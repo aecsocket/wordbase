@@ -2,10 +2,11 @@ pub mod structured;
 
 #[cfg(feature = "parse-yomitan")]
 mod parse;
+use std::collections::HashMap;
+
 #[cfg(feature = "parse-yomitan")]
 pub use parse::*;
 
-use alloc::{string::String, vec::Vec};
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -107,25 +108,80 @@ pub enum GlossaryContent {
 pub struct TermMetaBank(pub Vec<TermMeta>);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum TermMeta {
-    Frequency(TermMetaFrequency),
-    Pitch(TermMetaPitch),
-    Phonetic(TermMetaPhonetic),
+#[serde(deny_unknown_fields)]
+pub struct TermMetaRaw {
+    pub expression: String,
+    pub kind: TermMetaKind,
+    pub data: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct TermMetaFrequency {
-    pub expression: String,
-    // pub data:
+#[serde(try_from = "TermMetaRaw")]
+pub enum TermMeta {
+    Frequency {
+        expression: String,
+        data: TermMetaFrequency,
+    },
+    Pitch {
+        expression: String,
+        data: TermMetaPitch,
+    },
+    Phonetic {
+        expression: String,
+        data: TermMetaPhonetic,
+    },
+}
+
+impl TryFrom<TermMetaRaw> for TermMeta {
+    type Error = serde_json::Error;
+
+    fn try_from(
+        TermMetaRaw {
+            expression,
+            kind,
+            data,
+        }: TermMetaRaw,
+    ) -> Result<Self, Self::Error> {
+        Ok(match kind {
+            TermMetaKind::Frequency => Self::Frequency {
+                expression,
+                data: TermMetaFrequency::deserialize(data)?,
+            },
+            TermMetaKind::Pitch => Self::Pitch {
+                expression,
+                data: TermMetaPitch::deserialize(data)?,
+            },
+            TermMetaKind::Phonetic => Self::Phonetic {
+                expression,
+                data: TermMetaPhonetic::deserialize(data)?,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum TermMetaKind {
+    #[serde(rename = "freq")]
+    Frequency,
+    #[serde(rename = "pitch")]
+    Pitch,
+    #[serde(rename = "ipa")]
+    Phonetic,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged, deny_unknown_fields)]
+pub enum TermMetaFrequency {
+    Generic(GenericFrequencyData),
+    WithReading(TermMetaFrequencyDataWithReading),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged, deny_unknown_fields)]
 pub enum GenericFrequencyData {
     String(String),
     Number(u64),
+    #[serde(rename_all = "camelCase")]
     Complex {
         value: u64,
         display_value: Option<String>,
@@ -134,14 +190,14 @@ pub enum GenericFrequencyData {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct TermMetaPitch {
-    pub expression: String,
-    pub data: TermMetaPitchData,
+pub struct TermMetaFrequencyDataWithReading {
+    pub reading: String,
+    pub frequency: GenericFrequencyData,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct TermMetaPitchData {
+pub struct TermMetaPitch {
     pub reading: String,
     pub pitches: Vec<Pitch>,
 }
@@ -166,13 +222,6 @@ pub enum PitchPosition {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TermMetaPhonetic {
-    pub expression: String,
-    pub data: TermMetaPhoneticData,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct TermMetaPhoneticData {
     pub reading: String,
     pub transcriptions: Vec<PhoneticTranscription>,
 }
@@ -183,6 +232,31 @@ pub struct PhoneticTranscription {
     pub ipa: String,
     #[serde(default)]
     pub tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Deref, DerefMut)]
+pub struct KanjiBank(pub Vec<Kanji>);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Kanji {
+    pub character: String,
+    pub onyomi: String,
+    pub kunyomi: String,
+    pub tags: String,
+    pub meanings: Vec<String>,
+    pub stats: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Deref, DerefMut)]
+pub struct KanjiMetaBank(pub Vec<KanjiMetaFrequency>);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KanjiMetaFrequency {
+    pub character: String,
+    pub mode: String,
+    pub data: GenericFrequencyData,
 }
 
 #[cfg(test)]

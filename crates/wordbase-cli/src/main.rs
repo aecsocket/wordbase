@@ -68,23 +68,62 @@ async fn main() -> Result<()> {
         Command::Dictionary {
             command: DictionaryCommand::Parse { input },
         } => {
+            struct Stats {
+                total: usize,
+                done: AtomicUsize,
+            }
+
+            impl Stats {
+                fn new(total: usize) -> Self {
+                    Self {
+                        total,
+                        done: AtomicUsize::new(0),
+                    }
+                }
+            }
+
             let (import, index) = yomitan::Parse::new(|| {
                 let file = File::open(&input)?;
                 Ok(file)
             })?;
 
-            let total_banks = import.term_bank_names().len();
-            let banks_done = AtomicUsize::new(0);
+            let tags = Stats::new(import.tag_banks().len());
+            let terms = Stats::new(import.term_banks().len());
+            let term_metas = Stats::new(import.term_meta_banks().len());
+            let kanjis = Stats::new(import.kanji_banks().len());
+            let kanji_metas = Stats::new(import.kanji_meta_banks().len());
             import.run(
-                |_, _| {},
                 |name, bank| {
-                    let banks_done = banks_done.fetch_add(1, Ordering::SeqCst) + 1;
+                    let done = tags.done.fetch_add(1, Ordering::SeqCst) + 1;
+                    let total = tags.total;
+                    eprintln!("TAG [{done} / {total}] {name} - tags: {}", bank.len());
+                },
+                |name, bank| {
+                    let done = terms.done.fetch_add(1, Ordering::SeqCst) + 1;
+                    let total = terms.total;
+                    eprintln!("TERM [{done} / {total}] {name} - terms: {}", bank.len());
+                },
+                |name, bank| {
+                    let done = term_metas.done.fetch_add(1, Ordering::SeqCst) + 1;
+                    let total = term_metas.total;
                     eprintln!(
-                        "[{banks_done} / {total_banks}] {name} - terms: {}",
+                        "META [{done} / {total}] {name} - term metas: {}",
                         bank.len()
                     );
                 },
-                |_, _| {},
+                |name, bank| {
+                    let done = kanjis.done.fetch_add(1, Ordering::SeqCst) + 1;
+                    let total = kanjis.total;
+                    eprintln!("KANJI [{done} / {total}] {name} - kanji: {}", bank.len());
+                },
+                |name, bank| {
+                    let done = kanji_metas.done.fetch_add(1, Ordering::SeqCst) + 1;
+                    let total = kanji_metas.total;
+                    eprintln!(
+                        "KANJI META [{done} / {total}] {name} - kanji metas: {}",
+                        bank.len()
+                    );
+                },
             )?;
         }
     }

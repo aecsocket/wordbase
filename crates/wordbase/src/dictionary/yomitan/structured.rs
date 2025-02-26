@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use alloc::string::String;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
