@@ -1,0 +1,55 @@
+[workspace]
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.package]
+authors = ["aecsocket <aecsocket@tutanota.com>"]
+categories = []
+edition = "2024"
+keywords = []
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/aecsocket/wordbase"
+rust-version = "1.85.0"
+
+[workspace.lints.rust]
+# missing_docs = "warn"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+
+alloc_instead_of_core = "warn"
+std_instead_of_alloc = "warn"
+std_instead_of_core = "warn"
+unwrap_used = "warn"
+
+module_name_repetitions = "allow"
+needless_pass_by_value = "allow"
+similar_names = "allow"
+too_many_arguments = "allow"
+type_complexity = "allow"
+
+[workspace.dependencies]
+wordbase = { path = "crates/wordbase", default-features = false }
+wordbase-tokio-tungstenite = { path = "crates/wordbase-tokio-tungstenite", default-features = false }
+
+anyhow = { version = "1.0", default-features = false }
+clap = { version = "4.5", default-features = false }
+derive_more = { version = "2.0", default-features = false }
+futures = { version = "0.3", default-features = false }
+gdk4 = { version = "0.9", default-features = false }
+gtk4 = { version = "0.9", default-features = false }
+libadwaita = { version = "0.7", default-features = false }
+rayon = { version = "1.10", default-features = false }
+regex = { version = "1.11", default-features = false }
+serde = { version = "1.0", default-features = false }
+serde_json = { version = "1.0", default-features = false }
+serde_repr = { version = "0.1", default-features = false }
+sqlite = { version = "0.36", default-features = false }
+tokio = { version = "1.43", default-features = false }
+tokio-tungstenite = { version = "0.26", default-features = false }
+tracing = { version = "0.1", default-features = false }
+tracing-subscriber = { version = "0.3", default-features = false }
+zip = { version = "2.2", default-features = false }

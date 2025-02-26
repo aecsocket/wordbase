@@ -1,0 +1,28 @@
+{
+  "name": "wordbase",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "mounts": [
+    {
+      "type": "volume",
+      "source": "wordbase-profile",
+      "target": "/root"
+    },
+    {
+      "type": "volume",
+      "target": "/root/.vscode-server"
+    }
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "vadimcn.vscode-lldb",
+        "tamasfe.even-better-toml",
+        "fill-labs.dependi",
+        "GitHub.vscode-pull-request-github"
+      ]
+    }
+  }
+}

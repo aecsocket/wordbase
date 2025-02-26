@@ -1,0 +1,40 @@
+[package]
+description = "Dictionary and word lookup service"
+name = "wordbase"
+version = "0.1.0"
+
+authors.workspace = true
+categories.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+default = ["std"]
+
+parse-yomitan = ["std", "dep:rayon", "dep:regex", "dep:serde_json", "dep:zip"]
+std = ["serde/std"]
+
+[dependencies]
+derive_more = { workspace = true, features = [
+    "from",
+    "display",
+    "error",
+    "deref",
+    "deref_mut",
+] }
+serde = { workspace = true, features = ["alloc", "derive"] }
+serde_repr = { workspace = true }
+
+rayon = { workspace = true, optional = true }
+regex = { workspace = true, optional = true, default-features = true }
+serde_json = { workspace = true, optional = true, features = ["std"] }
+zip = { workspace = true, optional = true, default-features = true }

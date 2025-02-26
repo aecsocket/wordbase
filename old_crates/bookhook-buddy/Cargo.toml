@@ -1,0 +1,40 @@
+[package]
+description = "Desktop integration for visual novel texthookers"
+name = "bookhook-buddy"
+version = "0.1.0"
+
+authors.workspace = true
+categories.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+
+[dependencies]
+bookhook = { workspace = true }
+
+anyhow = { workspace = true, features = ["std"] }
+derive_more = { workspace = true, features = ["std", "display", "error"] }
+futures = { workspace = true, features = ["std", "async-await"] }
+gdk4 = { workspace = true }
+gtk4 = { workspace = true }
+libadwaita = { workspace = true, features = ["v1_2"] }
+serde = { workspace = true, features = ["std", "derive"] }
+serde_json = { workspace = true, features = ["std"] }
+tokio = { workspace = true, features = ["full"] }
+tokio-tungstenite = { workspace = true, features = [
+  "connect",
+  "handshake",
+  "rustls-tls-webpki-roots",
+] }
+tracing = { workspace = true, features = ["std", "attributes"] }
+tracing-subscriber = { workspace = true, default-features = true }
