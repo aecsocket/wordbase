@@ -1,6 +1,6 @@
 // <https://github.com/ripose-jp/Memento/blob/master/src/dict/deconjugator.h>
 
-use std::sync::LazyLock;
+use std::{borrow::Cow, sync::LazyLock};
 
 pub struct Deconjugate;
 
@@ -48,8 +48,6 @@ pub enum WordForm {
     Continuous,
     Adverbial,
     Noun,
-    Any,
-    None,
 }
 
 impl WordForm {
@@ -62,6 +60,7 @@ impl WordForm {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Rule {
     pub base: &'static str,
     pub conjugated: &'static str,
@@ -76,10 +75,11 @@ pub struct ConjugationInfo {
 }
 
 impl Deconjugate {
-    pub fn word<'a>(&self, word: &'a str) -> impl Iterator<Item = ConjugationInfo> + 'a {
+    pub fn word<'a>(&self, word: &'a str) -> impl Iterator<Item = &'static Rule> + 'a {
+        let mut current_word = Cow::Borrowed(word);
         let mut current_form = None::<WordForm>;
         RULES.iter().filter_map(move |rule| {
-            // (*) let's assume we have rule "Polite ます" => Negative ません"
+            // (*) let's assume we are testing rule "Polite ます" => Negative ません"
 
             // if the word isn't in any form yet,
             // then it can be transformed into any form
@@ -95,30 +95,31 @@ impl Deconjugate {
             }
 
             // (*) check if our word actually ends with ません
-            // before we declare the Polite => Negative derivation
-            if !word.ends_with(rule.conjugated) {
-                return None;
-            }
+            // before we declare the Polite => Negative derivation:
+            // try to strip ません off the end
+            let stripped = current_word.strip_suffix(rule.conjugated)?;
 
             // we've found a valid derivation!
-            // (*) we now know that our word is a Negative form
+            // (*) we now know that our word is a Negative form, so we:
+            // - return this fact to the caller (that's what we return)
+            // - transform the word into its Positive form,
+            //   for further deconjugation
+            //   しません -> します
+            let mut new_word = stripped.to_string();
+            new_word.push_str(rule.base);
+            current_word = Cow::Owned(new_word);
+            current_form = Some(rule.base_form);
 
-            {
-                return None;
-            }
+            println!("===> now {current_word} form {current_form:?}");
 
-            // todo logic
-
-            Some(ConjugationInfo {
-                form: rule.conjugated_form,
-            })
+            Some(rule)
         })
     }
 
     pub fn first_word<'a>(
         &self,
         text: &'a str,
-    ) -> impl Iterator<Item = (&'a str, impl Iterator<Item = ConjugationInfo>)> {
+    ) -> impl Iterator<Item = (&'a str, impl Iterator<Item = &'static Rule>)> {
         text.char_indices().rev().map(|(byte_pos, char)| {
             let current_text = &text[..byte_pos + char.len_utf8()];
             (current_text, self.word(current_text))
@@ -597,7 +598,7 @@ static RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
             GodanVerb "ぶ" => "び",
             GodanVerb "む" => "み",
             GodanVerb "ぬ" => "に",
-            // IchidanVerb "る" => "",
+            IchidanVerb "る" => "",
             KuruVerb "くる" => "き",
             KuruVerb "来る" => "来",
             SuruVerb "する" => "し",
@@ -623,9 +624,13 @@ mod tests {
 
     #[test]
     fn foo() {
-        println!("{:?}", Deconjugate.word("します").collect::<Vec<_>>(),);
-
-        output("hello world");
+        output("hello");
+        println!();
+        output("しますabc");
+        println!();
+        output("します");
+        println!();
+        output("しません");
 
         // println!("{:?}", Deconjugate.first_word("します").collect::<Vec<_>>());
 
@@ -634,10 +639,10 @@ mod tests {
     }
 
     fn output(word: &str) {
-        for (conjugated, forms) in Deconjugate.first_word(word) {
+        for (conjugated, rules) in Deconjugate.first_word(word) {
             println!("- {conjugated}:");
-            for form in forms {
-                println!("  - {form:?}");
+            for rule in rules {
+                println!("  - {:?}", rule.conjugated_form);
             }
         }
     }
