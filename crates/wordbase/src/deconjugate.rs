@@ -4,7 +4,12 @@ use std::sync::LazyLock;
 
 pub struct Deconjugator;
 
-pub struct ConjugationInfo {}
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ConjugationInfo {
+    pub base: String,
+    pub derivations: Vec<WordForm>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -65,86 +70,90 @@ impl WordForm {
 }
 
 struct Rule {
-    before: &'static str,
-    after: &'static str,
-    before_form: WordForm,
-    after_form: WordForm,
+    base: &'static str,
+    conjugated: &'static str,
+    base_form: WordForm,
+    conjugated_form: WordForm,
 }
 
 macro_rules! add_rules {
     ($vec:expr,) => {};
     (
         $vec:expr,
-        $before_form:ident $before:expr => $after_form:ident $after:expr
+        $base_form:ident $base:expr => $conjugated_form:ident $conjugated:expr
         $(, $($tail:tt)*)?
     ) => {
         $vec.push(Rule {
-            before: $before,
-            after: $after,
-            before_form: WordForm::$before_form,
-            after_form: WordForm::$after_form,
+            base: $base,
+            conjugated: $conjugated,
+            base_form: WordForm::$base_form,
+            conjugated_form: WordForm::$conjugated_form,
         });
         $(add_rules!($vec, $($tail)*))?
     };
     (
         $vec:expr,
-        $before_form:ident override $override_before_form:ident $before:expr
+        $base_form:ident override $override_base_form:ident $base:expr
         =>
-        $after_form:ident $after:expr
+        $conjugated_form:ident $conjugated:expr
         $(, $($tail:tt)*)?
     ) => {
         $vec.push(Rule {
-            before: $before,
-            after: $after,
-            before_form: WordForm::$override_before_form,
-            after_form: WordForm::$after_form,
+            base: $base,
+            conjugated: $conjugated,
+            base_form: WordForm::$override_base_form,
+            conjugated_form: WordForm::$conjugated_form,
         });
         $(add_rules!($vec, $($tail)*))?
     };
     (
         $vec:expr,
-        $before_form:ident $before:expr
+        $base_form:ident $base:expr
         =>
-        $after_form:ident override $override_after_form:ident $after:expr
+        $conjugated_form:ident override $override_conjugated_form:ident $conjugated:expr
         $(, $($tail:tt)*)?
     ) => {
         $vec.push(Rule {
-            before: $before,
-            after: $after,
-            before_form: WordForm::$before_form,
-            after_form: WordForm::$override_after_form,
+            base: $base,
+            conjugated: $conjugated,
+            base_form: WordForm::$base_form,
+            conjugated_form: WordForm::$override_conjugated_form,
         });
         $(add_rules!($vec, $($tail)*))?
     };
     (
         $vec:expr,
-        $before_form:ident => * [
-            $($(override $override_before_form:ident)? $before:expr => $after_form:ident $after:expr),* $(,)?
+        $base_form:ident => * [
+            $($(override $override_base_form:ident)? $base:expr => $conjugated_form:ident $conjugated:expr),* $(,)?
         ]
         $(, $($tail:tt)*)?
     ) => {
         $(add_rules!(
             $vec,
-            $before_form $(override $override_before_form)? $before => $after_form $after
+            $base_form $(override $override_base_form)? $base => $conjugated_form $conjugated
         );)*
         $(add_rules!($vec, $($tail)*))?
     };
     (
         $vec:expr,
-        * => $after_form:ident [
-            $($before_form:ident $before:expr => $(override $override_after_form:ident)? $after:expr),* $(,)?
+        * => $conjugated_form:ident [
+            $($base_form:ident $base:expr => $(override $override_conjugated_form:ident)? $conjugated:expr),* $(,)?
         ]
         $(, $($tail:tt)*)?
     ) => {
         $(add_rules!(
             $vec,
-            $before_form $before => $after_form $(override $override_after_form)? $after
+            $base_form $base => $conjugated_form $(override $override_conjugated_form)? $conjugated
         );)*
         $(add_rules!($vec, $($tail)*))?
     };
 }
 
-#[expect(clippy::vec_init_then_push)]
+#[expect(
+    clippy::vec_init_then_push,
+    reason = "macros cannot generate individual elements in an array, \
+              so we have to create and push into a `Vec` instead"
+)]
 static RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
     let mut vec = Vec::new();
     add_rules! [
@@ -559,5 +568,33 @@ static RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
 });
 
 impl Deconjugator {
-    // pub fn deconjugate(&self, text: &str) -> Vec<ConjugationInfo> {}
+    pub fn deconjugate(&self, word: &str) -> impl Iterator<Item = ConjugationInfo> {
+        RULES.iter().filter_map(|rule| {
+            let current_form = WordForm::Any;
+            if current_form != WordForm::Any && rule.conjugated_form != current_form {
+                return None;
+            }
+            if !word.ends_with(rule.conjugated) {
+                return None;
+            }
+
+            if rule.base_form.is_terminal() {
+            } else {
+            };
+            todo!()
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn foo() {
+        println!(
+            "{:?}",
+            Deconjugator.deconjugate("します").collect::<Vec<_>>()
+        );
+    }
 }
