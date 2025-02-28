@@ -1,9 +1,13 @@
 #![doc = include_str!("../README.md")]
 
 use std::{
-    fs::File,
+    fs::{self, File},
+    io::Cursor,
     path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
 use anyhow::{Context, Result};
@@ -50,10 +54,12 @@ async fn main() -> Result<()> {
                 }
             }
 
-            let (import, index) = yomitan::Parse::new(|| {
-                let file = File::open(&input)?;
-                Ok(file)
-            })?;
+            let file_contents = fs::read(&input)?;
+            let new_reader = || Ok(Cursor::new(file_contents.as_slice()));
+
+            // let new_reader = || Ok(fs::File::open(&input)?);
+
+            let (import, index) = yomitan::Parse::new(new_reader)?;
 
             let tags = Stats::new(import.tag_banks().len());
             let terms = Stats::new(import.term_banks().len());

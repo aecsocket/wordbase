@@ -19,9 +19,9 @@ use tokio_tungstenite::{
 use tracing::{Instrument, info, info_span, trace};
 use wordbase::{
     DEFAULT_PORT,
+    deconjugate::Deconjugate,
     lookup::LookupConfig,
     protocol::{self, Lookup},
-    response,
 };
 
 /// Wordbase server.
@@ -59,10 +59,11 @@ async fn main() -> Result<Never> {
             .await
             .context("failed to accept TCP stream")?;
 
+        let config = config.clone();
         tokio::spawn(
             async move {
                 info!("Incoming connection from {peer_addr:?}");
-                let Err(err) = handle_stream(config.clone(), stream).await;
+                let Err(err) = handle_stream(config, stream).await;
                 info!("Connection lost: {err:?}");
             }
             .instrument(info_span!("connection", id = %connection_id)),
@@ -112,23 +113,21 @@ async fn handle_message(
     let request =
         serde_json::from_str::<protocol::Request>(&message).context("received invalid request")?;
 
+    trace!("Requested {request:?}");
     let response: protocol::Response = match request {
-        protocol::Request::FetchLookupConfig => {
-            trace!("Requested lookup config");
-            config.lookup.clone().into()
+        protocol::Request::FetchLookupConfig => config.lookup.clone().into(),
+        protocol::Request::Lookup(request) => protocol::LookupResponse {
+            json: Lookup {
+                chars_scanned: 3,
+                entries: (),
+            },
+            html: None,
         }
-        protocol::Request::Lookup(request) => {
-            info!("Requested lookup for {:?}", request.text);
-            protocol::LookupResponse {
-                json: Lookup {
-                    chars_scanned: 3,
-                    entries: (),
-                },
-                html: None,
-            }
-            .into()
+        .into(),
+        protocol::Request::Deconjugate(request) => {
+            let deconjugate = Deconjugate.deconjugate(&request.text).collect::<Vec<_>>();
+            protocol::DeconjugateResponse { text: deconjugate }.into()
         }
-        protocol::Request::Deconjugate(request) => {}
     };
 
     let response = serde_json::to_string(&response).context("failed to serialize response")?;

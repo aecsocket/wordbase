@@ -2,14 +2,7 @@
 
 use std::sync::LazyLock;
 
-pub struct Deconjugator;
-
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ConjugationInfo {
-    pub base: String,
-    pub derivations: Vec<WordForm>,
-}
+pub struct Deconjugate;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -69,11 +62,68 @@ impl WordForm {
     }
 }
 
-struct Rule {
-    base: &'static str,
-    conjugated: &'static str,
-    base_form: WordForm,
-    conjugated_form: WordForm,
+pub struct Rule {
+    pub base: &'static str,
+    pub conjugated: &'static str,
+    pub base_form: WordForm,
+    pub conjugated_form: WordForm,
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ConjugationInfo {
+    pub form: WordForm,
+}
+
+impl Deconjugate {
+    pub fn word<'a>(&self, word: &'a str) -> impl Iterator<Item = ConjugationInfo> + 'a {
+        let mut current_form = None::<WordForm>;
+        RULES.iter().filter_map(move |rule| {
+            // (*) let's assume we have rule "Polite ます" => Negative ません"
+
+            // if the word isn't in any form yet,
+            // then it can be transformed into any form
+            let is_valid = current_form.is_none_or(|current_form| {
+                // otherwise, this rule is only valid if our word's current form
+                // matches the rule's conjugated form
+                // (*) we can only deconjugate ません to ます
+                // if our word is currently Negative
+                current_form == rule.conjugated_form
+            });
+            if !is_valid {
+                return None;
+            }
+
+            // (*) check if our word actually ends with ません
+            // before we declare the Polite => Negative derivation
+            if !word.ends_with(rule.conjugated) {
+                return None;
+            }
+
+            // we've found a valid derivation!
+            // (*) we now know that our word is a Negative form
+
+            {
+                return None;
+            }
+
+            // todo logic
+
+            Some(ConjugationInfo {
+                form: rule.conjugated_form,
+            })
+        })
+    }
+
+    pub fn first_word<'a>(
+        &self,
+        text: &'a str,
+    ) -> impl Iterator<Item = (&'a str, impl Iterator<Item = ConjugationInfo>)> {
+        text.char_indices().rev().map(|(byte_pos, char)| {
+            let current_text = &text[..byte_pos + char.len_utf8()];
+            (current_text, self.word(current_text))
+        })
+    }
 }
 
 macro_rules! add_rules {
@@ -547,7 +597,7 @@ static RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
             GodanVerb "ぶ" => "び",
             GodanVerb "む" => "み",
             GodanVerb "ぬ" => "に",
-            IchidanVerb "る" => "",
+            // IchidanVerb "る" => "",
             KuruVerb "くる" => "き",
             KuruVerb "来る" => "来",
             SuruVerb "する" => "し",
@@ -567,34 +617,28 @@ static RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
     vec
 });
 
-impl Deconjugator {
-    pub fn deconjugate(&self, word: &str) -> impl Iterator<Item = ConjugationInfo> {
-        RULES.iter().filter_map(|rule| {
-            let current_form = WordForm::Any;
-            if current_form != WordForm::Any && rule.conjugated_form != current_form {
-                return None;
-            }
-            if !word.ends_with(rule.conjugated) {
-                return None;
-            }
-
-            if rule.base_form.is_terminal() {
-            } else {
-            };
-            todo!()
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn foo() {
-        println!(
-            "{:?}",
-            Deconjugator.deconjugate("します").collect::<Vec<_>>()
-        );
+        println!("{:?}", Deconjugate.word("します").collect::<Vec<_>>(),);
+
+        output("hello world");
+
+        // println!("{:?}", Deconjugate.first_word("します").collect::<Vec<_>>());
+
+        // let (results, text) = Deconjugate.first_word::<Vec<_>>("しますabc");
+        // assert_eq!(text, "します");
+    }
+
+    fn output(word: &str) {
+        for (conjugated, forms) in Deconjugate.first_word(word) {
+            println!("- {conjugated}:");
+            for form in forms {
+                println!("  - {form:?}");
+            }
+        }
     }
 }
