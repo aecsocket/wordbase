@@ -1,6 +1,6 @@
 [package]
-description = "`tokio-tungstenite` client implementation for Wordbase"
-name = "wordbase-tokio-tungstenite"
+description = "Wordbase client implementation using Tokio"
+name = "wordbase-client-tokio"
 version = "0.1.0"
 
 authors.workspace = true

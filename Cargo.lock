@@ -1536,12 +1536,22 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "tokio",
+ "wordbase",
+ "wordbase-client-tokio",
+]
+
+[[package]]
+name = "wordbase-client-tokio"
+version = "0.1.0"
+dependencies = [
+ "derive_more",
+ "futures",
  "serde",
  "serde_json",
  "tokio",
  "tokio-tungstenite",
  "wordbase",
- "wordbase-tokio-tungstenite",
 ]
 
 [[package]]
@@ -1559,19 +1569,6 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
- "wordbase",
-]
-
-[[package]]
-name = "wordbase-tokio-tungstenite"
-version = "0.1.0"
-dependencies = [
- "derive_more",
- "futures",
- "serde",
- "serde_json",
- "tokio",
- "tokio-tungstenite",
  "wordbase",
 ]
 

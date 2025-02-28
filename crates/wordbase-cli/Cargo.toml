@@ -21,15 +21,8 @@ all-features = true
 
 [dependencies]
 wordbase = { workspace = true, features = ["parse-yomitan"] }
-wordbase-tokio-tungstenite = { workspace = true }
+wordbase-client-tokio = { workspace = true }
 
 anyhow = { workspace = true, features = ["std"] }
 clap = { workspace = true, default-features = true, features = ["derive"] }
-serde = { workspace = true, features = ["std", "derive"] }
-serde_json = { workspace = true, features = ["std"] }
 tokio = { workspace = true, features = ["full"] }
-tokio-tungstenite = { workspace = true, features = [
-    "connect",
-    "handshake",
-    "rustls-tls-webpki-roots",
-] }

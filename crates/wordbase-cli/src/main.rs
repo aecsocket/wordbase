@@ -49,7 +49,7 @@ async fn main() -> Result<()> {
             server_addr,
             command,
         } => {
-            let mut connection = wordbase_tokio_tungstenite::connect(server_addr)
+            let mut connection = wordbase_client_tokio::connect(server_addr)
                 .await
                 .context("failed to connect to server")?;
 
@@ -74,7 +74,7 @@ async fn main() -> Result<()> {
             }
 
             impl Stats {
-                fn new(total: usize) -> Self {
+                const fn new(total: usize) -> Self {
                     Self {
                         total,
                         done: AtomicUsize::new(0),

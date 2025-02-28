@@ -1,6 +1,6 @@
-use core::marker::PhantomData;
 use std::{
     io::{Read, Seek},
+    marker::PhantomData,
     sync::LazyLock,
 };
 

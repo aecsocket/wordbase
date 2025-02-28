@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 
-use core::{
+use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     num::Wrapping,
 };
