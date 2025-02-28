@@ -3,6 +3,7 @@
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     num::Wrapping,
+    sync::Arc,
 };
 
 use anyhow::{Context, Result};
@@ -16,7 +17,12 @@ use tokio_tungstenite::{
     },
 };
 use tracing::{Instrument, info, info_span, trace};
-use wordbase::{DEFAULT_PORT, response};
+use wordbase::{
+    DEFAULT_PORT,
+    lookup::LookupConfig,
+    protocol::{self, Lookup},
+    response,
+};
 
 /// Wordbase server.
 #[derive(Debug, clap::Parser)]
@@ -26,6 +32,11 @@ struct Args {
     listen_addr: SocketAddr,
 }
 
+#[derive(Debug, Default)]
+struct Config {
+    lookup: LookupConfig,
+}
+
 const DEFAULT_LISTEN_ADDR: SocketAddr =
     SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), DEFAULT_PORT);
 
@@ -33,6 +44,8 @@ const DEFAULT_LISTEN_ADDR: SocketAddr =
 async fn main() -> Result<Never> {
     tracing_subscriber::fmt().init();
     let args = <Args as clap::Parser>::parse();
+
+    let config = Arc::new(Config::default());
 
     let listener = TcpListener::bind(&args.listen_addr)
         .await
@@ -49,7 +62,7 @@ async fn main() -> Result<Never> {
         tokio::spawn(
             async move {
                 info!("Incoming connection from {peer_addr:?}");
-                let Err(err) = handle_stream(stream).await;
+                let Err(err) = handle_stream(config.clone(), stream).await;
                 info!("Connection lost: {err:?}");
             }
             .instrument(info_span!("connection", id = %connection_id)),
@@ -59,7 +72,7 @@ async fn main() -> Result<Never> {
     }
 }
 
-async fn handle_stream(stream: TcpStream) -> Result<Never> {
+async fn handle_stream(config: Arc<Config>, stream: TcpStream) -> Result<Never> {
     let mut stream = tokio_tungstenite::accept_async(stream)
         .await
         .context("failed to accept WebSocket stream")?;
@@ -71,7 +84,7 @@ async fn handle_stream(stream: TcpStream) -> Result<Never> {
             .context("stream closed")?
             .context("stream error")?;
 
-        if let Err(err) = handle_message(&mut stream, message).await {
+        if let Err(err) = handle_message(&config, &mut stream, message).await {
             let close_frame = CloseFrame {
                 code: CloseCode::Abnormal,
                 reason: Utf8Bytes::from(err.to_string()),
@@ -84,7 +97,11 @@ async fn handle_stream(stream: TcpStream) -> Result<Never> {
     }
 }
 
-async fn handle_message(stream: &mut WebSocketStream<TcpStream>, message: Message) -> Result<()> {
+async fn handle_message(
+    config: &Config,
+    stream: &mut WebSocketStream<TcpStream>,
+    message: Message,
+) -> Result<()> {
     let message = message
         .into_text()
         .context("received message which is not UTF-8 text")?;
@@ -93,24 +110,25 @@ async fn handle_message(stream: &mut WebSocketStream<TcpStream>, message: Messag
     }
 
     let request =
-        serde_json::from_str::<wordbase::Request>(&message).context("received invalid request")?;
+        serde_json::from_str::<protocol::Request>(&message).context("received invalid request")?;
 
-    let response: wordbase::Response = match request {
-        wordbase::Request::Ping => {
-            trace!("Requested ping");
-            response::Pong {
-                version: option_env!("CARGO_PKG_VERSION").unwrap_or("?").into(),
+    let response: protocol::Response = match request {
+        protocol::Request::FetchLookupConfig => {
+            trace!("Requested lookup config");
+            config.lookup.clone().into()
+        }
+        protocol::Request::Lookup(request) => {
+            info!("Requested lookup for {:?}", request.text);
+            protocol::LookupResponse {
+                json: Lookup {
+                    chars_scanned: 3,
+                    entries: (),
+                },
+                html: None,
             }
             .into()
         }
-        wordbase::Request::Lookup(lookup) => {
-            info!("Requested lookup for {:?}", lookup.text);
-            response::Lookup {
-                chars_matched: 3,
-                entries: format!("you sent: {}", lookup.text),
-            }
-            .into()
-        }
+        protocol::Request::Deconjugate(request) => {}
     };
 
     let response = serde_json::to_string(&response).context("failed to serialize response")?;

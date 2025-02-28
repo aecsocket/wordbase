@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 
-use derive_more::{Display, Error};
+use derive_more::{Deref, DerefMut, Display, Error};
 pub use wordbase;
 
 use futures::{Sink, SinkExt, Stream, StreamExt};
@@ -9,14 +9,7 @@ use tokio_tungstenite::{
     MaybeTlsStream, WebSocketStream,
     tungstenite::{Message, client::IntoClientRequest},
 };
-use wordbase::{request, response};
-
-/// Wordbase client connection over [`tokio_tungstenite`].
-///
-/// Wrap an existing [`tokio_tungstenite::WebSocketStream`] in this type, or use
-/// [`connect`] to create a new connection to a Wordbase server.
-#[derive(Debug, Clone, Copy)]
-pub struct Connection<S>(S);
+use wordbase::{lookup::LookupConfig, protocol};
 
 /// WebSocket error type.
 pub type WsError = tokio_tungstenite::tungstenite::Error;
@@ -51,62 +44,13 @@ pub enum Error {
     InvalidResponseKind,
 }
 
-/// Connects to a Wordbase server at the given URL.
-///
-/// See [`tokio_tungstenite::connect_async`].
-///
-/// # Errors
-///
-/// See [`WsError`].
-pub async fn connect<R: IntoClientRequest + Unpin>(
-    request: R,
-) -> Result<Connection<WebSocketStream<MaybeTlsStream<TcpStream>>>, Error> {
-    let (stream, _) = tokio_tungstenite::connect_async(request)
-        .await
-        .map_err(Error::Connect)?;
-    Connection::handshake(stream).await.map_err(|(err, _)| err)
-}
+#[derive(Debug, Clone, Copy)]
+pub struct Connection<S>(pub S);
 
 impl<S> Connection<S>
 where
     S: Stream<Item = Result<Message, WsError>> + Sink<Message, Error = WsError> + Unpin,
 {
-    /// Creates a new [`Connection`] by performing a handshake with an existing
-    /// stream.
-    ///
-    /// # Errors
-    ///
-    /// If handshaking fails, this returns an error as well as the original stream.
-    pub async fn handshake(stream: S) -> Result<Self, (Error, S)> {
-        let mut connection = Self(stream);
-        match connection.request(&wordbase::Request::Ping).await {
-            Ok(wordbase::Response::Pong(_)) => Ok(connection),
-            Ok(_) => Err((Error::InvalidResponseKind, connection.0)),
-            Err(err) => Err((err, connection.0)),
-        }
-    }
-
-    /// Creates a new [`Connection`] form an existing stream, assuming that a
-    /// handshake has already been performed.
-    pub const fn assume_handshaked(stream: S) -> Self {
-        Self(stream)
-    }
-
-    /// Gets a shared reference to the underlying stream.
-    pub const fn inner(&self) -> &S {
-        &self.0
-    }
-
-    /// Gets a mutable reference to the underlying stream.
-    pub fn inner_mut(&mut self) -> &mut S {
-        &mut self.0
-    }
-
-    /// Takes the underlying stream.
-    pub fn into_inner(self) -> S {
-        self.0
-    }
-
     /// Sends a request and receives a response.
     ///
     /// # Errors
@@ -114,8 +58,8 @@ where
     /// See [`Error`].
     pub async fn request(
         &mut self,
-        request: &wordbase::Request,
-    ) -> Result<response::Response, Error> {
+        request: &protocol::Request,
+    ) -> Result<protocol::Response, Error> {
         let request = serde_json::to_string(request).map_err(Error::SerializeRequest)?;
         self.0
             .send(Message::text(request))
@@ -129,35 +73,132 @@ where
             .map_err(Error::StreamError)?
             .into_text()
             .map_err(Error::ResponseIntoText)?;
-        let response = serde_json::from_str::<wordbase::Response>(&response)
+        let response = serde_json::from_str::<protocol::Response>(&response)
             .map_err(Error::DeserializeResponse)?;
         Ok(response)
     }
 
-    /// Sends a [`request::Ping`].
+    /// Sends a [`protocol::Request::FetchLookupConfig`].
     ///
     /// # Errors
     ///
     /// See [`Error`].
-    pub async fn ping(&mut self) -> Result<response::Pong, Error> {
-        if let wordbase::Response::Pong(pong) = self.request(&wordbase::Request::Ping).await? {
-            Ok(pong)
+    pub async fn fetch_lookup_config(&mut self) -> Result<LookupConfig, Error> {
+        if let protocol::Response::LookupConfig(res) =
+            self.request(&protocol::Request::FetchLookupConfig).await?
+        {
+            Ok(res)
         } else {
             Err(Error::InvalidResponseKind)
         }
     }
 
-    /// Sends a [`request::Lookup`].
+    /// Sends a [`protocol::Request::Lookup`].
     ///
     /// # Errors
     ///
     /// See [`Error`].
-    pub async fn lookup(&mut self, text: impl Into<String>) -> Result<response::Lookup, Error> {
-        let request = request::Lookup { text: text.into() };
-        if let wordbase::Response::Lookup(lookup) = self.request(&request.into()).await? {
-            Ok(lookup)
+    pub async fn lookup(
+        &mut self,
+        request: protocol::LookupRequest,
+    ) -> Result<protocol::LookupResponse, Error> {
+        if let protocol::Response::Lookup(res) = self.request(&request.into()).await? {
+            Ok(res)
         } else {
             Err(Error::InvalidResponseKind)
         }
     }
+
+    /// Sends a [`protocol::Request::Deconjugate`].
+    ///
+    /// # Errors
+    ///
+    /// See [`Error`].
+    pub async fn deconjugate(
+        &mut self,
+        request: protocol::DeconjugateRequest,
+    ) -> Result<protocol::DeconjugateResponse, Error> {
+        if let protocol::Response::Deconjugate(res) = self.request(&request.into()).await? {
+            Ok(res)
+        } else {
+            Err(Error::InvalidResponseKind)
+        }
+    }
+}
+
+/// Wordbase client connection over [`tokio_tungstenite`].
+///
+/// Use [`connect`] to connect to a server, or use  [`Client::handshake`] to
+/// create one from an existing [`tokio_tungstenite::WebSocketStream`].
+#[derive(Debug, Clone, Deref, DerefMut)]
+pub struct Client<S> {
+    #[deref]
+    #[deref_mut]
+    connection: Connection<S>,
+    lookup_config: LookupConfig,
+}
+
+impl<S> Client<S>
+where
+    S: Stream<Item = Result<Message, WsError>> + Sink<Message, Error = WsError> + Unpin,
+{
+    /// Creates a new [`Connection`] by performing a handshake with an existing
+    /// stream.
+    ///
+    /// This handshake will also fetch the server's configuration, which will be
+    /// accessible via this client.
+    ///
+    /// # Errors
+    ///
+    /// If handshaking fails, this returns an error as well as the original stream.
+    pub async fn handshake(stream: S) -> Result<Self, (Error, S)> {
+        let mut connection = Connection(stream);
+        let lookup_config = match connection.fetch_lookup_config().await {
+            Ok(config) => Ok(config),
+            Err(err) => {
+                return Err((err, connection.0));
+            }
+        }?;
+
+        Ok(Self {
+            connection,
+            lookup_config,
+        })
+    }
+
+    /// Gets a shared reference to the underlying [`Connection`].
+    pub const fn connection(&self) -> &Connection<S> {
+        &self.connection
+    }
+
+    /// Gets a mutable reference to the underlying [`Connection`].
+    pub fn connection_mut(&mut self) -> &mut Connection<S> {
+        &mut self.connection
+    }
+
+    /// Takes the underlying [`Connection`].
+    pub fn into_connection(self) -> Connection<S> {
+        self.connection
+    }
+
+    /// Gets the server's [`LookupConfig`].
+    pub const fn lookup_config(&self) -> &LookupConfig {
+        &self.lookup_config
+    }
+}
+
+/// Connects to a Wordbase server at the given URL and sets up a [`Client`].
+///
+/// See [`tokio_tungstenite::connect_async`] and [`Client::handshake`].
+///
+/// # Errors
+///
+/// See [`WsError`].
+pub async fn connect(
+    request: impl IntoClientRequest + Unpin,
+) -> Result<Client<WebSocketStream<MaybeTlsStream<TcpStream>>>, Error> {
+    let (stream, _) = tokio_tungstenite::connect_async(request)
+        .await
+        .map_err(Error::Connect)?;
+    Client::handshake(stream).await.map_err(|(err, _)| err)
 }

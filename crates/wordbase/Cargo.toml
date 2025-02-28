@@ -18,7 +18,8 @@ workspace = true
 all-features = true
 
 [features]
-parse-yomitan = ["dep:rayon", "dep:regex", "dep:serde_json", "dep:zip"]
+parse-yomitan = ["serde", "dep:rayon", "dep:regex", "dep:serde_json", "dep:zip"]
+serde = []
 
 [dependencies]
 derive_more = { workspace = true, features = [

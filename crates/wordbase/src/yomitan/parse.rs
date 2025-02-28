@@ -212,14 +212,14 @@ fn parse_from<T: DeserializeOwned>(
 mod tests {
     use std::{io::Cursor, sync::Mutex};
 
-    use crate::dictionary::yomitan::{Glossary, KanjiMetaBank};
+    use crate::yomitan::{Glossary, KanjiMetaBank};
 
     use super::*;
 
     #[test]
     fn jitendex() {
         let (index, tags, terms, term_metas, kanjis, kanji_metas) =
-            parse(include_bytes!("../../../../../dictionaries/jitendex.zip"));
+            parse(include_bytes!("../../../../dictionaries/jitendex.zip"));
         assert!(index.title.contains("Jitendex.org"));
         assert!(tags.iter().any(|tag| {
             tag.name == "★" && tag.category == "popular" && tag.notes == "high priority entry"
@@ -237,7 +237,7 @@ mod tests {
     #[test]
     fn jmnedict() {
         let (index, tags, terms, term_metas, kanjis, kanji_metas) =
-            parse(include_bytes!("../../../../../dictionaries/jmnedict.zip"));
+            parse(include_bytes!("../../../../dictionaries/jmnedict.zip"));
         assert!(index.title.contains("JMnedict"));
         assert!(tags.iter().any(|tag| {
             tag.name == "given"
@@ -261,7 +261,7 @@ mod tests {
 
     #[test]
     fn dojg() {
-        parse(include_bytes!("../../../../../dictionaries/dojg.zip"));
+        parse(include_bytes!("../../../../dictionaries/dojg.zip"));
     }
 
     fn parse(

@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use wordbase::{DEFAULT_PORT, dictionary::yomitan};
+use wordbase::{DEFAULT_PORT, yomitan};
 
 #[derive(Debug, clap::Parser)]
 struct Args {
@@ -17,22 +17,10 @@ struct Args {
 
 #[derive(Debug, clap::Parser)]
 enum Command {
-    Client {
-        #[arg(long, default_value_t = format!("ws://127.0.0.1:{DEFAULT_PORT}"))]
-        server_addr: String,
-        #[command(subcommand)]
-        command: ClientCommand,
-    },
     Dictionary {
         #[command(subcommand)]
         command: DictionaryCommand,
     },
-}
-
-#[derive(Debug, clap::Parser)]
-enum ClientCommand {
-    Ping,
-    Lookup { text: String },
 }
 
 #[derive(Debug, clap::Parser)]
@@ -45,26 +33,6 @@ async fn main() -> Result<()> {
     let args = <Args as clap::Parser>::parse();
 
     match args.command {
-        Command::Client {
-            server_addr,
-            command,
-        } => {
-            let mut connection = wordbase_client_tokio::connect(server_addr)
-                .await
-                .context("failed to connect to server")?;
-
-            match command {
-                ClientCommand::Ping => {
-                    let x = connection.ping().await?;
-                    println!("{x:?}");
-                }
-                ClientCommand::Lookup { text } => {
-                    let x = connection.lookup(text).await?;
-                    println!("{x:?}");
-                }
-            }
-            _ = connection.into_inner().close(None).await;
-        }
         Command::Dictionary {
             command: DictionaryCommand::Parse { input },
         } => {
