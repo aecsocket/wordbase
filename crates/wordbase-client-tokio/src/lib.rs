@@ -108,22 +108,6 @@ where
             Err(Error::InvalidResponseKind)
         }
     }
-
-    /// Sends a [`protocol::Request::Deconjugate`].
-    ///
-    /// # Errors
-    ///
-    /// See [`Error`].
-    pub async fn deconjugate(
-        &mut self,
-        request: protocol::DeconjugateRequest,
-    ) -> Result<protocol::DeconjugateResponse, Error> {
-        if let protocol::Response::Deconjugate(res) = self.request(&request.into()).await? {
-            Ok(res)
-        } else {
-            Err(Error::InvalidResponseKind)
-        }
-    }
 }
 
 /// Wordbase client connection over [`tokio_tungstenite`].

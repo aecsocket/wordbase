@@ -119,15 +119,11 @@ async fn handle_message(
         protocol::Request::Lookup(request) => protocol::LookupResponse {
             json: Lookup {
                 chars_scanned: 3,
-                entries: (),
+                entries: "foo".into(),
             },
             html: None,
         }
         .into(),
-        protocol::Request::Deconjugate(request) => {
-            let deconjugate = Deconjugate.deconjugate(&request.text).collect::<Vec<_>>();
-            protocol::DeconjugateResponse { text: deconjugate }.into()
-        }
     };
 
     let response = serde_json::to_string(&response).context("failed to serialize response")?;
@@ -137,4 +133,25 @@ async fn handle_message(
         .context("failed to send response")?;
 
     Ok(())
+}
+
+fn lookup(request: protocol::LookupRequest) {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn foo() {
+        let tagger = mecab::Tagger::new("");
+        for dict in tagger.dictionary_info().iter() {
+            println!("\nfilename: {}", dict.filename);
+            println!("charset: {}", dict.charset);
+            println!("size: {}", dict.size);
+            println!("type: {}", dict.dict_type);
+            println!("lsize: {}", dict.lsize);
+            println!("rsize: {}", dict.rsize);
+            println!("version: {}", dict.version);
+        }
+    }
 }

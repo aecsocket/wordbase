@@ -21,7 +21,8 @@
         "vadimcn.vscode-lldb",
         "tamasfe.even-better-toml",
         "fill-labs.dependi",
-        "GitHub.vscode-pull-request-github"
+        "GitHub.vscode-pull-request-github",
+        "ms-azuretools.vscode-docker"
       ]
     }
   }

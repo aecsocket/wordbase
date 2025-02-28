@@ -8,7 +8,6 @@ use crate::lookup::LookupConfig;
 pub enum Request {
     FetchLookupConfig,
     Lookup(LookupRequest),
-    Deconjugate(DeconjugateRequest),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,17 +17,11 @@ pub struct LookupRequest {
     pub wants_html: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeconjugateRequest {
-    pub text: String,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, From)]
 #[serde(tag = "type")]
 pub enum Response {
     LookupConfig(LookupConfig),
     Lookup(LookupResponse),
-    Deconjugate(DeconjugateResponse),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,12 +31,7 @@ pub struct LookupResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeconjugateResponse {
-    pub text: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Lookup {
     pub chars_scanned: u64,
-    pub entries: (), // TODO
+    pub entries: String, // TODO
 }

@@ -1,10 +1,8 @@
 pub mod structured;
 
-#[cfg(feature = "parse-yomitan")]
 mod parse;
 use std::collections::HashMap;
 
-#[cfg(feature = "parse-yomitan")]
 pub use parse::*;
 
 use derive_more::{Deref, DerefMut};
