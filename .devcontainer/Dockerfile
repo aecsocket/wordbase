@@ -2,7 +2,7 @@ FROM archlinux:base-devel
 
 # setup dev container
 RUN pacman -Syu --noconfirm \
-    git openssh gnupg fish starship man-db less ripgrep fzf bat exa zoxide yq just zellij helix && \
+    git openssh gnupg fish starship man-db less ripgrep fzf unzip bat exa zoxide yq just zellij helix && \
     useradd -m -s /usr/bin/fish dev && \
     echo "dev ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/dev
 USER dev
@@ -21,6 +21,9 @@ RUN yay -Syu --noconfirm rustup && \
     cargo binstall cargo-shear
 
 # install extra tools
-RUN yay -Syu --noconfirm websocat mecab
+RUN yay -Syu --noconfirm websocatmecab && \
+    sudo mkdir -p /usr/libexec && \
+    sudo ln -s /usr/lib/mecab/ /usr/libexec/mecab && \
+    yay -Syu --noconfirm mecab-ipadic
 
 USER root

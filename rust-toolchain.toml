@@ -9,4 +9,3 @@ components = [
   "rust-src",
   "clippy",
 ]
-targets = ["wasm32-unknown-unknown"]

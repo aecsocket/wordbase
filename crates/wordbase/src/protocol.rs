@@ -13,7 +13,6 @@ pub enum Request {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LookupRequest {
     pub text: String,
-    pub wants_json: bool,
     pub wants_html: bool,
 }
 
