@@ -16,16 +16,16 @@ pub struct LookupRequest {
     pub wants_html: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, From)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Response {
     LookupConfig(LookupConfig),
-    Lookup(LookupResponse),
+    Lookup { response: Option<LookupResponse> },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LookupResponse {
-    pub json: Lookup,
+    pub raw: Lookup,
     pub html: Option<String>,
 }
 

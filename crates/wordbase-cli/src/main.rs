@@ -11,7 +11,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use wordbase::{DEFAULT_PORT, yomitan};
+use wordbase::{DEFAULT_PORT, protocol::LookupRequest, yomitan};
 
 #[derive(Debug, clap::Parser)]
 struct Args {
@@ -21,6 +21,10 @@ struct Args {
 
 #[derive(Debug, clap::Parser)]
 enum Command {
+    Lookup {
+        url: String,
+        text: String,
+    },
     Dictionary {
         #[command(subcommand)]
         command: DictionaryCommand,
@@ -37,6 +41,20 @@ async fn main() -> Result<()> {
     let args = <Args as clap::Parser>::parse();
 
     match args.command {
+        Command::Lookup { url, text } => {
+            let mut client = wordbase_client_tokio::connect(url)
+                .await
+                .context("failed to connect to server")?;
+            let response = client
+                .lookup(LookupRequest {
+                    text,
+                    wants_html: false,
+                })
+                .await
+                .context("failed to perform request")?;
+            println!("{response:#?}");
+            _ = client.0.close(None).await;
+        }
         Command::Dictionary {
             command: DictionaryCommand::Parse { input },
         } => {

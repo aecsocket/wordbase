@@ -101,9 +101,9 @@ where
     pub async fn lookup(
         &mut self,
         request: protocol::LookupRequest,
-    ) -> Result<protocol::LookupResponse, Error> {
-        if let protocol::Response::Lookup(res) = self.request(&request.into()).await? {
-            Ok(res)
+    ) -> Result<Option<protocol::LookupResponse>, Error> {
+        if let protocol::Response::Lookup { response } = self.request(&request.into()).await? {
+            Ok(response)
         } else {
             Err(Error::InvalidResponseKind)
         }
