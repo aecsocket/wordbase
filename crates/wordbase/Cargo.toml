@@ -22,6 +22,7 @@ parse-yomitan = ["serde", "dep:rayon", "dep:regex", "dep:serde_json", "dep:zip"]
 serde = []
 
 [dependencies]
+bytes = { workspace = true, features = ["serde"] }
 derive_more = { workspace = true, features = [
     "from",
     "display",

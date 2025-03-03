@@ -7,22 +7,24 @@
     {
       "type": "volume",
       "source": "wordbase-profile",
-      "target": "/root"
+      "target": "/home/dev"
     },
     {
       "type": "volume",
-      "target": "/root/.vscode-server"
+      "target": "/home/dev/.vscode-server"
     }
   ],
   "customizations": {
     "vscode": {
       "extensions": [
+        // generic
+        "ms-azuretools.vscode-docker",
+        "GitHub.vscode-pull-request-github",
+        // rust
         "rust-lang.rust-analyzer",
         "vadimcn.vscode-lldb",
         "tamasfe.even-better-toml",
-        "fill-labs.dependi",
-        "GitHub.vscode-pull-request-github",
-        "ms-azuretools.vscode-docker"
+        "fill-labs.dependi"
       ]
     }
   }

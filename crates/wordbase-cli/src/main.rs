@@ -11,7 +11,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use wordbase::{DEFAULT_PORT, protocol::LookupRequest, yomitan};
+use wordbase::{DEFAULT_PORT, protocol::Lookup, yomitan};
 
 #[derive(Debug, clap::Parser)]
 struct Args {
@@ -46,7 +46,7 @@ async fn main() -> Result<()> {
                 .await
                 .context("failed to connect to server")?;
             let response = client
-                .lookup(LookupRequest {
+                .lookup(Lookup {
                     text,
                     wants_html: false,
                 })

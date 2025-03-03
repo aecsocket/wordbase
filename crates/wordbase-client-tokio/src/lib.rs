@@ -1,5 +1,7 @@
 #![doc = include_str!("../README.md")]
 
+use std::num::Wrapping;
+
 use derive_more::{Deref, DerefMut, Display, Error};
 pub use wordbase;
 
@@ -9,7 +11,10 @@ use tokio_tungstenite::{
     MaybeTlsStream, WebSocketStream,
     tungstenite::{Message, client::IntoClientRequest},
 };
-use wordbase::{lookup::LookupConfig, protocol};
+use wordbase::{
+    lookup::LookupConfig,
+    protocol::{self, ClientRequest, FromClient, FromServer, Lookup, LookupInfo},
+};
 
 /// WebSocket error type.
 pub type WsError = tokio_tungstenite::tungstenite::Error;
@@ -44,65 +49,54 @@ pub enum Error {
     InvalidResponseKind,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Connection<S>(pub S);
+#[derive(Debug)]
+pub struct Connection<S> {
+    stream: S,
+    lookup_config: LookupConfig,
+    next_request_id: Wrapping<u64>,
+}
 
 impl<S> Connection<S>
 where
     S: Stream<Item = Result<Message, WsError>> + Sink<Message, Error = WsError> + Unpin,
 {
-    /// Sends a request and receives a response.
-    ///
-    /// # Errors
-    ///
-    /// See [`Error`].
-    pub async fn request(
-        &mut self,
-        request: &protocol::Request,
-    ) -> Result<protocol::Response, Error> {
-        let request = serde_json::to_string(request).map_err(Error::SerializeRequest)?;
-        self.0
+    pub async fn lookup(&mut self, request: Lookup) -> Result<Option<LookupInfo>, Error> {
+        let request = serde_json::to_string(&ClientRequest::from(request))
+            .map_err(Error::SerializeRequest)?;
+        let message = FromClient {
+            request_id,
+        }
+        self.stream
             .send(Message::text(request))
             .await
             .map_err(Error::Send)?;
-        let response = self
-            .0
-            .next()
-            .await
-            .ok_or(Error::StreamClosed)?
-            .map_err(Error::StreamError)?
-            .into_text()
-            .map_err(Error::ResponseIntoText)?;
-        let response = serde_json::from_str::<protocol::Response>(&response)
-            .map_err(Error::DeserializeResponse)?;
-        Ok(response)
-    }
 
-    /// Sends a [`protocol::Request::FetchLookupConfig`].
-    ///
-    /// # Errors
-    ///
-    /// See [`Error`].
-    pub async fn fetch_lookup_config(&mut self) -> Result<LookupConfig, Error> {
-        if let protocol::Response::LookupConfig(res) =
-            self.request(&protocol::Request::FetchLookupConfig).await?
-        {
-            Ok(res)
-        } else {
-            Err(Error::InvalidResponseKind)
+        loop {
+            let message = self
+                .stream
+                .next()
+                .await
+                .ok_or(Error::StreamClosed)?
+                .map_err(Error::StreamError)?
+                .into_text()
+                .map_err(Error::ResponseIntoText)?;
+            let message =
+                serde_json::from_str::<FromServer>(&message).map_err(Error::DeserializeResponse)?;
+
+            match message {
+                FromServer::SyncLookupConfig(config) => {
+                    self.lookup_config = config;
+                }
+                FromServer::Response {
+                    request_id,
+                    response,
+                } => {
+                    if request_id == 
+                }
+            }
         }
-    }
 
-    /// Sends a [`protocol::Request::Lookup`].
-    ///
-    /// # Errors
-    ///
-    /// See [`Error`].
-    pub async fn lookup(
-        &mut self,
-        request: protocol::LookupRequest,
-    ) -> Result<Option<protocol::LookupResponse>, Error> {
-        if let protocol::Response::Lookup { response } = self.request(&request.into()).await? {
+        if let protocol::ResponseKind::Lookup { response } = self.request(&request.into()).await? {
             Ok(response)
         } else {
             Err(Error::InvalidResponseKind)

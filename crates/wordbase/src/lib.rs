@@ -1,8 +1,8 @@
 #![doc = include_str!("../README.md")]
 
-pub mod deconjugate;
 pub mod lookup;
 pub mod protocol;
+
 #[cfg(feature = "parse-yomitan")]
 pub mod yomitan;
 

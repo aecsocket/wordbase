@@ -1,10 +1,11 @@
-use std::{num::Wrapping, sync::Arc};
+use core::task;
+use std::{num::Wrapping, pin::Pin, sync::Arc};
 
 use anyhow::{Context, Result};
-use futures::{SinkExt, StreamExt, never::Never};
+use futures::{Sink, SinkExt, Stream, StreamExt, never::Never};
 use tokio::{
     net::{TcpListener, TcpStream},
-    sync::{mpsc, oneshot},
+    sync::{broadcast, mpsc, oneshot},
 };
 use tokio_tungstenite::{
     WebSocketStream,
@@ -14,7 +15,7 @@ use tokio_tungstenite::{
     },
 };
 use tracing::{Instrument, info, info_span, trace};
-use wordbase::protocol::{self, Lookup, LookupResponse};
+use wordbase::protocol::{self, FromClient, FromServer, Lookup, LookupInfo, NewSentence};
 
 use crate::{
     Config,
@@ -24,6 +25,7 @@ use crate::{
 pub async fn run(
     config: Arc<Config>,
     send_mecab_request: mpsc::Sender<MecabRequest>,
+    recv_new_sentence: broadcast::Receiver<NewSentence>,
 ) -> Result<Never> {
     let listener = TcpListener::bind(&config.listen_addr)
         .await
@@ -39,46 +41,88 @@ pub async fn run(
 
         let config = config.clone();
         let send_mecab_request = send_mecab_request.clone();
+        let recv_new_sentence = recv_new_sentence.resubscribe();
         tokio::spawn(
             async move {
                 info!("Incoming connection from {peer_addr:?}");
-                let Err(err) = handle_stream(config, send_mecab_request, stream).await;
+                let Err(err) =
+                    handle_stream(config, send_mecab_request, recv_new_sentence, stream).await;
                 info!("Connection lost: {err:?}");
             }
             .instrument(info_span!("connection", id = %connection_id)),
         );
-
         connection_id += 1;
+    }
+}
+
+struct Connection(WebSocketStream<TcpStream>);
+
+impl Connection {
+    async fn read(&mut self) -> Result<FromClient> {
+        let message = self
+            .0
+            .next()
+            .await
+            .context("stream closed")?
+            .context("stream error")?
+            .into_text()
+            .context("received message which was not UTF-8 text")?;
+        let message =
+            serde_json::from_str::<FromClient>(&message).context("received invalid message")?;
+        Ok(message)
+    }
+
+    async fn write(&mut self, message: &FromServer) -> Result<()> {
+        let message = serde_json::to_string(message).context("failed to serialize message")?;
+        self.0.send(Message::text(message)).await?;
+        Ok(())
     }
 }
 
 async fn handle_stream(
     config: Arc<Config>,
     send_mecab_request: mpsc::Sender<MecabRequest>,
+    mut recv_new_sentence: broadcast::Receiver<NewSentence>,
     stream: TcpStream,
 ) -> Result<Never> {
-    let mut stream = tokio_tungstenite::accept_async(stream)
+    let stream = tokio_tungstenite::accept_async(stream)
         .await
         .context("failed to accept WebSocket stream")?;
+    let mut connection = Connection(stream);
 
     loop {
-        let message = stream
-            .next()
-            .await
-            .context("stream closed")?
-            .context("stream error")?;
+        tokio::select! {
+            Ok(new_sentence) = recv_new_sentence.recv() => {
+                on_new_sentence(&mut connection, new_sentence).await;
+            }
+            message = connection.read() => {
 
-        if let Err(err) = handle_message(&config, &send_mecab_request, &mut stream, message).await {
-            let close_frame = CloseFrame {
-                code: CloseCode::Abnormal,
-                reason: Utf8Bytes::from(err.to_string()),
-            };
-            tokio::spawn(async move {
-                _ = stream.close(Some(close_frame)).await;
-            });
-            return Err(err);
+            }
         }
+
+        // let message = stream
+        //     .next()
+        //     .await
+        //     .context("stream closed")?
+        //     .context("stream error")?;
+
+        // if let Err(err) = handle_message(&config, &send_mecab_request, &mut stream, message).await {
+        //     let close_frame = CloseFrame {
+        //         code: CloseCode::Abnormal,
+        //         reason: Utf8Bytes::from(err.to_string()),
+        //     };
+        //     tokio::spawn(async move {
+        //         _ = stream.close(Some(close_frame)).await;
+        //     });
+        //     return Err(err);
+        // }
     }
+}
+
+async fn on_new_sentence(connection: &mut Connection, new_sentence: NewSentence) {
+    _ = connection
+        .write(&FromServer::NewSentence(new_sentence))
+        .await;
 }
 
 async fn handle_message(
@@ -94,15 +138,15 @@ async fn handle_message(
         return Ok(());
     }
 
-    let request =
-        serde_json::from_str::<protocol::Request>(&message).context("received invalid request")?;
+    let request = serde_json::from_str::<protocol::FromClient>(&message)
+        .context("received invalid request")?;
 
     trace!("Requested {request:?}");
-    let response: protocol::Response = match request {
-        protocol::Request::FetchLookupConfig => {
-            protocol::Response::LookupConfig(config.lookup.clone())
+    let response: protocol::ResponseKind = match request {
+        protocol::FromClient::FetchLookupConfig => {
+            protocol::ResponseKind::FetchLookupConfig(config.lookup.clone())
         }
-        protocol::Request::Lookup(request) => protocol::Response::Lookup {
+        protocol::FromClient::Lookup(request) => protocol::ResponseKind::Lookup {
             response: lookup(request, send_mecab_request).await?,
         },
     };
@@ -117,9 +161,9 @@ async fn handle_message(
 }
 
 async fn lookup(
-    request: protocol::LookupRequest,
+    request: Lookup,
     send_mecab_request: &mpsc::Sender<MecabRequest>,
-) -> Result<Option<LookupResponse>> {
+) -> Result<Option<LookupInfo>> {
     let (send_mecab_response, recv_mecab_response) = oneshot::channel::<MecabResponse>();
     _ = send_mecab_request
         .send(MecabRequest {
