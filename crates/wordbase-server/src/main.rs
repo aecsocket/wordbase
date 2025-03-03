@@ -40,7 +40,7 @@ async fn main() -> Result<()> {
     let config = Arc::new(Config::default());
 
     let (send_mecab_request, recv_mecab_request) = mpsc::channel::<MecabRequest>(4);
-    let (send_new_sentence, recv_new_sentence) = broadcast::channel::<NewSentence>(4);
+    let (send_new_sentence, _) = broadcast::channel::<NewSentence>(4);
 
     #[expect(
         unreachable_code,
@@ -48,8 +48,8 @@ async fn main() -> Result<()> {
     )]
     tokio::try_join!(
         mecab::run(recv_mecab_request),
-        textractor::run(config.clone(), send_new_sentence),
-        websocket::run(config.clone(), send_mecab_request, recv_new_sentence),
+        textractor::run(config.clone(), send_new_sentence.clone()),
+        websocket::run(config.clone(), send_mecab_request, send_new_sentence),
     )?;
     Ok(())
 }

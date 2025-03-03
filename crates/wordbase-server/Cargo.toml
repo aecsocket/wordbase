@@ -24,7 +24,13 @@ wordbase = { workspace = true }
 
 anyhow = { workspace = true, features = ["std"] }
 clap = { workspace = true, default-features = true, features = ["derive"] }
-derive_more = { workspace = true, features = ["std", "display", "error"] }
+derive_more = { workspace = true, features = [
+    "std",
+    "display",
+    "error",
+    "deref",
+    "deref_mut",
+] }
 futures = { workspace = true, features = ["std", "async-await"] }
 mecab = { workspace = true }
 serde = { workspace = true, features = ["std", "derive"] }

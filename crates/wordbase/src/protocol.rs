@@ -2,7 +2,7 @@ use bytes::Bytes;
 use derive_more::From;
 use serde::{Deserialize, Serialize};
 
-use crate::lookup::LookupConfig;
+use crate::lookup::{LookupConfig, LookupInfo};
 
 // client-to-server
 
@@ -58,10 +58,11 @@ pub struct AddAnkiNote {
 // server-to-client
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", content = "content")]
 pub enum FromServer {
     SyncLookupConfig(LookupConfig),
     NewSentence(NewSentence),
+    Error(String),
     Response {
         request_id: RequestId,
         #[serde(flatten)]
@@ -70,14 +71,8 @@ pub enum FromServer {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, From)]
-#[serde(tag = "type")]
+#[serde(tag = "type", content = "content")]
 pub enum Response {
-    LookupInfo(#[serde(rename = "response")] Option<LookupInfo>),
+    LookupInfo(Option<LookupInfo>),
     AddedAnkiNote,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LookupInfo {
-    pub chars_scanned: u64,
-    pub deinflected: String,
 }
