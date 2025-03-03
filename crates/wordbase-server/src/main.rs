@@ -1,8 +1,8 @@
 #![doc = include_str!("../README.md")]
 
 mod mecab;
+mod server;
 mod textractor;
-mod websocket;
 
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -49,7 +49,7 @@ async fn main() -> Result<()> {
     tokio::try_join!(
         mecab::run(recv_mecab_request),
         textractor::run(config.clone(), send_new_sentence.clone()),
-        websocket::run(config.clone(), send_mecab_request, send_new_sentence),
+        server::run(config.clone(), send_mecab_request, send_new_sentence),
     )?;
     Ok(())
 }

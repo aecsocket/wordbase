@@ -15,7 +15,7 @@ pub struct MecabRequest {
 #[derive(Debug)]
 pub struct MecabResponse {
     pub conjugated_len: u64,
-    pub base_form: String,
+    pub lemma: String,
 }
 
 static MODEL: LazyLock<Model> = LazyLock::new(|| {
@@ -36,6 +36,8 @@ thread_local! {
 }
 
 pub async fn run(mut recv_request: mpsc::Receiver<MecabRequest>) -> Result<Never> {
+    _ = *MODEL;
+
     loop {
         let request = recv_request
             .recv()
@@ -57,10 +59,10 @@ fn respond(text: String) -> Option<MecabResponse> {
             let stat = i32::from(node.stat);
             stat != MECAB_BOS_NODE && stat != MECAB_EOS_NODE
         })?;
-        let base_form = node.feature.split(',').nth(7).map(ToOwned::to_owned)?;
+        let lemma = node.feature.split(',').nth(6).map(ToOwned::to_owned)?;
         Some(MecabResponse {
             conjugated_len: 1,
-            base_form,
+            lemma,
         })
     })
 }

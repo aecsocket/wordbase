@@ -24,7 +24,7 @@ RUN yay -Syu --noconfirm \
     cargo binstall cargo-shear
 
 # install extra tools
-RUN yay -Syu --noconfirm websocatmecab && \
+RUN yay -Syu --noconfirm websocat mecab && \
     sudo mkdir -p /usr/libexec && \
     sudo ln -s /usr/lib/mecab/ /usr/libexec/mecab && \
     yay -Syu --noconfirm mecab-ipadic

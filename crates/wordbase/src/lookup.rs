@@ -16,5 +16,5 @@ impl Default for LookupConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LookupInfo {
     pub conjugated_len: u64,
-    pub base_form: String,
+    pub lemma: String,
 }

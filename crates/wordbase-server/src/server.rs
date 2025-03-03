@@ -157,6 +157,6 @@ async fn do_lookup(
 
     Ok(Some(LookupInfo {
         conjugated_len: mecab_response.conjugated_len,
-        base_form: mecab_response.base_form,
+        lemma: mecab_response.lemma,
     }))
 }
