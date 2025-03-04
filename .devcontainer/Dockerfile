@@ -28,3 +28,7 @@ RUN yay -Syu --noconfirm websocat mecab && \
     sudo mkdir -p /usr/libexec && \
     sudo ln -s /usr/lib/mecab/ /usr/libexec/mecab && \
     yay -Syu --noconfirm mecab-ipadic
+
+# install GTK/Adwaita development libraries
+RUN yay -Syu --noconfirm \
+    libadwaita meson blueprint-compiler python-sphinx-furo blueprint-compiler-docs-git

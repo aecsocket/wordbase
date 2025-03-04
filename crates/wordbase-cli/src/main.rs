@@ -111,7 +111,6 @@ async fn main() -> Result<()> {
         }
 
         info!("{:#?}", entry.glossary);
-        info!("");
     }
 
     drop(state);
@@ -125,39 +124,39 @@ fn print_strings(c: &yomitan::structured::Content) {
     match c {
         yomitan::structured::Content::String(s) => info!("{s}"),
         yomitan::structured::Content::Element(elem) => match &**elem {
-            Element::LineBreak { .. } => {}
-            Element::UnstyledElementRuby(e)
-            | Element::UnstyledElementRt(e)
-            | Element::UnstyledElementRp(e)
-            | Element::UnstyledElementTable(e)
-            | Element::UnstyledElementThead(e)
-            | Element::UnstyledElementTbody(e)
-            | Element::UnstyledElementTfoot(e)
-            | Element::UnstyledElementTr(e) => {
+            Element::Br { .. } => {}
+            Element::Ruby(e)
+            | Element::Rt(e)
+            | Element::Rp(e)
+            | Element::Table(e)
+            | Element::Thead(e)
+            | Element::Tbody(e)
+            | Element::Tfoot(e)
+            | Element::Tr(e) => {
                 if let Some(c) = &e.content {
                     print_strings(c);
                 }
             }
-            Element::TableElementTd(e) | Element::TableElementTh(e) => {
+            Element::Td(e) | Element::Th(e) => {
                 if let Some(c) = &e.content {
                     print_strings(c);
                 }
             }
-            Element::StyledElementSpan(e)
-            | Element::StyledElementDiv(e)
-            | Element::StyledElementOl(e)
-            | Element::StyledElementUl(e)
-            | Element::StyledElementLi(e)
-            | Element::StyledElementDetails(e)
-            | Element::StyledElementSummary(e) => {
+            Element::Span(e)
+            | Element::Div(e)
+            | Element::Ol(e)
+            | Element::Ul(e)
+            | Element::Li(e)
+            | Element::Details(e)
+            | Element::Summary(e) => {
                 if let Some(c) = &e.content {
                     print_strings(c);
                 }
             }
-            Element::ImageElement(e) => {
+            Element::Img(e) => {
                 info!("(image {})", e.base.path);
             }
-            Element::LinkElement(e) => {
+            Element::A(e) => {
                 if let Some(c) = &e.content {
                     print_strings(c);
                 }

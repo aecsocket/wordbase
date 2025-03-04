@@ -1,0 +1,624 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $Dictionary: Widget {
+  Box {
+    orientation: vertical;
+    spacing: 16;
+
+    Box {
+      orientation: horizontal;
+      spacing: 12;
+      halign: start;
+
+      Box {
+        orientation: vertical;
+        spacing: 12;
+
+        Box {
+          orientation: vertical;
+          spacing: 2;
+
+          Label {
+            label: "きょうりょく";
+            selectable: true;
+          }
+
+          Label {
+            label: "協力";
+            selectable: true;
+
+            styles [
+              "title-1",
+            ]
+          }
+
+          Box {
+            hexpand: true;
+            halign: center;
+
+            Label {
+              label: "きょ";
+
+              styles [
+                "caption",
+                "mora",
+              ]
+            }
+
+            Label {
+              label: "う";
+
+              styles [
+                "caption",
+                "mora",
+                "mora-high",
+              ]
+            }
+
+            Label {
+              label: "りょ";
+
+              styles [
+                "caption",
+                "mora",
+                "mora-high",
+              ]
+            }
+
+            Label {
+              label: "く";
+
+              styles [
+                "caption",
+                "mora",
+                "mora-high",
+              ]
+            }
+          }
+        }
+
+        Box {
+          orientation: vertical;
+          spacing: 8;
+
+          Box {
+            orientation: horizontal;
+            spacing: 4;
+            hexpand: true;
+
+            Button {
+              styles [
+                "suggested-action",
+              ]
+
+              hexpand: true;
+
+              Adw.ButtonContent {
+                label: _("Add Card");
+                icon-name: "list-add-symbolic";
+              }
+            }
+
+            Button {
+              Adw.ButtonContent {
+                icon-name: "audio-speakers-symbolic";
+              }
+            }
+          }
+
+          Box {
+            orientation: vertical;
+            spacing: 4;
+
+            Button {
+              styles [
+                "pill",
+                "small",
+              ]
+
+              can-focus: false;
+
+              Box {
+                spacing: 12;
+
+                Label {
+                  label: "JPDB";
+                  hexpand: true;
+                  halign: start;
+                }
+
+                Label {
+                  label: "954, 131342㋕";
+                  justify: center;
+
+                  styles [
+                    "numeric",
+                  ]
+                }
+              }
+            }
+
+            Button {
+              styles [
+                "pill",
+                "small",
+              ]
+
+              Box {
+                spacing: 12;
+
+                Label {
+                  label: "VN Freq";
+                  hexpand: true;
+                  halign: start;
+                }
+
+                Label {
+                  label: "948";
+
+                  styles [
+                    "numeric",
+                  ]
+                }
+              }
+            }
+
+            Button {
+              styles [
+                "pill",
+                "small",
+              ]
+
+              Box {
+                spacing: 12;
+
+                Label {
+                  label: "Novels";
+                  hexpand: true;
+                  halign: start;
+                }
+
+                Label {
+                  label: "1377";
+
+                  styles [
+                    "numeric",
+                  ]
+                }
+              }
+            }
+
+            Button {
+              styles [
+                "pill",
+                "small",
+              ]
+
+              Box {
+                spacing: 12;
+
+                Label {
+                  label: "Anime & J-drama";
+                  hexpand: true;
+                  halign: start;
+                }
+
+                Label {
+                  label: "1042";
+
+                  styles [
+                    "numeric",
+                  ]
+                }
+              }
+            }
+
+            Button {
+              styles [
+                "pill",
+                "small",
+              ]
+
+              Box {
+                spacing: 12;
+
+                Label {
+                  label: "Youtube";
+                  hexpand: true;
+                  halign: start;
+                }
+
+                Label {
+                  label: "722";
+
+                  styles [
+                    "numeric",
+                  ]
+                }
+              }
+            }
+
+            Button {
+              styles [
+                "pill",
+                "small",
+              ]
+
+              Box {
+                spacing: 12;
+
+                Label {
+                  label: "Wikipedia";
+                  hexpand: true;
+                  halign: start;
+                }
+
+                Label {
+                  label: "705";
+
+                  styles [
+                    "numeric",
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+
+      Box {
+        orientation: vertical;
+        spacing: 8;
+
+        Adw.Bin {
+          styles [
+            "card",
+          ]
+
+          Box {
+            orientation: vertical;
+            margin-top: 8;
+            margin-bottom: 8;
+            margin-start: 8;
+            margin-end: 8;
+            halign: start;
+            spacing: 4;
+
+            Box {
+              orientation: horizontal;
+              spacing: 4;
+
+              Label {
+                margin-end: 4;
+                label: "Jitendex.org [2025-02-11]";
+                selectable: true;
+
+                styles [
+                  "caption-heading",
+                ]
+              }
+
+              Button {
+                styles [
+                  "pill",
+                  "small",
+                ]
+
+                label: "noun";
+              }
+
+              Button {
+                styles [
+                  "pill",
+                  "small",
+                ]
+
+                label: "suru";
+              }
+
+              Button {
+                styles [
+                  "pill",
+                  "small",
+                ]
+
+                label: "intransitive";
+              }
+            }
+
+            Label {
+              label: "cooperation, collaboration, help, support";
+              halign: start;
+              valign: start;
+              selectable: true;
+            }
+
+            Box {
+              orientation: vertical;
+              margin-top: 4;
+              margin-bottom: 4;
+              margin-start: 16;
+              halign: start;
+              spacing: 4;
+
+              Label {
+                label: "ご<b>協力</b>に感謝します。";
+                selectable: true;
+                halign: start;
+                use-markup: true;
+              }
+
+              Label {
+                label: "I appreciate your cooperation.";
+                selectable: true;
+                halign: start;
+
+                styles [
+                  "caption",
+                ]
+              }
+            }
+          }
+        }
+
+        Adw.Bin {
+          styles [
+            "card",
+          ]
+
+          Box {
+            orientation: vertical;
+            margin-top: 8;
+            margin-bottom: 8;
+            margin-start: 8;
+            margin-end: 8;
+            halign: start;
+            spacing: 8;
+
+            Label {
+              label: "三省堂国語辞典　第八版";
+              halign: start;
+              valign: start;
+              selectable: true;
+
+              styles [
+                "caption-heading",
+              ]
+            }
+
+            Label {
+              label: "①〔いっしょに活動するときに〕力をあわせること。\n「クラスのみんなで━して準備する」\n ②〔人の活動に対して〕自分もできるだけのことをする。\n「━的・ご━ねがいます」\n 「協力」は、目的のために力を合わせる場合に広く使う。少しだけ手を貸す場合にも言う。「協調」は、国と国など、考え方のちがう者どうしが力を合わせる場合に使う。「協同」は同じ目的で集まるところに、「協働」は同じ目的で働くところに重点がある。";
+              halign: start;
+              valign: start;
+              selectable: true;
+              wrap: true;
+              wrap-mode: word;
+            }
+          }
+        }
+      }
+    }
+
+    Box {
+      orientation: horizontal;
+      spacing: 12;
+      halign: start;
+
+      Box {
+        orientation: vertical;
+        spacing: 12;
+
+        Box {
+          orientation: vertical;
+          spacing: 2;
+
+          Label {
+            label: "協";
+            selectable: true;
+
+            styles [
+              "title-1",
+            ]
+          }
+        }
+
+        Box {
+          orientation: vertical;
+          valign: start;
+          spacing: 4;
+
+          Button {
+            styles [
+              "pill",
+              "small",
+              "accent",
+            ]
+
+            label: "noun";
+          }
+
+          Button {
+            styles [
+              "pill",
+              "small",
+              "accent",
+            ]
+
+            label: "suru";
+          }
+
+          Button {
+            styles [
+              "pill",
+              "small",
+              "accent",
+            ]
+
+            label: "intransitive";
+          }
+
+          Button {
+            styles [
+              "pill",
+              "small",
+            ]
+
+            can-focus: false;
+
+            Box {
+              spacing: 12;
+
+              Label {
+                label: "JPDB";
+                hexpand: true;
+                halign: start;
+              }
+
+              Label {
+                label: "1964, 152579㋕";
+                justify: center;
+
+                styles [
+                  "numeric",
+                ]
+              }
+            }
+          }
+
+          Button {
+            styles [
+              "pill",
+              "small",
+            ]
+
+            Box {
+              spacing: 12;
+
+              Label {
+                label: "VN Freq";
+                hexpand: true;
+                halign: start;
+              }
+
+              Label {
+                label: "1208";
+
+                styles [
+                  "numeric",
+                ]
+              }
+            }
+          }
+        }
+      }
+
+      Box {
+        orientation: vertical;
+        spacing: 8;
+
+        Adw.Bin {
+          styles [
+            "card",
+          ]
+
+          Box {
+            orientation: vertical;
+            margin-top: 8;
+            margin-bottom: 8;
+            margin-start: 8;
+            margin-end: 8;
+            halign: start;
+            spacing: 8;
+
+            Label {
+              label: "Jitendex.org [2025-02-11]";
+              halign: start;
+              valign: start;
+              selectable: true;
+
+              styles [
+                "caption-heading",
+              ]
+            }
+
+            Label {
+              label: "cooperation, collaboration, help, support";
+              halign: start;
+              valign: start;
+              selectable: true;
+            }
+
+            Adw.Bin {
+              styles [
+                "card",
+              ]
+
+              Box {
+                orientation: vertical;
+                margin-top: 8;
+                margin-bottom: 8;
+                margin-start: 8;
+                margin-end: 8;
+                halign: start;
+                spacing: 4;
+
+                Label {
+                  label: "ご協力に感謝します。";
+                  selectable: true;
+                  halign: start;
+                }
+
+                Label {
+                  label: "I appreciate your cooperation.";
+                  selectable: true;
+                  halign: start;
+
+                  styles [
+                    "caption",
+                  ]
+                }
+              }
+            }
+          }
+        }
+
+        Adw.Bin {
+          styles [
+            "card",
+          ]
+
+          Box {
+            orientation: vertical;
+            margin-top: 8;
+            margin-bottom: 8;
+            margin-start: 8;
+            margin-end: 8;
+            halign: start;
+            spacing: 8;
+
+            Label {
+              label: "三省堂国語辞典　第八版";
+              halign: start;
+              valign: start;
+              selectable: true;
+
+              styles [
+                "caption-heading",
+              ]
+            }
+
+            Label {
+              label: "①〔いっしょに活動するときに〕力をあわせること。\n「クラスのみんなで━して準備する」\n ②〔人の活動に対して〕自分もできるだけのことをする。\n「━的・ご━ねがいます」\n 「協力」は、目的のために力を合わせる場合に広く使う。少しだけ手を貸す場合にも言う。「協調」は、国と国など、考え方のちがう者どうしが力を合わせる場合に使う。「協同」は同じ目的で集まるところに、「協働」は同じ目的で働くところに重点がある。";
+              halign: start;
+              valign: start;
+              selectable: true;
+              wrap: true;
+              wrap-mode: word;
+            }
+          }
+        }
+      }
+    }
+  }
+}

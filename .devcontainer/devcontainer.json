@@ -23,11 +23,13 @@
         // generic
         "ms-azuretools.vscode-docker",
         "GitHub.vscode-pull-request-github",
-        // rust
+        // Rust
         "rust-lang.rust-analyzer",
         "vadimcn.vscode-lldb",
         "tamasfe.even-better-toml",
-        "fill-labs.dependi"
+        "fill-labs.dependi",
+        // GTK
+        "bodil.blueprint-gtk"
       ]
     }
   }

@@ -212,49 +212,29 @@ pub struct LinkElement {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "tag", deny_unknown_fields)]
+#[serde(tag = "tag", rename_all = "kebab-case", deny_unknown_fields)]
 #[expect(clippy::large_enum_variant, reason = "most variants will be large")]
 pub enum Element {
-    #[serde(rename = "br")]
-    LineBreak { data: Option<Data> },
-    #[serde(rename = "ruby")]
-    UnstyledElementRuby(UnstyledElement),
-    #[serde(rename = "rt")]
-    UnstyledElementRt(UnstyledElement),
-    #[serde(rename = "rp")]
-    UnstyledElementRp(UnstyledElement),
-    #[serde(rename = "table")]
-    UnstyledElementTable(UnstyledElement),
-    #[serde(rename = "thead")]
-    UnstyledElementThead(UnstyledElement),
-    #[serde(rename = "tbody")]
-    UnstyledElementTbody(UnstyledElement),
-    #[serde(rename = "tfoot")]
-    UnstyledElementTfoot(UnstyledElement),
-    #[serde(rename = "tr")]
-    UnstyledElementTr(UnstyledElement),
-    #[serde(rename = "td")]
-    TableElementTd(TableElement),
-    #[serde(rename = "th")]
-    TableElementTh(TableElement),
-    #[serde(rename = "span")]
-    StyledElementSpan(StyledElement),
-    #[serde(rename = "div")]
-    StyledElementDiv(StyledElement),
-    #[serde(rename = "ol")]
-    StyledElementOl(StyledElement),
-    #[serde(rename = "ul")]
-    StyledElementUl(StyledElement),
-    #[serde(rename = "li")]
-    StyledElementLi(StyledElement),
-    #[serde(rename = "details")]
-    StyledElementDetails(StyledElement),
-    #[serde(rename = "summary")]
-    StyledElementSummary(StyledElement),
-    #[serde(rename = "img")]
-    ImageElement(ImageElement),
-    #[serde(rename = "a")]
-    LinkElement(LinkElement),
+    Br { data: Option<Data> },
+    Ruby(UnstyledElement),
+    Rt(UnstyledElement),
+    Rp(UnstyledElement),
+    Table(UnstyledElement),
+    Thead(UnstyledElement),
+    Tbody(UnstyledElement),
+    Tfoot(UnstyledElement),
+    Tr(UnstyledElement),
+    Td(TableElement),
+    Th(TableElement),
+    Span(StyledElement),
+    Div(StyledElement),
+    Ol(StyledElement),
+    Ul(StyledElement),
+    Li(StyledElement),
+    Details(StyledElement),
+    Summary(StyledElement),
+    Img(ImageElement),
+    A(LinkElement),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
