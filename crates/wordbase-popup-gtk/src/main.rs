@@ -13,27 +13,45 @@ extern crate libadwaita as adw;
 mod dictionary;
 
 use adw::prelude::*;
+use gtk::gdk;
 
 fn main() {
-    let application = adw::Application::builder()
+    let app = adw::Application::builder()
         .application_id("com.github.aecsocket.WordbasePopup")
         .build();
 
-    application.connect_activate(|application| {
-        let dictionary = dictionary::Dictionary::new();
+    app.connect_startup(|_| {
+        let css_provider = gtk::CssProvider::new();
+        css_provider.load_from_string(include_str!("style.css"));
 
-        let list = gtk::ListBox::new();
-        list.append(&gtk::Label::builder().label("Hello world!").build());
-        list.append(&dictionary);
-        list.append(&gtk::Label::builder().label("Goodbye world").build());
+        gtk::style_context_add_provider_for_display(
+            &gdk::Display::default().unwrap(),
+            &css_provider,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+    });
+
+    app.connect_activate(|app| {
+        let view = gtk::ScrolledWindow::new();
+
+        let contents = adw::Bin::builder()
+            .margin_top(16)
+            .margin_bottom(16)
+            .margin_start(16)
+            .margin_end(16)
+            .build();
+        view.set_child(Some(&contents));
+
+        let dictionary = dictionary::Dictionary::new();
+        contents.set_child(Some(&dictionary));
 
         let window = adw::ApplicationWindow::builder()
-            .application(application)
+            .application(app)
             .title("Dictionary")
-            .content(&list)
+            .content(&view)
             .build();
         window.present();
     });
 
-    application.run();
+    app.run();
 }

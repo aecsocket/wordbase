@@ -7,23 +7,12 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, gtk::CompositeTemplate)]
-    #[template(string = "
-    using Gtk 4.0;
-
-    template $Dictionary : Box {
-        Label label {
-            label: 'foobar';
-        }
-        Label my_label2 {
-            label: 'foobaz';
-        }
-    }
-    ")]
+    #[template(file = "src/dictionary.blp")]
     pub struct Dictionary {
-        #[template_child]
-        pub label: TemplateChild<gtk::Label>,
-        #[template_child(id = "my_label2")]
-        pub label2: gtk::TemplateChild<gtk::Label>,
+        // #[template_child]
+        // pub label: TemplateChild<gtk::Label>,
+        // #[template_child(id = "my_label2")]
+        // pub label2: gtk::TemplateChild<gtk::Label>,
     }
 
     #[glib::object_subclass]
