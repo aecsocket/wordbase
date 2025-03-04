@@ -4,8 +4,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::lookup::{LookupConfig, LookupInfo};
 
-// client-to-server
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FromClient {
     pub request_id: RequestId,
@@ -54,8 +52,6 @@ pub struct AddAnkiNote {
     pub image: Option<Bytes>,
     pub audio: Option<Bytes>,
 }
-
-// server-to-client
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "content")]

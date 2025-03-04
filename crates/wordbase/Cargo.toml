@@ -18,8 +18,13 @@ workspace = true
 all-features = true
 
 [features]
-parse-yomitan = ["serde", "dep:rayon", "dep:regex", "dep:serde_json", "dep:zip"]
-serde = []
+yomitan = [
+    "dep:rayon",
+    "dep:regex",
+    "dep:serde_json",
+    "dep:serde_repr",
+    "dep:zip",
+]
 
 [dependencies]
 bytes = { workspace = true, features = ["serde"] }
@@ -30,10 +35,10 @@ derive_more = { workspace = true, features = [
     "deref",
     "deref_mut",
 ] }
-serde = { workspace = true, features = ["std", "derive"] }
-serde_repr = { workspace = true }
+serde = { workspace = true, features = ["alloc", "derive"] }
 
 rayon = { workspace = true, optional = true }
 regex = { workspace = true, optional = true, default-features = true }
 serde_json = { workspace = true, optional = true, features = ["std"] }
+serde_repr = { workspace = true, optional = true }
 zip = { workspace = true, optional = true, default-features = true }

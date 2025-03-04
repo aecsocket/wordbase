@@ -18,7 +18,7 @@ pub struct MecabResponse {
 }
 
 static MODEL: LazyLock<Model> = LazyLock::new(|| {
-    let model = Model::new("");
+    let model = Model::new("-Ochamame");
 
     for dictionary in model.dictionary_info().iter() {
         info!(
@@ -61,26 +61,13 @@ fn respond(text: String) -> Option<MecabResponse> {
         let feature = FeatureFields::new(&first_node.feature)?;
         let lemma = feature.lemma.to_owned();
 
-        let conjugated_len = first_node.length
-            + nodes
-                .take_while(|node| {
-                    let Some(feature) = FeatureFields::new(&node.feature) else {
-                        return false;
-                    };
-                    let stat = i32::from(node.stat);
-                    let meta_node = stat == MECAB_BOS_NODE || stat == MECAB_EOS_NODE;
-                    !meta_node && !feature.start_of_word()
-                })
-                .map(|node| node.length)
-                .sum::<u16>();
-
         Some(MecabResponse { lemma })
     })
 }
 
 struct FeatureFields<'a> {
-    part_of_speech: &'a str,
-    subclass1: &'a str,
+    _part_of_speech: &'a str,
+    _subclass1: &'a str,
     _subclass2: &'a str,
     _subclass3: &'a str,
     _conjugation_form: &'a str,
@@ -91,12 +78,10 @@ struct FeatureFields<'a> {
 
 impl<'a> FeatureFields<'a> {
     fn new(text: &'a str) -> Option<Self> {
-        info!("{text}");
-
         let mut parts = text.split(',');
         Some(Self {
-            part_of_speech: parts.next()?,
-            subclass1: parts.next()?,
+            _part_of_speech: parts.next()?,
+            _subclass1: parts.next()?,
             _subclass2: parts.next()?,
             _subclass3: parts.next()?,
             _conjugation_form: parts.next()?,
@@ -104,21 +89,5 @@ impl<'a> FeatureFields<'a> {
             _reading: parts.next()?,
             lemma: parts.next()?,
         })
-    }
-
-    #[must_use]
-    fn start_of_word(&self) -> bool {
-        match self.part_of_speech {
-            // particle
-            "助詞" => false,
-            // verb
-            "動詞" => {
-                // 食べ    subclass1: 一般
-                // なかっ  subclass1: (empty)
-                // た      subclass1: (empty)
-                !self.subclass1.is_empty()
-            }
-            _ => true,
-        }
     }
 }

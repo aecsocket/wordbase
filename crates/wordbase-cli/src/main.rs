@@ -54,8 +54,6 @@ async fn main() -> Result<()> {
                 .context("failed to perform request")?;
             if let Some(response) = response {
                 println!("{response:#?}");
-                let conjugated = &text[..usize::from(response.conjugated_len)];
-                println!("Conjugated: {conjugated}");
             } else {
                 println!("(nothing)");
             }

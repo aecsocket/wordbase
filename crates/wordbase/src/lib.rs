@@ -3,7 +3,7 @@
 pub mod lookup;
 pub mod protocol;
 
-#[cfg(feature = "parse-yomitan")]
+#[cfg(feature = "yomitan")]
 pub mod yomitan;
 
 /// Default port which a Wordbase server listens on.
