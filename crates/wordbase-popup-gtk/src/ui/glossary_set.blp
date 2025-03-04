@@ -2,41 +2,32 @@ using Gtk 4.0;
 using Adw 1;
 
 template $GlossarySet: Adw.Bin {
-  hexpand: true;
-  valign: start;
-
   styles [
     "card",
   ]
 
   Box {
-    orientation: vertical;
+    hexpand: true;
     margin-top: 8;
     margin-bottom: 8;
     margin-start: 8;
     margin-end: 8;
-    hexpand: true;
+    orientation: vertical;
     spacing: 4;
 
-    Box {
-      orientation: horizontal;
-      spacing: 4;
+    Label dictionary {
+      label: "Dictionary";
+      halign: start;
+      selectable: true;
 
-      Label dictionary {
-        label: "Dictionary";
-        margin-end: 4;
-        selectable: true;
-
-        styles [
-          "caption-heading",
-        ]
-      }
+      styles [
+        "caption-heading",
+      ]
     }
 
     Label {
-      label: "TODO";
+      label: "(insert WebView here)";
       halign: start;
-      valign: start;
       selectable: true;
       wrap: true;
     }

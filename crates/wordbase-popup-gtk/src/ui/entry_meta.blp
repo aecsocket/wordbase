@@ -2,8 +2,7 @@ using Gtk 4.0;
 using Adw 1;
 
 template $EntryMeta: Box {
-  halign: start;
-  valign: start;
+  hexpand: false;
   orientation: vertical;
   spacing: 12;
 
@@ -47,7 +46,6 @@ template $EntryMeta: Box {
     Box {
       orientation: horizontal;
       spacing: 4;
-      hexpand: true;
 
       Button {
         hexpand: true;
@@ -57,7 +55,7 @@ template $EntryMeta: Box {
         ]
 
         Adw.ButtonContent {
-          label: _("Add Card");
+          label: _("Add Note");
           icon-name: "list-add-symbolic";
         }
       }
