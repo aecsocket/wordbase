@@ -1,11 +1,10 @@
-use core::arch;
 use std::{
     convert::Infallible,
     io::Cursor,
     num::Wrapping,
     path::Path,
     sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{self, AtomicUsize},
     },
 };
@@ -13,11 +12,12 @@ use std::{
 use anyhow::{Context as _, Result, bail};
 use derive_more::{Deref, DerefMut};
 use futures::{SinkExt as _, StreamExt as _, never::Never};
-use sqlx::{Pool, Sqlite, query, sqlite::SqlitePoolOptions};
+use sqlx::{Pool, Row, Sqlite, sqlite::SqlitePoolOptions};
 use tokio::{
     fs,
     net::{TcpListener, TcpStream},
-    sync::{broadcast, mpsc, oneshot},
+    sync::{Mutex, broadcast, mpsc, oneshot},
+    task::JoinSet,
 };
 use tokio_tungstenite::{WebSocketStream, tungstenite::Message};
 use tracing::{Instrument, info, info_span, warn};
@@ -27,7 +27,7 @@ use wordbase::{
     },
     lookup::LookupInfo,
     protocol::{ClientRequest, FromClient, FromServer, Lookup, NewSentence, Response},
-    yomitan::{self, TermBank},
+    yomitan,
 };
 
 use crate::{
@@ -49,8 +49,9 @@ pub async fn run(
 
     sqlx::query(
         "CREATE TABLE expressions (
-            expression TEXT PRIMARY KEY,
-            reading TEXT NOT NULL
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            expression TEXT NOT NULL,
+            reading TEXT
         )",
     )
     .execute(&db)
@@ -60,7 +61,8 @@ pub async fn run(
     let path = Path::new("/home/dev/dictionaries/jitendex.zip");
     todo_import(&db, &path)
         .instrument(info_span!("import", ?path))
-        .await;
+        .await
+        .context("failed to import")?;
 
     let listener = TcpListener::bind(&config.listen_addr)
         .await
@@ -216,31 +218,55 @@ async fn todo_import(db: &Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
 
     let (parser, index) = yomitan::Parse::new(|| Ok::<_, Infallible>(Cursor::new(&archive)))
         .context("failed to parse")?;
-    let term_banks_total = parser.term_banks().len();
+    let term_banks_left = AtomicUsize::new(parser.term_banks().len());
 
     info!("{} rev {}:", index.title, index.revision);
     info!("  - {} tag banks", parser.tag_banks().len());
-    info!("  - {term_banks_total} term banks");
+    info!(
+        "  - {} term banks",
+        term_banks_left.load(atomic::Ordering::SeqCst)
+    );
     info!("  - {} term meta banks", parser.term_meta_banks().len());
     info!("  - {} kanji banks", parser.kanji_banks().len());
     info!("  - {} kanji meta banks", parser.kanji_meta_banks().len());
 
-    let term_bank = Mutex::new(TermBank::default());
-    let term_banks_left = AtomicUsize::new(term_banks_total);
+    let tx = Arc::new(Mutex::new(
+        db.begin()
+            .await
+            .context("failed to start database transaction")?,
+    ));
+    let tasks = Mutex::new(JoinSet::<Result<()>>::new());
 
-    let tx = db
-        .begin()
-        .await
-        .context("failed to start database transaction")?;
-    // let tx = Mutex::new(tx);
-
+    let rt = tokio::runtime::Handle::current();
     parser
         .run(
             |_, _| {},
-            |_, new_term_bank| {
+            |_, term_bank| {
+                let tx = tx.clone();
+
                 {
-                    let mut term_bank = term_bank.lock().expect("poisoned");
-                    term_bank.extend_from_slice(&new_term_bank);
+                    let mut tasks = tasks.blocking_lock();
+                    tasks.spawn_on(
+                        async move {
+                            for term in term_bank {
+                                let expression = term.expression;
+                                let reading = term.reading;
+                                sqlx::query("INSERT INTO expressions (expression, reading) VALUES ($1, $2)")
+                                .bind(&expression)
+                                .bind(&reading)
+                                .execute(&mut **tx.lock().await)
+                                .await
+                                .with_context(|| {
+                                format!(
+                                    "failed to insert {expression:?} ({reading:?}) into database"
+                                )
+                            })?;
+                            }
+
+                            Ok::<_, anyhow::Error>(())
+                        },
+                        &rt,
+                    );
                 }
 
                 let term_banks_left = term_banks_left.fetch_sub(1, atomic::Ordering::SeqCst);
@@ -251,23 +277,27 @@ async fn todo_import(db: &Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
             |_, _| {},
         )
         .context("failed to parse banks")?;
+    info!("Parse complete, waiting for database tasks to complete");
 
-    for term in term_bank.into_inner().expect("poisoned") {
-        let expression = term.expression;
-        let reading = term.reading;
-        sqlx::query("INSERT INTO expressions VALUES ($1, $2)")
-            .bind(&expression)
-            .bind(&reading)
-            .execute(&mut *tx)
-            .await
-            .with_context(|| {
-                format!("failed to insert {expression:?} ({reading:?}) into database")
-            })?;
+    let mut tasks = tasks.into_inner();
+    while let Some(result) = tasks.join_next().await {
+        result
+            .context("import task cancelled")?
+            .context("failed to import bank")?;
     }
 
-    tx.commit()
+    Arc::into_inner(tx)
+        .expect("lock should not be held after all tasks have been joined on")
+        .into_inner()
+        .commit()
         .await
         .context("failed to commit transaction to database")?;
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM expressions")
+        .fetch_one(db)
+        .await?;
+    info!("Num expressions: {count:?}");
+
     Ok(())
 }
 

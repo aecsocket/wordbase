@@ -1,21 +1,20 @@
 #![doc = include_str!("../README.md")]
 
-use core::alloc;
 use std::{
     collections::HashMap,
     convert::Infallible,
-    fs::{self, File},
+    fs,
     io::Cursor,
     path::PathBuf,
     sync::{
-        Arc, Mutex,
+        Mutex,
         atomic::{AtomicUsize, Ordering},
     },
 };
 
 use anyhow::{Context, Result};
 use tracing::info;
-use wordbase::{DEFAULT_PORT, protocol::Lookup, yomitan};
+use wordbase::yomitan;
 
 #[derive(Debug, clap::Parser)]
 struct Args {
