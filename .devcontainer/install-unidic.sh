@@ -1,4 +1,6 @@
 #!/bin/bash
+# Downloads the Unidic dictionary and installs it into MeCab.
+
 DOWNLOAD_PATH="$HOME/unidic.zip"
 
 if [ ! -f "$DOWNLOAD_PATH" ]; then

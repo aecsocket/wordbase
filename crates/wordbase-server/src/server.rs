@@ -12,10 +12,11 @@ use std::{
 use anyhow::{Context as _, Result, bail};
 use derive_more::{Deref, DerefMut};
 use futures::{SinkExt as _, StreamExt as _, never::Never};
-use sqlx::{Pool, Row, Sqlite, sqlite::SqlitePoolOptions};
+use sqlx::{Pool, Sqlite, Transaction, sqlite::SqlitePoolOptions};
 use tokio::{
     fs,
     net::{TcpListener, TcpStream},
+    runtime,
     sync::{Mutex, broadcast, mpsc, oneshot},
     task::JoinSet,
 };
@@ -27,7 +28,7 @@ use wordbase::{
     },
     lookup::LookupInfo,
     protocol::{ClientRequest, FromClient, FromServer, Lookup, NewSentence, Response},
-    yomitan,
+    yomitan::{self, TermBank},
 };
 
 use crate::{
@@ -47,16 +48,10 @@ pub async fn run(
         .context("failed to connect to database")?;
     info!("Connected to SQLite database");
 
-    sqlx::query(
-        "CREATE TABLE expressions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            expression TEXT NOT NULL,
-            reading TEXT
-        )",
-    )
-    .execute(&db)
-    .await
-    .context("failed to set up database")?;
+    sqlx::query(include_str!("setup_db.sql"))
+        .execute(&db)
+        .await
+        .context("failed to set up database")?;
 
     let path = Path::new("/home/dev/dictionaries/jitendex.zip");
     todo_import(&db, &path)
@@ -128,7 +123,7 @@ async fn handle_stream(
                 let message = message
                     .context("stream closed")?
                     .context("stream error")?;
-                if let Err(err) = handle_message(&config, &send_mecab_request, &send_new_sentence, &mut connection, message).await {
+                if let Err(err) = handle_message(&config, &db, &send_mecab_request, &send_new_sentence, &mut connection, message).await {
                     warn!("Failed to handle request: {err:?}");
                     _ = connection.write(&FromServer::Error(format!("{err:?}"))).await;
                 }
@@ -145,6 +140,7 @@ async fn forward_new_sentence(connection: &mut Connection, new_sentence: NewSent
 
 async fn handle_message(
     config: &Config,
+    db: &Pool<Sqlite>,
     send_mecab_request: &mpsc::Sender<MecabRequest>,
     send_new_sentence: &broadcast::Sender<NewSentence>,
     connection: &mut Connection,
@@ -162,7 +158,7 @@ async fn handle_message(
     let request_id = message.request_id;
     match message.request {
         ClientRequest::Lookup(request) => {
-            let response = do_lookup(config, send_mecab_request, request).await?;
+            let response = do_lookup(config, db, send_mecab_request, request).await?;
             connection
                 .write(&FromServer::Response {
                     request_id,
@@ -182,6 +178,7 @@ async fn handle_message(
 
 async fn do_lookup(
     config: &Config,
+    db: &Pool<Sqlite>,
     send_mecab_request: &mpsc::Sender<MecabRequest>,
     request: Lookup,
 ) -> Result<Option<LookupInfo>> {
@@ -200,13 +197,33 @@ async fn do_lookup(
             send_response: send_mecab_response,
         })
         .await;
-    let Some(mecab_response) = recv_mecab_response.await.context("mecab channel dropped")? else {
+    let Some(mecab) = recv_mecab_response.await.context("mecab channel dropped")? else {
         return Ok(None);
     };
 
+    let expressions = sqlx::query!(
+        "SELECT expression, reading FROM expressions WHERE expression = $1 OR reading = $1",
+        mecab.lemma
+    )
+    .fetch(db)
+    .map(|row| {
+        let row = row.context("failed to fetch database row")?;
+        Ok::<_, anyhow::Error>(ExpressionEntry {
+            reading: Reading::from_no_pairs(row.expression, row.reading),
+            frequency_sets: vec![],
+            pitch_sets: vec![],
+            glossary_sets: vec![],
+        })
+    })
+    .collect::<Vec<_>>()
+    .await
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .context("failed to fetch expressions")?;
+
     Ok(Some(LookupInfo {
-        lemma: mecab_response.lemma,
-        expressions: expression_entries(), // TODO
+        lemma: mecab.lemma,
+        expressions,
     }))
 }
 
@@ -237,36 +254,15 @@ async fn todo_import(db: &Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
     ));
     let tasks = Mutex::new(JoinSet::<Result<()>>::new());
 
-    let rt = tokio::runtime::Handle::current();
+    let tokio_runtime = runtime::Handle::current();
     parser
         .run(
             |_, _| {},
             |_, term_bank| {
-                let tx = tx.clone();
-
+                let task = parsed_term_bank(tx.clone(), term_bank);
                 {
                     let mut tasks = tasks.blocking_lock();
-                    tasks.spawn_on(
-                        async move {
-                            for term in term_bank {
-                                let expression = term.expression;
-                                let reading = term.reading;
-                                sqlx::query("INSERT INTO expressions (expression, reading) VALUES ($1, $2)")
-                                .bind(&expression)
-                                .bind(&reading)
-                                .execute(&mut **tx.lock().await)
-                                .await
-                                .with_context(|| {
-                                format!(
-                                    "failed to insert {expression:?} ({reading:?}) into database"
-                                )
-                            })?;
-                            }
-
-                            Ok::<_, anyhow::Error>(())
-                        },
-                        &rt,
-                    );
+                    tasks.spawn_on(task, &tokio_runtime);
                 }
 
                 let term_banks_left = term_banks_left.fetch_sub(1, atomic::Ordering::SeqCst);
@@ -277,17 +273,18 @@ async fn todo_import(db: &Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
             |_, _| {},
         )
         .context("failed to parse banks")?;
-    info!("Parse complete, waiting for database tasks to complete");
 
+    info!("Parse complete, waiting for database tasks to complete");
     let mut tasks = tasks.into_inner();
     while let Some(result) = tasks.join_next().await {
+        info!("{} tasks left", tasks.len());
         result
             .context("import task cancelled")?
             .context("failed to import bank")?;
     }
 
     Arc::into_inner(tx)
-        .expect("lock should not be held after all tasks have been joined on")
+        .expect("we own the last `Arc` after all tasks have been joined")
         .into_inner()
         .commit()
         .await
@@ -297,6 +294,26 @@ async fn todo_import(db: &Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
         .fetch_one(db)
         .await?;
     info!("Num expressions: {count:?}");
+
+    Ok(())
+}
+
+async fn parsed_term_bank(
+    tx: Arc<Mutex<Transaction<'_, Sqlite>>>,
+    term_bank: TermBank,
+) -> Result<()> {
+    for term in term_bank {
+        let expression = term.expression.clone();
+        let reading = term.reading.clone();
+        sqlx::query!(
+            "INSERT INTO expressions (expression, reading) VALUES ($1, $2)",
+            expression,
+            reading,
+        )
+        .execute(&mut **tx.lock().await)
+        .await
+        .with_context(|| format!("failed to insert {expression:?} ({reading:?}) into database"))?;
+    }
 
     Ok(())
 }
