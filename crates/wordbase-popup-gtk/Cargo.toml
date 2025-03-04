@@ -26,3 +26,4 @@ gtk4 = { workspace = true, features = ["gnome_47", "blueprint"] }
 libadwaita = { workspace = true }
 serde = { workspace = true, features = ["std", "derive"] }
 serde_json = { workspace = true, features = ["std"] }
+webkit6 = { workspace = true }

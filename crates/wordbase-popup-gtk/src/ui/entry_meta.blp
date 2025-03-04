@@ -1,0 +1,79 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $EntryMeta: Box {
+  halign: start;
+  valign: start;
+  orientation: vertical;
+  spacing: 12;
+
+  Box {
+    orientation: vertical;
+    spacing: 2;
+
+    Label reading {
+      label: "Reading";
+      selectable: true;
+    }
+
+    Label expression {
+      label: "Expression";
+      selectable: true;
+
+      styles [
+        "title-1",
+      ]
+    }
+
+    Box {
+      hexpand: true;
+      halign: center;
+
+      Label {
+        label: "#TODO: PITCH#";
+
+        styles [
+          "caption",
+          "mora",
+        ]
+      }
+    }
+  }
+
+  Box {
+    orientation: vertical;
+    spacing: 8;
+
+    Box {
+      orientation: horizontal;
+      spacing: 4;
+      hexpand: true;
+
+      Button {
+        hexpand: true;
+
+        styles [
+          "suggested-action",
+        ]
+
+        Adw.ButtonContent {
+          label: _("Add Card");
+          icon-name: "list-add-symbolic";
+        }
+      }
+
+      Button {
+        name: _("Play Pronunciation");
+
+        Adw.ButtonContent {
+          icon-name: "audio-speakers-symbolic";
+        }
+      }
+    }
+
+    Box frequency_tags {
+      orientation: vertical;
+      spacing: 4;
+    }
+  }
+}

@@ -1,0 +1,29 @@
+using Gtk 4.0;
+
+template $FrequencyTag: Button {
+  can-target: false;
+
+  styles [
+    "pill",
+    "small",
+  ]
+
+  Box {
+    spacing: 12;
+
+    Label dictionary {
+      label: "Dictionary";
+      hexpand: true;
+      halign: start;
+    }
+
+    Label frequency {
+      label: "Frequency";
+      halign: end;
+
+      styles [
+        "numeric",
+      ]
+    }
+  }
+}

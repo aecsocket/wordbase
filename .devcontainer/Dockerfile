@@ -31,5 +31,6 @@ RUN yay -Syu --noconfirm websocat mecab && \
 
 # install UI development libraries
 RUN yay -Syu --noconfirm \
-    libadwaita meson blueprint-compiler python-sphinx-furo blueprint-compiler-docs-git \
+    libadwaita webkitgtk-6.0 \
+    meson blueprint-compiler python-sphinx-furo blueprint-compiler-docs-git \
     noto-fonts noto-fonts-cjk
