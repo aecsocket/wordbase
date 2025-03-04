@@ -1,5 +1,15 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Dictionary {
+    pub id: DictionaryId,
+    pub title: String,
+    pub revision: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct DictionaryId(pub i64);
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExpressionEntry {
     pub reading: Reading,

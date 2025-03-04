@@ -1,12 +1,11 @@
 CREATE TABLE dictionaries (
     id          INTEGER     PRIMARY KEY AUTOINCREMENT,
-    created_at  TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
     title       TEXT        NOT NULL,
     revision    TEXT        NOT NULL
 );
 
 CREATE TABLE terms (
-    dictionary  INTEGER REFERENCES dictionaries(id),
+    dictionary  INTEGER REFERENCES dictionaries(id) ON DELETE CASCADE,
     expression  TEXT NOT NULL,
     reading     TEXT NOT NULL,
     data        BLOB

@@ -1,28 +1,57 @@
 #![doc = include_str!("../README.md")]
 
-use std::num::Wrapping;
-
+use bytes::Bytes;
 use derive_more::{Display, Error};
 pub use wordbase;
 
-use futures::{SinkExt, StreamExt};
-use tokio::net::TcpStream;
+use futures::{Sink, SinkExt, Stream, StreamExt};
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    net::TcpStream,
+};
 use tokio_tungstenite::{
     MaybeTlsStream, WebSocketStream,
     tungstenite::{Message, client::IntoClientRequest},
 };
 use wordbase::{
-    lookup::{LookupInfo, SharedConfig},
-    protocol::{ClientRequest, FromClient, FromServer, Lookup, NewSentence, RequestId, Response},
+    SharedConfig,
+    dict::{Dictionary, DictionaryId},
+    protocol::{DictionaryNotFound, FromClient, FromServer, LookupInfo, NewSentence},
 };
+
+#[derive(Debug, Clone, Copy)]
+pub struct Connection<S>(pub S);
+
+impl<S> Connection<S>
+where
+    S: Stream<Item = Result<Message, WsError>> + Sink<Message, Error = WsError> + Unpin,
+{
+    pub async fn recv(&mut self) -> Result<FromServer, ConnectionError> {
+        let data = self
+            .0
+            .next()
+            .await
+            .ok_or(ConnectionError::StreamClosed)?
+            .map_err(ConnectionError::Stream)?
+            .into_data();
+        serde_json::from_slice::<FromServer>(&data).map_err(ConnectionError::Deserialize)
+    }
+
+    pub async fn send(&mut self, message: &FromClient) -> Result<(), ConnectionError> {
+        let request = serde_json::to_string(message).map_err(ConnectionError::Serialize)?;
+        self.0
+            .send(Message::text(request))
+            .await
+            .map_err(ConnectionError::Send)
+    }
+}
 
 /// WebSocket error type.
 pub type WsError = tokio_tungstenite::tungstenite::Error;
 
-/// Error when using a [`Connection`].
 #[derive(Debug, Display, Error)]
 #[non_exhaustive]
-pub enum Error {
+pub enum ConnectionError {
     /// Failed to connect to server.
     #[display("failed to connect")]
     Connect(WsError),
@@ -38,141 +67,140 @@ pub enum Error {
     /// WebSocket stream error.
     #[display("stream error")]
     Stream(WsError),
-    /// Failed to parse server response as UTF-8 text.
-    #[display("failed to parse response as UTF-8 text")]
-    ResponseIntoText(WsError),
     /// Failed to deserialize server response.
     #[display("failed to deserialize response")]
     Deserialize(serde_json::Error),
-    /// Received invalid response kind from server.
-    #[display("received invalid response kind")]
-    InvalidResponseKind,
-    /// Server sent us an error in response to one of our requests.
-    FromServer(#[error(ignore)] String),
+    /// Received a valid message from the server, but we expected a different
+    /// kind of message.
+    #[display("received wrong message kind")]
+    WrongMessageKind,
+    /// Server is sending us a custom error.
+    Server(#[error(not(source))] String),
 }
 
 #[derive(Debug)]
-pub struct Connection {
-    pub stream: WebSocketStream<MaybeTlsStream<TcpStream>>,
-}
-
-impl Connection {
-    pub async fn recv(&mut self) -> Result<FromServer, Error> {
-        let data = self
-            .stream
-            .next()
-            .await
-            .ok_or(Error::StreamClosed)?
-            .map_err(Error::Stream)?
-            .into_data();
-        serde_json::from_slice::<FromServer>(&data).map_err(Error::Deserialize)
-    }
-
-    pub async fn send(&mut self, message: &FromClient) -> Result<(), Error> {
-        let request = serde_json::to_string(message).map_err(Error::Serialize)?;
-        self.stream
-            .send(Message::text(request))
-            .await
-            .map_err(Error::Send)
-    }
-}
-
-#[derive(Debug)]
-pub struct Client {
-    connection: Connection,
+pub struct Client<S> {
+    connection: Connection<S>,
     config: SharedConfig,
-    next_request_id: Wrapping<u64>,
     events: Vec<Event>,
 }
 
+pub type SocketClient = Client<WebSocketStream<MaybeTlsStream<TcpStream>>>;
+
 #[derive(Debug)]
 pub enum Event {
-    SyncConfig,
+    NewConfig,
     NewSentence(NewSentence),
-    Response {
-        request_id: RequestId,
-        response: Response,
-    },
 }
 
-impl Client {
-    pub async fn handshake(mut connection: Connection) -> Result<Self, (Error, Connection)> {
-        let lookup_config = match connection.recv().await {
-            Ok(FromServer::SyncConfig(shared_config)) => shared_config,
+impl<S> Client<S>
+where
+    S: Stream<Item = Result<Message, WsError>> + Sink<Message, Error = WsError> + Unpin,
+{
+    pub async fn handshake(stream: S) -> Result<Self, (ConnectionError, S)> {
+        let mut connection = Connection(stream);
+        let config = match connection.recv().await {
+            Ok(FromServer::SyncConfig { config }) => config,
             Ok(_) => {
-                return Err((Error::InvalidResponseKind, connection));
+                return Err((ConnectionError::WrongMessageKind, connection.0));
             }
             Err(err) => {
-                return Err((err, connection));
+                return Err((err, connection.0));
             }
         };
+
         Ok(Self {
             connection,
-            config: lookup_config,
-            next_request_id: Wrapping(0),
+            config,
             events: Vec::new(),
         })
     }
 
-    async fn send(&mut self, request: ClientRequest) -> Result<RequestId, Error> {
-        let request_id = RequestId::from_raw(self.next_request_id.0);
-        self.next_request_id += 1;
-        self.connection
-            .send(&FromClient {
-                request_id,
-                request,
-            })
-            .await?;
-        Ok(request_id)
+    fn event_from(&mut self, message: FromServer) -> Result<Event, ConnectionError> {
+        match message {
+            FromServer::Error { message } => Err(ConnectionError::Server(message)),
+            FromServer::SyncConfig { config } => {
+                self.config = config;
+                Ok(Event::NewConfig)
+            }
+            FromServer::NewSentence(new_sentence) => Ok(Event::NewSentence(new_sentence)),
+            _ => Err(ConnectionError::WrongMessageKind),
+        }
     }
 
-    pub fn drain_events(&mut self) -> impl Iterator<Item = Event> {
-        self.events.drain(..)
-    }
-
-    pub async fn poll(&mut self) -> Result<Event, Error> {
+    pub async fn poll(&mut self) -> Result<Event, ConnectionError> {
         if let Some(event) = self.events.pop() {
             return Ok(event);
         }
 
         let message = self.connection.recv().await?;
-        self.handle(message)
+        self.event_from(message)
     }
 
-    fn handle(&mut self, message: FromServer) -> Result<Event, Error> {
-        match message {
-            FromServer::SyncConfig(config) => {
-                self.config = config;
-                Ok(Event::SyncConfig)
-            }
-            FromServer::NewSentence(new_sentence) => Ok(Event::NewSentence(new_sentence)),
-            FromServer::Response {
-                request_id,
-                response,
-            } => Ok(Event::Response {
-                request_id,
-                response,
-            }),
-            FromServer::Error(err) => Err(Error::FromServer(err)),
-        }
+    fn fallback_handle(&mut self, message: FromServer) -> Result<(), ConnectionError> {
+        let event = self.event_from(message)?;
+        self.events.push(event);
+        Ok(())
     }
 
-    pub async fn lookup(&mut self, request: Lookup) -> Result<Option<LookupInfo>, Error> {
-        let this_request_id = self.send(ClientRequest::Lookup(request)).await?;
+    pub async fn new_sentence(&mut self, new_sentence: NewSentence) -> Result<(), ConnectionError> {
+        self.connection
+            .send(&FromClient::NewSentence(new_sentence))
+            .await?;
+        Ok(())
+    }
+
+    pub async fn lookup(
+        &mut self,
+        text: impl Into<String>,
+    ) -> Result<Option<LookupInfo>, ConnectionError> {
+        self.connection
+            .send(&FromClient::Lookup { text: text.into() })
+            .await?;
         loop {
             match self.connection.recv().await? {
-                FromServer::Response {
-                    request_id,
-                    response: Response::LookupInfo(lookup_info),
-                } if request_id == this_request_id => {
-                    return Ok(lookup_info);
-                }
-                message => {
-                    let event = self.handle(message)?;
-                    self.events.push(event);
-                }
+                FromServer::Lookup { lookup } => return Ok(lookup),
+                message => self.fallback_handle(message)?,
             }
         }
+    }
+
+    pub async fn list_dictionaries(&mut self) -> Result<Vec<Dictionary>, ConnectionError> {
+        self.connection.send(&FromClient::ListDictionaries).await?;
+        loop {
+            match self.connection.recv().await? {
+                FromServer::ListDictionaries { dictionaries } => return Ok(dictionaries),
+                message => self.fallback_handle(message)?,
+            }
+        }
+    }
+
+    pub async fn remove_dictionary(
+        &mut self,
+        dictionary_id: DictionaryId,
+    ) -> Result<Result<(), DictionaryNotFound>, ConnectionError> {
+        self.connection
+            .send(&FromClient::RemoveDictionary { dictionary_id })
+            .await?;
+        loop {
+            match self.connection.recv().await? {
+                FromServer::RemoveDictionary { result } => return Ok(result),
+                message => self.fallback_handle(message)?,
+            }
+        }
+    }
+}
+
+impl<S> Client<WebSocketStream<S>>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    pub async fn close(&mut self) -> Result<(), ConnectionError> {
+        self.connection
+            .0
+            .close(None)
+            .await
+            .map_err(ConnectionError::Stream)
     }
 }
 
@@ -182,11 +210,12 @@ impl Client {
 ///
 /// # Errors
 ///
-/// See [`WsError`].
-pub async fn connect(request: impl IntoClientRequest + Unpin) -> Result<Client, Error> {
+/// See [`ConnectionError`].
+pub async fn connect(
+    request: impl IntoClientRequest + Unpin,
+) -> Result<SocketClient, ConnectionError> {
     let (stream, _) = tokio_tungstenite::connect_async(request)
         .await
-        .map_err(Error::Connect)?;
-    let connection = Connection { stream };
-    Client::handshake(connection).await.map_err(|(err, _)| err)
+        .map_err(ConnectionError::Connect)?;
+    Client::handshake(stream).await.map_err(|(err, _)| err)
 }

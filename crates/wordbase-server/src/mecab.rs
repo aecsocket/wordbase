@@ -9,11 +9,11 @@ use tracing::info;
 #[derive(Debug)]
 pub struct MecabRequest {
     pub text: String,
-    pub send_response: oneshot::Sender<Option<MecabResponse>>,
+    pub send_info: oneshot::Sender<Option<MecabInfo>>,
 }
 
 #[derive(Debug)]
-pub struct MecabResponse {
+pub struct MecabInfo {
     pub lemma: String,
 }
 
@@ -43,12 +43,12 @@ pub async fn run(mut recv_request: mpsc::Receiver<MecabRequest>) -> Result<Never
             .recv()
             .await
             .context("request channel closed")?;
-        let response = respond(request.text);
-        _ = request.send_response.send(response);
+        let info = compute_info(request.text);
+        _ = request.send_info.send(info);
     }
 }
 
-fn respond(text: String) -> Option<MecabResponse> {
+fn compute_info(text: String) -> Option<MecabInfo> {
     TAGGER.with(|tagger| {
         let tagger = tagger.get_or_init(|| MODEL.create_tagger());
         let mut lattice = MODEL.create_lattice();
@@ -62,7 +62,7 @@ fn respond(text: String) -> Option<MecabResponse> {
         let feature = FeatureFields::new(&first_node.feature)?;
         let lemma = feature.lemma.to_owned();
 
-        Some(MecabResponse { lemma })
+        Some(MecabInfo { lemma })
     })
 }
 

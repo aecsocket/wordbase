@@ -3023,6 +3023,7 @@ dependencies = [
 name = "wordbase-client-tokio"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "derive_more",
  "futures",
  "serde",

@@ -1,170 +1,77 @@
 #![doc = include_str!("../README.md")]
 
-use std::{
-    collections::HashMap,
-    convert::Infallible,
-    fs,
-    io::Cursor,
-    path::PathBuf,
-    sync::{
-        Mutex,
-        atomic::{AtomicUsize, Ordering},
-    },
-};
-
 use anyhow::{Context, Result};
-use tracing::info;
-use wordbase::yomitan;
+use wordbase::dict::DictionaryId;
+use wordbase_client_tokio::SocketClient;
+
+/// Wordbase command line client.
+#[derive(Debug, clap::Parser)]
+#[command(version)]
+struct Args {
+    #[command(subcommand)]
+    command: Command,
+}
 
 #[derive(Debug, clap::Parser)]
-struct Args {
-    dictionary: PathBuf,
-    lookup: String,
+enum Command {
+    #[clap(alias = "dic")]
+    Dictionary {
+        #[command(subcommand)]
+        command: DictionaryCommand,
+    },
+}
+
+#[derive(Debug, clap::Subcommand)]
+enum DictionaryCommand {
+    /// List all dictionaries
+    #[clap(alias = "ls")]
+    List,
+    /// Remove a dictionary with a specific ID
+    #[clap(alias = "rm")]
+    Remove {
+        /// ID of the dictionary, as seen in `dictionary list`
+        id: i64,
+    },
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt().init();
     let args = <Args as clap::Parser>::parse();
 
-    let dictionary = fs::read(&args.dictionary).context("failed to read dictionary")?;
+    let server_url = "ws://127.0.0.1:9518";
+    let mut client = wordbase_client_tokio::connect(server_url)
+        .await
+        .with_context(|| format!("failed to connect to server at {server_url:?}"))?;
 
-    let (parser, index) = yomitan::Parse::new(|| Ok::<_, Infallible>(Cursor::new(&dictionary)))
-        .context("failed to parse dictionary index")?;
-    let term_banks_left = AtomicUsize::new(parser.term_banks().len());
-
-    info!("Parsing dictionary {:?}", index.title);
-
-    struct Entry {
-        reading: String,
-        glossary: Vec<yomitan::Glossary>,
-    }
-
-    #[derive(Default)]
-    struct State {
-        expressions: HashMap<String, Vec<Entry>>,
-        reading_to_expressions: HashMap<String, Vec<String>>,
-    }
-
-    let state = Mutex::new(State::default());
-
-    parser
-        .run(
-            |_, _| {},
-            |_, terms| {
-                let mut state = state.lock().expect("poisoned");
-                for term in terms.0 {
-                    state
-                        .expressions
-                        .entry(term.expression.clone())
-                        .or_default()
-                        .push(Entry {
-                            reading: term.reading.clone(),
-                            glossary: term.glossary,
-                        });
-
-                    state
-                        .reading_to_expressions
-                        .entry(term.reading)
-                        .or_default()
-                        .push(term.expression);
-                }
-                drop(state);
-
-                let term_banks_left = term_banks_left.fetch_sub(1, Ordering::SeqCst);
-                info!("{term_banks_left} term banks left");
-            },
-            |_, _| {},
-            |_, _| {},
-            |_, _| {},
-        )
-        .context("failed to parse dictionary")?;
-
-    let state = state.lock().expect("poisoned");
-    info!(
-        "{} expressions, {} readings",
-        state.expressions.len(),
-        state.reading_to_expressions.len()
-    );
-
-    let entries = state.expressions.get(&args.lookup).expect("no entries");
-    for entry in entries {
-        info!("=== {} ===", entry.reading);
-
-        for glossary in &entry.glossary {
-            match glossary {
-                yomitan::Glossary::String(s) => info!("{s}"),
-                yomitan::Glossary::Content(yomitan::GlossaryContent::Text { text }) => {
-                    info!("{text}");
-                }
-                yomitan::Glossary::Content(yomitan::GlossaryContent::Image(image)) => {
-                    info!("(image {})", image.path);
-                }
-                yomitan::Glossary::Content(yomitan::GlossaryContent::StructuredContent {
-                    content,
-                }) => {
-                    print_strings(content);
-                }
-                yomitan::Glossary::Deinflection(_) => {}
-            }
+    match args.command {
+        Command::Dictionary {
+            command: DictionaryCommand::List,
+        } => {
+            list_dictionaries(&mut client).await?;
         }
-
-        info!("{:#?}", entry.glossary);
+        Command::Dictionary {
+            command: DictionaryCommand::Remove { id },
+        } => {
+            remove_dictionary(&mut client, id).await?;
+        }
     }
 
-    drop(state);
-
+    _ = client.close().await;
     Ok(())
 }
 
-fn print_strings(c: &yomitan::structured::Content) {
-    use yomitan::structured::Element;
-
-    match c {
-        yomitan::structured::Content::String(s) => info!("{s}"),
-        yomitan::structured::Content::Element(elem) => match &**elem {
-            Element::Br { .. } => {}
-            Element::Ruby(e)
-            | Element::Rt(e)
-            | Element::Rp(e)
-            | Element::Table(e)
-            | Element::Thead(e)
-            | Element::Tbody(e)
-            | Element::Tfoot(e)
-            | Element::Tr(e) => {
-                if let Some(c) = &e.content {
-                    print_strings(c);
-                }
-            }
-            Element::Td(e) | Element::Th(e) => {
-                if let Some(c) = &e.content {
-                    print_strings(c);
-                }
-            }
-            Element::Span(e)
-            | Element::Div(e)
-            | Element::Ol(e)
-            | Element::Ul(e)
-            | Element::Li(e)
-            | Element::Details(e)
-            | Element::Summary(e) => {
-                if let Some(c) = &e.content {
-                    print_strings(c);
-                }
-            }
-            Element::Img(e) => {
-                info!("(image {})", e.base.path);
-            }
-            Element::A(e) => {
-                if let Some(c) = &e.content {
-                    print_strings(c);
-                }
-            }
-        },
-        yomitan::structured::Content::Content(c) => {
-            for c in c {
-                print_strings(c);
-            }
-        }
+async fn list_dictionaries(client: &mut SocketClient) -> Result<()> {
+    let dictionaries = client.list_dictionaries().await?;
+    for dictionary in dictionaries {
+        println!(
+            "{}. {} rev {}",
+            dictionary.id.0, dictionary.title, dictionary.revision
+        );
     }
+    Ok(())
+}
+
+async fn remove_dictionary(client: &mut SocketClient, id: i64) -> Result<()> {
+    client.remove_dictionary(DictionaryId(id)).await??;
+    Ok(())
 }
