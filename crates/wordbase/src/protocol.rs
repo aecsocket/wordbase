@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use derive_more::{Display, Error, From};
 use serde::{Deserialize, Serialize};
 

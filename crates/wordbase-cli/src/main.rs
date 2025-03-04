@@ -62,9 +62,10 @@ async fn main() -> Result<()> {
 
 async fn list_dictionaries(client: &mut SocketClient) -> Result<()> {
     let dictionaries = client.list_dictionaries().await?;
+    println!("Dictionaries ({}):", dictionaries.len());
     for dictionary in dictionaries {
         println!(
-            "{}. {} rev {}",
+            "  {}. {} rev {}",
             dictionary.id.0, dictionary.title, dictionary.revision
         );
     }

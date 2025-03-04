@@ -1,6 +1,5 @@
 #![doc = include_str!("../README.md")]
 
-use bytes::Bytes;
 use derive_more::{Display, Error};
 pub use wordbase;
 
