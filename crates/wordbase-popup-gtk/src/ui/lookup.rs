@@ -1,8 +1,6 @@
 use adw::subclass::prelude::*;
 use gtk::glib;
 
-use super::Dictionary;
-
 mod imp {
     use super::*;
 
@@ -11,6 +9,8 @@ mod imp {
     pub struct Lookup {
         #[template_child]
         pub entry: TemplateChild<gtk::Entry>,
+        #[template_child]
+        pub lemma: TemplateChild<gtk::Label>,
         #[template_child]
         pub dictionary_container: TemplateChild<adw::Bin>,
     }
@@ -48,6 +48,11 @@ impl Lookup {
     #[must_use]
     pub fn entry(&self) -> gtk::Entry {
         self.imp().entry.get()
+    }
+
+    #[must_use]
+    pub fn lemma(&self) -> gtk::Label {
+        self.imp().lemma.get()
     }
 
     #[must_use]

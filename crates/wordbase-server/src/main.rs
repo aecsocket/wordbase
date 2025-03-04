@@ -10,9 +10,8 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use mecab::MecabRequest;
-use rusqlite::Connection;
 use tokio::sync::{broadcast, mpsc};
 use wordbase::{DEFAULT_PORT, lookup::LookupConfig, protocol::NewSentence};
 
@@ -42,8 +41,6 @@ async fn main() -> Result<()> {
 
     let (send_mecab_request, recv_mecab_request) = mpsc::channel::<MecabRequest>(4);
     let (send_new_sentence, _) = broadcast::channel::<NewSentence>(4);
-    let db =
-        Connection::open_in_memory().context("failed to open connection to SQLite database")?;
 
     #[expect(
         unreachable_code,

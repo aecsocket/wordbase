@@ -51,16 +51,13 @@ pub enum Error {
 }
 
 #[derive(Debug)]
-pub struct Connection<S> {
-    pub stream: S,
+pub struct Connection {
+    pub stream: WebSocketStream<MaybeTlsStream<TcpStream>>,
     lookup_config: LookupConfig,
     next_request_id: Wrapping<u64>,
 }
 
-impl<S> Connection<S>
-where
-    S: Stream<Item = Result<Message, WsError>> + Sink<Message, Error = WsError> + Unpin,
-{
+impl Connection {
     pub async fn lookup(&mut self, request: Lookup) -> Result<Option<LookupInfo>, Error> {
         let this_request_id = RequestId::from_raw(self.next_request_id.0);
         let request = serde_json::to_string(&FromClient {
@@ -122,9 +119,7 @@ where
 /// # Errors
 ///
 /// See [`WsError`].
-pub async fn connect(
-    request: impl IntoClientRequest + Unpin,
-) -> Result<Connection<WebSocketStream<MaybeTlsStream<TcpStream>>>, Error> {
+pub async fn connect(request: impl IntoClientRequest + Unpin) -> Result<Connection, Error> {
     let (stream, _) = tokio_tungstenite::connect_async(request)
         .await
         .map_err(Error::Connect)?;

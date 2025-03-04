@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use futures::{StreamExt, never::Never};
 use tokio::{net::TcpStream, sync::broadcast};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
-use tracing::info;
+use tracing::{info, trace};
 use wordbase::protocol::NewSentence;
 
 use crate::Config;
@@ -19,7 +19,7 @@ pub async fn run(
         let (stream, _) = match tokio_tungstenite::connect_async(&config.textractor_url).await {
             Ok(stream) => stream,
             Err(err) => {
-                info!("err: {err:?}");
+                trace!("Failed to connect to Textractor: {err:?}");
                 continue;
             }
         };

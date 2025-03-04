@@ -21,9 +21,14 @@ all-features = true
 
 [dependencies]
 wordbase = { workspace = true }
+wordbase-client-tokio = { workspace = true }
 
+anyhow = { workspace = true }
 gtk4 = { workspace = true, features = ["gnome_47", "blueprint"] }
 libadwaita = { workspace = true, features = ["v1_6"] }
 serde = { workspace = true, features = ["std", "derive"] }
 serde_json = { workspace = true, features = ["std"] }
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true, default-features = true }
+tracing-subscriber = { workspace = true, default-features = true }
 webkit6 = { workspace = true }

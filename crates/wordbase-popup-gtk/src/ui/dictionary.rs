@@ -43,13 +43,13 @@ impl Dictionary {
         glib::Object::new()
     }
 
-    pub fn from<'a>(entries: impl IntoIterator<Item = &'a dict::ExpressionEntry>) -> Self {
+    pub fn from<'a>(expressions: impl IntoIterator<Item = &'a dict::ExpressionEntry>) -> Self {
         let this = Self::new();
-        for (row, entry) in entries.into_iter().enumerate() {
+        for (row, expression) in expressions.into_iter().enumerate() {
             let Ok(row) = i32::try_from(row) else {
                 break;
             };
-            this.attach_entry(row, entry);
+            this.attach_entry(row, expression);
         }
         this
     }

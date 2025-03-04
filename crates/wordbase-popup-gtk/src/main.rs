@@ -13,13 +13,32 @@ extern crate webkit6 as webkit;
 
 mod ui;
 
-use adw::prelude::*;
-use gtk::gdk;
-use wordbase::dict::{
-    ExpressionEntry, Frequency, FrequencySet, Glossary, GlossarySet, Pitch, PitchSet, Reading,
-};
+use std::{convert::Infallible, time::Duration};
 
-fn main() {
+use adw::prelude::*;
+use anyhow::{Context, Result};
+use gtk::{gdk, glib};
+use tokio::{
+    sync::{mpsc, oneshot},
+    time,
+};
+use tracing::{info, warn};
+use wordbase::{lookup::LookupInfo, protocol::Lookup};
+use wordbase_client_tokio::Connection;
+
+#[derive(Debug)]
+struct LookupRequest {
+    query: String,
+    send_response: oneshot::Sender<Option<LookupInfo>>,
+}
+
+#[tokio::main]
+async fn main() {
+    tracing_subscriber::fmt().init();
+
+    let (send_lookup_request, recv_lookup_request) = mpsc::channel::<LookupRequest>(4);
+    tokio::spawn(start_connecting(recv_lookup_request));
+
     let app = adw::Application::builder()
         .application_id("com.github.aecsocket.WordbasePopup")
         .build();
@@ -35,18 +54,47 @@ fn main() {
         );
     });
 
-    app.connect_activate(|app| {
+    app.connect_activate(move |app| {
         let content = ui::Lookup::new();
-        let dictionary_container = content.dictionary_container();
+
+        let send_lookup_request = send_lookup_request.clone();
+
+        let window_content = content.clone();
         content.entry().connect_changed(move |entry| {
-            let dictionary = ui::Dictionary::from(&entries());
-            dictionary_container.set_child(Some(&dictionary));
+            let query = entry.text().to_string();
+            let send_lookup_request = send_lookup_request.clone();
+            let (send_response, recv_response) = oneshot::channel();
+
+            let content = content.clone();
+            glib::spawn_future_local(async move {
+                send_lookup_request
+                    .send(LookupRequest {
+                        query,
+                        send_response,
+                    })
+                    .await?;
+                let response = recv_response.await?;
+
+                if let Some(lookup_info) = response {
+                    content.lemma().set_text(&lookup_info.lemma);
+                    content
+                        .dictionary_container()
+                        .set_child(Some(&ui::Dictionary::from(&lookup_info.expressions)));
+                } else {
+                    content.lemma().set_text("");
+                    content
+                        .dictionary_container()
+                        .set_child(None::<&ui::Dictionary>);
+                }
+
+                Ok::<_, anyhow::Error>(())
+            });
         });
 
         adw::ApplicationWindow::builder()
             .application(app)
             .title("Dictionary")
-            .content(&content)
+            .content(&window_content)
             .default_width(800)
             .default_height(400)
             .build()
@@ -56,176 +104,49 @@ fn main() {
     app.run();
 }
 
-#[allow(clippy::too_many_lines)]
-fn entries() -> Vec<ExpressionEntry> {
-    vec![
-        ExpressionEntry {
-            reading: Reading::from_pairs([("協", "きょう"), ("力", "りょく")]),
-            frequency_sets: vec![
-                FrequencySet {
-                    dictionary: "JPDB".into(),
-                    frequencies: vec![
-                        Frequency {
-                            value: 954,
-                            display_value: None,
-                        },
-                        Frequency {
-                            value: 131_342,
-                            display_value: Some("131342㋕".into()),
-                        },
-                    ],
-                },
-                FrequencySet {
-                    dictionary: "VN Freq".into(),
-                    frequencies: vec![Frequency {
-                        value: 948,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "Novels".into(),
-                    frequencies: vec![Frequency {
-                        value: 1377,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "Anime & J-drama".into(),
-                    frequencies: vec![Frequency {
-                        value: 1042,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "Youtube".into(),
-                    frequencies: vec![Frequency {
-                        value: 722,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "Wikipedia".into(),
-                    frequencies: vec![Frequency {
-                        value: 705,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "BCCWJ".into(),
-                    frequencies: vec![
-                        Frequency {
-                            value: 597,
-                            display_value: None,
-                        },
-                        Frequency {
-                            value: 1395,
-                            display_value: None,
-                        },
-                    ],
-                },
-                FrequencySet {
-                    dictionary: "CC100".into(),
-                    frequencies: vec![Frequency {
-                        value: 741,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "Innocent Ranked".into(),
-                    frequencies: vec![Frequency {
-                        value: 2343,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "Narou Freq".into(),
-                    frequencies: vec![Frequency {
-                        value: 845,
-                        display_value: None,
-                    }],
-                },
-            ],
-            pitch_sets: vec![PitchSet {
-                dictionary: "NHK".into(),
-                pitches: vec![Pitch { position: 1 }],
-            }],
-            glossary_sets: vec![
-                GlossarySet {
-                    dictionary: "Jitendex [2025-02-11]".into(),
-                    glossaries: vec![Glossary {
-                        todo: "TODO".into(),
-                    }],
-                },
-                GlossarySet {
-                    dictionary: "三省堂国語辞典　第八版".into(),
-                    glossaries: vec![Glossary {
-                        todo: "TODO".into(),
-                    }],
-                },
-                GlossarySet {
-                    dictionary: "明鏡国語辞典　第二版".into(),
-                    glossaries: vec![Glossary {
-                        todo: "TODO".into(),
-                    }],
-                },
-                GlossarySet {
-                    dictionary: "デジタル大辞泉".into(),
-                    glossaries: vec![Glossary {
-                        todo: "TODO".into(),
-                    }],
-                },
-                GlossarySet {
-                    dictionary: "PixivLight [2023-11-24]".into(),
-                    glossaries: vec![Glossary {
-                        todo: "TODO".into(),
-                    }],
-                },
-            ],
-        },
-        ExpressionEntry {
-            reading: Reading::from_no_pairs("協", ""),
-            frequency_sets: vec![
-                FrequencySet {
-                    dictionary: "Novels".into(),
-                    frequencies: vec![Frequency {
-                        value: 29289,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "Anime & J-drama".into(),
-                    frequencies: vec![Frequency {
-                        value: 26197,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "Youtube".into(),
-                    frequencies: vec![Frequency {
-                        value: 23714,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "Wikipedia".into(),
-                    frequencies: vec![Frequency {
-                        value: 6162,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "Innocent Ranked".into(),
-                    frequencies: vec![Frequency {
-                        value: 18957,
-                        display_value: None,
-                    }],
-                },
-            ],
-            pitch_sets: vec![],
-            glossary_sets: vec![GlossarySet {
-                dictionary: "JMnedict [2025-02-18]".into(),
-                glossaries: vec![],
-            }],
-        },
-    ]
+async fn start_connecting(
+    mut recv_lookup_request: mpsc::Receiver<LookupRequest>,
+) -> Result<Infallible> {
+    loop {
+        let mut connection = loop {
+            tokio::select! {
+                result = wordbase_client_tokio::connect("ws://127.0.0.1:9518") => {
+                    match result {
+                        Ok(connection) => break connection,
+                        Err(err) => {
+                            warn!("Failed to connect to server: {err:?}");
+                            time::sleep(Duration::from_secs(1)).await;
+                            continue;
+                        }
+                    }
+                }
+                _ = recv_lookup_request.recv() => continue,
+            };
+        };
+
+        let Err(err) = handle_connection(&mut recv_lookup_request, &mut connection).await;
+        warn!("Lost connection from server: {err:?}");
+        _ = connection.stream.close(None).await;
+    }
+}
+
+async fn handle_connection(
+    recv_lookup_request: &mut mpsc::Receiver<LookupRequest>,
+    connection: &mut Connection,
+) -> Result<Infallible> {
+    loop {
+        let request = recv_lookup_request
+            .recv()
+            .await
+            .context("lookup request channel closed")?;
+
+        let response = connection
+            .lookup(Lookup {
+                text: request.query,
+                wants_html: false,
+            })
+            .await
+            .context("failed to perform lookup")?;
+        _ = request.send_response.send(response);
+    }
 }

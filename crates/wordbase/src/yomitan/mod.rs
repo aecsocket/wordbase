@@ -53,6 +53,15 @@ pub struct IsoLanguageCode(pub String);
 #[derive(Debug, Clone, Default, Deserialize, Deref, DerefMut)]
 pub struct TagBank(pub Vec<Tag>);
 
+impl IntoIterator for TagBank {
+    type IntoIter = <Vec<Tag> as IntoIterator>::IntoIter;
+    type Item = Tag;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Tag {
@@ -65,6 +74,15 @@ pub struct Tag {
 
 #[derive(Debug, Clone, Default, Deserialize, Deref, DerefMut)]
 pub struct TermBank(pub Vec<Term>);
+
+impl IntoIterator for TermBank {
+    type IntoIter = <Vec<Term> as IntoIterator>::IntoIter;
+    type Item = Term;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -104,6 +122,15 @@ pub enum GlossaryContent {
 
 #[derive(Debug, Clone, Default, Deserialize, Deref, DerefMut)]
 pub struct TermMetaBank(pub Vec<TermMeta>);
+
+impl IntoIterator for TermMetaBank {
+    type IntoIter = <Vec<TermMeta> as IntoIterator>::IntoIter;
+    type Item = TermMeta;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -235,6 +262,15 @@ pub struct PhoneticTranscription {
 #[derive(Debug, Clone, Default, Deserialize, Deref, DerefMut)]
 pub struct KanjiBank(pub Vec<Kanji>);
 
+impl IntoIterator for KanjiBank {
+    type IntoIter = <Vec<Kanji> as IntoIterator>::IntoIter;
+    type Item = Kanji;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Kanji {
@@ -248,6 +284,15 @@ pub struct Kanji {
 
 #[derive(Debug, Clone, Default, Deserialize, Deref, DerefMut)]
 pub struct KanjiMetaBank(pub Vec<KanjiMetaFrequency>);
+
+impl IntoIterator for KanjiMetaBank {
+    type IntoIter = <Vec<KanjiMetaFrequency> as IntoIterator>::IntoIter;
+    type Item = KanjiMetaFrequency;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

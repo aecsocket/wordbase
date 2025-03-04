@@ -20,7 +20,7 @@ all-features = true
 [features]
 
 [dependencies]
-wordbase = { workspace = true }
+wordbase = { workspace = true, features = ["yomitan"] }
 
 anyhow = { workspace = true, features = ["std"] }
 clap = { workspace = true, default-features = true, features = ["derive"] }
@@ -33,14 +33,17 @@ derive_more = { workspace = true, features = [
 ] }
 futures = { workspace = true, features = ["std", "async-await"] }
 mecab = { workspace = true }
-rusqlite = { workspace = true, default-features = true, features = ["bundled"] }
 serde = { workspace = true, features = ["std", "derive"] }
 serde_json = { workspace = true, features = ["std"] }
+sqlx = { workspace = true, default-features = true, features = [
+    "runtime-tokio",
+    "sqlite",
+] }
 tokio = { workspace = true, features = ["full"] }
 tokio-tungstenite = { workspace = true, features = [
     "connect",
     "handshake",
     "rustls-tls-webpki-roots",
 ] }
-tracing = { workspace = true, features = ["std", "attributes"] }
+tracing = { workspace = true, default-features = true }
 tracing-subscriber = { workspace = true, default-features = true }
