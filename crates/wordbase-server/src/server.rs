@@ -87,7 +87,7 @@ async fn handle_stream(
                     .context("stream closed")?
                     .context("stream error")?;
                 if let Err(err) = handle_message(&config, &send_mecab_request, &send_new_sentence, &mut connection, message).await {
-                    connection.write(&FromServer::Error(format!("{err:?}"))).await?;
+                    _ = connection.write(&FromServer::Error(format!("{err:?}"))).await;
                 }
             }
         }
@@ -114,6 +114,7 @@ async fn handle_message(
         serde_json::from_str::<FromClient>(&message).context("received invalid message")?;
 
     let request_id = message.request_id;
+
     match message.request {
         ClientRequest::Lookup(request) => {
             let response = do_lookup(config, send_mecab_request, request).await?;
@@ -129,7 +130,6 @@ async fn handle_message(
             _ = send_new_sentence.send(new_sentence);
         }
     }
-
     Ok(())
 }
 
@@ -138,7 +138,7 @@ async fn do_lookup(
     send_mecab_request: &mpsc::Sender<MecabRequest>,
     request: Lookup,
 ) -> Result<Option<LookupInfo>> {
-    let request_len_valid = u64::try_from(request.text.chars().count())
+    let request_len_valid = u16::try_from(request.text.chars().count())
         .is_ok_and(|request_len| request_len <= config.lookup.max_request_len);
     if !request_len_valid {
         bail!("request too long");

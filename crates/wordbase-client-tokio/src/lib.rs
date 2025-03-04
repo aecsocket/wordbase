@@ -12,8 +12,8 @@ use tokio_tungstenite::{
     tungstenite::{Message, client::IntoClientRequest},
 };
 use wordbase::{
-    lookup::LookupConfig,
-    protocol::{self, ClientRequest, FromClient, FromServer, Lookup, LookupInfo},
+    lookup::{LookupConfig, LookupInfo},
+    protocol::{ClientRequest, FromClient, FromServer, Lookup, RequestId, Response},
 };
 
 /// WebSocket error type.
@@ -47,11 +47,12 @@ pub enum Error {
     /// Received invalid response kind from server.
     #[display("received invalid response kind")]
     InvalidResponseKind,
+    FromServer(#[error(ignore)] String),
 }
 
 #[derive(Debug)]
 pub struct Connection<S> {
-    stream: S,
+    pub stream: S,
     lookup_config: LookupConfig,
     next_request_id: Wrapping<u64>,
 }
@@ -61,11 +62,14 @@ where
     S: Stream<Item = Result<Message, WsError>> + Sink<Message, Error = WsError> + Unpin,
 {
     pub async fn lookup(&mut self, request: Lookup) -> Result<Option<LookupInfo>, Error> {
-        let request = serde_json::to_string(&ClientRequest::from(request))
-            .map_err(Error::SerializeRequest)?;
-        let message = FromClient {
-            request_id,
-        }
+        let this_request_id = RequestId::from_raw(self.next_request_id.0);
+        let request = serde_json::to_string(&FromClient {
+            request_id: this_request_id,
+            request: ClientRequest::from(request),
+        })
+        .map_err(Error::SerializeRequest)?;
+        self.next_request_id += 1;
+
         self.stream
             .send(Message::text(request))
             .await
@@ -85,83 +89,29 @@ where
 
             match message {
                 FromServer::SyncLookupConfig(config) => {
-                    self.lookup_config = config;
+                    todo!();
+                }
+                FromServer::NewSentence(new_sentence) => {
+                    todo!();
                 }
                 FromServer::Response {
                     request_id,
                     response,
-                } => {
-                    if request_id == 
+                } if request_id == this_request_id => {
+                    return if let Response::LookupInfo(response) = response {
+                        Ok(response)
+                    } else {
+                        Err(Error::InvalidResponseKind)
+                    };
+                }
+                FromServer::Response { .. } => {
+                    todo!();
+                }
+                FromServer::Error(err) => {
+                    return Err(Error::FromServer(err));
                 }
             }
         }
-
-        if let protocol::ResponseKind::Lookup { response } = self.request(&request.into()).await? {
-            Ok(response)
-        } else {
-            Err(Error::InvalidResponseKind)
-        }
-    }
-}
-
-/// Wordbase client connection over [`tokio_tungstenite`].
-///
-/// Use [`connect`] to connect to a server, or use  [`Client::handshake`] to
-/// create one from an existing [`tokio_tungstenite::WebSocketStream`].
-#[derive(Debug, Clone, Deref, DerefMut)]
-pub struct Client<S> {
-    #[deref]
-    #[deref_mut]
-    connection: Connection<S>,
-    lookup_config: LookupConfig,
-}
-
-impl<S> Client<S>
-where
-    S: Stream<Item = Result<Message, WsError>> + Sink<Message, Error = WsError> + Unpin,
-{
-    /// Creates a new [`Connection`] by performing a handshake with an existing
-    /// stream.
-    ///
-    /// This handshake will also fetch the server's configuration, which will be
-    /// accessible via this client.
-    ///
-    /// # Errors
-    ///
-    /// If handshaking fails, this returns an error as well as the original stream.
-    pub async fn handshake(stream: S) -> Result<Self, (Error, S)> {
-        let mut connection = Connection(stream);
-        let lookup_config = match connection.fetch_lookup_config().await {
-            Ok(config) => Ok(config),
-            Err(err) => {
-                return Err((err, connection.0));
-            }
-        }?;
-
-        Ok(Self {
-            connection,
-            lookup_config,
-        })
-    }
-
-    /// Gets a shared reference to the underlying [`Connection`].
-    pub const fn connection(&self) -> &Connection<S> {
-        &self.connection
-    }
-
-    /// Gets a mutable reference to the underlying [`Connection`].
-    pub fn connection_mut(&mut self) -> &mut Connection<S> {
-        &mut self.connection
-    }
-
-    /// Takes the underlying [`Connection`].
-    pub fn into_connection(self) -> Connection<S> {
-        self.connection
-    }
-
-    /// Gets the server's [`LookupConfig`].
-    pub const fn lookup_config(&self) -> &LookupConfig {
-        &self.lookup_config
     }
 }
 
@@ -174,9 +124,13 @@ where
 /// See [`WsError`].
 pub async fn connect(
     request: impl IntoClientRequest + Unpin,
-) -> Result<Client<WebSocketStream<MaybeTlsStream<TcpStream>>>, Error> {
+) -> Result<Connection<WebSocketStream<MaybeTlsStream<TcpStream>>>, Error> {
     let (stream, _) = tokio_tungstenite::connect_async(request)
         .await
         .map_err(Error::Connect)?;
-    Client::handshake(stream).await.map_err(|(err, _)| err)
+    Ok(Connection {
+        stream,
+        lookup_config: LookupConfig::default(),
+        next_request_id: Wrapping(0),
+    })
 }

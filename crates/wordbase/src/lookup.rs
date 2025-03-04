@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LookupConfig {
-    pub max_request_len: u64,
+    pub max_request_len: u16,
 }
 
 impl Default for LookupConfig {
@@ -15,6 +15,5 @@ impl Default for LookupConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LookupInfo {
-    pub conjugated_len: u64,
     pub lemma: String,
 }

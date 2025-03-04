@@ -47,13 +47,19 @@ async fn main() -> Result<()> {
                 .context("failed to connect to server")?;
             let response = client
                 .lookup(Lookup {
-                    text,
+                    text: text.clone(),
                     wants_html: false,
                 })
                 .await
                 .context("failed to perform request")?;
-            println!("{response:#?}");
-            _ = client.0.close(None).await;
+            if let Some(response) = response {
+                println!("{response:#?}");
+                let conjugated = &text[..usize::from(response.conjugated_len)];
+                println!("Conjugated: {conjugated}");
+            } else {
+                println!("(nothing)");
+            }
+            _ = client.stream.close(None).await;
         }
         Command::Dictionary {
             command: DictionaryCommand::Parse { input },

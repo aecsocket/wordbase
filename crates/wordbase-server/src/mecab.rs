@@ -14,7 +14,6 @@ pub struct MecabRequest {
 
 #[derive(Debug)]
 pub struct MecabResponse {
-    pub conjugated_len: u64,
     pub lemma: String,
 }
 
@@ -55,14 +54,71 @@ fn respond(text: String) -> Option<MecabResponse> {
         lattice.set_sentence(text);
         tagger.parse(&lattice);
 
-        let node = lattice.bos_node().iter_next().find(|node| {
-            let stat = i32::from(node.stat);
-            stat != MECAB_BOS_NODE && stat != MECAB_EOS_NODE
-        })?;
-        let lemma = node.feature.split(',').nth(6).map(ToOwned::to_owned)?;
-        Some(MecabResponse {
-            conjugated_len: 1,
-            lemma,
-        })
+        // skip the BOS (beginning of sentence) node
+        let mut nodes = lattice.bos_node().next()?.iter_next();
+
+        let first_node = nodes.next()?;
+        let feature = FeatureFields::new(&first_node.feature)?;
+        let lemma = feature.lemma.to_owned();
+
+        let conjugated_len = first_node.length
+            + nodes
+                .take_while(|node| {
+                    let Some(feature) = FeatureFields::new(&node.feature) else {
+                        return false;
+                    };
+                    let stat = i32::from(node.stat);
+                    let meta_node = stat == MECAB_BOS_NODE || stat == MECAB_EOS_NODE;
+                    !meta_node && !feature.start_of_word()
+                })
+                .map(|node| node.length)
+                .sum::<u16>();
+
+        Some(MecabResponse { lemma })
     })
+}
+
+struct FeatureFields<'a> {
+    part_of_speech: &'a str,
+    subclass1: &'a str,
+    _subclass2: &'a str,
+    _subclass3: &'a str,
+    _conjugation_form: &'a str,
+    _conjugation_type: &'a str,
+    _reading: &'a str,
+    lemma: &'a str,
+}
+
+impl<'a> FeatureFields<'a> {
+    fn new(text: &'a str) -> Option<Self> {
+        info!("{text}");
+
+        let mut parts = text.split(',');
+        Some(Self {
+            part_of_speech: parts.next()?,
+            subclass1: parts.next()?,
+            _subclass2: parts.next()?,
+            _subclass3: parts.next()?,
+            _conjugation_form: parts.next()?,
+            _conjugation_type: parts.next()?,
+            _reading: parts.next()?,
+            lemma: parts.next()?,
+        })
+    }
+
+    #[must_use]
+    fn start_of_word(&self) -> bool {
+        match self.part_of_speech {
+            // particle
+            "助詞" => false,
+            // verb
+            "動詞" => {
+                // 食べ    subclass1: 一般
+                // なかっ  subclass1: (empty)
+                // た      subclass1: (empty)
+                !self.subclass1.is_empty()
+            }
+            _ => true,
+        }
+    }
 }
