@@ -26,7 +26,7 @@ fn main() {
 
     app.connect_startup(|_| {
         let css_provider = gtk::CssProvider::new();
-        css_provider.load_from_string(include_str!("style.css"));
+        css_provider.load_from_string(include_str!("ui/style.css"));
 
         gtk::style_context_add_provider_for_display(
             &gdk::Display::default().expect("failed to get display"),
@@ -36,13 +36,19 @@ fn main() {
     });
 
     app.connect_activate(|app| {
-        let dictionary = ui::Dictionary::from(&entries());
-        let dictionary_popup = ui::DictionaryPopup::new(&dictionary);
+        let content = ui::Lookup::new();
+        let dictionary_container = content.dictionary_container();
+        content.entry().connect_changed(move |entry| {
+            let dictionary = ui::Dictionary::from(&entries());
+            dictionary_container.set_child(Some(&dictionary));
+        });
 
         adw::ApplicationWindow::builder()
             .application(app)
             .title("Dictionary")
-            .content(&dictionary_popup)
+            .content(&content)
+            .default_width(800)
+            .default_height(400)
             .build()
             .present();
     });

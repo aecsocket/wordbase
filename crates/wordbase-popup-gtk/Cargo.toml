@@ -23,7 +23,7 @@ all-features = true
 wordbase = { workspace = true }
 
 gtk4 = { workspace = true, features = ["gnome_47", "blueprint"] }
-libadwaita = { workspace = true }
+libadwaita = { workspace = true, features = ["v1_6"] }
 serde = { workspace = true, features = ["std", "derive"] }
 serde_json = { workspace = true, features = ["std"] }
 webkit6 = { workspace = true }
