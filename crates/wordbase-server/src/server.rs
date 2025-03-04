@@ -125,7 +125,9 @@ async fn handle_message(
                 })
                 .await?;
         }
-        ClientRequest::AddAnkiNote(request) => {}
+        ClientRequest::AddAnkiNote(_) => {
+            todo!();
+        }
         ClientRequest::NewSentence(new_sentence) => {
             _ = send_new_sentence.send(new_sentence);
         }

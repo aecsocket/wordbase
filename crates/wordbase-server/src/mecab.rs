@@ -2,7 +2,7 @@ use std::{cell::OnceCell, sync::LazyLock};
 
 use anyhow::{Context, Result};
 use futures::never::Never;
-use mecab::{MECAB_BOS_NODE, MECAB_EOS_NODE, Model, Tagger};
+use mecab::{Model, Tagger};
 use tokio::sync::{mpsc, oneshot};
 use tracing::info;
 
@@ -35,6 +35,7 @@ thread_local! {
 }
 
 pub async fn run(mut recv_request: mpsc::Receiver<MecabRequest>) -> Result<Never> {
+    // initialize the model before we even get any requests
     _ = *MODEL;
 
     loop {

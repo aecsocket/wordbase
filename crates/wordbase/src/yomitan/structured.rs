@@ -153,23 +153,23 @@ pub struct UnstyledElement {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TableElement {
-    content: Option<Content>,
-    data: Option<Data>,
-    col_span: Option<i64>,
-    row_span: Option<i64>,
-    style: Option<ContentStyle>,
-    lang: Option<String>,
+    pub content: Option<Content>,
+    pub data: Option<Data>,
+    pub col_span: Option<i64>,
+    pub row_span: Option<i64>,
+    pub style: Option<ContentStyle>,
+    pub lang: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StyledElement {
-    content: Option<Content>,
-    data: Option<Data>,
-    style: Option<ContentStyle>,
-    title: Option<String>,
-    open: Option<bool>,
-    lang: Option<String>,
+    pub content: Option<Content>,
+    pub data: Option<Data>,
+    pub style: Option<ContentStyle>,
+    pub title: Option<String>,
+    pub open: Option<bool>,
+    pub lang: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

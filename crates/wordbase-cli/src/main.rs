@@ -1,128 +1,172 @@
 #![doc = include_str!("../README.md")]
 
+use core::alloc;
 use std::{
+    collections::HashMap,
+    convert::Infallible,
     fs::{self, File},
     io::Cursor,
     path::PathBuf,
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
     },
 };
 
 use anyhow::{Context, Result};
+use tracing::info;
 use wordbase::{DEFAULT_PORT, protocol::Lookup, yomitan};
 
 #[derive(Debug, clap::Parser)]
 struct Args {
-    #[command(subcommand)]
-    command: Command,
-}
-
-#[derive(Debug, clap::Parser)]
-enum Command {
-    Lookup {
-        url: String,
-        text: String,
-    },
-    Dictionary {
-        #[command(subcommand)]
-        command: DictionaryCommand,
-    },
-}
-
-#[derive(Debug, clap::Parser)]
-enum DictionaryCommand {
-    Parse { input: PathBuf },
+    dictionary: PathBuf,
+    lookup: String,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    tracing_subscriber::fmt().init();
     let args = <Args as clap::Parser>::parse();
 
-    match args.command {
-        Command::Lookup { url, text } => {
-            let mut client = wordbase_client_tokio::connect(url)
-                .await
-                .context("failed to connect to server")?;
-            let response = client
-                .lookup(Lookup {
-                    text: text.clone(),
-                    wants_html: false,
-                })
-                .await
-                .context("failed to perform request")?;
-            if let Some(response) = response {
-                println!("{response:#?}");
-            } else {
-                println!("(nothing)");
-            }
-            _ = client.stream.close(None).await;
-        }
-        Command::Dictionary {
-            command: DictionaryCommand::Parse { input },
-        } => {
-            struct Stats {
-                total: usize,
-                done: AtomicUsize,
-            }
+    let dictionary = fs::read(&args.dictionary).context("failed to read dictionary")?;
 
-            impl Stats {
-                const fn new(total: usize) -> Self {
-                    Self {
-                        total,
-                        done: AtomicUsize::new(0),
-                    }
-                }
-            }
+    let (parser, index) = yomitan::Parse::new(|| Ok::<_, Infallible>(Cursor::new(&dictionary)))
+        .context("failed to parse dictionary index")?;
+    let term_banks_left = AtomicUsize::new(parser.term_banks().len());
 
-            let file_contents = fs::read(&input)?;
-            let new_reader = || Ok(Cursor::new(file_contents.as_slice()));
+    info!("Parsing dictionary {:?}", index.title);
 
-            // let new_reader = || Ok(fs::File::open(&input)?);
-
-            let (import, index) = yomitan::Parse::new(new_reader)?;
-
-            let tags = Stats::new(import.tag_banks().len());
-            let terms = Stats::new(import.term_banks().len());
-            let term_metas = Stats::new(import.term_meta_banks().len());
-            let kanjis = Stats::new(import.kanji_banks().len());
-            let kanji_metas = Stats::new(import.kanji_meta_banks().len());
-            import.run(
-                |name, bank| {
-                    let done = tags.done.fetch_add(1, Ordering::SeqCst) + 1;
-                    let total = tags.total;
-                    eprintln!("TAG [{done} / {total}] {name} - tags: {}", bank.len());
-                },
-                |name, bank| {
-                    let done = terms.done.fetch_add(1, Ordering::SeqCst) + 1;
-                    let total = terms.total;
-                    eprintln!("TERM [{done} / {total}] {name} - terms: {}", bank.len());
-                },
-                |name, bank| {
-                    let done = term_metas.done.fetch_add(1, Ordering::SeqCst) + 1;
-                    let total = term_metas.total;
-                    eprintln!(
-                        "META [{done} / {total}] {name} - term metas: {}",
-                        bank.len()
-                    );
-                },
-                |name, bank| {
-                    let done = kanjis.done.fetch_add(1, Ordering::SeqCst) + 1;
-                    let total = kanjis.total;
-                    eprintln!("KANJI [{done} / {total}] {name} - kanji: {}", bank.len());
-                },
-                |name, bank| {
-                    let done = kanji_metas.done.fetch_add(1, Ordering::SeqCst) + 1;
-                    let total = kanji_metas.total;
-                    eprintln!(
-                        "KANJI META [{done} / {total}] {name} - kanji metas: {}",
-                        bank.len()
-                    );
-                },
-            )?;
-        }
+    struct Entry {
+        reading: String,
+        glossary: Vec<yomitan::Glossary>,
     }
 
+    #[derive(Default)]
+    struct State {
+        expressions: HashMap<String, Vec<Entry>>,
+        reading_to_expressions: HashMap<String, Vec<String>>,
+    }
+
+    let state = Mutex::new(State::default());
+
+    parser
+        .run(
+            |_, _| {},
+            |_, terms| {
+                let mut state = state.lock().expect("poisoned");
+                for term in terms.0 {
+                    state
+                        .expressions
+                        .entry(term.expression.clone())
+                        .or_default()
+                        .push(Entry {
+                            reading: term.reading.clone(),
+                            glossary: term.glossary,
+                        });
+
+                    state
+                        .reading_to_expressions
+                        .entry(term.reading)
+                        .or_default()
+                        .push(term.expression);
+                }
+                drop(state);
+
+                let term_banks_left = term_banks_left.fetch_sub(1, Ordering::SeqCst);
+                info!("{term_banks_left} term banks left");
+            },
+            |_, _| {},
+            |_, _| {},
+            |_, _| {},
+        )
+        .context("failed to parse dictionary")?;
+
+    let state = state.lock().expect("poisoned");
+    info!(
+        "{} expressions, {} readings",
+        state.expressions.len(),
+        state.reading_to_expressions.len()
+    );
+
+    let entries = state.expressions.get(&args.lookup).expect("no entries");
+    for entry in entries {
+        info!("=== {} ===", entry.reading);
+
+        for glossary in &entry.glossary {
+            match glossary {
+                yomitan::Glossary::String(s) => info!("{s}"),
+                yomitan::Glossary::Content(yomitan::GlossaryContent::Text { text }) => {
+                    info!("{text}");
+                }
+                yomitan::Glossary::Content(yomitan::GlossaryContent::Image(image)) => {
+                    info!("(image {})", image.path);
+                }
+                yomitan::Glossary::Content(yomitan::GlossaryContent::StructuredContent {
+                    content,
+                }) => {
+                    print_strings(content);
+                }
+                yomitan::Glossary::Deinflection(_) => {}
+            }
+        }
+
+        info!("{:#?}", entry.glossary);
+        info!("");
+    }
+
+    drop(state);
+
     Ok(())
+}
+
+fn print_strings(c: &yomitan::structured::Content) {
+    use yomitan::structured::Element;
+
+    match c {
+        yomitan::structured::Content::String(s) => info!("{s}"),
+        yomitan::structured::Content::Element(elem) => match &**elem {
+            Element::LineBreak { .. } => {}
+            Element::UnstyledElementRuby(e)
+            | Element::UnstyledElementRt(e)
+            | Element::UnstyledElementRp(e)
+            | Element::UnstyledElementTable(e)
+            | Element::UnstyledElementThead(e)
+            | Element::UnstyledElementTbody(e)
+            | Element::UnstyledElementTfoot(e)
+            | Element::UnstyledElementTr(e) => {
+                if let Some(c) = &e.content {
+                    print_strings(c);
+                }
+            }
+            Element::TableElementTd(e) | Element::TableElementTh(e) => {
+                if let Some(c) = &e.content {
+                    print_strings(c);
+                }
+            }
+            Element::StyledElementSpan(e)
+            | Element::StyledElementDiv(e)
+            | Element::StyledElementOl(e)
+            | Element::StyledElementUl(e)
+            | Element::StyledElementLi(e)
+            | Element::StyledElementDetails(e)
+            | Element::StyledElementSummary(e) => {
+                if let Some(c) = &e.content {
+                    print_strings(c);
+                }
+            }
+            Element::ImageElement(e) => {
+                info!("(image {})", e.base.path);
+            }
+            Element::LinkElement(e) => {
+                if let Some(c) = &e.content {
+                    print_strings(c);
+                }
+            }
+        },
+        yomitan::structured::Content::Content(c) => {
+            for c in c {
+                print_strings(c);
+            }
+        }
+    }
 }

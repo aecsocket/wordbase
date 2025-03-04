@@ -16,8 +16,12 @@ pub async fn run(
     loop {
         tokio::time::sleep(config.textractor_connect_interval).await;
 
-        let Ok((stream, _)) = tokio_tungstenite::connect_async(&config.textractor_url).await else {
-            continue;
+        let (stream, _) = match tokio_tungstenite::connect_async(&config.textractor_url).await {
+            Ok(stream) => stream,
+            Err(err) => {
+                info!("err: {err:?}");
+                continue;
+            }
         };
 
         info!("Textractor connected");

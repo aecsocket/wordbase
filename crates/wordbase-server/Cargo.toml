@@ -33,9 +33,9 @@ derive_more = { workspace = true, features = [
 ] }
 futures = { workspace = true, features = ["std", "async-await"] }
 mecab = { workspace = true }
+rusqlite = { workspace = true, default-features = true, features = ["bundled"] }
 serde = { workspace = true, features = ["std", "derive"] }
 serde_json = { workspace = true, features = ["std"] }
-sqlite = { workspace = true, features = ["bundled"] }
 tokio = { workspace = true, features = ["full"] }
 tokio-tungstenite = { workspace = true, features = [
     "connect",
