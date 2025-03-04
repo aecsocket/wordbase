@@ -3,15 +3,13 @@ use serde::{Deserialize, Serialize};
 use crate::dict::ExpressionEntry;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LookupConfig {
-    pub max_request_len: u16,
+pub struct SharedConfig {
+    pub max_lookup_len: u16,
 }
 
-impl Default for LookupConfig {
+impl Default for SharedConfig {
     fn default() -> Self {
-        Self {
-            max_request_len: 16,
-        }
+        Self { max_lookup_len: 16 }
     }
 }
 

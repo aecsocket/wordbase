@@ -134,10 +134,10 @@ impl IntoIterator for TermMetaBank {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct TermMetaRaw {
-    pub expression: String,
-    pub kind: TermMetaKind,
-    pub data: serde_json::Value,
+struct TermMetaRaw {
+    expression: String,
+    kind: TermMetaKind,
+    data: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Deserialize)]

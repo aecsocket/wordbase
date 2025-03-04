@@ -28,7 +28,7 @@ use wordbase::{
     },
     lookup::LookupInfo,
     protocol::{ClientRequest, FromClient, FromServer, Lookup, NewSentence, Response},
-    yomitan::{self, TermBank},
+    yomitan::{self, TermBank, TermMetaBank},
 };
 
 use crate::{
@@ -183,7 +183,7 @@ async fn do_lookup(
     request: Lookup,
 ) -> Result<Option<LookupInfo>> {
     let request_len = request.text.chars().count();
-    let max_request_len = config.lookup.max_request_len;
+    let max_request_len = config.lookup.max_lookup_len;
     let request_len_valid =
         u16::try_from(request_len).is_ok_and(|request_len| request_len <= max_request_len);
     if !request_len_valid {
@@ -202,7 +202,7 @@ async fn do_lookup(
     };
 
     let expressions = sqlx::query!(
-        "SELECT expression, reading FROM expressions WHERE expression = $1 OR reading = $1",
+        "SELECT expression, reading FROM terms WHERE expression = $1 OR reading = $1",
         mecab.lemma
     )
     .fetch(db)
@@ -236,6 +236,7 @@ async fn todo_import(db: &Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
     let (parser, index) = yomitan::Parse::new(|| Ok::<_, Infallible>(Cursor::new(&archive)))
         .context("failed to parse")?;
     let term_banks_left = AtomicUsize::new(parser.term_banks().len());
+    let term_meta_banks_left = AtomicUsize::new(parser.term_meta_banks().len());
 
     info!("{} rev {}:", index.title, index.revision);
     info!("  - {} tag banks", parser.tag_banks().len());
@@ -243,7 +244,10 @@ async fn todo_import(db: &Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
         "  - {} term banks",
         term_banks_left.load(atomic::Ordering::SeqCst)
     );
-    info!("  - {} term meta banks", parser.term_meta_banks().len());
+    info!(
+        "  - {} term meta banks",
+        term_meta_banks_left.load(atomic::Ordering::SeqCst)
+    );
     info!("  - {} kanji banks", parser.kanji_banks().len());
     info!("  - {} kanji meta banks", parser.kanji_meta_banks().len());
 
@@ -254,21 +258,26 @@ async fn todo_import(db: &Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
     ));
     let tasks = Mutex::new(JoinSet::<Result<()>>::new());
 
-    let tokio_runtime = runtime::Handle::current();
+    let runtime = runtime::Handle::current();
+
+    let dictionary_id = 1u32;
+
     parser
         .run(
             |_, _| {},
-            |_, term_bank| {
-                let task = parsed_term_bank(tx.clone(), term_bank);
-                {
-                    let mut tasks = tasks.blocking_lock();
-                    tasks.spawn_on(task, &tokio_runtime);
-                }
-
+            |_, bank| {
+                tasks
+                    .blocking_lock()
+                    .spawn_on(import_term_bank(dictionary_id, tx.clone(), bank), &runtime);
                 let term_banks_left = term_banks_left.fetch_sub(1, atomic::Ordering::SeqCst);
                 info!("{term_banks_left} term banks left");
             },
-            |_, _| {},
+            |_, bank| {
+                tasks.blocking_lock().spawn_on(
+                    import_term_meta_bank(dictionary_id, tx.clone(), bank),
+                    &runtime,
+                );
+            },
             |_, _| {},
             |_, _| {},
         )
@@ -298,21 +307,46 @@ async fn todo_import(db: &Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
     Ok(())
 }
 
-async fn parsed_term_bank(
+async fn import_term_bank(
+    dictionary_id: u32,
     tx: Arc<Mutex<Transaction<'_, Sqlite>>>,
-    term_bank: TermBank,
+    bank: TermBank,
 ) -> Result<()> {
-    for term in term_bank {
+    for term in bank {
         let expression = term.expression.clone();
         let reading = term.reading.clone();
         sqlx::query!(
-            "INSERT INTO expressions (expression, reading) VALUES ($1, $2)",
+            "INSERT INTO terms (dictionary, expression, reading) VALUES ($1, $2, $3)",
+            dictionary_id,
             expression,
             reading,
         )
         .execute(&mut **tx.lock().await)
         .await
-        .with_context(|| format!("failed to insert {expression:?} ({reading:?}) into database"))?;
+        .with_context(|| {
+            format!("failed to insert term {expression:?} ({reading:?}) into database")
+        })?;
+    }
+
+    Ok(())
+}
+
+async fn import_term_meta_bank(
+    dictionary_id: u32,
+    tx: Arc<Mutex<Transaction<'_, Sqlite>>>,
+    bank: TermMetaBank,
+) -> Result<()> {
+    for term_meta in bank {
+        // let expression = term_meta.expression.clone();
+        // let reading = term_meta.reading.clone();
+        // sqlx::query!(
+        //     "INSERT INTO terms (expression, reading) VALUES ($1, $2)",
+        //     expression,
+        //     reading,
+        // )
+        // .execute(&mut **tx.lock().await)
+        // .await
+        // .with_context(|| format!("failed to insert {expression:?} ({reading:?}) into database"))?;
     }
 
     Ok(())

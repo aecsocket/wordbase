@@ -28,6 +28,9 @@ similar_names = "allow"
 too_many_arguments = "allow"
 type_complexity = "allow"
 
+missing_errors_doc = "allow"
+
+
 [workspace.dependencies]
 wordbase = { path = "crates/wordbase", default-features = false }
 wordbase-client-tokio = { path = "crates/wordbase-client-tokio", default-features = false }

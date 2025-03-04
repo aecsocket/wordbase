@@ -24,7 +24,7 @@ use tokio::{
 };
 use tracing::{info, warn};
 use wordbase::{lookup::LookupInfo, protocol::Lookup};
-use wordbase_client_tokio::Connection;
+use wordbase_client_tokio::{Client, Connection};
 
 #[derive(Debug)]
 struct LookupRequest {
@@ -37,7 +37,7 @@ async fn main() {
     tracing_subscriber::fmt().init();
 
     let (send_lookup_request, recv_lookup_request) = mpsc::channel::<LookupRequest>(4);
-    tokio::spawn(start_connecting(recv_lookup_request));
+    tokio::spawn(backend(recv_lookup_request));
 
     let app = adw::Application::builder()
         .application_id("com.github.aecsocket.WordbasePopup")
@@ -104,15 +104,13 @@ async fn main() {
     app.run();
 }
 
-async fn start_connecting(
-    mut recv_lookup_request: mpsc::Receiver<LookupRequest>,
-) -> Result<Infallible> {
+async fn backend(mut recv_lookup_request: mpsc::Receiver<LookupRequest>) -> Result<Infallible> {
     loop {
-        let mut connection = loop {
+        let mut client = loop {
             tokio::select! {
                 result = wordbase_client_tokio::connect("ws://127.0.0.1:9518") => {
                     match result {
-                        Ok(connection) => break connection,
+                        Ok(client) => break client,
                         Err(err) => {
                             warn!("Failed to connect to server: {err:?}");
                             time::sleep(Duration::from_secs(1)).await;
@@ -124,15 +122,15 @@ async fn start_connecting(
             };
         };
 
-        let Err(err) = handle_connection(&mut recv_lookup_request, &mut connection).await;
+        let Err(err) = handle_client(&mut recv_lookup_request, &mut client).await;
         warn!("Lost connection from server: {err:?}");
-        _ = connection.stream.close(None).await;
+        _ = client.close().await;
     }
 }
 
-async fn handle_connection(
+async fn handle_client(
     recv_lookup_request: &mut mpsc::Receiver<LookupRequest>,
-    connection: &mut Connection,
+    client: &mut Client,
 ) -> Result<Infallible> {
     loop {
         let request = recv_lookup_request
@@ -140,7 +138,7 @@ async fn handle_connection(
             .await
             .context("lookup request channel closed")?;
 
-        let response = connection
+        let response = client
             .lookup(Lookup {
                 text: request.query,
                 wants_html: false,
