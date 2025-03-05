@@ -8,7 +8,7 @@ mod imp {
     #[template(file = "src/ui/frequency_tag.blp")]
     pub struct FrequencyTag {
         #[template_child]
-        pub dictionary: TemplateChild<gtk::Label>,
+        pub source: TemplateChild<gtk::Label>,
         #[template_child]
         pub frequency: TemplateChild<gtk::Label>,
     }
@@ -44,8 +44,8 @@ impl FrequencyTag {
     }
 
     #[must_use]
-    pub fn dictionary(&self) -> gtk::Label {
-        self.imp().dictionary.get()
+    pub fn source(&self) -> gtk::Label {
+        self.imp().source.get()
     }
 
     #[must_use]

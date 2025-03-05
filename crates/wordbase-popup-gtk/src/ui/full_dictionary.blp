@@ -290,68 +290,68 @@ template $Dictionary: Box {
         column: 1;
       }
 
-      Adw.Bin {
-        styles [
-          "card",
-        ]
+      Box {
+        orientation: vertical;
+        spacing: 8;
 
-        Box {
-          orientation: vertical;
-          margin-top: 8;
-          margin-bottom: 8;
+        Label {
           margin-start: 8;
-          margin-end: 8;
+          label: "Jitendex.org [2025-02-11]";
           halign: start;
-          spacing: 4;
+
+          styles [
+            "caption-heading",
+          ]
+        }
+
+        Adw.Bin {
+          styles [
+            "card",
+          ]
 
           Box {
-            orientation: horizontal;
-            spacing: 4;
-
-            Label {
-              margin-end: 4;
-              label: "Jitendex.org [2025-02-11]";
-              selectable: true;
-
-              styles [
-                "caption-heading",
-              ]
-            }
-          }
-
-          Label {
-            label: "cooperation, collaboration, help, support";
-            halign: start;
-            valign: start;
-            selectable: true;
-            wrap: true;
-          }
-
-          Box {
+            margin-top: 8;
+            margin-bottom: 8;
+            margin-start: 8;
+            margin-end: 8;
             orientation: vertical;
-            margin-top: 4;
-            margin-bottom: 4;
-            margin-start: 16;
             halign: start;
             spacing: 4;
 
             Label {
-              label: "ご<b>協力</b>に感謝します。";
-              selectable: true;
+              label: "cooperation, collaboration, help, support";
               halign: start;
-              use-markup: true;
+              valign: start;
+              selectable: true;
               wrap: true;
             }
 
-            Label {
-              label: "I appreciate your cooperation.";
-              selectable: true;
+            Box {
+              orientation: vertical;
+              margin-top: 4;
+              margin-bottom: 4;
+              margin-start: 16;
               halign: start;
-              wrap: true;
+              spacing: 4;
 
-              styles [
-                "caption",
-              ]
+              Label {
+                label: "ご<b>協力</b>に感謝します。";
+                selectable: true;
+                halign: start;
+                use-markup: true;
+                wrap: true;
+              }
+
+              Label {
+                label: "I appreciate your cooperation.";
+                selectable: true;
+                halign: start;
+                wrap: true;
+
+                styles [
+                  "caption",
+                ]
+              }
             }
           }
         }

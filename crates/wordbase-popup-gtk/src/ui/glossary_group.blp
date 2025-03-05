@@ -1,0 +1,18 @@
+using Gtk 4.0;
+
+template $GlossaryGroup: Box {
+  hexpand: true;
+  orientation: vertical;
+  spacing: 8;
+
+  Label source {
+    margin-start: 8;
+    halign: start;
+    label: "Source";
+    selectable: true;
+
+    styles [
+      "caption-heading",
+    ]
+  }
+}

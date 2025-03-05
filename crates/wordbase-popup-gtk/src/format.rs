@@ -66,43 +66,72 @@ impl Terms {
     }
 
     pub fn to_ui(&self) -> ui::Dictionary {
-        let dictionary = ui::Dictionary::new();
+        let dictionary_ui = ui::Dictionary::new();
 
         for (row, (term, info)) in self.iter().enumerate() {
             let Ok(row) = i32::try_from(row) else {
                 break;
             };
-            let meta = ui::TermMeta::new();
-            dictionary.attach(&meta, 0, row, 1, 1);
 
-            meta.reading()
+            // term meta (left)
+
+            let meta_ui = ui::TermMeta::new();
+            dictionary_ui.attach(&meta_ui, 0, row, 1, 1);
+
+            meta_ui
+                .reading()
                 .set_text(term.reading.as_deref().unwrap_or_default());
-            meta.expression().set_text(&term.expression);
+            meta_ui.expression().set_text(&term.expression);
 
             for frequency_tag in info
                 .frequencies
-                .iter()
-                .map(|(_, (dict_title, frequencies))| frequency_tag(dict_title, frequencies))
+                .values()
+                .map(|(dict_title, frequencies)| frequency_tag(dict_title, frequencies))
             {
-                meta.frequency_tags().append(&frequency_tag);
+                meta_ui.frequency_tags().append(&frequency_tag);
             }
 
             let reading = term.reading.as_ref().unwrap_or(&term.expression);
-            for pitch_label in info.pitches.iter().flat_map(|(_, (_, pitches))| {
-                pitches.iter().map(|pitch| pitch_label(reading, pitch))
-            }) {
-                meta.pitches().append(&pitch_label);
+            for pitch_label in info
+                .pitches
+                .values()
+                .flat_map(|(_, pitches)| pitches.iter().map(|pitch| pitch_label(reading, pitch)))
+            {
+                meta_ui.pitches().append(&pitch_label);
+            }
+
+            // glossaries (right)
+
+            let page = ui::GlossaryPage::new();
+            dictionary_ui.attach(&page, 1, row, 1, 1);
+
+            for (dict_title, glossaries) in info.glossaries.values() {
+                let group = ui::GlossaryGroup::new();
+                page.append(&group);
+
+                group.source().set_text(dict_title);
+
+                for glossary in glossaries {
+                    let row = ui::GlossaryRow::new();
+                    group.append(&row);
+
+                    let label = gtk::Label::new(Some(&glossary.text));
+                    row.content().append(&label);
+                    label.set_selectable(true);
+                    label.set_wrap(true);
+                    label.set_halign(gtk::Align::Start);
+                }
             }
         }
 
-        dictionary
+        dictionary_ui
     }
 }
 
 fn frequency_tag(dict_title: &str, frequencies: &[Frequency]) -> ui::FrequencyTag {
     let tag = ui::FrequencyTag::new();
 
-    tag.dictionary().set_text(dict_title);
+    tag.source().set_text(dict_title);
 
     let frequency = frequencies
         .iter()

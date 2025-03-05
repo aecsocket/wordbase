@@ -1,12 +1,13 @@
 mod dictionary;
 mod dictionary_popup;
 mod frequency_tag;
-// mod glossaries;
-// mod glossary_set;
+mod glossary_group;
+mod glossary_page;
+mod glossary_row;
 mod lookup;
 mod term_meta;
 
 pub use {
-    dictionary::Dictionary, dictionary_popup::DictionaryPopup, frequency_tag::FrequencyTag,
-    lookup::Lookup, term_meta::TermMeta,
+    dictionary::Dictionary, frequency_tag::FrequencyTag, glossary_group::GlossaryGroup,
+    glossary_page::GlossaryPage, glossary_row::GlossaryRow, lookup::Lookup, term_meta::TermMeta,
 };
