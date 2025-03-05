@@ -24,7 +24,7 @@ use tokio::{
     time,
 };
 use tracing::warn;
-use wordbase::schema::LookupInfo;
+use wordbase::schema::{Dictionary, LookupInfo};
 use wordbase_client_tokio::SocketClient;
 
 #[tokio::main]
@@ -70,11 +70,11 @@ async fn main() {
                     .await?;
                 let response = recv_response.await?;
 
-                if let Some(lookup_info) = response {
-                    content.lemma().set_text(&lookup_info.lemma);
+                if let Some(response) = response {
+                    content.lemma().set_text(&response.info.lemma);
                     content
                         .dictionary_container()
-                        .set_child(Some(&ui::Dictionary::from(&lookup_info.expressions)));
+                        .set_child(Some(&ui::Dictionary::from(&response.expressions)));
                 } else {
                     content.lemma().set_text("");
                     content
@@ -102,7 +102,13 @@ async fn main() {
 #[derive(Debug)]
 struct LookupRequest {
     query: String,
-    send_response: oneshot::Sender<Option<LookupInfo>>,
+    send_response: oneshot::Sender<Option<LookupResponse>>,
+}
+
+#[derive(Debug)]
+struct LookupResponse {
+    dictionaries: Vec<Dictionary>,
+    info: LookupInfo,
 }
 
 async fn backend(mut recv_lookup_request: mpsc::Receiver<LookupRequest>) -> Result<Infallible> {
@@ -139,10 +145,16 @@ async fn handle_client(
             .await
             .context("lookup request channel closed")?;
 
-        let response = client
+        let dictionaries = client
+            .list_dictionaries()
+            .await
+            .context("failed to list dictionaries")?;
+        let info = client
             .lookup(request.query)
             .await
             .context("failed to perform lookup")?;
+
+        let response = info.map(|info| LookupResponse { dictionaries, info });
         _ = request.send_response.send(response);
     }
 }

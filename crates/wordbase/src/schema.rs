@@ -39,8 +39,7 @@ pub struct LookupInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Term {
-    pub source_id: DictionaryId,
-    pub source_title: String,
+    pub source: DictionaryId,
     pub expression: String,
     pub reading: String,
 }

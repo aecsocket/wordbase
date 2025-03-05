@@ -208,14 +208,8 @@ pub async fn lookup(db: &Pool<Sqlite>, lemma: String) -> Result<LookupInfo> {
 
 async fn fetch_terms(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<Term>> {
     sqlx::query!(
-        "SELECT
-            t.source,
-            t.expression,
-            t.reading,
-            dictionaries.title AS source_title
-        FROM readings t
-        LEFT JOIN dictionaries
-            ON t.source = dictionaries.id
+        "SELECT source, expression, reading
+        FROM readings
         WHERE expression = $1 OR reading = $1",
         lemma
     )
@@ -223,8 +217,7 @@ async fn fetch_terms(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<Term>> {
     .map(|record| {
         let record = record.context("failed to fetch record")?;
         anyhow::Ok(Term {
-            source_id: DictionaryId(record.source),
-            source_title: record.source_title,
+            source: DictionaryId(record.source),
             expression: record.expression,
             reading: record.reading,
         })
@@ -235,15 +228,8 @@ async fn fetch_terms(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<Term>> {
 
 async fn fetch_frequencies(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<(Term, Frequency)>> {
     sqlx::query!(
-        "SELECT
-            t.source,
-            t.expression,
-            t.reading,
-            t.data,
-            dictionaries.title AS source_title
-        FROM frequencies t
-        LEFT JOIN dictionaries
-            ON t.source = dictionaries.id
+        "SELECT source, expression, reading, data
+        FROM frequencies
         WHERE expression = $1 OR reading = $1",
         lemma
     )
@@ -252,8 +238,7 @@ async fn fetch_frequencies(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<(Term, 
         let record = record.context("failed to fetch record")?;
         anyhow::Ok((
             Term {
-                source_id: DictionaryId(record.source),
-                source_title: record.source_title,
+                source: DictionaryId(record.source),
                 expression: record.expression,
                 reading: record.reading,
             },
@@ -266,15 +251,8 @@ async fn fetch_frequencies(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<(Term, 
 
 async fn fetch_pitches(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<(Term, Pitch)>> {
     sqlx::query!(
-        "SELECT
-            t.source,
-            t.expression,
-            t.reading,
-            t.data,
-            dictionaries.title AS source_title
-        FROM pitches t
-        LEFT JOIN dictionaries
-            ON t.source = dictionaries.id
+        "SELECT source, expression, reading, data
+        FROM pitches
         WHERE expression = $1 OR reading = $1",
         lemma
     )
@@ -283,8 +261,7 @@ async fn fetch_pitches(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<(Term, Pitc
         let record = record.context("failed to fetch record")?;
         anyhow::Ok((
             Term {
-                source_id: DictionaryId(record.source),
-                source_title: record.source_title,
+                source: DictionaryId(record.source),
                 expression: record.expression,
                 reading: record.reading,
             },
@@ -297,15 +274,8 @@ async fn fetch_pitches(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<(Term, Pitc
 
 async fn fetch_glossaries(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<(Term, Glossary)>> {
     sqlx::query!(
-        "SELECT
-            t.source,
-            t.expression,
-            t.reading,
-            t.data,
-            dictionaries.title AS source_title
-        FROM glossaries t
-        LEFT JOIN dictionaries
-            ON t.source = dictionaries.id
+        "SELECT source, expression, reading, data
+        FROM glossaries
         WHERE expression = $1 OR reading = $1",
         lemma
     )
@@ -314,8 +284,7 @@ async fn fetch_glossaries(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<(Term, G
         let record = record.context("failed to fetch record")?;
         anyhow::Ok((
             Term {
-                source_id: DictionaryId(record.source),
-                source_title: record.source_title.unwrap(),
+                source: DictionaryId(record.source),
                 expression: record.expression,
                 reading: record.reading,
             },

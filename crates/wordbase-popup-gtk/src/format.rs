@@ -1,6 +1,6 @@
 use derive_more::Deref;
 use foldhash::HashMap;
-use wordbase::schema::{self, Frequency, Glossary, LookupInfo, Pitch};
+use wordbase::schema::{self, Dictionary, DictionaryId, Frequency, Glossary, LookupInfo, Pitch};
 
 #[derive(Debug, Clone, Deref)]
 pub struct Format(Vec<(Term, TermInfo)>);
@@ -21,7 +21,7 @@ pub struct TermInfo {
 pub type DictionaryTitle = String;
 
 impl Format {
-    pub fn new(info: LookupInfo) -> Self {
+    pub fn new(dictionaries: &Vec<Dictionary>, info: LookupInfo) -> Self {
         #[derive(Debug, Clone, Default)]
         struct TermMap {
             terms: HashMap<Term, TermInfo>,
@@ -44,29 +44,36 @@ impl Format {
             }
         }
 
+        let source_title_of = |id: DictionaryId| -> DictionaryTitle {
+            dictionaries
+                .iter()
+                .find(|dictionary| dictionary.id == id)
+                .map(|dictionary| dictionary.title.clone())
+                .unwrap_or_else(|| format!("{id:?}"))
+        };
+
         let mut map = TermMap::default();
 
         for term in info.terms {
-            let (term, _) = convert_term(term);
-            map.get_or_new(term);
+            map.get_or_new(term.into());
         }
 
         for (term, frequency) in info.frequencies {
-            let (term, source_title) = convert_term(term);
-            map.get_or_new(term)
+            let source_title = source_title_of(term.source);
+            map.get_or_new(term.into())
                 .frequencies
                 .push((source_title, frequency));
         }
 
         for (term, pitch) in info.pitches {
-            let (term, source_title) = convert_term(term);
+            let source_title = source_title_of(term.source);
             map.get_or_new(term.into())
                 .pitches
                 .push((source_title, pitch));
         }
 
         for (term, glossary) in info.glossaries {
-            let (term, source_title) = convert_term(term);
+            let source_title = source_title_of(term.source);
             map.get_or_new(term.into())
                 .glossaries
                 .push((source_title, glossary));
@@ -76,12 +83,11 @@ impl Format {
     }
 }
 
-fn convert_term(raw: schema::Term) -> (Term, DictionaryTitle) {
-    (
-        Term {
-            expression: raw.expression,
-            reading: raw.reading,
-        },
-        raw.source_title,
-    )
+impl From<schema::Term> for Term {
+    fn from(value: schema::Term) -> Self {
+        Self {
+            expression: value.expression,
+            reading: value.reading,
+        }
+    }
 }
