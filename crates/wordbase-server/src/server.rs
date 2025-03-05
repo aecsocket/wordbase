@@ -62,8 +62,20 @@ pub async fn run(
         todo_import(tx.clone(), "/home/dev/dictionaries/jpdb.zip")
             .instrument(info_span!("import", path = "jpdb.zip")),
     );
-    x.await?.context("failed to import jitendex")?;
-    y.await?.context("failed to import jpdb")?;
+    let z = tokio::spawn(
+        todo_import(tx.clone(), "/home/dev/dictionaries/nhk.zip")
+            .instrument(info_span!("import", path = "nhk.zip")),
+    );
+    let w = tokio::spawn(
+        todo_import(tx.clone(), "/home/dev/dictionaries/jmnedict.zip")
+            .instrument(info_span!("import", path = "jmnedict.zip")),
+    );
+
+    let (x, y, z, w) = tokio::try_join!(x, y, z, w).context("failed to import")?;
+    x.context("failed to import jitendex")?;
+    y.context("failed to import jpdb")?;
+    z.context("failed to import nhk")?;
+    w.context("failed to import jmnedict")?;
 
     Arc::into_inner(tx)
         .expect("we own the last `Arc` after all tasks have been joined")

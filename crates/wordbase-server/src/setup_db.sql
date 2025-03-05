@@ -34,6 +34,7 @@ CREATE INDEX pitches_reading    ON pitches(reading);
 CREATE TABLE glossaries (
     source          INTEGER NOT NULL REFERENCES dictionaries(id) ON DELETE CASCADE,
     expression      TEXT    NOT NULL,
+    reading         TEXT    NOT NULL,
     data            BLOB    NOT NULL
 );
 CREATE INDEX glossaries_expression ON glossaries(expression);

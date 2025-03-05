@@ -24,9 +24,8 @@ pub struct Pitch {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
 pub enum Glossary {
-    Definition(String),
+    Definition { text: String },
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

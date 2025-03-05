@@ -30,16 +30,17 @@ pub async fn term_bank(
             .await
             .context("failed to insert into `readings`")?;
 
-            for data in to_glossaries(term) {
+            for glossary in convert_term(term) {
                 scratch.clear();
-                postcard::to_io(&data, &mut scratch).context("failed to serialize data")?;
+                postcard::to_io(&glossary, &mut scratch).context("failed to serialize data")?;
                 let data = &scratch[..];
 
                 sqlx::query!(
-                    "INSERT INTO glossaries (source, expression, data)
-                    VALUES ($1, $2, $3)",
+                    "INSERT INTO glossaries (source, expression, reading, data)
+                    VALUES ($1, $2, $3, $4)",
                     source,
                     expression,
+                    reading,
                     data
                 )
                 .execute(&mut **tx.lock().await)
@@ -55,14 +56,14 @@ pub async fn term_bank(
     Ok(())
 }
 
-fn to_glossaries(term: yomitan::Term) -> impl Iterator<Item = Glossary> {
-    term.glossary
+fn convert_term(raw: yomitan::Term) -> impl Iterator<Item = Glossary> {
+    raw.glossary
         .into_iter()
         .flat_map(|glossary| match glossary {
             yomitan::Glossary::Deinflection(_) => None,
-            yomitan::Glossary::String(definition)
-            | yomitan::Glossary::Content(yomitan::GlossaryContent::Text { text: definition }) => {
-                Some(Glossary::Definition(definition))
+            yomitan::Glossary::String(text)
+            | yomitan::Glossary::Content(yomitan::GlossaryContent::Text { text }) => {
+                Some(Glossary::Definition { text })
             }
             yomitan::Glossary::Content(yomitan::GlossaryContent::Image(image)) => {
                 None // TODO
@@ -161,21 +162,21 @@ fn convert_frequency(
     new.map(|new| (reading, new)).into_iter()
 }
 
-fn convert_pitch(pitch: yomitan::TermMetaPitch) -> impl Iterator<Item = (String, Pitch)> {
-    pitch.pitches.into_iter().map(move |variant| {
+fn convert_pitch(raw: yomitan::TermMetaPitch) -> impl Iterator<Item = (String, Pitch)> {
+    raw.pitches.into_iter().map(move |pitch| {
         (
-            pitch.reading.clone(),
+            raw.reading.clone(),
             Pitch {
-                position: variant.position,
-                nasal: convert_pitch_position(variant.nasal),
-                devoice: convert_pitch_position(variant.devoice),
+                position: pitch.position,
+                nasal: convert_pitch_position(pitch.nasal),
+                devoice: convert_pitch_position(pitch.devoice),
             },
         )
     })
 }
 
-fn convert_pitch_position(position: Option<yomitan::PitchPosition>) -> Vec<u64> {
-    match position {
+fn convert_pitch_position(raw: Option<yomitan::PitchPosition>) -> Vec<u64> {
+    match raw {
         None => vec![],
         Some(yomitan::PitchPosition::One(position)) => vec![position],
         Some(yomitan::PitchPosition::Many(positions)) => positions,
@@ -183,15 +184,17 @@ fn convert_pitch_position(position: Option<yomitan::PitchPosition>) -> Vec<u64> 
 }
 
 pub async fn lookup(db: &Pool<Sqlite>, lemma: String) -> Result<LookupInfo> {
-    let (terms, frequencies, pitches) = tokio::join!(
+    let (terms, frequencies, pitches, glossaries) = tokio::join!(
         fetch_terms(db, &lemma),
         fetch_frequencies(db, &lemma),
-        fetch_pitches(db, &lemma)
+        fetch_pitches(db, &lemma),
+        fetch_glossaries(db, &lemma),
     );
-    let (terms, frequencies, pitches) = (
+    let (terms, frequencies, pitches, glossaries) = (
         terms.context("failed to fetch terms")?,
         frequencies.context("failed to fetch frequencies")?,
         pitches.context("failed to fetch pitches")?,
+        glossaries.context("failed to fetch glossaries")?,
     );
 
     Ok(LookupInfo {
@@ -199,7 +202,7 @@ pub async fn lookup(db: &Pool<Sqlite>, lemma: String) -> Result<LookupInfo> {
         terms,
         frequencies,
         pitches,
-        ..Default::default()
+        glossaries,
     })
 }
 
@@ -270,4 +273,37 @@ async fn fetch_pitches(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<(Expression
     })
     .try_collect()
     .await
+}
+
+async fn fetch_glossaries(
+    db: &Pool<Sqlite>,
+    lemma: &str,
+) -> Result<Vec<(ExpressionInfo, Glossary)>> {
+    sqlx::query!(
+        "SELECT source, expression, reading, data
+        FROM glossaries
+        WHERE expression = $1 OR reading = $1",
+        lemma
+    )
+    .fetch(db)
+    .map(|record| {
+        let record = record.context("failed to fetch record")?;
+        anyhow::Ok((
+            ExpressionInfo {
+                source: DictionaryId(record.source),
+                expression: record.expression,
+                reading: record.reading,
+            },
+            postcard::from_bytes(&record.data).context("failed to deserialize data")?,
+        ))
+    })
+    .try_collect()
+    .await
+}
+
+#[test]
+fn test() {
+    let x = Glossary::Definition { text: "hi".into() };
+    let b = postcard::to_stdvec(&x).unwrap();
+    postcard::from_bytes::<Glossary>(&b).unwrap();
 }
