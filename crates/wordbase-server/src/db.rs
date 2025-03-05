@@ -37,10 +37,6 @@ pub async fn lookup(db: &Pool<Sqlite>, lemma: String) -> Result<LookupInfo> {
             reading: record.reading,
         };
 
-        // this will cause duplicate term entries
-        // we strip these out later
-        info.terms.push((source, term.clone()));
-
         match u8::try_from(record.data_kind) {
             Ok(data_kind::GLOSSARY) => {
                 let data = postcard::from_bytes::<Glossary>(&record.data)
@@ -61,7 +57,6 @@ pub async fn lookup(db: &Pool<Sqlite>, lemma: String) -> Result<LookupInfo> {
         }
     }
 
-    info.terms.dedup();
     Ok(info)
 }
 

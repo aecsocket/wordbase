@@ -39,11 +39,8 @@ glib::wrapper! {
 
 impl FrequencyTag {
     #[must_use]
-    pub fn new(dictionary: &str, frequency: &str) -> Self {
-        let this = glib::Object::new::<Self>();
-        this.imp().dictionary.set_text(dictionary);
-        this.imp().frequency.set_text(frequency);
-        this
+    pub fn new() -> Self {
+        glib::Object::new()
     }
 
     #[must_use]

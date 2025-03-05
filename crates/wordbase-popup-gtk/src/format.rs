@@ -1,93 +1,101 @@
-use derive_more::Deref;
+use derive_more::{Deref, DerefMut};
 use foldhash::HashMap;
-use wordbase::schema::{self, Dictionary, DictionaryId, Frequency, Glossary, LookupInfo, Pitch};
+use gtk::prelude::{BoxExt, GridExt};
+use wordbase::schema::{Dictionary, DictionaryId, Frequency, Glossary, LookupInfo, Pitch, Term};
 
-#[derive(Debug, Clone, Deref)]
-pub struct Format(Vec<(Term, TermInfo)>);
+use crate::ui;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Term {
-    pub expression: String,
-    pub reading: String,
-}
+#[derive(Debug, Clone, Default, Deref, DerefMut)]
+pub struct Terms(pub IndexMap<Term, TermInfo>);
+
+type IndexMap<K, V> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
 
 #[derive(Debug, Clone, Default)]
 pub struct TermInfo {
-    pub frequencies: Vec<(DictionaryTitle, Frequency)>,
-    pub pitches: Vec<(DictionaryTitle, Pitch)>,
-    pub glossaries: Vec<(DictionaryTitle, Glossary)>,
+    pub glossaries: IndexMap<DictionaryId, (DictionaryTitle, Vec<Glossary>)>,
+    pub frequencies: IndexMap<DictionaryId, (DictionaryTitle, Vec<Frequency>)>,
+    pub pitches: IndexMap<DictionaryId, (DictionaryTitle, Vec<Pitch>)>,
 }
 
 pub type DictionaryTitle = String;
 
-impl Format {
-    pub fn new(dictionaries: &Vec<Dictionary>, info: LookupInfo) -> Self {
-        #[derive(Debug, Clone, Default)]
-        struct TermMap {
-            terms: HashMap<Term, TermInfo>,
-            indices: Vec<Term>,
-        }
-
-        impl TermMap {
-            fn get_or_new(&mut self, key: Term) -> &mut TermInfo {
-                self.terms.entry(key).or_insert_with_key(|key| {
-                    self.indices.push(key.clone());
-                    TermInfo::default()
-                })
-            }
-
-            fn into_ordered(mut self) -> Vec<(Term, TermInfo)> {
-                self.indices
-                    .into_iter()
-                    .map(|index| self.terms.remove_entry(&index).expect("should exist"))
-                    .collect()
-            }
-        }
-
-        let source_title_of = |id: DictionaryId| -> DictionaryTitle {
+impl Terms {
+    pub fn new(dictionaries: &HashMap<DictionaryId, Dictionary>, info: LookupInfo) -> Self {
+        let title_of = |id: DictionaryId| -> DictionaryTitle {
             dictionaries
-                .iter()
-                .find(|dictionary| dictionary.id == id)
-                .map(|dictionary| dictionary.title.clone())
-                .unwrap_or_else(|| format!("{id:?}"))
+                .get(&id)
+                .map_or_else(|| format!("{id:?}"), |dictionary| dictionary.title.clone())
         };
 
-        let mut map = TermMap::default();
+        let mut this = Self::default();
 
-        for term in info.terms {
-            map.get_or_new(term.into());
-        }
-
-        for (term, frequency) in info.frequencies {
-            let source_title = source_title_of(term.source);
-            map.get_or_new(term.into())
-                .frequencies
-                .push((source_title, frequency));
-        }
-
-        for (term, pitch) in info.pitches {
-            let source_title = source_title_of(term.source);
-            map.get_or_new(term.into())
-                .pitches
-                .push((source_title, pitch));
-        }
-
-        for (term, glossary) in info.glossaries {
-            let source_title = source_title_of(term.source);
-            map.get_or_new(term.into())
+        for (source, term, glossary) in info.glossaries {
+            this.entry(term)
+                .or_default()
                 .glossaries
-                .push((source_title, glossary));
+                .entry(source)
+                .or_insert_with(|| (title_of(source), Vec::new()))
+                .1
+                .push(glossary);
         }
 
-        Self(map.into_ordered())
+        for (source, term, frequency) in info.frequencies {
+            this.entry(term)
+                .or_default()
+                .frequencies
+                .entry(source)
+                .or_insert_with(|| (title_of(source), Vec::new()))
+                .1
+                .push(frequency);
+        }
+
+        for (source, term, pitch) in info.pitches {
+            this.entry(term)
+                .or_default()
+                .pitches
+                .entry(source)
+                .or_insert_with(|| (title_of(source), Vec::new()))
+                .1
+                .push(pitch);
+        }
+
+        this
     }
-}
 
-impl From<schema::Term> for Term {
-    fn from(value: schema::Term) -> Self {
-        Self {
-            expression: value.expression,
-            reading: value.reading,
+    pub fn to_ui(&self) -> ui::Dictionary {
+        let dictionary = ui::Dictionary::new();
+
+        for (row, (term, info)) in self.iter().enumerate() {
+            let Ok(row) = i32::try_from(row) else {
+                break;
+            };
+            let meta = ui::TermMeta::new();
+            dictionary.attach(&meta, 0, row, 1, 1);
+
+            meta.reading()
+                .set_text(term.reading.as_deref().unwrap_or_default());
+            meta.expression().set_text(&term.expression);
+
+            for (_, (dict_title, frequencies)) in &info.frequencies {
+                let tag = ui::FrequencyTag::new();
+                meta.frequency_tags().append(&tag);
+
+                tag.dictionary().set_text(dict_title);
+
+                let frequency = frequencies
+                    .iter()
+                    .map(|frequency| {
+                        frequency
+                            .display_rank
+                            .as_ref()
+                            .map_or_else(|| format!("{}", frequency.rank), ToOwned::to_owned)
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" · ");
+                tag.frequency().set_text(&frequency);
+            }
         }
+
+        dictionary
     }
 }

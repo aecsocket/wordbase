@@ -30,7 +30,6 @@ type_complexity = "allow"
 
 missing_errors_doc = "allow"
 
-
 [workspace.dependencies]
 wordbase = { path = "crates/wordbase", default-features = false }
 wordbase-client-tokio = { path = "crates/wordbase-client-tokio", default-features = false }
@@ -43,6 +42,7 @@ foldhash = { version = "0.1", default-features = false }
 futures = { version = "0.3", default-features = false }
 gdk4 = { version = "0.9", default-features = false }
 gtk4 = { version = "0.9", default-features = false }
+indexmap = { version = "2.7", default-features = false }
 libadwaita = { version = "0.7", default-features = false }
 mecab = { version = "0.1.6", default-features = false }
 postcard = { version = "1.1", default-features = false }

@@ -3110,6 +3110,7 @@ dependencies = [
  "derive_more",
  "foldhash",
  "gtk4",
+ "indexmap",
  "libadwaita",
  "serde",
  "serde_json",

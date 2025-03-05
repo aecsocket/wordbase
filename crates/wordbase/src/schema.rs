@@ -142,7 +142,6 @@ pub struct Pitch {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LookupInfo {
     pub lemma: String,
-    pub terms: Vec<(DictionaryId, Term)>,
     pub glossaries: Vec<(DictionaryId, Term, Glossary)>,
     pub frequencies: Vec<(DictionaryId, Term, Frequency)>,
     pub pitches: Vec<(DictionaryId, Term, Pitch)>,

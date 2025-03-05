@@ -18,13 +18,15 @@ use std::{convert::Infallible, time::Duration};
 
 use adw::prelude::*;
 use anyhow::{Context, Result};
+use foldhash::HashMap;
+use format::Terms;
 use gtk::{gdk, glib};
 use tokio::{
     sync::{mpsc, oneshot},
     time,
 };
 use tracing::warn;
-use wordbase::schema::{Dictionary, LookupInfo};
+use wordbase::schema::{Dictionary, DictionaryId, LookupInfo};
 use wordbase_client_tokio::SocketClient;
 
 #[tokio::main]
@@ -72,9 +74,11 @@ async fn main() {
 
                 if let Some(response) = response {
                     content.lemma().set_text(&response.info.lemma);
+
+                    let terms = Terms::new(&response.dictionaries, response.info);
                     content
                         .dictionary_container()
-                        .set_child(Some(&ui::Dictionary::from(&response.expressions)));
+                        .set_child(Some(&terms.to_ui()));
                 } else {
                     content.lemma().set_text("");
                     content
@@ -82,7 +86,7 @@ async fn main() {
                         .set_child(None::<&ui::Dictionary>);
                 }
 
-                Ok(())
+                anyhow::Ok(())
             });
         });
 
@@ -107,7 +111,7 @@ struct LookupRequest {
 
 #[derive(Debug)]
 struct LookupResponse {
-    dictionaries: Vec<Dictionary>,
+    dictionaries: HashMap<DictionaryId, Dictionary>,
     info: LookupInfo,
 }
 
@@ -149,6 +153,11 @@ async fn handle_client(
             .list_dictionaries()
             .await
             .context("failed to list dictionaries")?;
+        let dictionaries = dictionaries
+            .into_iter()
+            .map(|dictionary| (dictionary.id, dictionary))
+            .collect();
+
         let info = client
             .lookup(request.query)
             .await
