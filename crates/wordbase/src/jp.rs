@@ -1,3 +1,5 @@
+use std::iter;
+
 #[must_use]
 #[rustfmt::skip]
 pub const fn is_small_kana(c: char) -> bool {
@@ -10,7 +12,7 @@ pub const fn is_small_kana(c: char) -> bool {
 
 pub fn mora(reading: &str) -> impl Iterator<Item = &str> {
     let mut chars = reading.char_indices().peekable();
-    std::iter::from_fn(move || {
+    iter::from_fn(move || {
         let (byte_index, char) = chars.next()?;
         if let Some((next_byte_index, next_char)) = chars.peek().copied() {
             if is_small_kana(next_char) {

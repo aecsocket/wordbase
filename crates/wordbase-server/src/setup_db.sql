@@ -5,6 +5,13 @@ CREATE TABLE dictionaries (
     enabled     BOOLEAN     NOT NULL DEFAULT TRUE
 );
 
+CREATE TABLE tags (
+    id          INTEGER     PRIMARY KEY AUTOINCREMENT,
+    source      INTEGER NOT NULL REFERENCES dictionaries(id) ON DELETE CASCADE,
+    name        TEXT    NOT NULL,
+    data        BLOB    NOT NULL
+);
+
 CREATE TABLE terms (
     source      INTEGER NOT NULL REFERENCES dictionaries(id) ON DELETE CASCADE,
     expression  TEXT    NOT NULL,

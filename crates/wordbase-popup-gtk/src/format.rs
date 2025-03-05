@@ -1,6 +1,6 @@
 use derive_more::{Deref, DerefMut};
 use foldhash::HashMap;
-use gtk::prelude::{BoxExt, GridExt, WidgetExt};
+use gtk::prelude::{BoxExt, ButtonExt, GridExt, WidgetExt};
 use wordbase::{
     jp,
     schema::{Dictionary, DictionaryId, Frequency, Glossary, LookupInfo, Pitch, Term},
@@ -114,6 +114,17 @@ impl Terms {
                 for glossary in glossaries {
                     let row = ui::GlossaryRow::new();
                     group.append(&row);
+
+                    for (tag_name, tag) in &glossary.tags {
+                        let tag_ui = ui::GlossaryTag::new();
+                        row.tags().append(&tag_ui);
+
+                        tag_ui.set_label(tag_name);
+                        tag_ui.set_tooltip_text(Some(&tag.description));
+                        if let Some(category) = tag.category {
+                            tag_ui.add_css_class(ui::GlossaryTag::css_class_of(category));
+                        }
+                    }
 
                     let label = gtk::Label::new(Some(&glossary.text));
                     row.content().append(&label);

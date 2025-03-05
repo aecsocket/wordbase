@@ -2,6 +2,8 @@
     padding: 1px 12px;
 }
 
+/* <https://arbyste.github.io/jp-mining-note/autopa/#pitch-accent-groups> */
+
 .mora.heiban {
     color: var(--accent-blue);
 }
@@ -33,4 +35,50 @@
 
 .pitch-line.high.next-low {
     border-style: solid solid none none;
+}
+
+/* <https://github.com/yomidevs/yomitan/blob/48f1d012ad5045319d4e492dfbefa39da92817b2/ext/css/display.css#L136-L149> */
+
+.glossary-tag {
+    --glossary-tag-background-alpha: 0.3;
+}
+
+.glossary-tag.name {
+    background-color: alpha(#b6327a, var(--glossary-tag-background-alpha));
+}
+
+.glossary-tag.expression {
+    background-color: alpha(#f0ad4e, var(--glossary-tag-background-alpha));
+}
+
+.glossary-tag.popular {
+    background-color: alpha(#0275d8, var(--glossary-tag-background-alpha));
+}
+
+.glossary-tag.frequent {
+    background-color: alpha(#5bc0de, var(--glossary-tag-background-alpha));
+}
+
+.glossary-tag.archaism {
+    background-color: alpha(#d9534f, var(--glossary-tag-background-alpha));
+}
+
+.glossary-tag.dictionary {
+    background-color: alpha(#aa66cc, var(--glossary-tag-background-alpha));
+}
+
+.glossary-tag.frequency {
+    background-color: alpha(#5cb85c, var(--glossary-tag-background-alpha));
+}
+
+.glossary-tag.part-of-speech {
+    background-color: alpha(#565656, var(--glossary-tag-background-alpha));
+}
+
+.glossary-tag.search {
+    background-color: alpha(#8a8a91, var(--glossary-tag-background-alpha));
+}
+
+.glossary-tag.pronunciation-dictionary {
+    background-color: alpha(#6640be, var(--glossary-tag-background-alpha));
 }

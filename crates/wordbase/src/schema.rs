@@ -96,7 +96,30 @@ impl Term {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TermTag {
+    pub description: String,
+    pub category: Option<TagCategory>,
+    pub order: i64,
+}
+
+// https://github.com/yomidevs/yomitan/blob/master/docs/making-yomitan-dictionaries.md#tag-categories
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum TagCategory {
+    Name,
+    Expression,
+    Popular,
+    Frequent,
+    Archaism,
+    Dictionary,
+    Frequency,
+    PartOfSpeech,
+    Search,
+    PronunciationDictionary,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Glossary {
+    pub tags: Vec<(String, TermTag)>,
     pub text: String,
 }
 
@@ -119,6 +142,24 @@ pub struct Frequency {
     ///
     /// If this is omitted, [`Frequency::rank`] should be presented directly.
     pub display_rank: Option<String>,
+}
+
+impl Frequency {
+    #[must_use]
+    pub const fn new(rank: u64) -> Self {
+        Self {
+            rank,
+            display_rank: None,
+        }
+    }
+
+    #[must_use]
+    pub fn with_display(rank: u64, display: impl Into<String>) -> Self {
+        Self {
+            rank,
+            display_rank: Some(display.into()),
+        }
+    }
 }
 
 /// Japanese pitch accent information for a specific [term].

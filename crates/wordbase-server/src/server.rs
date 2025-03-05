@@ -51,24 +51,23 @@ pub async fn run(
         //     import::from_yomitan(db.clone(), "/home/dev/dictionaries/jitendex.zip")
         //         .instrument(info_span!("import", path = "jitendex.zip")),
         // );
-        let jpdb = tokio::spawn(
-            import::from_yomitan(db.clone(), "/home/dev/dictionaries/jpdb.zip")
-                .instrument(info_span!("import", path = "jpdb.zip")),
-        );
-        let nhk = tokio::spawn(
-            import::from_yomitan(db.clone(), "/home/dev/dictionaries/nhk.zip")
-                .instrument(info_span!("import", path = "nhk.zip")),
-        );
+        // let jpdb = tokio::spawn(
+        //     import::from_yomitan(db.clone(), "/home/dev/dictionaries/jpdb.zip")
+        //         .instrument(info_span!("import", path = "jpdb.zip")),
+        // );
+        // let nhk = tokio::spawn(
+        //     import::from_yomitan(db.clone(), "/home/dev/dictionaries/nhk.zip")
+        //         .instrument(info_span!("import", path = "nhk.zip")),
+        // );
         let jmnedict = tokio::spawn(
             import::from_yomitan(db.clone(), "/home/dev/dictionaries/jmnedict.zip")
                 .instrument(info_span!("import", path = "jmnedict.zip")),
         );
 
-        let (jpdb, nhk, jmnedict) =
-            tokio::try_join!(jpdb, nhk, jmnedict).context("failed to import")?;
+        let (jmnedict,) = tokio::try_join!(jmnedict).context("failed to import")?;
         // jitendex.context("failed to import jitendex")?;
-        jpdb.context("failed to import jpdb")?;
-        nhk.context("failed to import nhk")?;
+        // jpdb.context("failed to import jpdb")?;
+        // nhk.context("failed to import nhk")?;
         jmnedict.context("failed to import jmnedict")?;
     }
 
