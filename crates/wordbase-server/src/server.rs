@@ -1,35 +1,25 @@
-use std::{
-    convert::Infallible,
-    io::Cursor,
-    num::Wrapping,
-    path::Path,
-    sync::{
-        Arc,
-        atomic::{self, AtomicUsize},
-    },
-};
+use std::{num::Wrapping, str::FromStr, sync::Arc};
 
 use anyhow::{Context as _, Result, bail};
 use derive_more::{Deref, DerefMut};
 use futures::{SinkExt as _, StreamExt as _, never::Never};
-use sqlx::{Pool, Sqlite, Transaction, sqlite::SqlitePoolOptions};
+use sqlx::{
+    Pool, Sqlite,
+    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
+};
 use tokio::{
-    fs,
     net::{TcpListener, TcpStream},
-    runtime,
-    sync::{Mutex, broadcast, mpsc, oneshot},
-    task::JoinSet,
+    sync::{Barrier, broadcast, mpsc, oneshot},
 };
 use tokio_tungstenite::{WebSocketStream, tungstenite::Message};
 use tracing::{Instrument, info, info_span, warn};
 use wordbase::{
-    protocol::{DictionaryNotFound, FromClient, FromServer, NewSentence},
-    schema::{Dictionary, DictionaryId, LookupInfo},
-    yomitan,
+    protocol::{FromClient, FromServer, NewSentence},
+    schema::LookupInfo,
 };
 
 use crate::{
-    Config, import,
+    Config, db, import,
     mecab::{MecabInfo, MecabRequest},
 };
 
@@ -40,49 +30,61 @@ pub async fn run(
 ) -> Result<Never> {
     let db = SqlitePoolOptions::new()
         .max_connections(8)
-        .connect("sqlite::memory:")
+        .connect_with(
+            SqliteConnectOptions::from_str(":memory:")?.journal_mode(SqliteJournalMode::Wal),
+        )
         .await
         .context("failed to connect to database")?;
     info!("Connected to SQLite database");
 
-    sqlx::query(include_str!("setup_db.sql"))
-        .execute(&db)
-        .await
-        .context("failed to set up database")?;
+    {
+        // TODO
+        sqlx::query(include_str!("setup_db.sql"))
+            .execute(&db)
+            .await
+            .context("failed to set up database")?;
 
-    let tx = Arc::new(Mutex::new(
-        db.begin().await.context("failed to start transaction")?,
-    ));
-
-    let x = tokio::spawn(
-        todo_import(tx.clone(), "/home/dev/dictionaries/jitendex.zip")
+        let barrier = Arc::new(Barrier::new(4));
+        let jitendex = tokio::spawn(
+            import::from_yomitan(
+                db.clone(),
+                barrier.clone(),
+                "/home/dev/dictionaries/jitendex.zip",
+            )
             .instrument(info_span!("import", path = "jitendex.zip")),
-    );
-    let y = tokio::spawn(
-        todo_import(tx.clone(), "/home/dev/dictionaries/jpdb.zip")
+        );
+        let jpdb = tokio::spawn(
+            import::from_yomitan(
+                db.clone(),
+                barrier.clone(),
+                "/home/dev/dictionaries/jpdb.zip",
+            )
             .instrument(info_span!("import", path = "jpdb.zip")),
-    );
-    let z = tokio::spawn(
-        todo_import(tx.clone(), "/home/dev/dictionaries/nhk.zip")
+        );
+        let nhk = tokio::spawn(
+            import::from_yomitan(
+                db.clone(),
+                barrier.clone(),
+                "/home/dev/dictionaries/nhk.zip",
+            )
             .instrument(info_span!("import", path = "nhk.zip")),
-    );
-    let w = tokio::spawn(
-        todo_import(tx.clone(), "/home/dev/dictionaries/jmnedict.zip")
+        );
+        let jmnedict = tokio::spawn(
+            import::from_yomitan(
+                db.clone(),
+                barrier.clone(),
+                "/home/dev/dictionaries/jmnedict.zip",
+            )
             .instrument(info_span!("import", path = "jmnedict.zip")),
-    );
+        );
 
-    let (x, y, z, w) = tokio::try_join!(x, y, z, w).context("failed to import")?;
-    x.context("failed to import jitendex")?;
-    y.context("failed to import jpdb")?;
-    z.context("failed to import nhk")?;
-    w.context("failed to import jmnedict")?;
-
-    Arc::into_inner(tx)
-        .expect("we own the last `Arc` after all tasks have been joined")
-        .into_inner()
-        .commit()
-        .await
-        .context("failed to commit transaction to database")?;
+        let (jitendex, jpdb, nhk, jmnedict) =
+            tokio::try_join!(jitendex, jpdb, nhk, jmnedict).context("failed to import")?;
+        jitendex.context("failed to import jitendex")?;
+        jpdb.context("failed to import jpdb")?;
+        nhk.context("failed to import nhk")?;
+        jmnedict.context("failed to import jmnedict")?;
+    }
 
     let listener = TcpListener::bind(&config.listen_addr)
         .await
@@ -153,9 +155,19 @@ async fn handle_stream(
                 let data = data
                     .context("stream closed")?
                     .context("stream error")?;
-                if let Err(err) = handle_message(&config, &db, &send_mecab_request, &send_new_sentence, &mut connection, data).await {
+                if let Err(err) = handle_message(
+                    &config,
+                    &db,
+                    &send_mecab_request,
+                    &send_new_sentence,
+                    &mut connection,
+                    data,
+                )
+                .await
+                {
                     warn!("Failed to handle request: {err:?}");
-                    _ = connection.write(&FromServer::Error { message: format!("{err:?}") }).await;
+                    let message = format!("{err:?}");
+                    _ = connection.write(&FromServer::Error { message }).await;
                 }
             }
         }
@@ -198,7 +210,7 @@ async fn handle_message(
                 .context("failed to send response")
         }
         FromClient::ListDictionaries => {
-            let dictionaries = list_dictionaries(db)
+            let dictionaries = db::list_dictionaries(db)
                 .await
                 .context("failed to list dictionaries")?;
             connection
@@ -207,7 +219,7 @@ async fn handle_message(
                 .context("failed to send response")
         }
         FromClient::RemoveDictionary { dictionary_id } => {
-            let result = remove_dictionary(db, dictionary_id)
+            let result = db::remove_dictionary(db, dictionary_id)
                 .await
                 .context("failed to remove dictionary")?;
             connection
@@ -243,117 +255,6 @@ async fn do_lookup(
         return Ok(None);
     };
 
-    let info = import::lookup(db, mecab.lemma).await?;
+    let info = db::lookup(db, mecab.lemma).await?;
     Ok(Some(info))
-}
-
-async fn list_dictionaries(db: &Pool<Sqlite>) -> Result<Vec<Dictionary>> {
-    let dictionaries = sqlx::query!("SELECT id, title, revision FROM dictionaries")
-        .fetch(db)
-        .map(|record| {
-            let record = record.context("failed to fetch database record")?;
-            anyhow::Ok(Dictionary {
-                id: DictionaryId(record.id),
-                title: record.title,
-                revision: record.revision,
-            })
-        })
-        .collect::<Vec<_>>()
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(dictionaries)
-}
-
-async fn remove_dictionary(
-    db: &Pool<Sqlite>,
-    dictionary_id: DictionaryId,
-) -> Result<Result<(), DictionaryNotFound>> {
-    let result = sqlx::query!("DELETE FROM dictionaries WHERE id = $1", dictionary_id.0)
-        .execute(db)
-        .await
-        .context("failed to delete database record")?;
-    Ok(if result.rows_affected() > 0 {
-        Ok(())
-    } else {
-        Err(DictionaryNotFound)
-    })
-}
-
-async fn todo_import(
-    tx: Arc<Mutex<Transaction<'static, Sqlite>>>,
-    path: impl AsRef<Path>,
-) -> Result<()> {
-    info!("Reading archive into memory");
-    let archive = fs::read(path)
-        .await
-        .context("failed to read file into memory")?;
-    info!("Read into memory");
-
-    let (parser, index) = yomitan::Parse::new(|| Ok::<_, Infallible>(Cursor::new(&archive)))
-        .context("failed to parse")?;
-    let term_banks_left = AtomicUsize::new(parser.term_banks().len());
-    let term_meta_banks_left = AtomicUsize::new(parser.term_meta_banks().len());
-
-    info!("{} rev {}:", index.title, index.revision);
-    info!("  - {} tag banks", parser.tag_banks().len());
-    info!(
-        "  - {} term banks",
-        term_banks_left.load(atomic::Ordering::SeqCst)
-    );
-    info!(
-        "  - {} term meta banks",
-        term_meta_banks_left.load(atomic::Ordering::SeqCst)
-    );
-    info!("  - {} kanji banks", parser.kanji_banks().len());
-    info!("  - {} kanji meta banks", parser.kanji_meta_banks().len());
-
-    let dictionary_id = {
-        let mut tx = tx.lock().await;
-        let result = sqlx::query!(
-            "INSERT INTO dictionaries (title, revision) VALUES ($1, $2)",
-            index.title,
-            index.revision
-        )
-        .execute(&mut **tx)
-        .await
-        .context("failed to insert dictionary")?;
-        DictionaryId(result.last_insert_rowid())
-    };
-
-    let tasks = Mutex::new(JoinSet::<Result<()>>::new());
-    let runtime = runtime::Handle::current();
-
-    info!("Running parser");
-    parser
-        .run(
-            |_, _| {},
-            |_, bank| {
-                tasks
-                    .blocking_lock()
-                    .spawn_on(import::term_bank(dictionary_id, tx.clone(), bank), &runtime);
-                let term_banks_left = term_banks_left.fetch_sub(1, atomic::Ordering::SeqCst);
-                info!("{term_banks_left} term banks left");
-            },
-            |_, bank| {
-                tasks.blocking_lock().spawn_on(
-                    import::term_meta_bank(dictionary_id, tx.clone(), bank),
-                    &runtime,
-                );
-            },
-            |_, _| {},
-            |_, _| {},
-        )
-        .context("failed to parse banks")?;
-    info!("Parse complete, waiting for database tasks to complete");
-
-    let mut tasks = tasks.into_inner();
-    while let Some(result) = tasks.join_next().await {
-        info!("{} tasks left", tasks.len());
-        result
-            .context("import task cancelled")?
-            .context("failed to import bank")?;
-    }
-
-    Ok(())
 }

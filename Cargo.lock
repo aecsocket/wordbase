@@ -3128,6 +3128,7 @@ dependencies = [
  "anyhow",
  "clap",
  "derive_more",
+ "foldhash",
  "futures",
  "mecab",
  "postcard",

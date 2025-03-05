@@ -1,40 +1,20 @@
 CREATE TABLE dictionaries (
     id          INTEGER     PRIMARY KEY AUTOINCREMENT,
     title       TEXT        NOT NULL,
-    revision    TEXT        NOT NULL
+    revision    TEXT        NOT NULL,
+    enabled     BOOLEAN     NOT NULL DEFAULT TRUE
 );
 
-CREATE TABLE readings (
+CREATE TABLE terms (
     source      INTEGER NOT NULL REFERENCES dictionaries(id) ON DELETE CASCADE,
     expression  TEXT    NOT NULL,
-    reading     TEXT    NOT NULL,
-    UNIQUE      (source, expression, reading)
+    reading     TEXT,
+    -- keep this up to date with `db.rs`
+    -- 1: glossary
+    -- 2: frequency
+    -- 3: pitch
+    data_kind   INTEGER NOT NULL CHECK (data_kind IN (1, 2, 3)),
+    data        BLOB    NOT NULL
 );
-CREATE INDEX readings_expression    ON readings(expression);
-CREATE INDEX readings_reading       ON readings(reading);
-
-CREATE TABLE frequencies (
-    source          INTEGER NOT NULL REFERENCES dictionaries(id) ON DELETE CASCADE,
-    expression      TEXT    NOT NULL,
-    reading         TEXT    NOT NULL,
-    data            BLOB    NOT NULL
-);
-CREATE INDEX frequencies_expression ON frequencies(expression);
-CREATE INDEX frequencies_reading    ON frequencies(reading);
-
-CREATE TABLE pitches (
-    source          INTEGER NOT NULL REFERENCES dictionaries(id) ON DELETE CASCADE,
-    expression      TEXT    NOT NULL,
-    reading         TEXT    NOT NULL,
-    data            BLOB    NOT NULL
-);
-CREATE INDEX pitches_expression ON pitches(expression);
-CREATE INDEX pitches_reading    ON pitches(reading);
-
-CREATE TABLE glossaries (
-    source          INTEGER NOT NULL REFERENCES dictionaries(id) ON DELETE CASCADE,
-    expression      TEXT    NOT NULL,
-    reading         TEXT    NOT NULL,
-    data            BLOB    NOT NULL
-);
-CREATE INDEX glossaries_expression ON glossaries(expression);
+CREATE INDEX terms_expression    ON terms(expression);
+CREATE INDEX terms_reading       ON terms(reading);
