@@ -1,6 +1,6 @@
 use derive_more::{Deref, DerefMut};
 use foldhash::HashMap;
-use gtk::prelude::{BoxExt, GridExt};
+use gtk::prelude::{BoxExt, GridExt, WidgetExt};
 use wordbase::schema::{Dictionary, DictionaryId, Frequency, Glossary, LookupInfo, Pitch, Term};
 
 use crate::ui;
@@ -98,4 +98,41 @@ impl Terms {
 
         dictionary
     }
+}
+
+fn pitch_ui(reading: &str, pitch: &Pitch) -> gtk::Box {
+    let ui = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    for (position, char) in mora_is_high(reading, downstep) reading.chars().enumerate() {
+        let char_container = gtk::Overlay::new();
+        ui.append(&char_container);
+
+        let char_label = gtk::Label::new(Some(&char.to_string()));
+        char_container.set_child(Some(&char_label));
+
+        let pitch_line = gtk::Box::builder()
+            .valign(gtk::Align::Start)
+            .css_classes(["mora"])
+            .build();
+        char_container.add_overlay(&pitch_line);
+
+
+    }
+    ui
+}
+
+fn mora(reading: &str) -> impl Iterator<Item = &str> {
+    reading.
+}
+
+fn mora_is_high(reading: &str, downstep: usize) -> impl Iterator<Item = (char, bool)> {
+    reading.chars().enumerate().map(move |(position, char)| {
+        let is_high = if downstep == 0 {
+            // heiban
+            position > 0
+        } else {
+            // non-heiban
+            position > 0 && position < downstep
+        };
+        (char, is_high)
+    })
 }

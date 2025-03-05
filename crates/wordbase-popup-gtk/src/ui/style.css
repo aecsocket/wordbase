@@ -1,3 +1,17 @@
 .pill.small {
     padding: 1px 12px;
 }
+
+.mora {
+    border-style: solid;
+    border-color: transparent;
+    border-width: 2px;
+}
+
+.mora.high {
+    border-color: white transparent transparent transparent;
+}
+
+.mora.high.next-low {
+    border-color: white white transparent transparent;
+}

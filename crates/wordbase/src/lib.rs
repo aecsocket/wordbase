@@ -31,3 +31,12 @@ impl Default for SharedConfig {
         Self { max_lookup_len: 16 }
     }
 }
+
+#[test]
+fn foo() {
+    let s = "さぎょう hello world";
+    println!(
+        "{:?}",
+        unicode_segmentation::UnicodeSegmentation::graphemes(s, true).collect::<Vec<_>>()
+    );
+}

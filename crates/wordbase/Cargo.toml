@@ -41,4 +41,5 @@ rayon = { workspace = true, optional = true }
 regex = { workspace = true, optional = true, default-features = true }
 serde_json = { workspace = true, optional = true, features = ["std"] }
 serde_repr = { workspace = true, optional = true }
+unicode-segmentation = "1.12"                                          # TODO
 zip = { workspace = true, optional = true, default-features = true }
