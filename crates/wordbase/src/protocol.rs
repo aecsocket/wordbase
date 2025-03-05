@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     SharedConfig,
-    dict::{Dictionary, DictionaryId, Expression},
+    schema::{Dictionary, DictionaryId, LookupInfo},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, From)]
@@ -47,12 +47,6 @@ pub enum FromServer {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LookupInfo {
-    pub lemma: String,
-    pub expressions: Vec<Expression>,
-}
-
 #[derive(Debug, Clone, Display, Error, Serialize, Deserialize)]
 #[display("dictionary not found")]
 pub struct DictionaryNotFound;
@@ -87,10 +81,7 @@ mod tests {
         round_trip(FromServer::NewSentence(NewSentence::default()));
         round_trip(FromServer::Lookup { lookup: None });
         round_trip(FromServer::Lookup {
-            lookup: Some(LookupInfo {
-                lemma: default(),
-                expressions: default(),
-            }),
+            lookup: Some(default()),
         });
         round_trip(FromServer::ListDictionaries {
             dictionaries: vec![Dictionary::default()],

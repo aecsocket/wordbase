@@ -1,7 +1,7 @@
 #![doc = include_str!("../README.md")]
 
-pub mod dict;
 pub mod protocol;
+pub mod schema;
 
 #[cfg(feature = "yomitan")]
 pub mod yomitan;

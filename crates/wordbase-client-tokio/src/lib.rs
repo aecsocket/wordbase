@@ -14,8 +14,8 @@ use tokio_tungstenite::{
 };
 use wordbase::{
     SharedConfig,
-    dict::{Dictionary, DictionaryId},
-    protocol::{DictionaryNotFound, FromClient, FromServer, LookupInfo, NewSentence},
+    protocol::{DictionaryNotFound, FromClient, FromServer, NewSentence},
+    schema::{Dictionary, DictionaryId, LookupInfo},
 };
 
 #[derive(Debug, Clone, Copy)]

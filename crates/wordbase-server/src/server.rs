@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     convert::Infallible,
     io::Cursor,
     num::Wrapping,
@@ -12,9 +11,8 @@ use std::{
 
 use anyhow::{Context as _, Result, bail};
 use derive_more::{Deref, DerefMut};
-use foldhash::{HashMap, HashMapExt};
 use futures::{SinkExt as _, StreamExt as _, never::Never};
-use sqlx::{Pool, Sqlite, sqlite::SqlitePoolOptions};
+use sqlx::{Pool, Sqlite, Transaction, sqlite::SqlitePoolOptions};
 use tokio::{
     fs,
     net::{TcpListener, TcpStream},
@@ -25,18 +23,13 @@ use tokio::{
 use tokio_tungstenite::{WebSocketStream, tungstenite::Message};
 use tracing::{Instrument, info, info_span, warn};
 use wordbase::{
-    dict::{
-        Dictionary, DictionaryId, Expression, Frequency, FrequencySet, Glossary, GlossarySet,
-        PitchSet, PitchVariant, Reading,
-    },
-    protocol::{DictionaryNotFound, FromClient, FromServer, LookupInfo, NewSentence},
+    protocol::{DictionaryNotFound, FromClient, FromServer, NewSentence},
+    schema::{Dictionary, DictionaryId, LookupInfo},
     yomitan,
 };
 
 use crate::{
-    Config,
-    format::{Term, TermMeta},
-    import,
+    Config, import,
     mecab::{MecabInfo, MecabRequest},
 };
 
@@ -57,11 +50,27 @@ pub async fn run(
         .await
         .context("failed to set up database")?;
 
-    let path = Path::new("/home/dev/dictionaries/jitendex.zip");
-    todo_import(&db, &path)
-        .instrument(info_span!("import", ?path))
+    let tx = Arc::new(Mutex::new(
+        db.begin().await.context("failed to start transaction")?,
+    ));
+
+    let x = tokio::spawn(
+        todo_import(tx.clone(), "/home/dev/dictionaries/jitendex.zip")
+            .instrument(info_span!("import", path = "jitendex.zip")),
+    );
+    let y = tokio::spawn(
+        todo_import(tx.clone(), "/home/dev/dictionaries/jpdb.zip")
+            .instrument(info_span!("import", path = "jpdb.zip")),
+    );
+    x.await?.context("failed to import jitendex")?;
+    y.await?.context("failed to import jpdb")?;
+
+    Arc::into_inner(tx)
+        .expect("we own the last `Arc` after all tasks have been joined")
+        .into_inner()
+        .commit()
         .await
-        .context("failed to import")?;
+        .context("failed to commit transaction to database")?;
 
     let listener = TcpListener::bind(&config.listen_addr)
         .await
@@ -171,7 +180,10 @@ async fn handle_message(
             let lookup = do_lookup(config, db, send_mecab_request, text)
                 .await
                 .context("failed to perform lookup")?;
-            connection.write(&FromServer::Lookup { lookup }).await
+            connection
+                .write(&FromServer::Lookup { lookup })
+                .await
+                .context("failed to send response")
         }
         FromClient::ListDictionaries => {
             let dictionaries = list_dictionaries(db)
@@ -180,6 +192,7 @@ async fn handle_message(
             connection
                 .write(&FromServer::ListDictionaries { dictionaries })
                 .await
+                .context("failed to send response")
         }
         FromClient::RemoveDictionary { dictionary_id } => {
             let result = remove_dictionary(db, dictionary_id)
@@ -188,6 +201,7 @@ async fn handle_message(
             connection
                 .write(&FromServer::RemoveDictionary { result })
                 .await
+                .context("failed to send response")
         }
     }
 }
@@ -217,66 +231,8 @@ async fn do_lookup(
         return Ok(None);
     };
 
-    let mut expressions = HashMap::<Cow<str>, Expression>::new();
-    let mut expression_order = Vec::<Cow<str>>::new();
-
-    let mut records = sqlx::query!(
-        "SELECT
-            terms.dictionary,
-            terms.expression,
-            terms.reading,
-            terms.data AS term,
-            term_meta.data AS meta,
-            dictionaries.id AS dictionary_id,
-            dictionaries.title AS dictionary_title
-        FROM terms
-        LEFT JOIN term_meta
-            ON terms.expression = term_meta.expression
-        LEFT JOIN dictionaries
-            ON terms.dictionary = dictionaries.id
-        WHERE terms.expression = $1 OR terms.reading = $1",
-        mecab.lemma
-    )
-    .fetch(db);
-    while let Some(record) = records.next().await {
-        let record = record.context("failed to fetch database record")?;
-        let term = postcard::from_bytes::<Term>(&record.term)
-            .context("failed to deserialize record data")?;
-        let meta = postcard::from_bytes::<TermMeta>(&record.meta)
-            .context("failed to deserialize record meta data")?;
-
-        let expression = Cow::Borrowed(record.expression.as_str());
-        let expression = expressions.entry(expression.clone()).or_insert_with(|| {
-            expression_order.push(expression.clone());
-            Expression::new(Reading::from_no_pairs(&record.expression, record.reading))
-        });
-
-        match meta {
-            TermMeta::Frequency(frequency) => {
-                expression.frequency_sets.push(FrequencySet {
-                    dictionary: record.dictionary_title.clone(),
-                    frequencies: vec![frequency],
-                });
-            }
-            TermMeta::Pitch {
-                reading: _,
-                variants,
-            } => {
-                expression.pitch_sets.push(PitchSet {
-                    dictionary: record.dictionary_title,
-                    variants,
-                });
-            }
-        }
-    }
-
-    Ok(Some(LookupInfo {
-        lemma: mecab.lemma,
-        expressions: expression_order
-            .into_iter()
-            .map(|key| expressions.remove(&key).expect("key should exist in map"))
-            .collect(),
-    }))
+    let info = import::lookup(db, mecab.lemma).await?;
+    Ok(Some(info))
 }
 
 async fn list_dictionaries(db: &Pool<Sqlite>) -> Result<Vec<Dictionary>> {
@@ -312,11 +268,15 @@ async fn remove_dictionary(
     })
 }
 
-async fn todo_import(db: &Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
+async fn todo_import(
+    tx: Arc<Mutex<Transaction<'static, Sqlite>>>,
+    path: impl AsRef<Path>,
+) -> Result<()> {
     info!("Reading archive into memory");
     let archive = fs::read(path)
         .await
         .context("failed to read file into memory")?;
+    info!("Read into memory");
 
     let (parser, index) = yomitan::Parse::new(|| Ok::<_, Infallible>(Cursor::new(&archive)))
         .context("failed to parse")?;
@@ -336,22 +296,23 @@ async fn todo_import(db: &Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
     info!("  - {} kanji banks", parser.kanji_banks().len());
     info!("  - {} kanji meta banks", parser.kanji_meta_banks().len());
 
-    let mut tx = db.begin().await.context("failed to start transaction")?;
+    let dictionary_id = {
+        let mut tx = tx.lock().await;
+        let result = sqlx::query!(
+            "INSERT INTO dictionaries (title, revision) VALUES ($1, $2)",
+            index.title,
+            index.revision
+        )
+        .execute(&mut **tx)
+        .await
+        .context("failed to insert dictionary")?;
+        DictionaryId(result.last_insert_rowid())
+    };
 
-    let result = sqlx::query!(
-        "INSERT INTO dictionaries (title, revision) VALUES ($1, $2)",
-        index.title,
-        index.revision
-    )
-    .execute(&mut *tx)
-    .await
-    .context("failed to insert dictionary")?;
-    let dictionary_id = DictionaryId(result.last_insert_rowid());
-
-    let tx = Arc::new(Mutex::new(tx));
     let tasks = Mutex::new(JoinSet::<Result<()>>::new());
     let runtime = runtime::Handle::current();
 
+    info!("Running parser");
     parser
         .run(
             |_, _| {},
@@ -372,8 +333,8 @@ async fn todo_import(db: &Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
             |_, _| {},
         )
         .context("failed to parse banks")?;
-
     info!("Parse complete, waiting for database tasks to complete");
+
     let mut tasks = tasks.into_inner();
     while let Some(result) = tasks.join_next().await {
         info!("{} tasks left", tasks.len());
@@ -382,191 +343,5 @@ async fn todo_import(db: &Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
             .context("failed to import bank")?;
     }
 
-    Arc::into_inner(tx)
-        .expect("we own the last `Arc` after all tasks have been joined")
-        .into_inner()
-        .commit()
-        .await
-        .context("failed to commit transaction to database")?;
-
-    let count: i64 = sqlx::query_scalar!("SELECT COUNT(*) FROM terms")
-        .fetch_one(db)
-        .await?;
-    info!("Num expressions: {count:?}");
-
     Ok(())
-}
-
-#[allow(clippy::too_many_lines)]
-fn expression_entries() -> Vec<Expression> {
-    vec![
-        Expression {
-            reading: Reading::from_pairs([("協", "きょう"), ("力", "りょく")]),
-            frequency_sets: vec![
-                FrequencySet {
-                    dictionary: "JPDB".into(),
-                    frequencies: vec![
-                        Frequency {
-                            value: 954,
-                            display_value: None,
-                        },
-                        Frequency {
-                            value: 131_342,
-                            display_value: Some("131342㋕".into()),
-                        },
-                    ],
-                },
-                FrequencySet {
-                    dictionary: "VN Freq".into(),
-                    frequencies: vec![Frequency {
-                        value: 948,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "Novels".into(),
-                    frequencies: vec![Frequency {
-                        value: 1377,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "Anime & J-drama".into(),
-                    frequencies: vec![Frequency {
-                        value: 1042,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "Youtube".into(),
-                    frequencies: vec![Frequency {
-                        value: 722,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "Wikipedia".into(),
-                    frequencies: vec![Frequency {
-                        value: 705,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "BCCWJ".into(),
-                    frequencies: vec![
-                        Frequency {
-                            value: 597,
-                            display_value: None,
-                        },
-                        Frequency {
-                            value: 1395,
-                            display_value: None,
-                        },
-                    ],
-                },
-                FrequencySet {
-                    dictionary: "CC100".into(),
-                    frequencies: vec![Frequency {
-                        value: 741,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "Innocent Ranked".into(),
-                    frequencies: vec![Frequency {
-                        value: 2343,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "Narou Freq".into(),
-                    frequencies: vec![Frequency {
-                        value: 845,
-                        display_value: None,
-                    }],
-                },
-            ],
-            pitch_sets: vec![PitchSet {
-                dictionary: "NHK".into(),
-                variants: vec![PitchVariant { position: 1 }],
-            }],
-            glossary_sets: vec![
-                GlossarySet {
-                    dictionary: "Jitendex [2025-02-11]".into(),
-                    glossaries: vec![Glossary {
-                        todo: "TODO".into(),
-                    }],
-                },
-                GlossarySet {
-                    dictionary: "三省堂国語辞典　第八版".into(),
-                    glossaries: vec![Glossary {
-                        todo: "TODO".into(),
-                    }],
-                },
-                GlossarySet {
-                    dictionary: "明鏡国語辞典　第二版".into(),
-                    glossaries: vec![Glossary {
-                        todo: "TODO".into(),
-                    }],
-                },
-                GlossarySet {
-                    dictionary: "デジタル大辞泉".into(),
-                    glossaries: vec![Glossary {
-                        todo: "TODO".into(),
-                    }],
-                },
-                GlossarySet {
-                    dictionary: "PixivLight [2023-11-24]".into(),
-                    glossaries: vec![Glossary {
-                        todo: "TODO".into(),
-                    }],
-                },
-            ],
-        },
-        Expression {
-            reading: Reading::from_no_pairs("協", ""),
-            frequency_sets: vec![
-                FrequencySet {
-                    dictionary: "Novels".into(),
-                    frequencies: vec![Frequency {
-                        value: 29289,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "Anime & J-drama".into(),
-                    frequencies: vec![Frequency {
-                        value: 26197,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "Youtube".into(),
-                    frequencies: vec![Frequency {
-                        value: 23714,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "Wikipedia".into(),
-                    frequencies: vec![Frequency {
-                        value: 6162,
-                        display_value: None,
-                    }],
-                },
-                FrequencySet {
-                    dictionary: "Innocent Ranked".into(),
-                    frequencies: vec![Frequency {
-                        value: 18957,
-                        display_value: None,
-                    }],
-                },
-            ],
-            pitch_sets: vec![],
-            glossary_sets: vec![GlossarySet {
-                dictionary: "JMnedict [2025-02-18]".into(),
-                glossaries: vec![],
-            }],
-        },
-    ]
 }

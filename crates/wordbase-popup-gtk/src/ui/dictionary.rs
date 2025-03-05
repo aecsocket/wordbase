@@ -1,6 +1,6 @@
 use adw::subclass::prelude::*;
 use gtk::{glib, prelude::GridExt};
-use wordbase::dict;
+use wordbase::schema;
 
 use super::{EntryMeta, Glossaries};
 
@@ -43,7 +43,7 @@ impl Dictionary {
         glib::Object::new()
     }
 
-    pub fn from<'a>(expressions: impl IntoIterator<Item = &'a dict::Expression>) -> Self {
+    pub fn from<'a>(expressions: impl IntoIterator<Item = &'a schema::Expression>) -> Self {
         let this = Self::new();
         for (row, expression) in expressions.into_iter().enumerate() {
             let Ok(row) = i32::try_from(row) else {
@@ -59,7 +59,7 @@ impl Dictionary {
         self.imp().grid.attach(glossaries, 1, row, 1, 1);
     }
 
-    pub fn attach_entry(&self, row: i32, entry: &dict::Expression) {
+    pub fn attach_entry(&self, row: i32, entry: &schema::Expression) {
         let entry_meta = EntryMeta::from(entry);
         let glossaries = Glossaries::from(&entry.glossary_sets);
         self.attach(row, &entry_meta, &glossaries);

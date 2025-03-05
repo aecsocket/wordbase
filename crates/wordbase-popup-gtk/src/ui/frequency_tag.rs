@@ -1,6 +1,6 @@
 use adw::subclass::prelude::*;
 use gtk::glib;
-use wordbase::dict;
+use wordbase::schema;
 
 mod imp {
     use super::*;
@@ -48,7 +48,7 @@ impl FrequencyTag {
     }
 
     #[must_use]
-    pub fn from(value: &dict::FrequencySet) -> Self {
+    pub fn from(value: &schema::FrequencySet) -> Self {
         let display_frequency = value
             .frequencies
             .iter()

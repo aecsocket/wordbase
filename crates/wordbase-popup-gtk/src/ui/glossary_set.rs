@@ -1,6 +1,6 @@
 use adw::subclass::prelude::*;
 use gtk::glib;
-use wordbase::dict;
+use wordbase::schema;
 
 mod imp {
     use super::*;
@@ -43,7 +43,7 @@ impl GlossarySet {
         this
     }
 
-    pub fn from(set: &dict::GlossarySet) -> Self {
+    pub fn from(set: &schema::GlossarySet) -> Self {
         let this = Self::new(&set.dictionary);
         for glossary in &set.glossaries {}
         this

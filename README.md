@@ -1,6 +1,8 @@
-# Wordbase
+# Notes
 
-- Server
-  - [ ] Import a Yomitan dictionary
-  - [ ] Persist a dictionary in SQLite
-  - [ ] Look up a term from SQLite
+how to perform a lookup:
+- kanji/expression
+  - find the lemma (mecab)
+    - 食べなかった -> 食べる
+    - たべなかった -> 食べる
+  - find database records where `expression = lemma`

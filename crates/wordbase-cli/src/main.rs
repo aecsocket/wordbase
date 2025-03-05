@@ -1,7 +1,7 @@
 #![doc = include_str!("../README.md")]
 
 use anyhow::{Context, Result};
-use wordbase::dict::DictionaryId;
+use wordbase::schema::DictionaryId;
 use wordbase_client_tokio::SocketClient;
 
 /// Wordbase command line client.
@@ -81,7 +81,6 @@ async fn remove_dictionary(client: &mut SocketClient, id: i64) -> Result<()> {
 
 async fn lookup(client: &mut SocketClient, text: String) -> Result<()> {
     let info = client.lookup(text).await?.context("no lookup info")?;
-    println!("lemma: {}", info.lemma);
-    println!("expressions: {:#?}", info.expressions);
+    println!("{info:#?}");
     Ok(())
 }

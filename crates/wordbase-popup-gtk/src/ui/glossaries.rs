@@ -1,6 +1,6 @@
 use adw::subclass::prelude::*;
 use gtk::{glib, prelude::BoxExt};
-use wordbase::dict;
+use wordbase::schema;
 
 use super::GlossarySet;
 
@@ -40,7 +40,7 @@ impl Glossaries {
         glib::Object::new()
     }
 
-    pub fn from<'a>(glossary_sets: impl IntoIterator<Item = &'a dict::GlossarySet>) -> Self {
+    pub fn from<'a>(glossary_sets: impl IntoIterator<Item = &'a schema::GlossarySet>) -> Self {
         let this = Self::new();
         for glossary_set in glossary_sets {
             this.append(&GlossarySet::from(glossary_set));
