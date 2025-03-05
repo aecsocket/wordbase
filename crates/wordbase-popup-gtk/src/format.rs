@@ -122,13 +122,23 @@ fn pitch_label(reading: &str, pitch: &Pitch) -> gtk::Box {
     let ui = gtk::Box::new(gtk::Orientation::Horizontal, 0);
 
     let downstep = usize::try_from(pitch.position).unwrap_or(usize::MAX);
-    for (position, mora) in jp::mora(reading).enumerate() {
+    let mora = jp::mora(reading).collect::<Vec<_>>();
+
+    let color_css_class = match downstep {
+        0 => "heiban",
+        1 => "atamadaka",
+        n if n == mora.len() => "odaka",
+        _ => "nakadaka",
+    };
+
+    for (position, mora) in mora.into_iter().enumerate() {
         let char_container = gtk::Overlay::new();
         ui.append(&char_container);
 
         let char_label = gtk::Label::new(Some(mora));
         char_container.set_child(Some(&char_label));
         char_label.add_css_class("mora");
+        char_label.add_css_class(color_css_class);
 
         let pitch_line = gtk::Box::builder()
             .valign(gtk::Align::Start)

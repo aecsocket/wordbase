@@ -2,12 +2,28 @@
     padding: 1px 12px;
 }
 
+.mora.heiban {
+    color: var(--accent-blue);
+}
+
+.mora.atamadaka {
+    color: var(--accent-red);
+}
+
+.mora.nakadaka {
+    color: var(--accent-yellow);
+}
+
+.mora.odaka {
+    color: var(--accent-green);
+}
+
 .mora.high.next-low {
     margin-right: 3px;
 }
 
 .pitch-line {
-    border-width: 2px;
+    border-width: 1.5px;
     border-color: currentColor;
 }
 
