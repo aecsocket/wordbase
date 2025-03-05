@@ -53,13 +53,6 @@ pub struct LookupInfo {
     pub expressions: Vec<Expression>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "stage")]
-pub enum ImportStage {
-    Received,
-    Done { result: Result<(), ()> },
-}
-
 #[derive(Debug, Clone, Display, Error, Serialize, Deserialize)]
 #[display("dictionary not found")]
 pub struct DictionaryNotFound;

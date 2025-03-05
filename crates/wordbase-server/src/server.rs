@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     convert::Infallible,
     io::Cursor,
     num::Wrapping,
@@ -11,6 +12,7 @@ use std::{
 
 use anyhow::{Context as _, Result, bail};
 use derive_more::{Deref, DerefMut};
+use foldhash::{HashMap, HashMapExt};
 use futures::{SinkExt as _, StreamExt as _, never::Never};
 use sqlx::{Pool, Sqlite, sqlite::SqlitePoolOptions};
 use tokio::{
@@ -25,14 +27,16 @@ use tracing::{Instrument, info, info_span, warn};
 use wordbase::{
     dict::{
         Dictionary, DictionaryId, Expression, Frequency, FrequencySet, Glossary, GlossarySet,
-        Pitch, PitchSet, Reading,
+        PitchSet, PitchVariant, Reading,
     },
     protocol::{DictionaryNotFound, FromClient, FromServer, LookupInfo, NewSentence},
     yomitan,
 };
 
 use crate::{
-    Config, import,
+    Config,
+    format::{Term, TermMeta},
+    import,
     mecab::{MecabInfo, MecabRequest},
 };
 
@@ -213,29 +217,65 @@ async fn do_lookup(
         return Ok(None);
     };
 
-    let expressions = sqlx::query!(
-        "SELECT expression, reading FROM terms WHERE expression = $1 OR reading = $1",
+    let mut expressions = HashMap::<Cow<str>, Expression>::new();
+    let mut expression_order = Vec::<Cow<str>>::new();
+
+    let mut records = sqlx::query!(
+        "SELECT
+            terms.dictionary,
+            terms.expression,
+            terms.reading,
+            terms.data AS term,
+            term_meta.data AS meta,
+            dictionaries.id AS dictionary_id,
+            dictionaries.title AS dictionary_title
+        FROM terms
+        LEFT JOIN term_meta
+            ON terms.expression = term_meta.expression
+        LEFT JOIN dictionaries
+            ON terms.dictionary = dictionaries.id
+        WHERE terms.expression = $1 OR terms.reading = $1",
         mecab.lemma
     )
-    .fetch(db)
-    .map(|record| {
+    .fetch(db);
+    while let Some(record) = records.next().await {
         let record = record.context("failed to fetch database record")?;
-        anyhow::Ok(Expression {
-            reading: Reading::from_no_pairs(record.expression, record.reading),
-            frequency_sets: vec![],
-            pitch_sets: vec![],
-            glossary_sets: vec![],
-        })
-    })
-    .collect::<Vec<_>>()
-    .await
-    .into_iter()
-    .collect::<Result<Vec<_>, _>>()
-    .context("failed to fetch expressions")?;
+        let term = postcard::from_bytes::<Term>(&record.term)
+            .context("failed to deserialize record data")?;
+        let meta = postcard::from_bytes::<TermMeta>(&record.meta)
+            .context("failed to deserialize record meta data")?;
+
+        let expression = Cow::Borrowed(record.expression.as_str());
+        let expression = expressions.entry(expression.clone()).or_insert_with(|| {
+            expression_order.push(expression.clone());
+            Expression::new(Reading::from_no_pairs(&record.expression, record.reading))
+        });
+
+        match meta {
+            TermMeta::Frequency(frequency) => {
+                expression.frequency_sets.push(FrequencySet {
+                    dictionary: record.dictionary_title.clone(),
+                    frequencies: vec![frequency],
+                });
+            }
+            TermMeta::Pitch {
+                reading: _,
+                variants,
+            } => {
+                expression.pitch_sets.push(PitchSet {
+                    dictionary: record.dictionary_title,
+                    variants,
+                });
+            }
+        }
+    }
 
     Ok(Some(LookupInfo {
         lemma: mecab.lemma,
-        expressions,
+        expressions: expression_order
+            .into_iter()
+            .map(|key| expressions.remove(&key).expect("key should exist in map"))
+            .collect(),
     }))
 }
 
@@ -448,7 +488,7 @@ fn expression_entries() -> Vec<Expression> {
             ],
             pitch_sets: vec![PitchSet {
                 dictionary: "NHK".into(),
-                pitches: vec![Pitch { position: 1 }],
+                variants: vec![PitchVariant { position: 1 }],
             }],
             glossary_sets: vec![
                 GlossarySet {

@@ -39,6 +39,7 @@ anyhow = { version = "1.0", default-features = false }
 bytes = { version = "1.10", default-features = false }
 clap = { version = "4.5", default-features = false }
 derive_more = { version = "2.0", default-features = false }
+foldhash = { version = "0.1", default-features = false }
 futures = { version = "0.3", default-features = false }
 gdk4 = { version = "0.9", default-features = false }
 gtk4 = { version = "0.9", default-features = false }

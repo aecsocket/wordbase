@@ -1,36 +1,61 @@
 use std::sync::Arc;
 
 use anyhow::{Context as _, Result};
-use derive_more::From;
-use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, Transaction};
 use tokio::sync::Mutex;
 use wordbase::{
-    dict::{DictionaryId, Frequency},
+    dict::{DictionaryId, Frequency, PitchVariant},
     yomitan,
 };
+
+use crate::format::{Term, TermMeta};
 
 pub async fn term_bank(
     dictionary_id: DictionaryId,
     tx: Arc<Mutex<Transaction<'_, Sqlite>>>,
     bank: yomitan::TermBank,
 ) -> Result<()> {
+    let mut scratch = Vec::<u8>::new();
     for term in bank {
         let expression = term.expression.clone();
         let reading = term.reading.clone();
-        let data = "{}";
-        sqlx::query!(
-            "INSERT INTO terms (dictionary, expression, reading, data) VALUES ($1, $2, $3, $4)",
-            dictionary_id.0,
-            expression,
-            reading,
-            data,
-        )
-        .execute(&mut **tx.lock().await)
-        .await
-        .with_context(|| format!("failed to insert term {expression:?} ({reading:?})"))?;
+        for data in convert_term(term) {
+            async {
+                scratch.clear();
+                postcard::to_io(&data, &mut scratch).context("failed to serialize data")?;
+                let data = &scratch[..];
+    
+                sqlx::query!(
+                    "INSERT INTO terms (dictionary, expression, reading, data) VALUES ($1, $2, $3, $4)",
+                    dictionary_id.0,
+                    expression,
+                    reading,
+                    data,
+                )
+                .execute(&mut **tx.lock().await)
+                .await?;
+                anyhow::Ok(())
+            }
+            .await
+            .with_context(|| format!("failed to import term {expression:?} ({reading:?})"))?;
+        }
     }
     Ok(())
+}
+
+fn convert_term(term: yomitan::Term) -> impl Iterator<Item = Term> {
+    term.glossary.into_iter().flat_map(|glossary| match glossary {
+        yomitan::Glossary::Deinflection(_) => None,
+        yomitan::Glossary::String(definition) | yomitan::Glossary::Content(yomitan::GlossaryContent::Text { text: definition }) => {
+            Some(Term::Definition(definition))
+        }
+        yomitan::Glossary::Content(yomitan::GlossaryContent::Image(image)) => {
+            None // TODO
+        }
+        yomitan::Glossary::Content(yomitan::GlossaryContent::StructuredContent { content }) => {
+            None // TODO
+        }
+    })
 }
 
 pub async fn term_meta_bank(
@@ -38,52 +63,33 @@ pub async fn term_meta_bank(
     tx: Arc<Mutex<Transaction<'_, Sqlite>>>,
     bank: yomitan::TermMetaBank,
 ) -> Result<()> {
-    let mut serialized_data = Vec::<u8>::new();
+    let mut scratch = Vec::<u8>::new();
     for term_meta in bank {
         let expression = term_meta.expression.clone();
-        let expression2 = expression.clone();
-        async {
-            let Some(data) = convert_term_meta(term_meta) else {
-                return anyhow::Ok(());
-            };
-            postcard::to_io(&data, &mut serialized_data).context("failed to serialize data")?;
-            let data = &serialized_data[..];
+        for data in convert_term_meta(term_meta) {
+            async {
+                scratch.clear();
+                postcard::to_io(&data, &mut scratch).context("failed to serialize data")?;
+                let data = &scratch[..];
 
-            sqlx::query!(
-                "INSERT INTO term_meta (dictionary, expression, data) VALUES ($1, $2, $3)",
-                dictionary_id.0,
-                expression2,
-                data,
-            )
-            .execute(&mut **tx.lock().await)
+                sqlx::query!(
+                    "INSERT INTO term_meta (dictionary, expression, data) VALUES ($1, $2, $3)",
+                    dictionary_id.0,
+                    expression,
+                    data,
+                )
+                .execute(&mut **tx.lock().await)
+                .await?;
+                anyhow::Ok(())
+            }
             .await
-            .with_context(|| format!("failed to insert"))?;
-
-            Ok(())
+            .with_context(|| format!("failed to import term meta {expression:?}"))?;
         }
-        .await
-        .with_context(|| format!("failed to import term meta {expression:?}"))?;
     }
     Ok(())
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, From)]
-pub enum TermMeta {
-    Frequency(Frequency),
-    Pitch {
-        reading: String,
-        variants: Vec<PitchVariant>,
-    },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PitchVariant {
-    pub position: u64,
-    pub nasal: Vec<u64>,
-    pub devoice: Vec<u64>,
-}
-
-fn convert_term_meta(term_meta: yomitan::TermMeta) -> Option<TermMeta> {
+fn convert_term_meta(term_meta: yomitan::TermMeta) -> impl Iterator<Item = TermMeta> {
     match term_meta.data {
         yomitan::TermMetaData::Frequency(frequency) => {
             let (yomitan::TermMetaFrequency::Generic(frequency)
@@ -122,6 +128,7 @@ fn convert_term_meta(term_meta: yomitan::TermMeta) -> Option<TermMeta> {
         }),
         yomitan::TermMetaData::Phonetic(_) => None,
     }
+    .into_iter()
 }
 
 fn convert_pitch_position(position: Option<yomitan::PitchPosition>) -> Vec<u64> {

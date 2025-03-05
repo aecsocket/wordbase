@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 
+pub mod format;
 pub(crate) mod import;
 mod mecab;
 mod server;

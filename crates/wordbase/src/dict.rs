@@ -18,6 +18,17 @@ pub struct Expression {
     pub glossary_sets: Vec<GlossarySet>,
 }
 
+impl Expression {
+    pub fn new(reading: Reading) -> Self {
+        Self {
+            reading,
+            frequency_sets: Vec::new(),
+            pitch_sets: Vec::new(),
+            glossary_sets: Vec::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Reading {
     expression: String,
@@ -82,12 +93,14 @@ pub struct Frequency {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PitchSet {
     pub dictionary: String,
-    pub pitches: Vec<Pitch>,
+    pub variants: Vec<PitchVariant>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Pitch {
-    pub position: u16,
+pub struct PitchVariant {
+    pub position: u64,
+    pub nasal: Vec<u64>,
+    pub devoice: Vec<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
