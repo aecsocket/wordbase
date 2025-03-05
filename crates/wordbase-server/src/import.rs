@@ -2,19 +2,12 @@ use std::{
     convert::Infallible,
     io::Cursor,
     path::Path,
-    sync::{
-        Arc,
-        atomic::{self, AtomicUsize},
-    },
+    sync::atomic::{self, AtomicUsize},
 };
 
 use anyhow::{Context as _, Result};
 use sqlx::{Pool, Sqlite, Transaction};
-use tokio::{
-    fs,
-    sync::{Barrier, Mutex},
-    task::JoinSet,
-};
+use tokio::{fs, sync::Mutex};
 use tracing::info;
 use wordbase::{
     schema::{DictionaryId, Frequency, Glossary, Pitch},
@@ -23,11 +16,8 @@ use wordbase::{
 
 use crate::db::data_kind;
 
-pub async fn from_yomitan(
-    db: Pool<Sqlite>,
-    barrier: Arc<Barrier>,
-    path: impl AsRef<Path>,
-) -> Result<()> {
+pub async fn from_yomitan(db: Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
+    let path = path.as_ref();
     let archive = fs::read(path)
         .await
         .context("failed to read file into memory")?;
@@ -43,11 +33,41 @@ pub async fn from_yomitan(
         term_meta_banks_left.load(atomic::Ordering::Relaxed)
     );
 
-    info!("Starting transaction...");
+    let term_bank = Mutex::new(yomitan::TermBank::default());
+    let term_meta_bank = Mutex::new(yomitan::TermMetaBank::default());
+
+    info!("Parsing...");
+    let span = tracing::Span::current();
+    parser
+        .run(
+            |_, _| {},
+            |_, bank| {
+                let _span = span.enter();
+                term_bank.blocking_lock().extend_from_slice(&bank);
+
+                let left = term_banks_left.fetch_sub(1, atomic::Ordering::SeqCst) - 1;
+                if left % 10 == 0 {
+                    info!("{left} term banks left");
+                }
+            },
+            |_, bank| {
+                let _span = span.enter();
+                term_meta_bank.blocking_lock().extend_from_slice(&bank);
+
+                let left = term_meta_banks_left.fetch_sub(1, atomic::Ordering::SeqCst) - 1;
+                if left % 10 == 0 {
+                    info!("{left} term meta banks left");
+                }
+            },
+            |_, _| {},
+            |_, _| {},
+        )
+        .context("failed to parse banks")?;
+    info!("Parse complete, starting transaction...");
     let mut tx = db.begin().await.context("failed to begin transaction")?;
-    info!("Started");
 
     let dictionary_id = {
+        info!("Writing dictionary record...");
         let result = sqlx::query!(
             "INSERT INTO dictionaries (title, revision)
             VALUES ($1, $2)",
@@ -61,44 +81,17 @@ pub async fn from_yomitan(
         DictionaryId(result.last_insert_rowid())
     };
 
-    info!("Wrote dictionary {dictionary_id:?}, waiting for other dictionaries...");
-    barrier.wait().await;
-    info!("Other dictionaries done, time to parse!");
+    info!("Importing term bank");
+    from_term_bank(dictionary_id, &mut tx, term_bank.into_inner())
+        .await
+        .context("failed to import term bank")?;
+    info!("Importing term meta bank");
+    from_term_meta_bank(dictionary_id, &mut tx, term_meta_bank.into_inner())
+        .await
+        .context("failed to import term meta bank")?;
 
-    let tx = Arc::new(Mutex::new(tx));
-    let tasks = Mutex::new(JoinSet::<Result<()>>::new());
-    let runtime = tokio::runtime::Handle::current();
-
-    parser
-        .run(
-            |_, _| {},
-            |_, bank| {
-                tasks
-                    .blocking_lock()
-                    .spawn_on(term_bank(dictionary_id, tx.clone(), bank), &runtime);
-                let left = term_banks_left.fetch_sub(1, atomic::Ordering::SeqCst);
-                info!("{left} term banks left");
-            },
-            |_, bank| {
-                tasks
-                    .blocking_lock()
-                    .spawn_on(term_meta_bank(dictionary_id, tx.clone(), bank), &runtime);
-                let left = term_meta_banks_left.fetch_sub(1, atomic::Ordering::SeqCst);
-                info!("{left} term meta banks left");
-            },
-            |_, _| {},
-            |_, _| {},
-        )
-        .context("failed to parse banks")?;
-    info!("Parse complete, waiting for database tasks to complete");
-
-    let mut tasks = tasks.into_inner();
-    while let Some(result) = tasks.join_next().await {
-        info!("{} tasks left", tasks.len());
-        result
-            .context("import task cancelled")?
-            .context("failed to import bank")?;
-    }
+    info!("Committing...");
+    tx.commit().await.context("failed to commit transaction")?;
 
     info!("*=* COMPLETE *=*");
     Ok(())
@@ -108,12 +101,13 @@ fn none_if_empty(s: String) -> Option<String> {
     if s.trim().is_empty() { None } else { Some(s) }
 }
 
-async fn term_bank(
+async fn from_term_bank(
     DictionaryId(source): DictionaryId,
-    tx: Arc<Mutex<Transaction<'_, Sqlite>>>,
+    tx: &mut Transaction<'_, Sqlite>,
     bank: yomitan::TermBank,
 ) -> Result<()> {
     let mut scratch = Vec::<u8>::new();
+    let mut records_left = bank.len();
     for term in bank {
         let expression = term.expression.clone();
         let reading = none_if_empty(term.reading.clone());
@@ -133,10 +127,16 @@ async fn term_bank(
                     data_kind::GLOSSARY,
                     data
                 )
-                .execute(&mut **tx.lock().await)
+                .execute(&mut **tx)
                 .await
                 .context("failed to insert record")?;
             }
+
+            records_left -= 1;
+            if records_left % 10000 == 0 {
+                info!("IMPORT: {records_left} term records left");
+            }
+
             anyhow::Ok(())
         }
         .await
@@ -145,12 +145,13 @@ async fn term_bank(
     Ok(())
 }
 
-async fn term_meta_bank(
+async fn from_term_meta_bank(
     DictionaryId(source): DictionaryId,
-    tx: Arc<Mutex<Transaction<'_, Sqlite>>>,
+    tx: &mut Transaction<'_, Sqlite>,
     bank: yomitan::TermMetaBank,
 ) -> Result<()> {
     let mut scratch = Vec::<u8>::new();
+    let mut records_left = bank.len();
     for term_meta in bank {
         let expression = term_meta.expression.clone();
         async {
@@ -171,7 +172,7 @@ async fn term_meta_bank(
                             data_kind::FREQUENCY,
                             data,
                         )
-                        .execute(&mut **tx.lock().await)
+                        .execute(&mut **tx)
                         .await
                         .context("failed to insert record")?;
                     }
@@ -192,12 +193,17 @@ async fn term_meta_bank(
                             data_kind::PITCH,
                             data,
                         )
-                        .execute(&mut **tx.lock().await)
+                        .execute(&mut **tx)
                         .await
                         .context("failed to insert record")?;
                     }
                 }
                 yomitan::TermMetaData::Phonetic(_) => {}
+            }
+
+            records_left -= 1;
+            if records_left % 10000 == 0 {
+                info!("IMPORT: {records_left} term meta records left");
             }
 
             anyhow::Ok(())

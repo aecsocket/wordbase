@@ -18,6 +18,10 @@ pub enum FromClient {
     RemoveDictionary {
         dictionary_id: DictionaryId,
     },
+    SetDictionaryEnabled {
+        dictionary_id: DictionaryId,
+        enabled: bool,
+    },
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -43,6 +47,9 @@ pub enum FromServer {
         dictionaries: Vec<Dictionary>,
     },
     RemoveDictionary {
+        result: Result<(), DictionaryNotFound>,
+    },
+    SetDictionaryEnabled {
         result: Result<(), DictionaryNotFound>,
     },
 }

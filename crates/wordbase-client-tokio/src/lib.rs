@@ -188,6 +188,39 @@ where
             }
         }
     }
+
+    pub async fn set_dictionary_enabled(
+        &mut self,
+        dictionary_id: DictionaryId,
+        enabled: bool,
+    ) -> Result<Result<(), DictionaryNotFound>, ConnectionError> {
+        self.connection
+            .send(&FromClient::SetDictionaryEnabled {
+                dictionary_id,
+                enabled,
+            })
+            .await?;
+        loop {
+            match self.connection.recv().await? {
+                FromServer::SetDictionaryEnabled { result } => return Ok(result),
+                message => self.fallback_handle(message)?,
+            }
+        }
+    }
+
+    pub async fn enable_dictionary(
+        &mut self,
+        dictionary_id: DictionaryId,
+    ) -> Result<Result<(), DictionaryNotFound>, ConnectionError> {
+        self.set_dictionary_enabled(dictionary_id, true).await
+    }
+
+    pub async fn disable_dictionary(
+        &mut self,
+        dictionary_id: DictionaryId,
+    ) -> Result<Result<(), DictionaryNotFound>, ConnectionError> {
+        self.set_dictionary_enabled(dictionary_id, false).await
+    }
 }
 
 impl<S> Client<WebSocketStream<S>>

@@ -1,4 +1,4 @@
-use std::{num::Wrapping, str::FromStr, sync::Arc};
+use std::{num::Wrapping, str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::{Context as _, Result, bail};
 use derive_more::{Deref, DerefMut};
@@ -9,7 +9,7 @@ use sqlx::{
 };
 use tokio::{
     net::{TcpListener, TcpStream},
-    sync::{Barrier, broadcast, mpsc, oneshot},
+    sync::{broadcast, mpsc, oneshot},
 };
 use tokio_tungstenite::{WebSocketStream, tungstenite::Message};
 use tracing::{Instrument, info, info_span, warn};
@@ -29,9 +29,12 @@ pub async fn run(
     send_new_sentence: broadcast::Sender<NewSentence>,
 ) -> Result<Never> {
     let db = SqlitePoolOptions::new()
-        .max_connections(8)
+        .max_connections(1)
+        .acquire_timeout(Duration::from_secs(300))
         .connect_with(
-            SqliteConnectOptions::from_str(":memory:")?.journal_mode(SqliteJournalMode::Wal),
+            SqliteConnectOptions::from_str("sqlite://wordbase.db")?
+                .create_if_missing(true)
+                .journal_mode(SqliteJournalMode::Wal),
         )
         .await
         .context("failed to connect to database")?;
@@ -44,43 +47,26 @@ pub async fn run(
             .await
             .context("failed to set up database")?;
 
-        let barrier = Arc::new(Barrier::new(4));
-        let jitendex = tokio::spawn(
-            import::from_yomitan(
-                db.clone(),
-                barrier.clone(),
-                "/home/dev/dictionaries/jitendex.zip",
-            )
-            .instrument(info_span!("import", path = "jitendex.zip")),
-        );
+        // let jitendex = tokio::spawn(
+        //     import::from_yomitan(db.clone(), "/home/dev/dictionaries/jitendex.zip")
+        //         .instrument(info_span!("import", path = "jitendex.zip")),
+        // );
         let jpdb = tokio::spawn(
-            import::from_yomitan(
-                db.clone(),
-                barrier.clone(),
-                "/home/dev/dictionaries/jpdb.zip",
-            )
-            .instrument(info_span!("import", path = "jpdb.zip")),
+            import::from_yomitan(db.clone(), "/home/dev/dictionaries/jpdb.zip")
+                .instrument(info_span!("import", path = "jpdb.zip")),
         );
         let nhk = tokio::spawn(
-            import::from_yomitan(
-                db.clone(),
-                barrier.clone(),
-                "/home/dev/dictionaries/nhk.zip",
-            )
-            .instrument(info_span!("import", path = "nhk.zip")),
+            import::from_yomitan(db.clone(), "/home/dev/dictionaries/nhk.zip")
+                .instrument(info_span!("import", path = "nhk.zip")),
         );
         let jmnedict = tokio::spawn(
-            import::from_yomitan(
-                db.clone(),
-                barrier.clone(),
-                "/home/dev/dictionaries/jmnedict.zip",
-            )
-            .instrument(info_span!("import", path = "jmnedict.zip")),
+            import::from_yomitan(db.clone(), "/home/dev/dictionaries/jmnedict.zip")
+                .instrument(info_span!("import", path = "jmnedict.zip")),
         );
 
-        let (jitendex, jpdb, nhk, jmnedict) =
-            tokio::try_join!(jitendex, jpdb, nhk, jmnedict).context("failed to import")?;
-        jitendex.context("failed to import jitendex")?;
+        let (jpdb, nhk, jmnedict) =
+            tokio::try_join!(jpdb, nhk, jmnedict).context("failed to import")?;
+        // jitendex.context("failed to import jitendex")?;
         jpdb.context("failed to import jpdb")?;
         nhk.context("failed to import nhk")?;
         jmnedict.context("failed to import jmnedict")?;
@@ -224,6 +210,18 @@ async fn handle_message(
                 .context("failed to remove dictionary")?;
             connection
                 .write(&FromServer::RemoveDictionary { result })
+                .await
+                .context("failed to send response")
+        }
+        FromClient::SetDictionaryEnabled {
+            dictionary_id,
+            enabled,
+        } => {
+            let result = db::set_dictionary_enabled(db, dictionary_id, enabled)
+                .await
+                .context("failed to set dictionary enabled state")?;
+            connection
+                .write(&FromServer::SetDictionaryEnabled { result })
                 .await
                 .context("failed to send response")
         }

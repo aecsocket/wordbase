@@ -25,7 +25,7 @@ pub async fn lookup(db: &Pool<Sqlite>, lemma: String) -> Result<LookupInfo> {
             ON t.source = dictionaries.id
         WHERE
             dictionaries.enabled = TRUE
-            AND(expression = $1 OR reading = $1)",
+            AND (expression = $1 OR reading = $1)",
         lemma
     )
     .fetch(db);
@@ -66,18 +66,22 @@ pub async fn lookup(db: &Pool<Sqlite>, lemma: String) -> Result<LookupInfo> {
 }
 
 pub async fn list_dictionaries(db: &Pool<Sqlite>) -> Result<Vec<Dictionary>> {
-    sqlx::query!("SELECT id, title, revision FROM dictionaries")
-        .fetch(db)
-        .map(|record| {
-            let record = record.context("failed to fetch record")?;
-            anyhow::Ok(Dictionary {
-                id: DictionaryId(record.id),
-                title: record.title,
-                revision: record.revision,
-            })
+    sqlx::query!(
+        "SELECT id, title, revision, enabled
+        FROM dictionaries"
+    )
+    .fetch(db)
+    .map(|record| {
+        let record = record.context("failed to fetch record")?;
+        anyhow::Ok(Dictionary {
+            id: DictionaryId(record.id),
+            title: record.title,
+            revision: record.revision,
+            enabled: record.enabled,
         })
-        .try_collect::<Vec<_>>()
-        .await
+    })
+    .try_collect::<Vec<_>>()
+    .await
 }
 
 pub async fn remove_dictionary(
@@ -88,6 +92,28 @@ pub async fn remove_dictionary(
         .execute(db)
         .await
         .context("failed to delete record")?;
+    Ok(if result.rows_affected() > 0 {
+        Ok(())
+    } else {
+        Err(DictionaryNotFound)
+    })
+}
+
+pub async fn set_dictionary_enabled(
+    db: &Pool<Sqlite>,
+    dictionary_id: DictionaryId,
+    enabled: bool,
+) -> Result<Result<(), DictionaryNotFound>> {
+    let result = sqlx::query!(
+        "UPDATE dictionaries
+        SET enabled = $1
+        WHERE id = $2",
+        enabled,
+        dictionary_id.0
+    )
+    .execute(db)
+    .await
+    .context("failed to delete record")?;
     Ok(if result.rows_affected() > 0 {
         Ok(())
     } else {

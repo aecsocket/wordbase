@@ -34,6 +34,16 @@ enum DictionaryCommand {
         /// ID of the dictionary, as seen in `dictionary list`
         id: i64,
     },
+    /// Enable a dictionary for lookups
+    Enable {
+        /// ID of the dictionary, as seen in `dictionary list`
+        id: i64,
+    },
+    /// Disable a dictionary for lookups
+    Disable {
+        /// ID of the dictionary, as seen in `dictionary list`
+        id: i64,
+    },
 }
 
 #[tokio::main]
@@ -53,6 +63,12 @@ async fn main() -> Result<()> {
             Command::Dictionary {
                 command: DictionaryCommand::Remove { id },
             } => remove_dictionary(&mut client, id).await,
+            Command::Dictionary {
+                command: DictionaryCommand::Enable { id },
+            } => enable_dictionary(&mut client, id).await,
+            Command::Dictionary {
+                command: DictionaryCommand::Disable { id },
+            } => disable_dictionary(&mut client, id).await,
             Command::Lookup { text } => lookup(&mut client, text).await,
         }
     })
@@ -66,8 +82,9 @@ async fn list_dictionaries(client: &mut SocketClient) -> Result<()> {
     let dictionaries = client.list_dictionaries().await?;
     println!("Dictionaries ({}):", dictionaries.len());
     for dictionary in dictionaries {
+        let enabled = if dictionary.enabled { "[on]" } else { "[  ]" };
         println!(
-            "  {}. {} rev {}",
+            "  {}. {enabled} {} rev {}",
             dictionary.id.0, dictionary.title, dictionary.revision
         );
     }
@@ -76,6 +93,16 @@ async fn list_dictionaries(client: &mut SocketClient) -> Result<()> {
 
 async fn remove_dictionary(client: &mut SocketClient, id: i64) -> Result<()> {
     client.remove_dictionary(DictionaryId(id)).await??;
+    Ok(())
+}
+
+async fn enable_dictionary(client: &mut SocketClient, id: i64) -> Result<()> {
+    client.enable_dictionary(DictionaryId(id)).await??;
+    Ok(())
+}
+
+async fn disable_dictionary(client: &mut SocketClient, id: i64) -> Result<()> {
+    client.disable_dictionary(DictionaryId(id)).await??;
     Ok(())
 }
 

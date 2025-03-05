@@ -1,2 +1,5 @@
 /target
 .env
+wordbase.db
+wordbase.db-shm
+wordbase.db-wal

@@ -16,7 +16,7 @@
   ],
   "postCreateCommand": [
     ".devcontainer/install-unidic.sh",
-    ".devcontainer/setup-schema-db.sh",
+    ".devcontainer/setup-schema-db.sh"
   ],
   "customizations": {
     "vscode": {
@@ -30,7 +30,9 @@
         "tamasfe.even-better-toml",
         "fill-labs.dependi",
         // GTK
-        "bodil.blueprint-gtk"
+        "bodil.blueprint-gtk",
+        // SQLite
+        "qwtel.sqlite-viewer"
       ]
     }
   }

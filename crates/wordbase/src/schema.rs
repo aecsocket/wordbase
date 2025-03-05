@@ -23,6 +23,9 @@ pub struct Dictionary {
     /// This does not guarantee to conform to any existing format, e.g.
     /// semantic versioning.
     pub revision: String,
+    /// Whether this dictionary is used for returning results in lookup
+    /// operations.
+    pub enabled: bool,
 }
 
 /// Opaque identifier for a single [`Dictionary`] in a database.
@@ -140,7 +143,7 @@ pub struct Pitch {
 pub struct LookupInfo {
     pub lemma: String,
     pub terms: Vec<(DictionaryId, Term)>,
+    pub glossaries: Vec<(DictionaryId, Term, Glossary)>,
     pub frequencies: Vec<(DictionaryId, Term, Frequency)>,
     pub pitches: Vec<(DictionaryId, Term, Pitch)>,
-    pub glossaries: Vec<(DictionaryId, Term, Glossary)>,
 }
