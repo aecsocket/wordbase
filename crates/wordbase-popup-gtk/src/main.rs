@@ -87,7 +87,7 @@ async fn main() {
                         .set_child(None::<&ui::Dictionary>);
                 }
 
-                Ok::<_, anyhow::Error>(())
+                Ok(())
             });
         });
 

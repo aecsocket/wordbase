@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 pub use parse::*;
 
-use derive_more::{Deref, DerefMut};
+use derive_more::{Deref, DerefMut, From};
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 
@@ -142,19 +142,16 @@ struct TermMetaRaw {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(try_from = "TermMetaRaw")]
-pub enum TermMeta {
-    Frequency {
-        expression: String,
-        data: TermMetaFrequency,
-    },
-    Pitch {
-        expression: String,
-        data: TermMetaPitch,
-    },
-    Phonetic {
-        expression: String,
-        data: TermMetaPhonetic,
-    },
+pub struct TermMeta {
+    pub expression: String,
+    pub data: TermMetaData,
+}
+
+#[derive(Debug, Clone, Deserialize, From)]
+pub enum TermMetaData {
+    Frequency(TermMetaFrequency),
+    Pitch(TermMetaPitch),
+    Phonetic(TermMetaPhonetic),
 }
 
 impl TryFrom<TermMetaRaw> for TermMeta {
@@ -167,18 +164,12 @@ impl TryFrom<TermMetaRaw> for TermMeta {
             data,
         }: TermMetaRaw,
     ) -> Result<Self, Self::Error> {
-        Ok(match kind {
-            TermMetaKind::Frequency => Self::Frequency {
-                expression,
-                data: TermMetaFrequency::deserialize(data)?,
-            },
-            TermMetaKind::Pitch => Self::Pitch {
-                expression,
-                data: TermMetaPitch::deserialize(data)?,
-            },
-            TermMetaKind::Phonetic => Self::Phonetic {
-                expression,
-                data: TermMetaPhonetic::deserialize(data)?,
+        Ok(Self {
+            expression,
+            data: match kind {
+                TermMetaKind::Frequency => TermMetaFrequency::deserialize(data)?.into(),
+                TermMetaKind::Pitch => TermMetaPitch::deserialize(data)?.into(),
+                TermMetaKind::Phonetic => TermMetaPhonetic::deserialize(data)?.into(),
             },
         })
     }
@@ -198,7 +189,10 @@ pub enum TermMetaKind {
 #[serde(rename_all = "camelCase", untagged, deny_unknown_fields)]
 pub enum TermMetaFrequency {
     Generic(GenericFrequencyData),
-    WithReading(TermMetaFrequencyDataWithReading),
+    WithReading {
+        reading: String,
+        frequency: GenericFrequencyData,
+    },
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -211,13 +205,6 @@ pub enum GenericFrequencyData {
         value: u64,
         display_value: Option<String>,
     },
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct TermMetaFrequencyDataWithReading {
-    pub reading: String,
-    pub frequency: GenericFrequencyData,
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -12,7 +12,7 @@ use std::{
 use anyhow::{Context as _, Result, bail};
 use derive_more::{Deref, DerefMut};
 use futures::{SinkExt as _, StreamExt as _, never::Never};
-use sqlx::{Pool, Sqlite, Transaction, sqlite::SqlitePoolOptions};
+use sqlx::{Pool, Sqlite, sqlite::SqlitePoolOptions};
 use tokio::{
     fs,
     net::{TcpListener, TcpStream},
@@ -24,15 +24,15 @@ use tokio_tungstenite::{WebSocketStream, tungstenite::Message};
 use tracing::{Instrument, info, info_span, warn};
 use wordbase::{
     dict::{
-        Dictionary, DictionaryId, ExpressionEntry, Frequency, FrequencySet, Glossary, GlossarySet,
+        Dictionary, DictionaryId, Expression, Frequency, FrequencySet, Glossary, GlossarySet,
         Pitch, PitchSet, Reading,
     },
     protocol::{DictionaryNotFound, FromClient, FromServer, LookupInfo, NewSentence},
-    yomitan::{self, TermBank, TermMetaBank},
+    yomitan,
 };
 
 use crate::{
-    Config,
+    Config, import,
     mecab::{MecabInfo, MecabRequest},
 };
 
@@ -220,7 +220,7 @@ async fn do_lookup(
     .fetch(db)
     .map(|record| {
         let record = record.context("failed to fetch database record")?;
-        Ok::<_, anyhow::Error>(ExpressionEntry {
+        anyhow::Ok(Expression {
             reading: Reading::from_no_pairs(record.expression, record.reading),
             frequency_sets: vec![],
             pitch_sets: vec![],
@@ -244,7 +244,7 @@ async fn list_dictionaries(db: &Pool<Sqlite>) -> Result<Vec<Dictionary>> {
         .fetch(db)
         .map(|record| {
             let record = record.context("failed to fetch database record")?;
-            Ok::<_, anyhow::Error>(Dictionary {
+            anyhow::Ok(Dictionary {
                 id: DictionaryId(record.id),
                 title: record.title,
                 revision: record.revision,
@@ -318,13 +318,13 @@ async fn todo_import(db: &Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
             |_, bank| {
                 tasks
                     .blocking_lock()
-                    .spawn_on(import_term_bank(dictionary_id, tx.clone(), bank), &runtime);
+                    .spawn_on(import::term_bank(dictionary_id, tx.clone(), bank), &runtime);
                 let term_banks_left = term_banks_left.fetch_sub(1, atomic::Ordering::SeqCst);
                 info!("{term_banks_left} term banks left");
             },
             |_, bank| {
                 tasks.blocking_lock().spawn_on(
-                    import_term_meta_bank(dictionary_id, tx.clone(), bank),
+                    import::term_meta_bank(dictionary_id, tx.clone(), bank),
                     &runtime,
                 );
             },
@@ -357,53 +357,10 @@ async fn todo_import(db: &Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
     Ok(())
 }
 
-async fn import_term_bank(
-    dictionary_id: DictionaryId,
-    tx: Arc<Mutex<Transaction<'_, Sqlite>>>,
-    bank: TermBank,
-) -> Result<()> {
-    for term in bank {
-        let expression = term.expression.clone();
-        let reading = term.reading.clone();
-        sqlx::query!(
-            "INSERT INTO terms (dictionary, expression, reading) VALUES ($1, $2, $3)",
-            dictionary_id.0,
-            expression,
-            reading,
-        )
-        .execute(&mut **tx.lock().await)
-        .await
-        .with_context(|| format!("failed to insert term {expression:?} ({reading:?})"))?;
-    }
-
-    Ok(())
-}
-
-async fn import_term_meta_bank(
-    dictionary_id: DictionaryId,
-    tx: Arc<Mutex<Transaction<'_, Sqlite>>>,
-    bank: TermMetaBank,
-) -> Result<()> {
-    for term_meta in bank {
-        // let expression = term_meta.expression.clone();
-        // let reading = term_meta.reading.clone();
-        // sqlx::query!(
-        //     "INSERT INTO terms (expression, reading) VALUES ($1, $2)",
-        //     expression,
-        //     reading,
-        // )
-        // .execute(&mut **tx.lock().await)
-        // .await
-        // .with_context(|| format!("failed to insert {expression:?} ({reading:?}) into database"))?;
-    }
-
-    Ok(())
-}
-
 #[allow(clippy::too_many_lines)]
-fn expression_entries() -> Vec<ExpressionEntry> {
+fn expression_entries() -> Vec<Expression> {
     vec![
-        ExpressionEntry {
+        Expression {
             reading: Reading::from_pairs([("協", "きょう"), ("力", "りょく")]),
             frequency_sets: vec![
                 FrequencySet {
@@ -526,7 +483,7 @@ fn expression_entries() -> Vec<ExpressionEntry> {
                 },
             ],
         },
-        ExpressionEntry {
+        Expression {
             reading: Reading::from_no_pairs("協", ""),
             frequency_sets: vec![
                 FrequencySet {

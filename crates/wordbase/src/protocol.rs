@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     SharedConfig,
-    dict::{Dictionary, DictionaryId, ExpressionEntry},
+    dict::{Dictionary, DictionaryId, Expression},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, From)]
@@ -50,7 +50,7 @@ pub enum FromServer {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LookupInfo {
     pub lemma: String,
-    pub expressions: Vec<ExpressionEntry>,
+    pub expressions: Vec<Expression>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

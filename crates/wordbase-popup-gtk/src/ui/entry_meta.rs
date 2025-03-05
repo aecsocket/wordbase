@@ -52,7 +52,7 @@ impl EntryMeta {
     }
 
     #[must_use]
-    pub fn from(entry: &dict::ExpressionEntry) -> Self {
+    pub fn from(entry: &dict::Expression) -> Self {
         let this = Self::new(entry.reading.expression(), entry.reading.reading());
         for frequency_set in &entry.frequency_sets {
             this.add_frequency_tag(&FrequencyTag::from(frequency_set));

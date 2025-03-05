@@ -33,6 +33,7 @@ derive_more = { workspace = true, features = [
 ] }
 futures = { workspace = true, features = ["std", "async-await"] }
 mecab = { workspace = true }
+postcard = { workspace = true, default-features = true, features = ["use-std"] }
 serde = { workspace = true, features = ["std", "derive"] }
 serde_json = { workspace = true, features = ["std"] }
 sqlx = { workspace = true, default-features = true, features = [

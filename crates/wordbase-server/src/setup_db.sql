@@ -8,14 +8,14 @@ CREATE TABLE terms (
     dictionary  INTEGER REFERENCES dictionaries(id) ON DELETE CASCADE,
     expression  TEXT NOT NULL,
     reading     TEXT NOT NULL,
-    data        BLOB
+    data        BLOB NOT NULL
 );
 CREATE INDEX terms_expression    ON terms(expression);
 CREATE INDEX terms_reading       ON terms(reading);
 
 CREATE TABLE term_meta (
-    dictionary  INTEGER REFERENCES dictionary(id),
+    dictionary  INTEGER REFERENCES dictionaries(id) ON DELETE CASCADE,
     expression  TEXT NOT NULL,
-    data        BLOB
+    data        BLOB NOT NULL
 );
 CREATE INDEX term_meta_expression ON term_meta(expression);

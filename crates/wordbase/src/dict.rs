@@ -11,7 +11,7 @@ pub struct Dictionary {
 pub struct DictionaryId(pub i64);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExpressionEntry {
+pub struct Expression {
     pub reading: Reading,
     pub frequency_sets: Vec<FrequencySet>,
     pub pitch_sets: Vec<PitchSet>,
