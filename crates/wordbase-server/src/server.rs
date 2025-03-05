@@ -188,39 +188,6 @@ async fn handle_message(
     }
 }
 
-async fn list_dictionaries(db: &Pool<Sqlite>) -> Result<Vec<Dictionary>> {
-    let dictionaries = sqlx::query!("SELECT id, title, revision FROM dictionaries")
-        .fetch(db)
-        .map(|record| {
-            let record = record.context("failed to fetch database record")?;
-            Ok::<_, anyhow::Error>(Dictionary {
-                id: DictionaryId(record.id),
-                title: record.title,
-                revision: record.revision,
-            })
-        })
-        .collect::<Vec<_>>()
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(dictionaries)
-}
-
-async fn remove_dictionary(
-    db: &Pool<Sqlite>,
-    dictionary_id: DictionaryId,
-) -> Result<Result<(), DictionaryNotFound>> {
-    let result = sqlx::query!("DELETE FROM dictionaries WHERE id = $1", dictionary_id.0)
-        .execute(db)
-        .await
-        .context("failed to delete database record")?;
-    Ok(if result.rows_affected() > 0 {
-        Ok(())
-    } else {
-        Err(DictionaryNotFound)
-    })
-}
-
 async fn do_lookup(
     config: &Config,
     db: &Pool<Sqlite>,
@@ -270,6 +237,39 @@ async fn do_lookup(
         lemma: mecab.lemma,
         expressions,
     }))
+}
+
+async fn list_dictionaries(db: &Pool<Sqlite>) -> Result<Vec<Dictionary>> {
+    let dictionaries = sqlx::query!("SELECT id, title, revision FROM dictionaries")
+        .fetch(db)
+        .map(|record| {
+            let record = record.context("failed to fetch database record")?;
+            Ok::<_, anyhow::Error>(Dictionary {
+                id: DictionaryId(record.id),
+                title: record.title,
+                revision: record.revision,
+            })
+        })
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(dictionaries)
+}
+
+async fn remove_dictionary(
+    db: &Pool<Sqlite>,
+    dictionary_id: DictionaryId,
+) -> Result<Result<(), DictionaryNotFound>> {
+    let result = sqlx::query!("DELETE FROM dictionaries WHERE id = $1", dictionary_id.0)
+        .execute(db)
+        .await
+        .context("failed to delete database record")?;
+    Ok(if result.rows_affected() > 0 {
+        Ok(())
+    } else {
+        Err(DictionaryNotFound)
+    })
 }
 
 async fn todo_import(db: &Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
