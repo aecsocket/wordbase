@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 
+pub mod jp;
 pub mod protocol;
 pub mod schema;
 
@@ -30,13 +31,4 @@ impl Default for SharedConfig {
     fn default() -> Self {
         Self { max_lookup_len: 16 }
     }
-}
-
-#[test]
-fn foo() {
-    let s = "さぎょう hello world";
-    println!(
-        "{:?}",
-        unicode_segmentation::UnicodeSegmentation::graphemes(s, true).collect::<Vec<_>>()
-    );
 }

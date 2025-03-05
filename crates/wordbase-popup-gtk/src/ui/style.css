@@ -2,16 +2,19 @@
     padding: 1px 12px;
 }
 
-.mora {
-    border-style: solid;
-    border-color: transparent;
-    border-width: 2px;
-}
-
-.mora.high {
-    border-color: white transparent transparent transparent;
-}
-
 .mora.high.next-low {
-    border-color: white white transparent transparent;
+    margin-right: 3px;
+}
+
+.pitch-line {
+    border-width: 2px;
+    border-color: currentColor;
+}
+
+.pitch-line.high {
+    border-style: solid none none none;
+}
+
+.pitch-line.high.next-low {
+    border-style: solid solid none none;
 }
