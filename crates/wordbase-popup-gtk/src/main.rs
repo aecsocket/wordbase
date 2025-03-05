@@ -11,6 +11,7 @@ extern crate gtk4 as gtk;
 extern crate libadwaita as adw;
 extern crate webkit6 as webkit;
 
+mod format;
 mod ui;
 
 use std::{convert::Infallible, time::Duration};
@@ -22,15 +23,9 @@ use tokio::{
     sync::{mpsc, oneshot},
     time,
 };
-use tracing::{info, warn};
-use wordbase::{lookup::LookupInfo, protocol::Lookup};
-use wordbase_client_tokio::{Client, Connection};
-
-#[derive(Debug)]
-struct LookupRequest {
-    query: String,
-    send_response: oneshot::Sender<Option<LookupInfo>>,
-}
+use tracing::warn;
+use wordbase::schema::LookupInfo;
+use wordbase_client_tokio::SocketClient;
 
 #[tokio::main]
 async fn main() {
@@ -104,6 +99,12 @@ async fn main() {
     app.run();
 }
 
+#[derive(Debug)]
+struct LookupRequest {
+    query: String,
+    send_response: oneshot::Sender<Option<LookupInfo>>,
+}
+
 async fn backend(mut recv_lookup_request: mpsc::Receiver<LookupRequest>) -> Result<Infallible> {
     loop {
         let mut client = loop {
@@ -130,7 +131,7 @@ async fn backend(mut recv_lookup_request: mpsc::Receiver<LookupRequest>) -> Resu
 
 async fn handle_client(
     recv_lookup_request: &mut mpsc::Receiver<LookupRequest>,
-    client: &mut Client,
+    client: &mut SocketClient,
 ) -> Result<Infallible> {
     loop {
         let request = recv_lookup_request
@@ -139,10 +140,7 @@ async fn handle_client(
             .context("lookup request channel closed")?;
 
         let response = client
-            .lookup(Lookup {
-                text: request.query,
-                wants_html: false,
-            })
+            .lookup(request.query)
             .await
             .context("failed to perform lookup")?;
         _ = request.send_response.send(response);

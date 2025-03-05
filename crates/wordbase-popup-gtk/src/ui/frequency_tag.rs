@@ -1,6 +1,5 @@
 use adw::subclass::prelude::*;
 use gtk::glib;
-use wordbase::schema;
 
 mod imp {
     use super::*;
@@ -48,37 +47,12 @@ impl FrequencyTag {
     }
 
     #[must_use]
-    pub fn from(value: &schema::FrequencySet) -> Self {
-        let display_frequency = value
-            .frequencies
-            .iter()
-            .map(|frequency| {
-                frequency
-                    .display_value
-                    .as_ref()
-                    .map_or_else(|| format!("{}", frequency.value), ToOwned::to_owned)
-            })
-            .collect::<Vec<_>>()
-            .join(" · ");
-
-        Self::new(&value.dictionary, &display_frequency)
+    pub fn dictionary(&self) -> gtk::Label {
+        self.imp().dictionary.get()
     }
 
     #[must_use]
-    pub fn dictionary(&self) -> glib::GString {
-        self.imp().dictionary.text()
-    }
-
-    pub fn set_dictionary(&self, dictionary: &str) {
-        self.imp().dictionary.set_text(dictionary);
-    }
-
-    #[must_use]
-    pub fn frequency(&self) -> glib::GString {
-        self.imp().frequency.text()
-    }
-
-    pub fn set_frequency(&self, frequency: &str) {
-        self.imp().frequency.set_text(frequency);
+    pub fn frequency(&self) -> gtk::Label {
+        self.imp().frequency.get()
     }
 }

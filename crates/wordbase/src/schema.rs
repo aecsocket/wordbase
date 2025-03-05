@@ -31,15 +31,16 @@ pub enum Glossary {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LookupInfo {
     pub lemma: String,
-    pub terms: Vec<ExpressionInfo>,
-    pub frequencies: Vec<(ExpressionInfo, Frequency)>,
-    pub pitches: Vec<(ExpressionInfo, Pitch)>,
-    pub glossaries: Vec<(ExpressionInfo, Glossary)>,
+    pub terms: Vec<Term>,
+    pub frequencies: Vec<(Term, Frequency)>,
+    pub pitches: Vec<(Term, Pitch)>,
+    pub glossaries: Vec<(Term, Glossary)>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExpressionInfo {
-    pub source: DictionaryId,
+pub struct Term {
+    pub source_id: DictionaryId,
+    pub source_title: String,
     pub expression: String,
     pub reading: String,
 }

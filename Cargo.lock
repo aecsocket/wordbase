@@ -3107,6 +3107,8 @@ name = "wordbase-popup-gtk"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "derive_more",
+ "foldhash",
  "gtk4",
  "libadwaita",
  "serde",
@@ -3126,7 +3128,6 @@ dependencies = [
  "anyhow",
  "clap",
  "derive_more",
- "foldhash",
  "futures",
  "mecab",
  "postcard",

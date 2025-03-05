@@ -5,7 +5,7 @@ use futures::{StreamExt, TryStreamExt};
 use sqlx::{Pool, Sqlite, Transaction};
 use tokio::sync::Mutex;
 use wordbase::{
-    schema::{DictionaryId, ExpressionInfo, Frequency, Glossary, LookupInfo, Pitch},
+    schema::{DictionaryId, Frequency, Glossary, LookupInfo, Pitch, Term},
     yomitan,
 };
 
@@ -206,18 +206,25 @@ pub async fn lookup(db: &Pool<Sqlite>, lemma: String) -> Result<LookupInfo> {
     })
 }
 
-async fn fetch_terms(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<ExpressionInfo>> {
+async fn fetch_terms(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<Term>> {
     sqlx::query!(
-        "SELECT source, expression, reading
-        FROM readings
+        "SELECT
+            t.source,
+            t.expression,
+            t.reading,
+            dictionaries.title AS source_title
+        FROM readings t
+        LEFT JOIN dictionaries
+            ON t.source = dictionaries.id
         WHERE expression = $1 OR reading = $1",
         lemma
     )
     .fetch(db)
     .map(|record| {
         let record = record.context("failed to fetch record")?;
-        anyhow::Ok(ExpressionInfo {
-            source: DictionaryId(record.source),
+        anyhow::Ok(Term {
+            source_id: DictionaryId(record.source),
+            source_title: record.source_title,
             expression: record.expression,
             reading: record.reading,
         })
@@ -226,13 +233,17 @@ async fn fetch_terms(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<ExpressionInf
     .await
 }
 
-async fn fetch_frequencies(
-    db: &Pool<Sqlite>,
-    lemma: &str,
-) -> Result<Vec<(ExpressionInfo, Frequency)>> {
+async fn fetch_frequencies(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<(Term, Frequency)>> {
     sqlx::query!(
-        "SELECT source, expression, reading, data
-        FROM frequencies
+        "SELECT
+            t.source,
+            t.expression,
+            t.reading,
+            t.data,
+            dictionaries.title AS source_title
+        FROM frequencies t
+        LEFT JOIN dictionaries
+            ON t.source = dictionaries.id
         WHERE expression = $1 OR reading = $1",
         lemma
     )
@@ -240,8 +251,9 @@ async fn fetch_frequencies(
     .map(|record| {
         let record = record.context("failed to fetch record")?;
         anyhow::Ok((
-            ExpressionInfo {
-                source: DictionaryId(record.source),
+            Term {
+                source_id: DictionaryId(record.source),
+                source_title: record.source_title,
                 expression: record.expression,
                 reading: record.reading,
             },
@@ -252,10 +264,17 @@ async fn fetch_frequencies(
     .await
 }
 
-async fn fetch_pitches(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<(ExpressionInfo, Pitch)>> {
+async fn fetch_pitches(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<(Term, Pitch)>> {
     sqlx::query!(
-        "SELECT source, expression, reading, data
-        FROM pitches
+        "SELECT
+            t.source,
+            t.expression,
+            t.reading,
+            t.data,
+            dictionaries.title AS source_title
+        FROM pitches t
+        LEFT JOIN dictionaries
+            ON t.source = dictionaries.id
         WHERE expression = $1 OR reading = $1",
         lemma
     )
@@ -263,8 +282,9 @@ async fn fetch_pitches(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<(Expression
     .map(|record| {
         let record = record.context("failed to fetch record")?;
         anyhow::Ok((
-            ExpressionInfo {
-                source: DictionaryId(record.source),
+            Term {
+                source_id: DictionaryId(record.source),
+                source_title: record.source_title,
                 expression: record.expression,
                 reading: record.reading,
             },
@@ -275,13 +295,17 @@ async fn fetch_pitches(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<(Expression
     .await
 }
 
-async fn fetch_glossaries(
-    db: &Pool<Sqlite>,
-    lemma: &str,
-) -> Result<Vec<(ExpressionInfo, Glossary)>> {
+async fn fetch_glossaries(db: &Pool<Sqlite>, lemma: &str) -> Result<Vec<(Term, Glossary)>> {
     sqlx::query!(
-        "SELECT source, expression, reading, data
-        FROM glossaries
+        "SELECT
+            t.source,
+            t.expression,
+            t.reading,
+            t.data,
+            dictionaries.title AS source_title
+        FROM glossaries t
+        LEFT JOIN dictionaries
+            ON t.source = dictionaries.id
         WHERE expression = $1 OR reading = $1",
         lemma
     )
@@ -289,8 +313,9 @@ async fn fetch_glossaries(
     .map(|record| {
         let record = record.context("failed to fetch record")?;
         anyhow::Ok((
-            ExpressionInfo {
-                source: DictionaryId(record.source),
+            Term {
+                source_id: DictionaryId(record.source),
+                source_title: record.source_title.unwrap(),
                 expression: record.expression,
                 reading: record.reading,
             },
@@ -299,11 +324,4 @@ async fn fetch_glossaries(
     })
     .try_collect()
     .await
-}
-
-#[test]
-fn test() {
-    let x = Glossary::Definition { text: "hi".into() };
-    let b = postcard::to_stdvec(&x).unwrap();
-    postcard::from_bytes::<Glossary>(&b).unwrap();
 }
