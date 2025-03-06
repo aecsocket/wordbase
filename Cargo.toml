@@ -43,6 +43,7 @@ foldhash = { version = "0.1", default-features = false }
 futures = { version = "0.3", default-features = false }
 gdk4 = { version = "0.9", default-features = false }
 gtk4 = { version = "0.9", default-features = false }
+html-escape = { version = "0.2", default-features = false }
 indexmap = { version = "2.7", default-features = false }
 libadwaita = { version = "0.7", default-features = false }
 mecab = { version = "0.1.6", default-features = false }

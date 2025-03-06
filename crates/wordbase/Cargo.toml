@@ -37,6 +37,7 @@ derive_more = { workspace = true, features = [
 ] }
 serde = { workspace = true, features = ["alloc", "derive"] }
 
+html-escape = { workspace = true, optional = false, default-features = true }
 rayon = { workspace = true, optional = false }
 regex = { workspace = true, optional = false, default-features = true }
 serde_json = { workspace = true, optional = false, features = ["std"] }

@@ -2,7 +2,9 @@ use core::fmt;
 
 use crate::yomitan::structured::{StyledElement, UnstyledElement};
 
-use super::structured::{Content, ContentStyle, Element, ImageElement, LinkElement, TableElement};
+use super::structured::{
+    Content, ContentStyle, Data, Element, ImageElement, LinkElement, TableElement,
+};
 
 #[must_use]
 pub fn to_html(content: &Content) -> String {
@@ -72,7 +74,8 @@ macro_rules! forward_to_tag {
         if let Some(value) = &($field) {
             write!($w, " ")?;
             write!($w, $prop)?;
-            write!($w, r#"="{value}""#)?;
+            let value = format!("{value}");
+            write!($w, "=\"{}\"", html_escape::encode_safe(&value))?;
         }
     };
 }
@@ -89,8 +92,20 @@ macro_rules! forward_to_tag_fn {
     };
 }
 
+fn forward_data(w: &mut impl fmt::Write, data: Option<&Data>) -> fmt::Result {
+    let Some(data) = data else {
+        return Ok(());
+    };
+    for (key, value) in data.iter() {
+        let value = html_escape::encode_safe(value);
+        write!(w, " data-{key}=\"{value}\"")?;
+    }
+    Ok(())
+}
+
 fn unstyled(w: &mut impl fmt::Write, elem: &UnstyledElement, tag: &str) -> fmt::Result {
     write!(w, "<{tag}")?;
+    forward_data(w, elem.data.as_ref())?;
     forward_to_tag!(w, elem.lang, "lang");
     write!(w, ">")?;
 
@@ -103,6 +118,7 @@ fn unstyled(w: &mut impl fmt::Write, elem: &UnstyledElement, tag: &str) -> fmt::
 
 fn table(w: &mut impl fmt::Write, elem: &TableElement, tag: &str) -> fmt::Result {
     write!(w, "<{tag}")?;
+    forward_data(w, elem.data.as_ref())?;
     forward_to_tag!(w, elem.col_span, "col-span");
     forward_to_tag!(w, elem.row_span, "row-span");
     forward_to_tag_fn!(w, elem.style, "style", style_css);
@@ -118,6 +134,7 @@ fn table(w: &mut impl fmt::Write, elem: &TableElement, tag: &str) -> fmt::Result
 
 fn styled(w: &mut impl fmt::Write, elem: &StyledElement, tag: &str) -> fmt::Result {
     write!(w, "<{tag}")?;
+    forward_data(w, elem.data.as_ref())?;
     forward_to_tag_fn!(w, elem.style, "style", style_css);
     forward_to_tag!(w, elem.title, "title");
     forward_to_tag!(w, elem.open, "open");
@@ -140,7 +157,10 @@ fn style_css(w: &mut impl fmt::Write, s: &ContentStyle) -> fmt::Result {
         ($field:expr, $prop:expr) => {
             if let Some(value) = &($field) {
                 write!(w, $prop)?;
-                write!(w, ":{value};")?;
+                write!(w, ":")?;
+                let value = format!("{value}");
+                write!(w, "{}", html_escape::encode_safe(&value))?;
+                write!(w, ";")?;
             }
         };
     }

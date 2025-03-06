@@ -1,7 +1,9 @@
+use std::{fmt::Write, sync::LazyLock};
+
 use derive_more::{Deref, DerefMut};
 use foldhash::HashMap;
 use gtk::{gdk, gio, prelude::*};
-use webkit::prelude::WebViewExt;
+use webkit::prelude::{PolicyDecisionExt, WebViewExt};
 use wordbase::{
     jp,
     schema::{Dictionary, DictionaryId, Frequency, Glossary, LookupInfo, Pitch, Term},
@@ -128,9 +130,7 @@ impl Terms {
                         }
                     }
 
-                    for content in &glossary.content {
-                        row.content().append(&glossary_webview(content));
-                    }
+                    row.content().append(&glossary_webview(&glossary.content));
                 }
             }
         }
@@ -211,15 +211,43 @@ fn pitch_label(reading: &str, pitch: &Pitch) -> gtk::Widget {
     ui.upcast()
 }
 
-fn glossary_webview(content: &structured::Content) -> gtk::Widget {
+static GLOSSARY_HTML: LazyLock<String> = LazyLock::new(|| {
+    // TODO: is there a way to fetch this?
+    const ADWAITA_DARK_FG_COLOR: &str = "#ffffff";
+
+    let css = include_str!("glossary.css").replace("var(--t-dark-fg)", ADWAITA_DARK_FG_COLOR);
+    format!("<style>{css}</style>")
+});
+
+fn glossary_webview(contents: &[structured::Content]) -> gtk::Widget {
     let view = webkit::WebView::new();
     // avoid errors in log about allocating `WIDTHx0` sized buffer
     // we'll resize the view once we have an actual height
     view.set_height_request(1);
     view.set_background_color(&gdk::RGBA::new(0.0, 0.0, 0.0, 0.0));
 
-    let html = yomitan::to_html(content);
-    view.load_html(&html, None);
+    // when attempting to navigate to a URL, open in the user's browser instead
+    view.connect_decide_policy(|_, decision, decision_type| {
+        if decision_type != webkit::PolicyDecisionType::NavigationAction {
+            return false;
+        }
+        let Some(decision) = decision.downcast_ref::<webkit::NavigationPolicyDecision>() else {
+            return false;
+        };
+        let Some(mut nav_action) = decision.navigation_action() else {
+            return false;
+        };
+        if !nav_action.is_user_gesture() {
+            return false;
+        }
+
+        if let Some(request) = nav_action.request() {
+            println!("TODO: request to {:?}", request.uri());
+        }
+
+        decision.ignore();
+        true // inhibit request
+    });
 
     // resize the view to the content
     view.connect_load_changed(move |view, _| {
@@ -239,6 +267,22 @@ fn glossary_webview(content: &structured::Content) -> gtk::Widget {
             },
         );
     });
+
+    let mut html = GLOSSARY_HTML.clone();
+    _ = write!(
+        &mut html,
+        r#"<ul class="glossary-list" data-count="{}">"#,
+        contents.len()
+    );
+    for content in contents {
+        _ = write!(&mut html, "<li>");
+        _ = yomitan::write_html(&mut html, content);
+        _ = write!(&mut html, "</li>");
+    }
+    _ = write!(&mut html, "</ul>");
+
+    println!("html = {html}");
+    view.load_html(&html, None);
 
     view.upcast()
 }

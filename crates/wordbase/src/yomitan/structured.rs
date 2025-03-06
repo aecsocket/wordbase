@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use derive_more::Display;
+use derive_more::{Deref, DerefMut, Display};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -118,7 +118,7 @@ pub enum ImageAppearance {
     Monochrome,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Deref, DerefMut, Serialize, Deserialize)]
 pub struct Data(pub HashMap<String, String>);
 
 #[derive(Debug, Display, Clone, Serialize, Deserialize)]
