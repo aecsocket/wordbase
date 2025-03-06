@@ -3,16 +3,24 @@ use std::collections::HashMap;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum VerticalAlign {
+    #[display("baseline")]
     Baseline,
+    #[display("sub")]
     Sub,
+    #[display("super")]
     Super,
+    #[display("text-top")]
     TextTop,
+    #[display("text-bottom")]
     TextBottom,
+    #[display("middle")]
     Middle,
+    #[display("top")]
     Top,
+    #[display("bottom")]
     Bottom,
 }
 
@@ -60,22 +68,31 @@ pub enum FontWeight {
     Bold,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum WordBreak {
+    #[display("normal")]
     Normal,
+    #[display("break-all")]
     BreakAll,
+    #[display("keep-all")]
     KeepAll,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum TextAlign {
+    #[display("start")]
     Start,
+    #[display("end")]
     End,
+    #[display("left")]
     Left,
+    #[display("right")]
     Right,
+    #[display("center")]
     Center,
+    #[display("justify")]
     Justify,
 }
 

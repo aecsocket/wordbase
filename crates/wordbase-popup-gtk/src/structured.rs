@@ -2,8 +2,9 @@ use core::fmt::{self, Write as _};
 
 use gtk::{gdk, pango, prelude::*};
 use webkit::prelude::WebViewExt;
-use wordbase::yomitan::structured::{
-    Content, ContentStyle, Element, StyledElement, TextAlign, VerticalAlign,
+use wordbase::yomitan::{
+    self,
+    structured::{Content, ContentStyle, Element, StyledElement, TextAlign, VerticalAlign},
 };
 
 pub fn to_ui(display: gdk::Display, content: &Content) -> gtk::Widget {
@@ -11,41 +12,9 @@ pub fn to_ui(display: gdk::Display, content: &Content) -> gtk::Widget {
     webview.set_height_request(200);
     webview.set_background_color(&gdk::RGBA::new(0.0, 0.0, 0.0, 0.0));
 
-    webview.load_html(
-        r#"
-            <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Transparent WebKit</title>
-            <style>
-                body {
-                    background-color: transparent !important;
-                    color: white; /* Ensure text is visible */
-                }
-            </style>
-        </head>
-        <body>
-            <h1>Hello, World!</h1>
-            <p>This HTML is loaded in a WebKit WebView with a transparent background.</p>
-        </body>
-        </html>
-    "#,
-        None,
-    );
-
-    // let mut css = String::new();
-    // let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    // make(&mut css, content, &mut |child| container.append(&child));
-
-    // let css_provider = gtk::CssProvider::new();
-    // css_provider.load_from_string(&css);
-    // gtk::style_context_add_provider_for_display(&display, &css_provider, 0);
-    // container.connect_destroy(move |_| {
-    //     gtk::style_context_remove_provider_for_display(&display, &css_provider);
-    // })
-
+    let mut html = String::new();
+    _ = yomitan::to_html(&mut html, content);
+    webview.load_html(&html, None);
     webview.upcast()
 }
 

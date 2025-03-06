@@ -1,9 +1,10 @@
+mod html;
+mod parse;
 pub mod structured;
 
-mod parse;
-use std::collections::HashMap;
+pub use {html::*, parse::*};
 
-pub use parse::*;
+use std::collections::HashMap;
 
 use derive_more::{Deref, DerefMut, From};
 use serde::Deserialize;
