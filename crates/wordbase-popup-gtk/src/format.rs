@@ -211,6 +211,8 @@ fn pitch_label(reading: &str, pitch: &Pitch) -> gtk::Box {
 }
 
 fn structured_content_to_ui(content: &structured::Content) -> Option<gtk::Widget> {
+    const MARGIN: i32 = 4;
+
     match content {
         structured::Content::String(text) => {
             let label = gtk::Label::new(Some(text));
@@ -238,9 +240,30 @@ fn structured_content_to_ui(content: &structured::Content) -> Option<gtk::Widget
             | structured::Element::Thead(e)
             | structured::Element::Tbody(e)
             | structured::Element::Tfoot(e)
-            | structured::Element::Tr(e) => e.content.as_ref().and_then(structured_content_to_ui),
-            structured::Element::Td(e) => e.content.as_ref().and_then(structured_content_to_ui),
-            structured::Element::Th(e) => e.content.as_ref().and_then(structured_content_to_ui),
+            | structured::Element::Tr(e) => {
+                let b = gtk::Box::new(gtk::Orientation::Vertical, 0);
+                b.set_margin_start(MARGIN);
+                if let Some(c) = e.content.as_ref().and_then(structured_content_to_ui) {
+                    b.append(&c);
+                }
+                Some(b.upcast::<gtk::Widget>())
+            }
+            structured::Element::Td(e) => {
+                let b = gtk::Box::new(gtk::Orientation::Vertical, 0);
+                b.set_margin_start(MARGIN);
+                if let Some(c) = e.content.as_ref().and_then(structured_content_to_ui) {
+                    b.append(&c);
+                }
+                Some(b.upcast())
+            }
+            structured::Element::Th(e) => {
+                let b = gtk::Box::new(gtk::Orientation::Vertical, 0);
+                b.set_margin_start(MARGIN);
+                if let Some(c) = e.content.as_ref().and_then(structured_content_to_ui) {
+                    b.append(&c);
+                }
+                Some(b.upcast())
+            }
             structured::Element::Span(e)
             | structured::Element::Div(e)
             | structured::Element::Ol(e)
@@ -248,10 +271,53 @@ fn structured_content_to_ui(content: &structured::Content) -> Option<gtk::Widget
             | structured::Element::Li(e)
             | structured::Element::Details(e)
             | structured::Element::Summary(e) => {
-                e.content.as_ref().and_then(structured_content_to_ui)
+                let b = gtk::Box::new(gtk::Orientation::Vertical, 0);
+
+                if let Some(style) = &e.style {
+                    use structured::TextAlign as Al;
+
+                    #[expect(clippy::match_same_arms, reason = "clearer logic")]
+                    match (style.text_align, gtk::Widget::default_direction()) {
+                        (None, _) => {}
+                        (Some(Al::Start | Al::Justify), _) => b.set_halign(gtk::Align::Start),
+                        (Some(Al::End), _) => b.set_halign(gtk::Align::End),
+                        (Some(Al::Center), _) => {
+                            b.set_halign(gtk::Align::Center);
+                        }
+                        (Some(Al::Left), gtk::TextDirection::Rtl) => {
+                            b.set_halign(gtk::Align::End);
+                        }
+                        (Some(Al::Left), _) => b.set_halign(gtk::Align::Start),
+                        (Some(Al::Right), gtk::TextDirection::Rtl) => {
+                            b.set_halign(gtk::Align::Start);
+                        }
+                        (Some(Al::Right), _) => b.set_halign(gtk::Align::End),
+                    }
+                }
+
+                b.set_margin_start(MARGIN);
+                if let Some(c) = e.content.as_ref().and_then(structured_content_to_ui) {
+                    b.append(&c);
+                }
+                Some(b.upcast())
             }
             structured::Element::Img(e) => None,
-            structured::Element::A(e) => e.content.as_ref().and_then(structured_content_to_ui),
+            // structured::Element::A(
+            //     elem @ structured::LinkElement {
+            //         content: Some(structured::Content::String(text)),
+            //         href,
+            //         ..
+            //     },
+            // ) => {
+            //     gtk::LinkButton
+            // }
+            structured::Element::A(e) => {
+                let button = gtk::LinkButton::new(&e.href);
+                if let Some(child) = e.content.as_ref().and_then(structured_content_to_ui) {
+                    button.set_child(Some(&child));
+                }
+                Some(button.upcast())
+            }
         }
         .map(Cast::upcast),
     }
