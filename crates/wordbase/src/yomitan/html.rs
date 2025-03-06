@@ -4,7 +4,14 @@ use crate::yomitan::structured::{StyledElement, UnstyledElement};
 
 use super::structured::{Content, ContentStyle, Element, ImageElement, LinkElement, TableElement};
 
-pub fn to_html(mut w: impl fmt::Write, content: &Content) -> fmt::Result {
+#[must_use]
+pub fn to_html(content: &Content) -> String {
+    let mut html = String::new();
+    _ = write_html(&mut html, content);
+    html
+}
+
+pub fn write_html(mut w: impl fmt::Write, content: &Content) -> fmt::Result {
     any(&mut w, content)
 }
 
@@ -46,13 +53,13 @@ fn element(w: &mut impl fmt::Write, elem: &Element) -> fmt::Result {
         Element::Td(e) => table(w, e, "td"),
         Element::Th(e) => table(w, e, "th"),
         //
-        Element::Span(e)      => styled(w, e, "span"),
-        Element::Div(e)       => styled(w, e, "div"),
-        Element::Ol(e)        => styled(w, e, "ol"),
-        Element::Ul(e)        => styled(w, e, "ul"),
-        Element::Li(e)        => styled(w, e, "li"),
-        Element::Details(e)   => styled(w, e, "details"),
-        Element::Summary(e)   => styled(w, e, "summary"),
+        Element::Span(e)    => styled(w, e, "span"),
+        Element::Div(e)     => styled(w, e, "div"),
+        Element::Ol(e)      => styled(w, e, "ol"),
+        Element::Ul(e)      => styled(w, e, "ul"),
+        Element::Li(e)      => styled(w, e, "li"),
+        Element::Details(e) => styled(w, e, "details"),
+        Element::Summary(e) => styled(w, e, "summary"),
         //
         Element::Img(e) => img(w, e),
         //

@@ -1,11 +1,11 @@
 use derive_more::{Deref, DerefMut};
 use foldhash::HashMap;
-use gtk::{gdk, prelude::*};
+use gtk::{gdk, gio, prelude::*};
 use webkit::prelude::WebViewExt;
 use wordbase::{
     jp,
     schema::{Dictionary, DictionaryId, Frequency, Glossary, LookupInfo, Pitch, Term},
-    yomitan,
+    yomitan::{self, structured},
 };
 
 use crate::ui;
@@ -129,15 +129,7 @@ impl Terms {
                     }
 
                     for content in &glossary.content {
-                        let webview = webkit::WebView::new();
-                        webview.set_height_request(200);
-                        webview.set_background_color(&gdk::RGBA::new(0.0, 0.0, 0.0, 0.0));
-
-                        let mut html = String::new();
-                        _ = yomitan::to_html(&mut html, content);
-                        webview.load_html(&html, None);
-
-                        row.content().append(&webview);
+                        row.content().append(&glossary_webview(content));
                     }
                 }
             }
@@ -147,7 +139,7 @@ impl Terms {
     }
 }
 
-fn frequency_tag(dict_title: &str, frequencies: &[Frequency]) -> ui::FrequencyTag {
+fn frequency_tag(dict_title: &str, frequencies: &[Frequency]) -> gtk::Widget {
     let tag = ui::FrequencyTag::new();
 
     tag.source().set_text(dict_title);
@@ -163,10 +155,10 @@ fn frequency_tag(dict_title: &str, frequencies: &[Frequency]) -> ui::FrequencyTa
         .collect::<Vec<_>>()
         .join(" · ");
     tag.frequency().set_text(&frequency);
-    tag
+    tag.upcast()
 }
 
-fn pitch_label(reading: &str, pitch: &Pitch) -> gtk::Box {
+fn pitch_label(reading: &str, pitch: &Pitch) -> gtk::Widget {
     let ui = gtk::Box::new(gtk::Orientation::Horizontal, 0);
 
     let downstep = usize::try_from(pitch.position).unwrap_or(usize::MAX);
@@ -216,5 +208,37 @@ fn pitch_label(reading: &str, pitch: &Pitch) -> gtk::Box {
             widget.add_css_class(next_css_class);
         }
     }
-    ui
+    ui.upcast()
+}
+
+fn glossary_webview(content: &structured::Content) -> gtk::Widget {
+    let view = webkit::WebView::new();
+    // avoid errors in log about allocating `WIDTHx0` sized buffer
+    // we'll resize the view once we have an actual height
+    view.set_height_request(1);
+    view.set_background_color(&gdk::RGBA::new(0.0, 0.0, 0.0, 0.0));
+
+    let html = yomitan::to_html(content);
+    view.load_html(&html, None);
+
+    // resize the view to the content
+    view.connect_load_changed(move |view, _| {
+        view.evaluate_javascript(
+            "document.body.scrollHeight",
+            None,
+            None,
+            None::<&gio::Cancellable>,
+            {
+                let view = view.clone();
+                move |result| {
+                    if let Ok(value) = result {
+                        let height = value.to_int32();
+                        view.set_height_request(height);
+                    };
+                }
+            },
+        );
+    });
+
+    view.upcast()
 }

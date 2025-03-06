@@ -20,6 +20,12 @@
     color: var(--accent-green);
 }
 
+/* add spacing between the downstep mora and the pitch line */
+.mora.high.next-low {
+    margin-right: 3px;
+}
+
+/* add spacing between the downstep line and the next mora */
 .mora-container.high.next-low {
     margin-right: 3px;
 }
