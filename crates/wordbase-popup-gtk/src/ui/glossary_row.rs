@@ -2,7 +2,12 @@ use adw::subclass::prelude::*;
 use gtk::glib;
 
 mod imp {
-    use gtk::{gio::prelude::ListModelExt, prelude::WidgetExt};
+    use std::cell::RefCell;
+
+    use gtk::{
+        gio::{self, prelude::ListModelExt},
+        prelude::WidgetExt,
+    };
 
     use super::*;
 
@@ -13,6 +18,7 @@ mod imp {
         pub content: TemplateChild<gtk::Box>,
         #[template_child]
         pub tags: TemplateChild<gtk::Box>,
+        pub tag_children: RefCell<Option<gio::ListModel>>,
     }
 
     #[glib::object_subclass]
@@ -30,14 +36,21 @@ mod imp {
         }
     }
 
+    fn hide_if_empty(content: &gtk::Box, model: &gio::ListModel) {
+        content.set_visible(model.n_items() > 0);
+    }
+
     impl ObjectImpl for GlossaryRow {
         fn constructed(&self) {
-            let content = self.content.get();
-            content
-                .observe_children()
-                .connect_items_changed(move |model, _, _, _| {
-                    content.set_visible(model.n_items() > 0);
-                });
+            let tags = self.tags.get();
+            let tag_children = tags.observe_children();
+            hide_if_empty(&tags, &tag_children);
+            tag_children.connect_items_changed(move |child_model, _, _, _| {
+                hide_if_empty(&tags, child_model);
+            });
+            // we must retain a reference to the list model,
+            // otherwise we won't receive any signals on it
+            self.tag_children.replace(Some(tag_children));
         }
     }
     impl WidgetImpl for GlossaryRow {}

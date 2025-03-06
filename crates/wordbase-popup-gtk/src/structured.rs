@@ -8,7 +8,32 @@ use wordbase::yomitan::structured::{
 
 pub fn to_ui(display: gdk::Display, content: &Content) -> gtk::Widget {
     let webview = webkit::WebView::new();
-    webview.load_plain_text("hello world!");
+    webview.set_height_request(200);
+    webview.set_background_color(&gdk::RGBA::new(0.0, 0.0, 0.0, 0.0));
+
+    webview.load_html(
+        r#"
+            <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Transparent WebKit</title>
+            <style>
+                body {
+                    background-color: transparent !important;
+                    color: white; /* Ensure text is visible */
+                }
+            </style>
+        </head>
+        <body>
+            <h1>Hello, World!</h1>
+            <p>This HTML is loaded in a WebKit WebView with a transparent background.</p>
+        </body>
+        </html>
+    "#,
+        None,
+    );
 
     // let mut css = String::new();
     // let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
