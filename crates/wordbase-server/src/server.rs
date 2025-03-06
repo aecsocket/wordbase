@@ -10,6 +10,7 @@ use sqlx::{
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::{broadcast, mpsc, oneshot},
+    task::JoinSet,
 };
 use tokio_tungstenite::{WebSocketStream, tungstenite::Message};
 use tracing::{Instrument, info, info_span, warn};
@@ -42,33 +43,25 @@ pub async fn run(
 
     {
         // TODO
+        const IMPORTS: &[&str] = &["jitendex", "jpdb", "nhk", "jmnedict"];
+
         sqlx::query(include_str!("setup_db.sql"))
             .execute(&db)
             .await
             .context("failed to set up database")?;
 
-        // let jitendex = tokio::spawn(
-        //     import::from_yomitan(db.clone(), "/home/dev/dictionaries/jitendex.zip")
-        //         .instrument(info_span!("import", path = "jitendex.zip")),
-        // );
-        // let jpdb = tokio::spawn(
-        //     import::from_yomitan(db.clone(), "/home/dev/dictionaries/jpdb.zip")
-        //         .instrument(info_span!("import", path = "jpdb.zip")),
-        // );
-        // let nhk = tokio::spawn(
-        //     import::from_yomitan(db.clone(), "/home/dev/dictionaries/nhk.zip")
-        //         .instrument(info_span!("import", path = "nhk.zip")),
-        // );
-        let jmnedict = tokio::spawn(
-            import::from_yomitan(db.clone(), "/home/dev/dictionaries/jmnedict.zip")
-                .instrument(info_span!("import", path = "jmnedict.zip")),
-        );
-
-        let (jmnedict,) = tokio::try_join!(jmnedict).context("failed to import")?;
-        // jitendex.context("failed to import jitendex")?;
-        // jpdb.context("failed to import jpdb")?;
-        // nhk.context("failed to import nhk")?;
-        jmnedict.context("failed to import jmnedict")?;
+        let mut joins = JoinSet::new();
+        for path in IMPORTS {
+            joins.spawn(
+                import::from_yomitan(db.clone(), format!("/home/dev/dictionaries/{path}.zip"))
+                    .instrument(info_span!("import", %path)),
+            );
+        }
+        while let Some(result) = joins.join_next().await {
+            result
+                .context("cancelled import task")?
+                .context("failed to import")?;
+        }
     }
 
     let listener = TcpListener::bind(&config.listen_addr)
