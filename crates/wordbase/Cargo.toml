@@ -27,7 +27,6 @@ yomitan = [
 ]
 
 [dependencies]
-bytes = { workspace = true, features = ["serde"] }
 derive_more = { workspace = true, features = [
     "from",
     "display",

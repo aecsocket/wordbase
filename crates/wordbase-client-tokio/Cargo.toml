@@ -22,10 +22,8 @@ all-features = true
 [dependencies]
 wordbase = { workspace = true }
 
-bytes = { workspace = true, features = ["serde"] }
 derive_more = { workspace = true, features = ["display", "error"] }
 futures = { workspace = true, features = ["std", "async-await"] }
-serde = { workspace = true, features = ["std", "derive"] }
 serde_json = { workspace = true, features = ["std"] }
 tokio = { workspace = true, features = ["full"] }
 tokio-tungstenite = { workspace = true, features = [
