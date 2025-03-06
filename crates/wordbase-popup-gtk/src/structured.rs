@@ -19,7 +19,7 @@ pub fn to_ui(display: gdk::Display, content: &Content) -> gtk::Widget {
     // gtk::style_context_add_provider_for_display(&display, &css_provider, 0);
     // container.connect_destroy(move |_| {
     //     gtk::style_context_remove_provider_for_display(&display, &css_provider);
-    // });
+    // })
 
     webview.upcast()
 }

@@ -26,6 +26,11 @@
       "type": "bind",
       "source": "${env:XDG_RUNTIME_DIR}/bus",
       "target": "${localEnv:XDG_RUNTIME_DIR}/bus"
+    },
+    {
+      "type": "bind",
+      "source": "${env:XDG_RUNTIME_DIR}/at-spi/bus",
+      "target": "${localEnv:XDG_RUNTIME_DIR}/at-spi/bus"
     }
   ],
   "containerEnv": {

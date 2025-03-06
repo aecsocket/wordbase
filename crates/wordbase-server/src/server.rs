@@ -41,7 +41,8 @@ pub async fn run(
         .context("failed to connect to database")?;
     info!("Connected to SQLite database");
 
-    {
+    let initialize = false;
+    if initialize {
         // TODO
         const IMPORTS: &[&str] = &["jitendex", "jpdb", "nhk", "jmnedict"];
 
