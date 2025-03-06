@@ -9,7 +9,7 @@ use std::{
 use anyhow::{Context as _, Result};
 use sqlx::{Pool, Sqlite, Transaction};
 use tokio::{fs, sync::Mutex};
-use tracing::info;
+use tracing::{info, warn};
 use wordbase::{
     schema::{DictionaryId, Frequency, Glossary, Pitch, TagCategory, TermTag},
     yomitan::{self, structured},
@@ -25,6 +25,23 @@ pub async fn from_yomitan(db: Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()
 
     let (parser, index) = yomitan::Parse::new(|| Ok::<_, Infallible>(Cursor::new(&archive)))
         .context("failed to parse")?;
+
+    let already_present = sqlx::query_scalar!(
+        "SELECT EXISTS(
+            SELECT 1
+            FROM dictionaries
+            WHERE title = $1
+        )",
+        index.title
+    )
+    .fetch_one(&db)
+    .await
+    .context("failed to check if dictionary is already present")?;
+    if already_present > 0 {
+        warn!("{} is already present, skipping...", index.title);
+        return Ok(());
+    }
+
     let tag_banks_left = AtomicUsize::new(parser.tag_banks().len());
     let term_banks_left = AtomicUsize::new(parser.term_banks().len());
     let term_meta_banks_left = AtomicUsize::new(parser.term_meta_banks().len());

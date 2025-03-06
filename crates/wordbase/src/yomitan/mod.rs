@@ -13,7 +13,7 @@ use serde_repr::Deserialize_repr;
 // https://github.com/yomidevs/yomitan/blob/master/ext/data/schemas/dictionary-index-schema.json
 // https://github.com/yomidevs/yomitan/blob/3ca2800d4aeff0a93be23642db9892ddbae1aa55/types/ext/dictionary-data.d.ts#L22
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct Index {
     #[serde(alias = "version")]
     pub format: Format,
