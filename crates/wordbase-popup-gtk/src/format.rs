@@ -1,8 +1,8 @@
-use std::{fmt::Write, sync::LazyLock};
+use std::{fmt::Write, sync::LazyLock, time::Duration};
 
 use derive_more::{Deref, DerefMut};
 use foldhash::HashMap;
-use gtk::{gdk, gio, prelude::*};
+use gtk::{gdk, gio, glib, prelude::*};
 use webkit::prelude::{PolicyDecisionExt, WebViewExt};
 use wordbase::{
     jp,
@@ -220,11 +220,34 @@ static GLOSSARY_HTML: LazyLock<String> = LazyLock::new(|| {
 });
 
 fn glossary_webview(contents: &[structured::Content]) -> gtk::Widget {
+    // why are we wrapping the webview in a container?
+    // it's a surprise tool for later ;)
+    let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
+
     let view = webkit::WebView::new();
+    container.append(&view);
+
+    view.set_hexpand(true);
+    view.set_vexpand(true);
     // avoid errors in log about allocating `WIDTHx0` sized buffer
     // we'll resize the view once we have an actual height
     view.set_height_request(1);
     view.set_background_color(&gdk::RGBA::new(0.0, 0.0, 0.0, 0.0));
+
+    // generate the glossary HTML and start loading it
+    let mut html = GLOSSARY_HTML.clone();
+    _ = write!(
+        &mut html,
+        r#"<ul class="glossary-list" data-count="{}">"#,
+        contents.len()
+    );
+    for content in contents {
+        _ = write!(&mut html, "<li>");
+        _ = yomitan::write_html(&mut html, content);
+        _ = write!(&mut html, "</li>");
+    }
+    _ = write!(&mut html, "</ul>");
+    view.load_html(&html, None);
 
     // when attempting to navigate to a URL, open in the user's browser instead
     view.connect_decide_policy(|_, decision, decision_type| {
@@ -249,10 +272,35 @@ fn glossary_webview(contents: &[structured::Content]) -> gtk::Widget {
         true // inhibit request
     });
 
-    // resize the view to the content
-    view.connect_load_changed(move |view, _| {
+    // resize the view height to the content *when the webpage loads*
+    view.connect_load_changed(move |view, _| resize_view(view.clone()));
+
+    // resize the view height to the content *when the container changes size*
+    // we use a DrawingArea to detect when the container size changes,
+    // by hooking into `draw_func`. it's pretty stupid, I know.
+    let height_change_proxy = gtk::DrawingArea::builder()
+        .hexpand(true)
+        .vexpand(false)
+        .build();
+    container.append(&height_change_proxy);
+    height_change_proxy.set_draw_func(move |_, _, _, _| {
+        resize_view(view.clone());
+    });
+
+    container.upcast()
+}
+
+fn resize_view(view: webkit::WebView) {
+    glib::timeout_add_local_once(Duration::from_millis(100), move || {
         view.evaluate_javascript(
-            "document.body.scrollHeight",
+            // get the natural height of the content
+            // `document.body.scrollHeight` and friends will stay tall
+            // even if the natural height is reduced, so we need to do it like this
+            "
+[...document.body.children].reduce(
+    (h, el) => Math.max(h, el.getBoundingClientRect().bottom),
+    0
+)",
             None,
             None,
             None::<&gio::Cancellable>,
@@ -267,22 +315,4 @@ fn glossary_webview(contents: &[structured::Content]) -> gtk::Widget {
             },
         );
     });
-
-    let mut html = GLOSSARY_HTML.clone();
-    _ = write!(
-        &mut html,
-        r#"<ul class="glossary-list" data-count="{}">"#,
-        contents.len()
-    );
-    for content in contents {
-        _ = write!(&mut html, "<li>");
-        _ = yomitan::write_html(&mut html, content);
-        _ = write!(&mut html, "</li>");
-    }
-    _ = write!(&mut html, "</ul>");
-
-    println!("html = {html}");
-    view.load_html(&html, None);
-
-    view.upcast()
 }

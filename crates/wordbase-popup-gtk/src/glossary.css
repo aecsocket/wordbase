@@ -4,6 +4,10 @@
     }
 }
 
+body {
+    overflow: hidden;
+}
+
 .glossary-list[data-count="0"],
 .glossary-list[data-count="1"] {
     padding-left: 0;

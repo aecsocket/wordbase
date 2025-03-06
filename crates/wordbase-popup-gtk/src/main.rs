@@ -73,14 +73,11 @@ async fn main() {
                 let response = recv_response.await?;
 
                 if let Some(response) = response {
-                    content.lemma().set_text(&response.info.lemma);
-
                     let terms = Terms::new(&response.dictionaries, response.info);
                     content
                         .dictionary_container()
                         .set_child(Some(&terms.to_ui()));
                 } else {
-                    content.lemma().set_text("");
                     content
                         .dictionary_container()
                         .set_child(None::<&ui::Dictionary>);
