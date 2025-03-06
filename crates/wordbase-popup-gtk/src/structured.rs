@@ -1,23 +1,27 @@
 use core::fmt::{self, Write as _};
 
 use gtk::{gdk, pango, prelude::*};
+use webkit::prelude::WebViewExt;
 use wordbase::yomitan::structured::{
     Content, ContentStyle, Element, StyledElement, TextAlign, VerticalAlign,
 };
 
 pub fn to_ui(display: gdk::Display, content: &Content) -> gtk::Widget {
-    let mut css = String::new();
-    let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    make(&mut css, content, &mut |child| container.append(&child));
+    let webview = webkit::WebView::new();
+    webview.load_plain_text("hello world!");
 
-    let css_provider = gtk::CssProvider::new();
-    css_provider.load_from_string(&css);
-    gtk::style_context_add_provider_for_display(&display, &css_provider, 0);
-    container.connect_destroy(move |_| {
-        gtk::style_context_remove_provider_for_display(&display, &css_provider);
-    });
+    // let mut css = String::new();
+    // let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    // make(&mut css, content, &mut |child| container.append(&child));
 
-    container.upcast()
+    // let css_provider = gtk::CssProvider::new();
+    // css_provider.load_from_string(&css);
+    // gtk::style_context_add_provider_for_display(&display, &css_provider, 0);
+    // container.connect_destroy(move |_| {
+    //     gtk::style_context_remove_provider_for_display(&display, &css_provider);
+    // });
+
+    webview.upcast()
 }
 
 // internal iteration is a bit icky, but we'd need generators otherwise
