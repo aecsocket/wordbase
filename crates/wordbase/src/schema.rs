@@ -97,6 +97,7 @@ impl Term {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TermTag {
+    pub name: String,
     pub description: String,
     pub category: Option<TagCategory>,
     pub order: i64,
@@ -119,7 +120,12 @@ pub enum TagCategory {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Glossary {
-    pub tags: Vec<(String, TermTag)>,
+    pub tags: Vec<TermTag>,
+    pub content: Vec<GlossaryContent>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GlossaryContent {
     pub text: String,
 }
 

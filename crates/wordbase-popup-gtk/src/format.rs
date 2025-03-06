@@ -115,18 +115,25 @@ impl Terms {
                     let row = ui::GlossaryRow::new();
                     group.append(&row);
 
-                    for (tag_name, tag) in &glossary.tags {
+                    for tag in &glossary.tags {
                         let tag_ui = ui::GlossaryTag::new();
                         row.tags().append(&tag_ui);
 
-                        tag_ui.set_label(tag_name);
+                        tag_ui.set_label(&tag.name);
                         tag_ui.set_tooltip_text(Some(&tag.description));
                         if let Some(category) = tag.category {
                             tag_ui.add_css_class(ui::GlossaryTag::css_class_of(category));
                         }
                     }
 
-                    let label = gtk::Label::new(Some(&glossary.text));
+                    let content = glossary
+                        .content
+                        .iter()
+                        .map(|content| content.text.clone())
+                        .collect::<Vec<_>>()
+                        .join(" | ");
+
+                    let label = gtk::Label::new(Some(&content));
                     row.content().append(&label);
                     label.set_selectable(true);
                     label.set_wrap(true);
