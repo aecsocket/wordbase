@@ -5,12 +5,9 @@ use wordbase::yomitan::structured::{self, ContentStyle, FontStyle, FontWeight, T
 
 pub fn to_ui(display: gdk::Display, content: &structured::Content) -> Option<gtk::Widget> {
     let mut css = String::new();
-    _ = write!(&mut css, "* {{ color: red; }} ");
-
     let widget = make(&mut css, content)?;
 
     let css_provider = gtk::CssProvider::new();
-    println!("TODO CSS = {css}");
     css_provider.load_from_string(&css);
     gtk::style_context_add_provider_for_display(&display, &css_provider, 0);
     widget.connect_destroy(move |_| {
@@ -31,7 +28,7 @@ fn make(css: &mut String, content: &structured::Content) -> Option<gtk::Widget> 
             Some(label.upcast())
         }
         structured::Content::Content(children) => {
-            let container = gtk::FlowBox::new();
+            let container = gtk::Box::new(gtk::Orientation::Vertical, 4);
             for child in children {
                 if let Some(child) = make(css, child) {
                     container.append(&child);
@@ -58,15 +55,19 @@ fn make(css: &mut String, content: &structured::Content) -> Option<gtk::Widget> 
             | structured::Element::Ul(e)
             | structured::Element::Li(e)
             | structured::Element::Details(e)
-            | structured::Element::Summary(e) => {
-                if let Some(style) = &e.style {
-                    let css_class = random_css_class();
-                    _ = write!(&mut *css, ".glossary-{css_class}{{");
-                    _ = to_css(style, &mut *css);
-                    _ = write!(&mut *css, "}}");
-                }
-                e.content.as_ref().and_then(|e| make(css, e))
-            }
+            | structured::Element::Summary(e) => e
+                .content
+                .as_ref()
+                .and_then(|e| make(css, e))
+                .inspect(|child| {
+                    if let Some(style) = &e.style {
+                        let css_class = format!("glossary-{}", random_css_class());
+                        _ = write!(&mut *css, ".{css_class}{{");
+                        _ = to_css(style, &mut *css);
+                        _ = write!(&mut *css, "}}");
+                        child.add_css_class(&css_class);
+                    }
+                }),
             structured::Element::Img(e) => None,
             structured::Element::A(e) => {
                 let button = gtk::LinkButton::new(&e.href);
@@ -99,17 +100,7 @@ fn to_css(style: &ContentStyle, mut w: impl fmt::Write) -> Result<(), fmt::Error
     }
 
     if let Some(value) = &style.font_size {
-        write!(w, "font-size: {value}")?;
-    }
-
-    match &style.text_align {
-        Some(TextAlign::Start) => write!(w, "text-align: start;")?,
-        Some(TextAlign::End) => write!(w, "text-align: end;")?,
-        Some(TextAlign::Left) => write!(w, "text-align: left;")?,
-        Some(TextAlign::Right) => write!(w, "text-align: right;")?,
-        Some(TextAlign::Center) => write!(w, "text-align: center;")?,
-        Some(TextAlign::Justify) => write!(w, "text-align: justify;")?,
-        None => {}
+        write!(w, "font-size: {value};")?;
     }
 
     Ok(())
