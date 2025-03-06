@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -15,35 +16,47 @@ pub enum VerticalAlign {
     Bottom,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum TextDecorationLine {
+    #[display("underline")]
     Underline,
+    #[display("overline")]
     Overline,
+    #[display("line-through")]
     LineThrough,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum TextDecorationStyle {
+    #[display("solid")]
     Solid,
+    #[display("double")]
     Double,
+    #[display("dotted")]
     Dotted,
+    #[display("dashed")]
     Dashed,
+    #[display("wavy")]
     Wavy,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum FontStyle {
+    #[display("normal")]
     Normal,
+    #[display("italic")]
     Italic,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum FontWeight {
+    #[display("normal")]
     Normal,
+    #[display("bold")]
     Bold,
 }
 
@@ -91,7 +104,7 @@ pub enum ImageAppearance {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Data(pub HashMap<String, String>);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Display, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum NumberOrString {
     Number(f64),

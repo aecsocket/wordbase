@@ -86,22 +86,48 @@ fn random_css_class() -> String {
     format!("{b0:02x}{b1:02x}{b2:02x}{b3:02x}{b4:02x}{b5:02x}{b6:02x}{b7:02x}")
 }
 
-fn to_css(style: &ContentStyle, mut w: impl fmt::Write) -> Result<(), fmt::Error> {
-    match &style.font_style {
-        Some(FontStyle::Normal) => write!(w, "font-style: normal;")?,
-        Some(FontStyle::Italic) => write!(w, "font-style: italic;")?,
-        None => {}
+fn to_css(s: &ContentStyle, mut w: impl fmt::Write) -> Result<(), fmt::Error> {
+    macro_rules! forward_to_css {
+        ($writer:expr, $style:expr, $field:ident, $css_prop:expr) => {{
+            if let Some(value) = &($style.$field) {
+                write!($writer, $css_prop)?;
+                write!($writer, ":{value};")?;
+            }
+        }};
     }
 
-    match &style.font_weight {
-        Some(FontWeight::Normal) => write!(w, "font-weight: normal;")?,
-        Some(FontWeight::Bold) => write!(w, "font-weight: bold;")?,
-        None => {}
-    }
-
-    if let Some(value) = &style.font_size {
-        write!(w, "font-size: {value};")?;
-    }
+    forward_to_css!(w, s, font_style, "font-style");
+    forward_to_css!(w, s, font_weight, "font-weight");
+    forward_to_css!(w, s, font_size, "font-size");
+    forward_to_css!(w, s, color, "color");
+    forward_to_css!(w, s, background, "background");
+    forward_to_css!(w, s, background_color, "background-color");
+    // forward_to_css!(w, s, text_decoration_line, "text-decoration-line");
+    forward_to_css!(w, s, text_decoration_style, "text-decoration-style");
+    forward_to_css!(w, s, text_decoration_color, "text-decoration-color");
+    forward_to_css!(w, s, border_color, "border-color");
+    forward_to_css!(w, s, border_style, "border-style");
+    forward_to_css!(w, s, border_radius, "border-radius");
+    forward_to_css!(w, s, border_width, "border-width");
+    forward_to_css!(w, s, clip_path, "clip-path");
+    // forward_to_css!(w, s, vertical_align, "vertical-align");
+    // forward_to_css!(w, s, text_align, "text-align");
+    forward_to_css!(w, s, text_emphasis, "text-emphasis");
+    forward_to_css!(w, s, text_shadow, "text-shadow");
+    forward_to_css!(w, s, margin, "margin");
+    forward_to_css!(w, s, margin_top, "margin-top");
+    forward_to_css!(w, s, margin_left, "margin-left");
+    forward_to_css!(w, s, margin_right, "margin-right");
+    forward_to_css!(w, s, margin_bottom, "margin-bottom");
+    forward_to_css!(w, s, padding, "padding");
+    forward_to_css!(w, s, padding_top, "padding-top");
+    forward_to_css!(w, s, padding_left, "padding-left");
+    forward_to_css!(w, s, padding_right, "padding-right");
+    forward_to_css!(w, s, padding_bottom, "padding-bottom");
+    // forward_to_css!(w, s, word_break, "word-break");
+    forward_to_css!(w, s, white_space, "white-space");
+    forward_to_css!(w, s, cursor, "cursor");
+    forward_to_css!(w, s, list_style_type, "list-style-type");
 
     Ok(())
 }
