@@ -178,35 +178,41 @@ fn pitch_label(reading: &str, pitch: &Pitch) -> gtk::Box {
     };
 
     for (position, mora) in mora.into_iter().enumerate() {
-        let char_container = gtk::Overlay::new();
-        ui.append(&char_container);
+        let container = gtk::Overlay::builder()
+            .css_classes(["mora-container"])
+            .build();
+        ui.append(&container);
 
-        let char_label = gtk::Label::new(Some(mora));
-        char_container.set_child(Some(&char_label));
-        char_label.add_css_class("mora");
-        char_label.add_css_class(color_css_class);
+        let label = gtk::Label::new(Some(mora));
+        container.set_child(Some(&label));
+        label.add_css_class("mora");
+        label.add_css_class(color_css_class);
 
         let pitch_line = gtk::Box::builder()
             .valign(gtk::Align::Start)
-            .height_request(10)
+            .height_request(10) // TODO un-hardcode
             .css_classes(["pitch-line"])
             .build();
-        char_container.add_overlay(&pitch_line);
+        container.add_overlay(&pitch_line);
 
         let is_high = jp::is_high(downstep, position);
-
-        let css_class = if is_high { "high" } else { "low" };
-        pitch_line.add_css_class(css_class);
-        char_label.add_css_class(css_class);
+        let base_css_class = if is_high { "high" } else { "low" };
 
         let is_next_high = jp::is_high(downstep, position + 1);
-        let css_class = if is_next_high {
+        let next_css_class = if is_next_high {
             "next-high"
         } else {
             "next-low"
         };
-        pitch_line.add_css_class(css_class);
-        char_label.add_css_class(css_class);
+
+        for widget in [
+            container.upcast_ref::<gtk::Widget>(),
+            label.upcast_ref(),
+            pitch_line.upcast_ref(),
+        ] {
+            widget.add_css_class(base_css_class);
+            widget.add_css_class(next_css_class);
+        }
     }
     ui
 }

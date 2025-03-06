@@ -2,13 +2,13 @@ using Gtk 4.0;
 
 template $FrequencyTag: Button {
   styles [
-    // "pill",
+    "pill",
     "small",
   ]
 
   Box {
-    orientation: vertical;
-    spacing: 4;
+    orientation: horizontal;
+    spacing: 8;
 
     Label source {
       label: "Source";
@@ -18,7 +18,7 @@ template $FrequencyTag: Button {
 
     Label frequency {
       label: "Frequency";
-      halign: start;
+      halign: end;
 
       styles [
         "numeric",
