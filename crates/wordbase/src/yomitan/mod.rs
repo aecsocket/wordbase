@@ -4,9 +4,8 @@ pub mod structured;
 
 pub use {html::*, parse::*};
 
-use std::collections::HashMap;
-
 use derive_more::{Deref, DerefMut, From};
+use foldhash::HashMap;
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 

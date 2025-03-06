@@ -7,13 +7,13 @@ use super::structured::{
 };
 
 #[must_use]
-pub fn to_html(content: &Content) -> String {
+pub fn render_to_string(content: &Content) -> String {
     let mut html = String::new();
-    _ = write_html(&mut html, content);
+    _ = render_to_writer(&mut html, content);
     html
 }
 
-pub fn write_html(mut w: impl fmt::Write, content: &Content) -> fmt::Result {
+pub fn render_to_writer(mut w: impl fmt::Write, content: &Content) -> fmt::Result {
     write!(w, r#"<span class="gloss-content">"#)?;
     any(&mut w, content)?;
     write!(w, "</span>")

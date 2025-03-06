@@ -1,107 +1,92 @@
-use std::collections::HashMap;
-
 use derive_more::{Deref, DerefMut, Display};
+use foldhash::HashMap;
 use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum VerticalAlign {
-    #[display("baseline")]
-    Baseline,
-    #[display("sub")]
-    Sub,
-    #[display("super")]
-    Super,
-    #[display("text-top")]
-    TextTop,
-    #[display("text-bottom")]
-    TextBottom,
-    #[display("middle")]
-    Middle,
-    #[display("top")]
-    Top,
-    #[display("bottom")]
-    Bottom,
-}
-
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum TextDecorationLine {
-    #[display("underline")]
-    Underline,
-    #[display("overline")]
-    Overline,
-    #[display("line-through")]
-    LineThrough,
-}
-
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum TextDecorationStyle {
-    #[display("solid")]
-    Solid,
-    #[display("double")]
-    Double,
-    #[display("dotted")]
-    Dotted,
-    #[display("dashed")]
-    Dashed,
-    #[display("wavy")]
-    Wavy,
-}
-
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum FontStyle {
-    #[display("normal")]
-    Normal,
-    #[display("italic")]
-    Italic,
-}
-
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum FontWeight {
-    #[display("normal")]
-    Normal,
-    #[display("bold")]
-    Bold,
-}
-
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum WordBreak {
-    #[display("normal")]
-    Normal,
-    #[display("break-all")]
-    BreakAll,
-    #[display("keep-all")]
-    KeepAll,
-}
-
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum TextAlign {
-    #[display("start")]
-    Start,
-    #[display("end")]
-    End,
-    #[display("left")]
-    Left,
-    #[display("right")]
-    Right,
-    #[display("center")]
-    Center,
-    #[display("justify")]
-    Justify,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+pub enum VerticalAlign {
+    Baseline,
+    Sub,
+    Super,
+    TextTop,
+    TextBottom,
+    Middle,
+    Top,
+    Bottom,
+}
+
+crate::util::display_as_serialize!(VerticalAlign);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TextDecorationLine {
+    Underline,
+    Overline,
+    LineThrough,
+}
+
+crate::util::display_as_serialize!(TextDecorationLine);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TextDecorationStyle {
+    Solid,
+    Double,
+    Dotted,
+    Dashed,
+    Wavy,
+}
+
+crate::util::display_as_serialize!(TextDecorationStyle);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FontStyle {
+    Normal,
+    Italic,
+}
+
+crate::util::display_as_serialize!(FontStyle);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FontWeight {
+    Normal,
+    Bold,
+}
+
+crate::util::display_as_serialize!(FontWeight);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WordBreak {
+    Normal,
+    BreakAll,
+    KeepAll,
+}
+
+crate::util::display_as_serialize!(WordBreak);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TextAlign {
+    Start,
+    End,
+    Left,
+    Right,
+    Center,
+    Justify,
+}
+
+crate::util::display_as_serialize!(TextAlign);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SizeUnits {
     Px,
     Em,
 }
+
+crate::util::display_as_serialize!(SizeUnits);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -111,6 +96,8 @@ pub enum ImageRendering {
     CrispEdges,
 }
 
+crate::util::display_as_serialize!(ImageRendering);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ImageAppearance {
@@ -118,8 +105,7 @@ pub enum ImageAppearance {
     Monochrome,
 }
 
-#[derive(Debug, Clone, Default, Deref, DerefMut, Serialize, Deserialize)]
-pub struct Data(pub HashMap<String, String>);
+crate::util::display_as_serialize!(ImageAppearance);
 
 #[derive(Debug, Display, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -127,6 +113,9 @@ pub enum NumberOrString {
     Number(f64),
     String(String),
 }
+
+#[derive(Debug, Clone, Default, Deref, DerefMut, Serialize, Deserialize)]
+pub struct Data(pub HashMap<String, String>);
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

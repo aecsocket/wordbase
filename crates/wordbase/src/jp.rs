@@ -1,5 +1,11 @@
+//! Utilities for working with Japanese text.
+
 use std::iter;
 
+/// Checks if the given character is one of the small kana characters, either
+/// hiragana or katakana.
+/// 
+/// This returns `false` for `っ` (see [`mora`]).
 #[must_use]
 #[rustfmt::skip]
 pub const fn is_small_kana(c: char) -> bool {
@@ -10,7 +16,17 @@ pub const fn is_small_kana(c: char) -> bool {
     )
 }
 
-pub fn mora(reading: &str) -> impl Iterator<Item = &str> {
+/// Splits a kana reading (either hiragana or katakana) into its constituent
+/// [morae].
+///
+/// Rules:
+/// - kana followed by a small kana is treated as a single mora, for example
+///   `ひょ`, `じゅ`.
+/// - `っ` is treated as its own mora.
+/// - otherwise, each character is its own mora.
+///
+/// [morae]: https://en.wikipedia.org/wiki/Mora_(linguistics)
+pub fn morae(reading: &str) -> impl Iterator<Item = &str> {
     let mut chars = reading.char_indices().peekable();
     iter::from_fn(move || {
         let (byte_index, char) = chars.next()?;
@@ -27,21 +43,29 @@ pub fn mora(reading: &str) -> impl Iterator<Item = &str> {
     })
 }
 
+/// For a [pitch position][jpa] where the downstep is on the [mora] at index
+/// `downstep`, is the [mora] at index `position` high or low?
+///
+/// Rules:
+/// - if the downstep is at 0 (*heiban*, where there is no downstep):
+///   - the first position is low
+///   - all later positions are high
+/// - if the downstep is at 1 (*atamadaka*):
+///   - the first position is high
+///   - all later positions are low
+/// - if the downstep is after 1 (*nakadaka* or *odaka*);
+///   - the first position is low
+///   - all positions until `position` are high
+///   - `position` and onwards are low
+///
+/// [jpa]: https://en.wikipedia.org/wiki/Japanese_pitch_accent
+/// [mora]: https://en.wikipedia.org/wiki/Mora_(linguistics)
 #[must_use]
 pub const fn is_high(downstep: usize, position: usize) -> bool {
     match downstep {
-        0 => {
-            // heiban
-            position > 0
-        }
-        1 => {
-            // atamadaka
-            position == 0
-        }
-        _ => {
-            // nakadaka or odaka
-            position > 0 && position < downstep
-        }
+        0 => position > 0,
+        1 => position == 0,
+        _ => position > 0 && position < downstep,
     }
 }
 
@@ -50,7 +74,7 @@ mod tests {
     #[test]
     fn mora() {
         fn splits_into<'a>(reading: &str, target: impl AsRef<[&'a str]>) {
-            assert_eq!(&super::mora(reading).collect::<Vec<_>>(), target.as_ref());
+            assert_eq!(&super::morae(reading).collect::<Vec<_>>(), target.as_ref());
         }
 
         splits_into("hello", ["h", "e", "l", "l", "o"]);

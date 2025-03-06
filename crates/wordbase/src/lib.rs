@@ -3,6 +3,7 @@
 pub mod jp;
 pub mod protocol;
 pub mod schema;
+pub(crate) mod util;
 
 // #[cfg(feature = "yomitan")] // TODO
 pub mod yomitan;

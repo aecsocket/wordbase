@@ -34,7 +34,8 @@ derive_more = { workspace = true, features = [
     "deref",
     "deref_mut",
 ] }
-serde = { workspace = true, features = ["alloc", "derive"] }
+foldhash = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 
 html-escape = { workspace = true, optional = false, default-features = true }
 rayon = { workspace = true, optional = false }

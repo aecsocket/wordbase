@@ -38,7 +38,7 @@ anyhow = { version = "1.0", default-features = false }
 bzip2 = { version = "0.5" }
 clap = { version = "4.5", default-features = false }
 derive_more = { version = "2.0", default-features = false }
-foldhash = { version = "0.1", default-features = false }
+foldhash = { version = "0.1.4" }
 form_urlencoded = { version = "1.2", default-features = false }
 futures = { version = "0.3", default-features = false }
 glib = { version = "0.20", default-features = false }

@@ -107,8 +107,8 @@ impl Term {
 /// provide a translated meaning in the reader's native language.
 ///
 /// This is the main content that you want to show a user for a term lookup. The
-/// content is expressed as [structured content], which you are responsible for
-/// rendering out into a format which you can display.
+/// content is expressed as [structured content], which you can render out into
+/// a presentable format.
 ///
 /// [term]: Term
 /// [structured content]: structured

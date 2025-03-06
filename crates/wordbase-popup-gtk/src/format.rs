@@ -163,7 +163,7 @@ fn pitch_label(reading: &str, pitch: &Pitch) -> gtk::Widget {
     let ui = gtk::Box::new(gtk::Orientation::Horizontal, 0);
 
     let downstep = usize::try_from(pitch.position).unwrap_or(usize::MAX);
-    let mora = jp::mora(reading).collect::<Vec<_>>();
+    let mora = jp::morae(reading).collect::<Vec<_>>();
 
     let color_css_class = match downstep {
         0 => "heiban",
@@ -245,7 +245,7 @@ fn glossary_webview(contents: &[structured::Content]) -> gtk::Widget {
     );
     for content in contents {
         _ = write!(&mut html, "<li>");
-        _ = yomitan::write_html(&mut html, content);
+        _ = yomitan::render_to_writer(&mut html, content);
         _ = write!(&mut html, "</li>");
     }
     _ = write!(&mut html, "</ul>");
