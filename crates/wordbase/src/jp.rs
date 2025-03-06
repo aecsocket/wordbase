@@ -16,8 +16,7 @@ pub const fn is_small_kana(c: char) -> bool {
     )
 }
 
-/// Splits a kana reading (either hiragana or katakana) into its constituent
-/// [morae].
+/// Splits a reading (either hiragana or katakana) into its constituent [morae].
 ///
 /// Rules:
 /// - kana followed by a small kana is treated as a single mora, for example

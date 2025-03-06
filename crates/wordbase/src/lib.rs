@@ -1,12 +1,14 @@
 #![doc = include_str!("../README.md")]
 
+pub mod content;
 pub mod jp;
 pub mod protocol;
-pub mod schema;
+mod schema;
 pub(crate) mod util;
-
 // #[cfg(feature = "yomitan")] // TODO
 pub mod yomitan;
+
+pub use schema::*;
 
 use serde::{Deserialize, Serialize};
 

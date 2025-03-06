@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::yomitan::structured;
+use crate::content::Content;
 
 /// Metadata for a dictionary imported into a Wordbase server's database.
 ///
@@ -15,6 +15,7 @@ use crate::yomitan::structured;
 /// [term]: Term
 /// [corpus]: https://en.wikipedia.org/wiki/Text_corpus
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Dictionary {
     /// Opaque and unique identifier for this dictionary in the database.
     pub id: DictionaryId,
@@ -66,6 +67,7 @@ pub struct DictionaryId(pub i64);
 /// [dictionary]: Dictionary
 /// [glossaries]: Glossary
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Term {
     /// Canonical form of the term.
     pub expression: String,
@@ -113,11 +115,12 @@ impl Term {
 /// [term]: Term
 /// [structured content]: structured
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Glossary {
     /// Tags for this glossary.
     pub tags: Vec<TermTag>,
     /// Content of this glossary.
-    pub content: Vec<structured::Content>,
+    pub content: Content,
 }
 
 /// Categorises a [glossary] for a given [term].
@@ -128,6 +131,7 @@ pub struct Glossary {
 /// [glossary]: Glossary
 /// [term]: Term
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TermTag {
     /// Human-readable name for this tag.
     pub name: String,
@@ -166,6 +170,7 @@ pub enum TagCategory {
 /// [Dictionaries]: Dictionary
 /// [term]: Term
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Frequency {
     /// How often this [term] appears in the [dictionary]'s corpus - a lower
     /// value means it appears more frequently.
@@ -209,6 +214,7 @@ impl Frequency {
 /// [dictionaries]: Dictionary
 /// [pronounced orally]: https://en.wikipedia.org/wiki/Japanese_pitch_accent
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Pitch {
     pub position: u64,
     pub nasal: Vec<u64>,
@@ -216,6 +222,7 @@ pub struct Pitch {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct LookupInfo {
     pub lemma: String,
     pub glossaries: Vec<(DictionaryId, Term, Glossary)>,

@@ -259,6 +259,7 @@ pub enum Element {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged, deny_unknown_fields)]
 pub enum Content {
+    // todo doc: must not have \n's
     String(String),
     Element(Box<Element>),
     Content(Vec<Content>),

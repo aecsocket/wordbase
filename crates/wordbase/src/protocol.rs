@@ -1,10 +1,7 @@
 use derive_more::{Display, Error, From};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    SharedConfig,
-    schema::{Dictionary, DictionaryId, LookupInfo},
-};
+use crate::{Dictionary, DictionaryId, LookupInfo, SharedConfig};
 
 #[derive(Debug, Clone, Serialize, Deserialize, From)]
 #[serde(tag = "type")]
