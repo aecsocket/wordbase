@@ -29,6 +29,7 @@ foldhash = { workspace = true, default-features = true }
 gtk4 = { workspace = true, features = ["gnome_47", "blueprint"] }
 indexmap = { workspace = true, default-features = true }
 libadwaita = { workspace = true, features = ["v1_6"] }
+rand = { workspace = true, default-features = true }
 serde = { workspace = true, features = ["std", "derive"] }
 serde_json = { workspace = true, features = ["std"] }
 tokio = { workspace = true, features = ["full"] }

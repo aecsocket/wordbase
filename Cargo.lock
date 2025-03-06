@@ -2989,6 +2989,7 @@ dependencies = [
  "gtk4",
  "indexmap",
  "libadwaita",
+ "rand 0.9.0",
  "serde",
  "serde_json",
  "tokio",

@@ -132,7 +132,8 @@ impl Terms {
                     }
 
                     for content in &glossary.content {
-                        if let Some(content) = structured_content_to_ui(&content) {
+                        let display = gtk::gdk::Display::default().unwrap();
+                        if let Some(content) = crate::structured::to_ui(display, content) {
                             row.content().append(&content);
                         }
                     }
@@ -208,117 +209,4 @@ fn pitch_label(reading: &str, pitch: &Pitch) -> gtk::Box {
         char_label.add_css_class(css_class);
     }
     ui
-}
-
-fn structured_content_to_ui(content: &structured::Content) -> Option<gtk::Widget> {
-    const MARGIN: i32 = 4;
-
-    match content {
-        structured::Content::String(text) => {
-            let label = gtk::Label::new(Some(text));
-            label.set_selectable(true);
-            label.set_wrap(true);
-            label.set_wrap_mode(pango::WrapMode::Word);
-            label.set_halign(gtk::Align::Start);
-            Some(label.upcast())
-        }
-        structured::Content::Content(children) => {
-            let container = gtk::Box::new(gtk::Orientation::Vertical, 4);
-            for child in children {
-                if let Some(child) = structured_content_to_ui(child) {
-                    container.append(&child);
-                }
-            }
-            Some(container.upcast())
-        }
-        structured::Content::Element(element) => match &**element {
-            structured::Element::Br { data: _ } => None,
-            structured::Element::Ruby(e)
-            | structured::Element::Rt(e)
-            | structured::Element::Rp(e)
-            | structured::Element::Table(e)
-            | structured::Element::Thead(e)
-            | structured::Element::Tbody(e)
-            | structured::Element::Tfoot(e)
-            | structured::Element::Tr(e) => {
-                let b = gtk::Box::new(gtk::Orientation::Vertical, 0);
-                b.set_margin_start(MARGIN);
-                if let Some(c) = e.content.as_ref().and_then(structured_content_to_ui) {
-                    b.append(&c);
-                }
-                Some(b.upcast::<gtk::Widget>())
-            }
-            structured::Element::Td(e) => {
-                let b = gtk::Box::new(gtk::Orientation::Vertical, 0);
-                b.set_margin_start(MARGIN);
-                if let Some(c) = e.content.as_ref().and_then(structured_content_to_ui) {
-                    b.append(&c);
-                }
-                Some(b.upcast())
-            }
-            structured::Element::Th(e) => {
-                let b = gtk::Box::new(gtk::Orientation::Vertical, 0);
-                b.set_margin_start(MARGIN);
-                if let Some(c) = e.content.as_ref().and_then(structured_content_to_ui) {
-                    b.append(&c);
-                }
-                Some(b.upcast())
-            }
-            structured::Element::Span(e)
-            | structured::Element::Div(e)
-            | structured::Element::Ol(e)
-            | structured::Element::Ul(e)
-            | structured::Element::Li(e)
-            | structured::Element::Details(e)
-            | structured::Element::Summary(e) => {
-                let b = gtk::Box::new(gtk::Orientation::Vertical, 0);
-
-                if let Some(style) = &e.style {
-                    use structured::TextAlign as Al;
-
-                    #[expect(clippy::match_same_arms, reason = "clearer logic")]
-                    match (style.text_align, gtk::Widget::default_direction()) {
-                        (None, _) => {}
-                        (Some(Al::Start | Al::Justify), _) => b.set_halign(gtk::Align::Start),
-                        (Some(Al::End), _) => b.set_halign(gtk::Align::End),
-                        (Some(Al::Center), _) => {
-                            b.set_halign(gtk::Align::Center);
-                        }
-                        (Some(Al::Left), gtk::TextDirection::Rtl) => {
-                            b.set_halign(gtk::Align::End);
-                        }
-                        (Some(Al::Left), _) => b.set_halign(gtk::Align::Start),
-                        (Some(Al::Right), gtk::TextDirection::Rtl) => {
-                            b.set_halign(gtk::Align::Start);
-                        }
-                        (Some(Al::Right), _) => b.set_halign(gtk::Align::End),
-                    }
-                }
-
-                b.set_margin_start(MARGIN);
-                if let Some(c) = e.content.as_ref().and_then(structured_content_to_ui) {
-                    b.append(&c);
-                }
-                Some(b.upcast())
-            }
-            structured::Element::Img(e) => None,
-            // structured::Element::A(
-            //     elem @ structured::LinkElement {
-            //         content: Some(structured::Content::String(text)),
-            //         href,
-            //         ..
-            //     },
-            // ) => {
-            //     gtk::LinkButton
-            // }
-            structured::Element::A(e) => {
-                let button = gtk::LinkButton::new(&e.href);
-                if let Some(child) = e.content.as_ref().and_then(structured_content_to_ui) {
-                    button.set_child(Some(&child));
-                }
-                Some(button.upcast())
-            }
-        }
-        .map(Cast::upcast),
-    }
 }

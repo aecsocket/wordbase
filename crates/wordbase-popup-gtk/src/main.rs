@@ -11,6 +11,7 @@ extern crate gtk4 as gtk;
 extern crate libadwaita as adw;
 
 mod format;
+mod structured;
 mod ui;
 
 use std::{convert::Infallible, time::Duration};
