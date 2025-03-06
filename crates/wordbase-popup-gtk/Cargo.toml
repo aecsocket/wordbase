@@ -34,4 +34,3 @@ serde_json = { workspace = true, features = ["std"] }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true, default-features = true }
 tracing-subscriber = { workspace = true, default-features = true }
-webkit6 = { workspace = true }

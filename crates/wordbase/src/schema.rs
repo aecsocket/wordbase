@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::yomitan::structured;
+
 /// Metadata for a dictionary.
 ///
 /// Dictionaries contain records for [terms][term] in their chosen language, which
@@ -121,12 +123,7 @@ pub enum TagCategory {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Glossary {
     pub tags: Vec<TermTag>,
-    pub content: Vec<GlossaryContent>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GlossaryContent {
-    pub text: String,
+    pub content: Vec<structured::Content>,
 }
 
 /// How often a given [term] appears in a language.

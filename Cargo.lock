@@ -118,15 +118,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "atomic-polyfill"
-version = "1.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8cf2bce30dfe09ef0bfaef228b9d414faaf7e563035494d7fe092dba54b300f4"
-dependencies = [
- "critical-section",
-]
-
-[[package]]
 name = "autocfg"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -319,12 +310,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
 
 [[package]]
-name = "cobs"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67ba02a97a2bd10f4b59b25c7973101c79642302776489e030cd13cdab09ed15"
-
-[[package]]
 name = "colorchoice"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -383,12 +368,6 @@ checksum = "a97769d94ddab943e4510d138150169a2758b5ef3eb191a9ee688de3e23ef7b3"
 dependencies = [
  "cfg-if",
 ]
-
-[[package]]
-name = "critical-section"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
 
 [[package]]
 name = "crossbeam-deque"
@@ -535,18 +514,6 @@ checksum = "b7914353092ddf589ad78f25c5c1c21b7f80b0ff8621e7c814c3485b5306da9d"
 dependencies = [
  "serde",
 ]
-
-[[package]]
-name = "embedded-io"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef1a6892d9eef45c8fa6b9e0086428a2cca8491aca8f787c534a3d6d0bcb3ced"
-
-[[package]]
-name = "embedded-io"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "equivalent"
@@ -1031,15 +998,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hash32"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0c35f58762feb77d74ebe43bdbc3210f09be9fe6742234d573bacc26ed92b67"
-dependencies = [
- "byteorder",
-]
-
-[[package]]
 name = "hashbrown"
 version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1057,20 +1015,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7382cf6263419f2d8df38c55d7da83da5c18aef87fc7a7fc1fb1e344edfe14c1"
 dependencies = [
  "hashbrown",
-]
-
-[[package]]
-name = "heapless"
-version = "0.7.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdc6457c0eb62c71aac4bc17216026d8410337c4126773b9c5daba343f17964f"
-dependencies = [
- "atomic-polyfill",
- "hash32",
- "rustc_version",
- "serde",
- "spin",
- "stable_deref_trait",
 ]
 
 [[package]]
@@ -1298,29 +1242,6 @@ name = "itoa"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d75a2a4b1b190afb6f5425f10f6a8f959d2ea0b9c2b1d79553551850539e4674"
-
-[[package]]
-name = "javascriptcore6"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03b28ed9c7c08f906b2a51bc2365eae2ba5e7db1249b89892f7ae4cbd602d1f4"
-dependencies = [
- "glib",
- "javascriptcore6-sys",
- "libc",
-]
-
-[[package]]
-name = "javascriptcore6-sys"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4741e2a31c2145050dd4971f8dd51e92c840d5839a7124cc68a33c7325523a12"
-dependencies = [
- "glib-sys",
- "gobject-sys",
- "libc",
- "system-deps",
-]
 
 [[package]]
 name = "jobserver"
@@ -1627,6 +1548,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "paste"
+version = "1.0.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
+
+[[package]]
 name = "pbkdf2"
 version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1689,19 +1616,6 @@ name = "pkg-config"
 version = "0.3.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "953ec861398dccce10c670dfeaf3ec4911ca479e9c02154b3a215178c5f566f2"
-
-[[package]]
-name = "postcard"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "170a2601f67cc9dba8edd8c4870b15f71a6a2dc196daec8c83f72b59dff628a8"
-dependencies = [
- "cobs",
- "embedded-io 0.4.0",
- "embedded-io 0.6.1",
- "heapless",
- "serde",
-]
 
 [[package]]
 name = "powerfmt"
@@ -1876,6 +1790,28 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "rmp"
+version = "0.8.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "228ed7c16fa39782c3b3468e974aec2795e9089153cd08ee2e9aefb3613334c4"
+dependencies = [
+ "byteorder",
+ "num-traits",
+ "paste",
+]
+
+[[package]]
+name = "rmp-serde"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52e599a477cf9840e92f2cde9a7189e67b42c57532749bf90aea6ec10facd4db"
+dependencies = [
+ "byteorder",
+ "rmp",
+ "serde",
 ]
 
 [[package]]
@@ -2126,32 +2062,6 @@ checksum = "c970269d99b64e60ec3bd6ad27270092a5394c4e309314b18ae3fe575695fbe8"
 dependencies = [
  "libc",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "soup3"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b84ccd1f4aee0854a16b0b489ba843798e2eb4cdcddd4a61248f7db9ce8b6df1"
-dependencies = [
- "futures-channel",
- "gio",
- "glib",
- "libc",
- "soup3-sys",
-]
-
-[[package]]
-name = "soup3-sys"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8869997193d52a61a1db48627bdaa57343f76e2c5132ee6d351245a6ab30631e"
-dependencies = [
- "gio-sys",
- "glib-sys",
- "gobject-sys",
- "libc",
- "system-deps",
 ]
 
 [[package]]
@@ -2821,39 +2731,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8dad83b4f25e74f184f64c43b150b91efe7647395b42289f38e50566d82855b"
 
 [[package]]
-name = "webkit6"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c359ef247305dcade3363c281c505b943e0e6162a42eac76ff76ed8e7cebfbd"
-dependencies = [
- "gdk4",
- "gio",
- "glib",
- "gtk4",
- "javascriptcore6",
- "libc",
- "soup3",
- "webkit6-sys",
-]
-
-[[package]]
-name = "webkit6-sys"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96284c5280af5984dbdae8dae3cfeea11b44b214f9bd42b35c0ca75903bccce2"
-dependencies = [
- "gdk4-sys",
- "gio-sys",
- "glib-sys",
- "gobject-sys",
- "gtk4-sys",
- "javascriptcore6-sys",
- "libc",
- "soup3-sys",
- "system-deps",
-]
-
-[[package]]
 name = "webpki-roots"
 version = "0.26.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3117,7 +2994,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "webkit6",
  "wordbase",
  "wordbase-client-tokio",
 ]
@@ -3132,7 +3008,7 @@ dependencies = [
  "foldhash",
  "futures",
  "mecab",
- "postcard",
+ "rmp-serde",
  "serde",
  "serde_json",
  "sqlx",

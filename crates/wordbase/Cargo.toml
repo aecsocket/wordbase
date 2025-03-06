@@ -19,11 +19,11 @@ all-features = true
 
 [features]
 yomitan = [
-    "dep:rayon",
-    "dep:regex",
-    "dep:serde_json",
-    "dep:serde_repr",
-    "dep:zip",
+    # "dep:rayon",
+    # "dep:regex",
+    # "dep:serde_json",
+    # "dep:serde_repr",
+    # "dep:zip",
 ]
 
 [dependencies]
@@ -37,8 +37,8 @@ derive_more = { workspace = true, features = [
 ] }
 serde = { workspace = true, features = ["alloc", "derive"] }
 
-rayon = { workspace = true, optional = true }
-regex = { workspace = true, optional = true, default-features = true }
-serde_json = { workspace = true, optional = true, features = ["std"] }
-serde_repr = { workspace = true, optional = true }
-zip = { workspace = true, optional = true, default-features = true }
+rayon = { workspace = true, optional = false }
+regex = { workspace = true, optional = false, default-features = true }
+serde_json = { workspace = true, optional = false, features = ["std"] }
+serde_repr = { workspace = true, optional = false }
+zip = { workspace = true, optional = false, default-features = true }

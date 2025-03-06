@@ -11,11 +11,11 @@ use sqlx::{Pool, Sqlite, Transaction};
 use tokio::{fs, sync::Mutex};
 use tracing::info;
 use wordbase::{
-    schema::{DictionaryId, Frequency, Glossary, GlossaryContent, Pitch, TagCategory, TermTag},
-    yomitan,
+    schema::{DictionaryId, Frequency, Glossary, Pitch, TagCategory, TermTag},
+    yomitan::{self, structured},
 };
 
-use crate::db::data_kind;
+use crate::db::{data_kind, serialize};
 
 pub async fn from_yomitan(db: Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
     let path = path.as_ref();
@@ -134,14 +134,14 @@ async fn import_term_bank(
         let content = term
             .glossary
             .into_iter()
-            .flat_map(to_glossary_content)
+            .filter_map(to_glossary_content)
             .collect();
 
         let glossary = Glossary { tags, content };
 
         async {
             scratch.clear();
-            postcard::to_io(&glossary, &mut scratch).context("failed to serialize data")?;
+            serialize(&glossary, &mut scratch).context("failed to serialize data")?;
             let data = &scratch[..];
 
             sqlx::query!(
@@ -201,8 +201,7 @@ async fn import_term_meta_bank(
                 yomitan::TermMetaData::Frequency(frequency) => {
                     for (reading, frequency) in to_frequencies(frequency) {
                         scratch.clear();
-                        postcard::to_io(&frequency, &mut scratch)
-                            .context("failed to serialize data")?;
+                        serialize(&frequency, &mut scratch).context("failed to serialize data")?;
                         let data = &scratch[..];
 
                         sqlx::query!(
@@ -222,8 +221,7 @@ async fn import_term_meta_bank(
                 yomitan::TermMetaData::Pitch(pitch) => {
                     for (reading, pitch) in to_pitch(pitch) {
                         scratch.clear();
-                        postcard::to_io(&pitch, &mut scratch)
-                            .context("failed to serialize data")?;
+                        serialize(&pitch, &mut scratch).context("failed to serialize data")?;
                         let data = &scratch[..];
 
                         sqlx::query!(
@@ -277,21 +275,25 @@ fn to_term_tag(raw: yomitan::Tag) -> TermTag {
     }
 }
 
-fn to_glossary_content(raw: yomitan::Glossary) -> impl Iterator<Item = GlossaryContent> {
+fn to_glossary_content(raw: yomitan::Glossary) -> Option<structured::Content> {
     match raw {
         yomitan::Glossary::Deinflection(_) => None,
         yomitan::Glossary::String(text)
         | yomitan::Glossary::Content(yomitan::GlossaryContent::Text { text }) => {
-            Some(GlossaryContent { text })
+            Some(structured::Content::String(text))
         }
-        yomitan::Glossary::Content(yomitan::GlossaryContent::Image(_image)) => {
-            None // TODO
+        yomitan::Glossary::Content(yomitan::GlossaryContent::Image(base)) => {
+            Some(structured::Content::Element(Box::new(
+                structured::Element::Img(structured::ImageElement {
+                    base,
+                    ..Default::default()
+                }),
+            )))
         }
-        yomitan::Glossary::Content(yomitan::GlossaryContent::StructuredContent { content: _ }) => {
-            None // TODO
+        yomitan::Glossary::Content(yomitan::GlossaryContent::StructuredContent { content }) => {
+            Some(content)
         }
     }
-    .into_iter()
 }
 
 fn to_frequencies(

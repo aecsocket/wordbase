@@ -1,9 +1,14 @@
 use derive_more::{Deref, DerefMut};
 use foldhash::HashMap;
-use gtk::prelude::{BoxExt, ButtonExt, GridExt, WidgetExt};
+use gtk::{
+    glib::object::Cast,
+    pango,
+    prelude::{BoxExt, ButtonExt, GridExt, WidgetExt},
+};
 use wordbase::{
     jp,
     schema::{Dictionary, DictionaryId, Frequency, Glossary, LookupInfo, Pitch, Term},
+    yomitan::structured,
 };
 
 use crate::ui;
@@ -126,18 +131,11 @@ impl Terms {
                         }
                     }
 
-                    let content = glossary
-                        .content
-                        .iter()
-                        .map(|content| content.text.clone())
-                        .collect::<Vec<_>>()
-                        .join(" | ");
-
-                    let label = gtk::Label::new(Some(&content));
-                    row.content().append(&label);
-                    label.set_selectable(true);
-                    label.set_wrap(true);
-                    label.set_halign(gtk::Align::Start);
+                    for content in &glossary.content {
+                        if let Some(content) = structured_content_to_ui(&content) {
+                            row.content().append(&content);
+                        }
+                    }
                 }
             }
         }
@@ -210,4 +208,51 @@ fn pitch_label(reading: &str, pitch: &Pitch) -> gtk::Box {
         char_label.add_css_class(css_class);
     }
     ui
+}
+
+fn structured_content_to_ui(content: &structured::Content) -> Option<gtk::Widget> {
+    match content {
+        structured::Content::String(text) => {
+            let label = gtk::Label::new(Some(text));
+            label.set_selectable(true);
+            label.set_wrap(true);
+            label.set_wrap_mode(pango::WrapMode::Word);
+            label.set_halign(gtk::Align::Start);
+            Some(label.upcast())
+        }
+        structured::Content::Content(children) => {
+            let container = gtk::Box::new(gtk::Orientation::Vertical, 4);
+            for child in children {
+                if let Some(child) = structured_content_to_ui(child) {
+                    container.append(&child);
+                }
+            }
+            Some(container.upcast())
+        }
+        structured::Content::Element(element) => match &**element {
+            structured::Element::Br { data: _ } => None,
+            structured::Element::Ruby(e)
+            | structured::Element::Rt(e)
+            | structured::Element::Rp(e)
+            | structured::Element::Table(e)
+            | structured::Element::Thead(e)
+            | structured::Element::Tbody(e)
+            | structured::Element::Tfoot(e)
+            | structured::Element::Tr(e) => e.content.as_ref().and_then(structured_content_to_ui),
+            structured::Element::Td(e) => e.content.as_ref().and_then(structured_content_to_ui),
+            structured::Element::Th(e) => e.content.as_ref().and_then(structured_content_to_ui),
+            structured::Element::Span(e)
+            | structured::Element::Div(e)
+            | structured::Element::Ol(e)
+            | structured::Element::Ul(e)
+            | structured::Element::Li(e)
+            | structured::Element::Details(e)
+            | structured::Element::Summary(e) => {
+                e.content.as_ref().and_then(structured_content_to_ui)
+            }
+            structured::Element::Img(e) => None,
+            structured::Element::A(e) => e.content.as_ref().and_then(structured_content_to_ui),
+        }
+        .map(Cast::upcast),
+    }
 }

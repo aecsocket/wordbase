@@ -88,7 +88,7 @@ pub enum ImageAppearance {
     Monochrome,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Data(pub HashMap<String, String>);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,7 +98,7 @@ pub enum NumberOrString {
     String(String),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ContentStyle {
     pub font_style: Option<FontStyle>,
@@ -136,13 +136,13 @@ pub struct ContentStyle {
     pub list_style_type: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LineBreak {
     pub data: Option<Data>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UnstyledElement {
     pub content: Option<Content>,
@@ -150,7 +150,7 @@ pub struct UnstyledElement {
     pub lang: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TableElement {
     pub content: Option<Content>,
@@ -161,7 +161,7 @@ pub struct TableElement {
     pub lang: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StyledElement {
     pub content: Option<Content>,
@@ -172,7 +172,7 @@ pub struct StyledElement {
     pub lang: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ImageElementBase {
     pub data: Option<Data>,
@@ -192,7 +192,7 @@ pub struct ImageElementBase {
     pub collapsible: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageElement {
     #[serde(flatten)]
@@ -203,7 +203,7 @@ pub struct ImageElement {
     pub size_units: Option<SizeUnits>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LinkElement {
     pub content: Option<Content>,

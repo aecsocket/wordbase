@@ -4,7 +4,7 @@ pub mod jp;
 pub mod protocol;
 pub mod schema;
 
-#[cfg(feature = "yomitan")]
+// #[cfg(feature = "yomitan")] // TODO
 pub mod yomitan;
 
 use serde::{Deserialize, Serialize};

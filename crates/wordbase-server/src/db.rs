@@ -1,5 +1,8 @@
+use std::io;
+
 use anyhow::{Context as _, Result, bail};
 use futures::{StreamExt, TryStreamExt};
+use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
 use wordbase::{
     protocol::DictionaryNotFound,
@@ -11,6 +14,17 @@ pub mod data_kind {
     pub const GLOSSARY: u8 = 1;
     pub const FREQUENCY: u8 = 2;
     pub const PITCH: u8 = 3;
+}
+
+pub fn serialize(
+    value: &impl Serialize,
+    writer: impl io::Write,
+) -> Result<(), rmp_serde::encode::Error> {
+    value.serialize(&mut rmp_serde::Serializer::new(writer))
+}
+
+pub fn deserialize<'a, T: Deserialize<'a>>(buf: &'a [u8]) -> Result<T, rmp_serde::decode::Error> {
+    rmp_serde::from_slice(buf)
 }
 
 pub async fn lookup(db: &Pool<Sqlite>, lemma: String) -> Result<LookupInfo> {
@@ -39,17 +53,17 @@ pub async fn lookup(db: &Pool<Sqlite>, lemma: String) -> Result<LookupInfo> {
 
         match u8::try_from(record.data_kind) {
             Ok(data_kind::GLOSSARY) => {
-                let data = postcard::from_bytes::<Glossary>(&record.data)
+                let data = deserialize::<Glossary>(&record.data)
                     .context("failed to deserialize glossary data")?;
                 info.glossaries.push((source, term, data));
             }
             Ok(data_kind::FREQUENCY) => {
-                let data = postcard::from_bytes::<Frequency>(&record.data)
+                let data = deserialize::<Frequency>(&record.data)
                     .context("failed to deserialize frequency data")?;
                 info.frequencies.push((source, term, data));
             }
             Ok(data_kind::PITCH) => {
-                let data = postcard::from_bytes::<Pitch>(&record.data)
+                let data = deserialize::<Pitch>(&record.data)
                     .context("failed to deserialize pitch data")?;
                 info.pitches.push((source, term, data));
             }
