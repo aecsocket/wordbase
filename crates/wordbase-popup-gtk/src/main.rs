@@ -20,18 +20,22 @@ use adw::prelude::*;
 use anyhow::{Context, Result};
 use foldhash::HashMap;
 use format::Terms;
-use gtk::{gdk, glib};
+use gtk::gdk;
+use log::warn;
 use tokio::{
     sync::{mpsc, oneshot},
     time,
 };
-use tracing::warn;
 use wordbase::schema::{Dictionary, DictionaryId, LookupInfo};
 use wordbase_client_tokio::SocketClient;
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt().init();
+    pretty_env_logger::formatted_builder()
+        .filter_level(log::LevelFilter::Info)
+        .try_init()
+        .expect("failed to initialize logger");
+    glib::log_set_default_handler(glib::rust_log_handler);
 
     let (send_lookup_request, recv_lookup_request) = mpsc::channel::<LookupRequest>(4);
     tokio::spawn(backend(recv_lookup_request));

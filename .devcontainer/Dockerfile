@@ -33,4 +33,4 @@ RUN yay -Syu --noconfirm websocat mecab && \
 RUN yay -Syu --noconfirm \
     libadwaita webkitgtk-6.0 \
     meson blueprint-compiler python-sphinx-furo blueprint-compiler-docs-git \
-    noto-fonts noto-fonts-cjk
+    noto-fonts noto-fonts-cjk noto-fonts-emoji

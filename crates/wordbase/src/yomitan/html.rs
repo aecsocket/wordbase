@@ -14,25 +14,22 @@ pub fn to_html(content: &Content) -> String {
 }
 
 pub fn write_html(mut w: impl fmt::Write, content: &Content) -> fmt::Result {
-    any(&mut w, content)
+    write!(w, r#"<span class="gloss-content">"#)?;
+    any(&mut w, content)?;
+    write!(w, "</span>")
 }
 
 fn any(w: &mut impl fmt::Write, content: &Content) -> fmt::Result {
     match content {
-        Content::String(s) => write!(w, "{s}"),
+        Content::String(s) => {
+            let s = html_escape::encode_safe(s).replace('\n', "<br>");
+            write!(w, "{s}")
+        }
         Content::Content(children) => {
             for content in children {
                 any(w, content)?;
             }
             Ok(())
-
-            // write!(w, "<ul>")?;
-            // for content in children {
-            //     write!(w, "<li>")?;
-            //     any(w, content)?;
-            //     write!(w, "</li>")?;
-            // }
-            // write!(*w, "</ul>")
         }
         Content::Element(elem) => element(w, elem),
     }
@@ -41,7 +38,7 @@ fn any(w: &mut impl fmt::Write, content: &Content) -> fmt::Result {
 #[rustfmt::skip]
 fn element(w: &mut impl fmt::Write, elem: &Element) -> fmt::Result {
     match elem {
-        Element::Br { data: _ } => write!(w, "</br>"),
+        Element::Br { data } => line_break(w, data.as_ref()),
         //
         Element::Ruby(e)  => unstyled(w, e, "ruby"),
         Element::Rt(e)    => unstyled(w, e, "rt"),
@@ -101,6 +98,12 @@ fn forward_data(w: &mut impl fmt::Write, data: Option<&Data>) -> fmt::Result {
         write!(w, " data-{key}=\"{value}\"")?;
     }
     Ok(())
+}
+
+fn line_break(w: &mut impl fmt::Write, data: Option<&Data>) -> fmt::Result {
+    write!(w, "<br")?;
+    forward_data(w, data)?;
+    write!(w, ">")
 }
 
 fn unstyled(w: &mut impl fmt::Write, elem: &UnstyledElement, tag: &str) -> fmt::Result {

@@ -23,17 +23,20 @@ all-features = true
 wordbase = { workspace = true }
 wordbase-client-tokio = { workspace = true }
 
-anyhow = { workspace = true }
+anyhow = { workspace = true, default-features = true }
 derive_more = { workspace = true, features = ["deref"] }
 either = { workspace = true, default-features = true }
 foldhash = { workspace = true, default-features = true }
+form_urlencoded = { workspace = true, default-features = true }
+glib = { workspace = true, default-features = true, features = ["log"] }
 gtk4 = { workspace = true, features = ["gnome_47", "blueprint"] }
 indexmap = { workspace = true, default-features = true }
 libadwaita = { workspace = true, features = ["v1_6"] }
+log = { workspace = true }
+open = { workspace = true, default-features = true }
+pretty_env_logger = { workspace = true }
 rand = { workspace = true, default-features = true }
 serde = { workspace = true, features = ["std", "derive"] }
 serde_json = { workspace = true, features = ["std"] }
 tokio = { workspace = true, features = ["full"] }
-tracing = { workspace = true, default-features = true }
-tracing-subscriber = { workspace = true, default-features = true }
 webkit6 = { workspace = true, default-features = true }

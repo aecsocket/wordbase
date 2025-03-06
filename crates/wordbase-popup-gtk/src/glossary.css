@@ -8,8 +8,12 @@ body {
     overflow: hidden;
 }
 
-.glossary-list[data-count="0"],
-.glossary-list[data-count="1"] {
+.gloss-content {
+    display: inline;
+}
+
+.gloss-list[data-count="0"],
+.gloss-list[data-count="1"] {
     padding-left: 0;
     list-style-type: none;
 }

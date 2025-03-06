@@ -2,7 +2,8 @@ use std::{fmt::Write, sync::LazyLock, time::Duration};
 
 use derive_more::{Deref, DerefMut};
 use foldhash::HashMap;
-use gtk::{gdk, gio, glib, prelude::*};
+use gtk::{gdk, gio, prelude::*};
+use log::{info, warn};
 use webkit::prelude::{PolicyDecisionExt, WebViewExt};
 use wordbase::{
     jp,
@@ -229,8 +230,9 @@ fn glossary_webview(contents: &[structured::Content]) -> gtk::Widget {
 
     view.set_hexpand(true);
     view.set_vexpand(true);
-    // avoid errors in log about allocating `WIDTHx0` sized buffer
+    // avoid errors about allocating GBM buffer of size WIDTHx0
     // we'll resize the view once we have an actual height
+    // also, if we can't allocate a buffer now, it will be empty forever
     view.set_height_request(1);
     view.set_background_color(&gdk::RGBA::new(0.0, 0.0, 0.0, 0.0));
 
@@ -238,7 +240,7 @@ fn glossary_webview(contents: &[structured::Content]) -> gtk::Widget {
     let mut html = GLOSSARY_HTML.clone();
     _ = write!(
         &mut html,
-        r#"<ul class="glossary-list" data-count="{}">"#,
+        r#"<ul class="gloss-list" data-count="{}">"#,
         contents.len()
     );
     for content in contents {
@@ -265,7 +267,9 @@ fn glossary_webview(contents: &[structured::Content]) -> gtk::Widget {
         }
 
         if let Some(request) = nav_action.request() {
-            println!("TODO: request to {:?}", request.uri());
+            if let Some(uri) = request.uri() {
+                open_uri(&uri);
+            }
         }
 
         decision.ignore();
@@ -309,10 +313,31 @@ fn resize_view(view: webkit::WebView) {
                 move |result| {
                     if let Ok(value) = result {
                         let height = value.to_int32();
-                        view.set_height_request(height);
+                        view.set_height_request(height.max(1));
                     };
                 }
             },
         );
     });
+}
+
+fn open_uri(uri: &str) {
+    if let Some(uri) = uri.strip_prefix('?') {
+        if let Some((_, query)) =
+            form_urlencoded::parse(uri.as_bytes()).find(|(key, _)| key == "query")
+        {
+            info!("Looking up {query:?}");
+            warn!("TODO: unimplemented");
+        } else {
+            warn!("Attempted to open {uri:?} which does not contain `query`");
+        }
+    } else {
+        info!("Opening {uri:?}");
+        if let Err(err) = open::that(uri) {
+            warn!(
+                "Failed to open link to {uri:?}: {:?}",
+                anyhow::Error::new(err)
+            );
+        }
+    }
 }
