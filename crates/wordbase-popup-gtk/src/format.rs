@@ -1,14 +1,11 @@
 use derive_more::{Deref, DerefMut};
 use foldhash::HashMap;
-use gtk::{
-    glib::object::Cast,
-    pango,
-    prelude::{BoxExt, ButtonExt, GridExt, WidgetExt},
-};
+use gtk::{gdk, prelude::*};
+use webkit::prelude::WebViewExt;
 use wordbase::{
     jp,
     schema::{Dictionary, DictionaryId, Frequency, Glossary, LookupInfo, Pitch, Term},
-    yomitan::structured,
+    yomitan,
 };
 
 use crate::ui;
@@ -132,9 +129,15 @@ impl Terms {
                     }
 
                     for content in &glossary.content {
-                        let display = gtk::gdk::Display::default().unwrap();
-                        row.content()
-                            .append(&crate::structured::to_ui(display, content));
+                        let webview = webkit::WebView::new();
+                        webview.set_height_request(200);
+                        webview.set_background_color(&gdk::RGBA::new(0.0, 0.0, 0.0, 0.0));
+
+                        let mut html = String::new();
+                        _ = yomitan::to_html(&mut html, content);
+                        webview.load_html(&html, None);
+
+                        row.content().append(&webview);
                     }
                 }
             }

@@ -12,7 +12,6 @@ extern crate libadwaita as adw;
 extern crate webkit6 as webkit;
 
 mod format;
-mod structured;
 mod ui;
 
 use std::{convert::Infallible, time::Duration};

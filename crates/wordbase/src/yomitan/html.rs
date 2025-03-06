@@ -2,7 +2,7 @@ use core::fmt;
 
 use crate::yomitan::structured::{StyledElement, UnstyledElement};
 
-use super::structured::{Content, ContentStyle, Element, LinkElement};
+use super::structured::{Content, ContentStyle, Element, ImageElement, LinkElement, TableElement};
 
 pub fn to_html(mut w: impl fmt::Write, content: &Content) -> fmt::Result {
     any(&mut w, content)
@@ -43,7 +43,8 @@ fn element(w: &mut impl fmt::Write, elem: &Element) -> fmt::Result {
         Element::Tfoot(e) => unstyled(w, e, "tfoot"),
         Element::Tr(e)    => unstyled(w, e, "tr"),
         //
-        Element::Td(e) | Element::Th(e) => Ok(()),
+        Element::Td(e) => table(w, e, "td"),
+        Element::Th(e) => table(w, e, "th"),
         //
         Element::Span(e)      => styled(w, e, "span"),
         Element::Div(e)       => styled(w, e, "div"),
@@ -53,17 +54,52 @@ fn element(w: &mut impl fmt::Write, elem: &Element) -> fmt::Result {
         Element::Details(e)   => styled(w, e, "details"),
         Element::Summary(e)   => styled(w, e, "summary"),
         //
-        Element::Img(e) => Ok(()),
+        Element::Img(e) => img(w, e),
         //
         Element::A(e) => link(w, e),
     }
 }
 
+macro_rules! forward_to_tag {
+    ($w:expr, $field:expr, $prop:expr) => {
+        if let Some(value) = &($field) {
+            write!($w, " ")?;
+            write!($w, $prop)?;
+            write!($w, r#"="{value}""#)?;
+        }
+    };
+}
+
+macro_rules! forward_to_tag_fn {
+    ($w:expr, $field:expr, $prop:expr, $f:ident) => {
+        if let Some(value) = &($field) {
+            write!($w, " ")?;
+            write!($w, $prop)?;
+            write!($w, "=\"")?;
+            $f($w, value)?;
+            write!($w, "\"")?;
+        }
+    };
+}
+
 fn unstyled(w: &mut impl fmt::Write, elem: &UnstyledElement, tag: &str) -> fmt::Result {
     write!(w, "<{tag}")?;
-    if let Some(lang) = &elem.lang {
-        write!(w, r#" lang="{lang}""#)?;
+    forward_to_tag!(w, elem.lang, "lang");
+    write!(w, ">")?;
+
+    if let Some(content) = &elem.content {
+        any(w, content)?;
     }
+
+    write!(w, "</{tag}>")
+}
+
+fn table(w: &mut impl fmt::Write, elem: &TableElement, tag: &str) -> fmt::Result {
+    write!(w, "<{tag}")?;
+    forward_to_tag!(w, elem.col_span, "col-span");
+    forward_to_tag!(w, elem.row_span, "row-span");
+    forward_to_tag_fn!(w, elem.style, "style", style_css);
+    forward_to_tag!(w, elem.lang, "lang");
     write!(w, ">")?;
 
     if let Some(content) = &elem.content {
@@ -75,20 +111,10 @@ fn unstyled(w: &mut impl fmt::Write, elem: &UnstyledElement, tag: &str) -> fmt::
 
 fn styled(w: &mut impl fmt::Write, elem: &StyledElement, tag: &str) -> fmt::Result {
     write!(w, "<{tag}")?;
-    if let Some(style) = &elem.style {
-        write!(w, " style=\"")?;
-        style_css(w, style)?;
-        write!(w, "\"")?;
-    }
-    if let Some(title) = &elem.title {
-        write!(w, r#" title="{title}""#)?;
-    }
-    if let Some(open) = &elem.open {
-        write!(w, r#" open="{open}""#)?;
-    }
-    if let Some(lang) = &elem.lang {
-        write!(w, r#" lang="{lang}""#)?;
-    }
+    forward_to_tag_fn!(w, elem.style, "style", style_css);
+    forward_to_tag!(w, elem.title, "title");
+    forward_to_tag!(w, elem.open, "open");
+    forward_to_tag!(w, elem.lang, "lang");
     write!(w, ">")?;
 
     if let Some(content) = &elem.content {
@@ -98,6 +124,10 @@ fn styled(w: &mut impl fmt::Write, elem: &StyledElement, tag: &str) -> fmt::Resu
     write!(w, "</{tag}>")
 }
 
+#[expect(
+    clippy::cognitive_complexity,
+    reason = "macro invocations lead to internal cognitive complexity"
+)]
 fn style_css(w: &mut impl fmt::Write, s: &ContentStyle) -> fmt::Result {
     macro_rules! forward_to_css {
         ($field:expr, $prop:expr) => {
@@ -114,7 +144,7 @@ fn style_css(w: &mut impl fmt::Write, s: &ContentStyle) -> fmt::Result {
     forward_to_css!(s.color, "color");
     forward_to_css!(s.background, "background");
     forward_to_css!(s.background_color, "background-color");
-    // forward_to_css!(s.text_decoration_line, "text-decoration-line");
+    // forward_to_css!(s.text_decoration_line, "text-decoration-line"); // TODO
     forward_to_css!(s.text_decoration_style, "text-decoration-style");
     forward_to_css!(s.text_decoration_color, "text-decoration-color");
     forward_to_css!(s.border_color, "border-color");
@@ -142,6 +172,12 @@ fn style_css(w: &mut impl fmt::Write, s: &ContentStyle) -> fmt::Result {
     forward_to_css!(s.list_style_type, "list-style-type");
 
     Ok(())
+}
+
+fn img(w: &mut impl fmt::Write, elem: &ImageElement) -> fmt::Result {
+    write!(w, "<img src={}", elem.base.path)?;
+    // TODO
+    write!(w, ">")
 }
 
 fn link(w: &mut impl fmt::Write, elem: &LinkElement) -> fmt::Result {
