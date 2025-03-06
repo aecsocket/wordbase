@@ -9,6 +9,7 @@
 
 extern crate gtk4 as gtk;
 extern crate libadwaita as adw;
+extern crate webkit6 as webkit;
 
 mod format;
 mod structured;

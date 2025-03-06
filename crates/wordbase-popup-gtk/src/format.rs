@@ -133,9 +133,8 @@ impl Terms {
 
                     for content in &glossary.content {
                         let display = gtk::gdk::Display::default().unwrap();
-                        if let Some(content) = crate::structured::to_ui(display, content) {
-                            row.content().append(&content);
-                        }
+                        row.content()
+                            .append(&crate::structured::to_ui(display, content));
                     }
                 }
             }

@@ -25,6 +25,7 @@ wordbase-client-tokio = { workspace = true }
 
 anyhow = { workspace = true }
 derive_more = { workspace = true, features = ["deref"] }
+either = { workspace = true, default-features = true }
 foldhash = { workspace = true, default-features = true }
 gtk4 = { workspace = true, features = ["gnome_47", "blueprint"] }
 indexmap = { workspace = true, default-features = true }
@@ -35,3 +36,4 @@ serde_json = { workspace = true, features = ["std"] }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true, default-features = true }
 tracing-subscriber = { workspace = true, default-features = true }
+webkit6 = { workspace = true, default-features = true }

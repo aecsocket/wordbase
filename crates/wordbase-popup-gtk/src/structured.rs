@@ -5,21 +5,25 @@ use wordbase::yomitan::structured::{
     Content, ContentStyle, Element, StyledElement, TextAlign, VerticalAlign,
 };
 
-pub fn to_ui(display: gdk::Display, content: &Content) -> Option<gtk::Widget> {
+pub fn to_ui(display: gdk::Display, content: &Content) -> gtk::Widget {
     let mut css = String::new();
-    let widget = make(&mut css, content)?;
+    let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    make(&mut css, content, &mut |child| container.append(&child));
 
     let css_provider = gtk::CssProvider::new();
     css_provider.load_from_string(&css);
     gtk::style_context_add_provider_for_display(&display, &css_provider, 0);
-    widget.connect_destroy(move |_| {
+    container.connect_destroy(move |_| {
         gtk::style_context_remove_provider_for_display(&display, &css_provider);
     });
 
-    Some(widget)
+    container.upcast()
 }
 
-fn make(css: &mut String, content: &Content) -> Option<gtk::Widget> {
+// internal iteration is a bit icky, but we'd need generators otherwise
+// we need dynamic dispatch, because otherwise when generating types,
+// we'd recurse infinitely
+fn make(css: &mut String, content: &Content, append: &mut dyn FnMut(gtk::Widget)) {
     match content {
         Content::String(text) => {
             let label = gtk::Label::new(Some(text));
@@ -27,30 +31,29 @@ fn make(css: &mut String, content: &Content) -> Option<gtk::Widget> {
             label.set_wrap(true);
             label.set_wrap_mode(pango::WrapMode::Word);
             label.set_halign(gtk::Align::Start);
-            Some(label.upcast())
+            append(label.upcast());
         }
         Content::Content(children) => {
-            let container = gtk::Box::new(gtk::Orientation::Vertical, 4);
-            for child in children {
-                if let Some(child) = make(css, child) {
-                    container.append(&child);
-                }
+            for content in children {
+                make(css, content, append);
             }
-            Some(container.upcast())
         }
         Content::Element(elem) => match &**elem {
-            Element::Br { data: _ } => None,
-            Element::Table(e) => e.content.as_ref().map(|content| {
-                let grid = gtk::Grid::new();
-                let mut row = 0i32;
-                make_into_grid(css, &grid, &mut row, content);
-                grid.upcast()
-            }),
-            Element::Span(e) => e.content.as_ref().map(|content| {
+            Element::Br { data: _ } => {}
+            Element::Rt(e) => {} // Ruby text that appears on top of kanji
+            Element::Table(e) => {
+                // TODO
+            }
+            Element::Div(e) => {
+                let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
+                make_styled(css, e, &mut |child| container.append(&child));
+                append(container.upcast());
+            }
+            Element::Span(e) => {
                 let container = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-                make_into_box(css, &container, content);
-                container.upcast()
-            }),
+                make_styled(css, e, &mut |child| container.append(&child));
+                append(container.upcast());
+            }
             Element::Ruby(e)
             | Element::Rt(e)
             | Element::Rp(e)
@@ -58,138 +61,149 @@ fn make(css: &mut String, content: &Content) -> Option<gtk::Widget> {
             | Element::Thead(e)
             | Element::Tbody(e)
             | Element::Tfoot(e)
-            | Element::Tr(e) => e.content.as_ref().and_then(|e| make(css, e)),
-            Element::Td(e) | Element::Th(e) => e.content.as_ref().and_then(|e| make(css, e)),
+            | Element::Tr(e) => make_opt(css, &e.content, append),
+            Element::Td(e) | Element::Th(e) => make_opt(css, &e.content, append),
             Element::Span(e)
             | Element::Div(e)
             | Element::Ol(e)
             | Element::Ul(e)
             | Element::Li(e)
             | Element::Details(e)
-            | Element::Summary(e) => make_styled(css, e),
+            | Element::Summary(e) => {
+                make_styled(css, e, append);
+            }
             Element::Img(_) => {
-                None // TODO
+                // TODO
             }
-            Element::A(e) => make_opt(css, &e.content).map(|child| {
-                let button = gtk::LinkButton::new(&e.href);
-                button.set_child(Some(&child));
-                button.upcast()
-            }),
-        }
-        .map(Cast::upcast),
+            Element::A(e) => {
+                make_opt(css, &e.content, &mut |child| {
+                    let container = gtk::LinkButton::new(&e.href);
+                    container.set_child(Some(&child));
+                    append(container.upcast());
+                });
+            }
+        },
     }
 }
 
-fn make_opt(css: &mut String, content: &Option<Content>) -> Option<gtk::Widget> {
-    content.as_ref().and_then(|e| make(css, e))
-}
-
-fn make_into_grid(css: &mut String, grid: &gtk::Grid, row: &mut i32, content: &Content) {
-    match content {
-        Content::Content(children) => {
-            for content in children {
-                make_into_grid(css, grid, row, content);
-                *row = row.saturating_add(1);
-            }
-        }
-        Content::Element(elem) => {
-            if let Element::Tr(e) = &**elem {
-                if let Some(content) = &e.content {
-                    let mut col = 0i32;
-                    make_into_table_row(css, grid, *row, &mut col, content);
-                }
-            }
-        }
-        Content::String(_) => {}
+fn make_opt(css: &mut String, content: &Option<Content>, append: &mut dyn FnMut(gtk::Widget)) {
+    if let Some(content) = content {
+        make(css, content, append);
     }
 }
 
-fn make_into_table_row(
-    css: &mut String,
-    grid: &gtk::Grid,
-    row: i32,
-    col: &mut i32,
-    content: &Content,
-) {
-    match content {
-        Content::Content(children) => {
-            for content in children {
-                make_into_table_row(css, grid, row, col, content);
-                *col = col.saturating_add(1);
-            }
-        }
-        Content::Element(elem) => {
-            if let Element::Th(e) | Element::Td(e) = &**elem {
-                if let Some(child) = e.content.as_ref().and_then(|e| make(css, e)) {
-                    if let (Ok(width), Ok(height)) = (
-                        i32::try_from(e.col_span.unwrap_or(1)),
-                        i32::try_from(e.row_span.unwrap_or(1)),
-                    ) {
-                        grid.attach(&child, *col, row, width, height);
-                    }
-                }
-            }
-        }
-        Content::String(_) => {}
-    }
-}
+// fn make_into_grid(css: &mut String, grid: &gtk::Grid, row: &mut i32, content: &Content) {
+//     match content {
+//         Content::Content(children) => {
+//             for content in children {
+//                 make_into_grid(css, grid, row, content);
+//                 *row = row.saturating_add(1);
+//             }
+//         }
+//         Content::Element(elem) => {
+//             if let Element::Tr(e) = &**elem {
+//                 if let Some(content) = &e.content {
+//                     let mut col = 0i32;
+//                     make_into_table_row(css, grid, *row, &mut col, content);
+//                 }
+//             }
+//         }
+//         Content::String(_) => {}
+//     }
+// }
 
-fn make_into_box(css: &mut String, container: &gtk::Box, content: &Content) {
-    match content {
-        Content::Content(children) => {
-            for content in children {
-                if let Some(child) = make(css, content) {
-                    container.append(&child);
-                }
-            }
-        }
-        _ => {
-            if let Some(child) = make(css, content) {
-                container.append(&child);
-            }
-        }
-    }
-}
+// fn make_into_table_row(
+//     css: &mut String,
+//     grid: &gtk::Grid,
+//     row: i32,
+//     col: &mut i32,
+//     content: &Content,
+// ) {
+//     match content {
+//         Content::Content(children) => {
+//             for content in children {
+//                 make_into_table_row(css, grid, row, col, content);
+//                 *col = col.saturating_add(1);
+//             }
+//         }
+//         Content::Element(elem) => {
+//             if let Element::Th(e) | Element::Td(e) = &**elem {
+//                 if let Some(child) = e.content.as_ref().and_then(|e| make(css, e)) {
+//                     if let (Ok(width), Ok(height)) = (
+//                         i32::try_from(e.col_span.unwrap_or(1)),
+//                         i32::try_from(e.row_span.unwrap_or(1)),
+//                     ) {
+//                         grid.attach(&child, *col, row, width, height);
+//                     }
+//                 }
+//             }
+//         }
+//         Content::String(_) => {}
+//     }
+// }
 
-fn make_styled(css: &mut String, elem: &StyledElement) -> Option<gtk::Widget> {
-    let child = elem.content.as_ref().and_then(|e| make(css, e))?;
+// fn make_into_box(css: &mut String, container: &gtk::Box, content: &Content) {
+//     match content {
+//         Content::Content(children) => {
+//             for content in children {
+//                 if let Some(child) = make(css, content) {
+//                     container.append(&child);
+//                 }
+//             }
+//         }
+//         _ => {
+//             if let Some(child) = make(css, content) {
+//                 container.append(&child);
+//             }
+//         }
+//     }
+// }
 
-    if let Some(value) = &elem.title {
-        child.set_tooltip_text(Some(value));
-    }
-
-    if let Some(style) = &elem.style {
+fn make_styled(css: &mut String, elem: &StyledElement, append: &mut dyn FnMut(gtk::Widget)) {
+    let css_class = elem.style.as_ref().map(|style| {
         let css_class = format!("glossary-{}", random_css_class());
         _ = write!(&mut *css, ".{css_class}{{");
         _ = to_css(style, &mut *css);
         _ = write!(&mut *css, "}}");
-        child.add_css_class(&css_class);
+        css_class
+    });
 
-        match style.vertical_align {
-            Some(VerticalAlign::Top) => child.set_valign(gtk::Align::Start),
-            Some(VerticalAlign::Middle) => child.set_valign(gtk::Align::Center),
-            Some(VerticalAlign::Bottom) => child.set_valign(gtk::Align::End),
-            _ => {}
+    make_opt(css, &elem.content, &mut |child| {
+        if let Some(value) = &elem.title {
+            child.set_tooltip_text(Some(value));
         }
 
-        let direction = gtk::Widget::default_direction();
-        match style.text_align {
-            Some(TextAlign::Start | TextAlign::Justify) => child.set_halign(gtk::Align::Start),
-            Some(TextAlign::End) => child.set_halign(gtk::Align::End),
-            Some(TextAlign::Left) => child.set_halign(match direction {
-                gtk::TextDirection::Rtl => gtk::Align::End,
-                _ => gtk::Align::Start,
-            }),
-            Some(TextAlign::Right) => child.set_halign(match direction {
-                gtk::TextDirection::Rtl => gtk::Align::Start,
-                _ => gtk::Align::End,
-            }),
-            Some(TextAlign::Center) => child.set_halign(gtk::Align::Center),
-            None => {}
+        if let Some(css_class) = &css_class {
+            child.add_css_class(css_class);
         }
-    }
 
-    Some(child)
+        if let Some(style) = &elem.style {
+            match style.vertical_align {
+                Some(VerticalAlign::Top) => child.set_valign(gtk::Align::Start),
+                Some(VerticalAlign::Middle) => child.set_valign(gtk::Align::Center),
+                Some(VerticalAlign::Bottom) => child.set_valign(gtk::Align::End),
+                _ => {}
+            }
+
+            let direction = gtk::Widget::default_direction();
+            match style.text_align {
+                Some(TextAlign::Start | TextAlign::Justify) => child.set_halign(gtk::Align::Start),
+                Some(TextAlign::End) => child.set_halign(gtk::Align::End),
+                Some(TextAlign::Left) => child.set_halign(match direction {
+                    gtk::TextDirection::Rtl => gtk::Align::End,
+                    _ => gtk::Align::Start,
+                }),
+                Some(TextAlign::Right) => child.set_halign(match direction {
+                    gtk::TextDirection::Rtl => gtk::Align::Start,
+                    _ => gtk::Align::End,
+                }),
+                Some(TextAlign::Center) => child.set_halign(gtk::Align::Center),
+                None => {}
+            }
+        }
+
+        append(child);
+    });
 }
 
 fn random_css_class() -> String {
