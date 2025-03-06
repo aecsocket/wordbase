@@ -85,7 +85,7 @@ async fn list_dictionaries(client: &mut SocketClient) -> Result<()> {
         let enabled = if dictionary.enabled { "[on]" } else { "[  ]" };
         println!(
             "  {}. {enabled} {} rev {}",
-            dictionary.id.0, dictionary.title, dictionary.revision
+            dictionary.id.0, dictionary.name, dictionary.revision
         );
     }
     Ok(())

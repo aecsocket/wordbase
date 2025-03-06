@@ -84,7 +84,7 @@ pub async fn list_dictionaries(db: &Pool<Sqlite>) -> Result<Vec<Dictionary>> {
         let record = record.context("failed to fetch record")?;
         anyhow::Ok(Dictionary {
             id: DictionaryId(record.id),
-            title: record.title,
+            name: record.title,
             revision: record.revision,
             enabled: record.enabled,
         })

@@ -32,7 +32,7 @@ impl Terms {
         let title_of = |id: DictionaryId| -> DictionaryTitle {
             dictionaries
                 .get(&id)
-                .map_or_else(|| format!("{id:?}"), |dictionary| dictionary.title.clone())
+                .map_or_else(|| format!("{id:?}"), |dictionary| dictionary.name.clone())
         };
 
         let mut this = Self::default();

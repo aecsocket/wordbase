@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::yomitan::structured;
 
-/// Metadata for a dictionary.
+/// Metadata for a dictionary imported into a Wordbase server's database.
 ///
 /// Dictionaries contain records for [terms][term] in their chosen language, which
 /// provide info on:
@@ -19,7 +19,7 @@ pub struct Dictionary {
     /// Opaque and unique identifier for this dictionary in the database.
     pub id: DictionaryId,
     /// Human-readable display name.
-    pub title: String,
+    pub name: String,
     /// Arbitrary version string.
     ///
     /// This does not guarantee to conform to any existing format, e.g.
@@ -38,7 +38,7 @@ pub struct DictionaryId(pub i64);
 /// some text.
 ///
 /// This type is used as a key for other record information, such as
-/// [frequency data].
+/// [glossaries].
 ///
 /// # Examples
 ///
@@ -64,7 +64,7 @@ pub struct DictionaryId(pub i64);
 /// ```
 ///
 /// [dictionary]: Dictionary
-/// [frequency data]: Frequency
+/// [glossaries]: Glossary
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Term {
     /// Canonical form of the term.
@@ -97,15 +97,53 @@ impl Term {
     }
 }
 
+/// Provides the meaning or definition of a [term].
+///
+/// This defines what a [term] actually means in human-readable terms - the
+/// natural meaning of "dictionary entry". However, the content is left
+/// deliberately undefined, and it is up to the dictionary to fill out what it
+/// wants for its glossaries. Some dictionaries are monolingual, and may provide
+/// a definition in the dictionary's own language. Others are bilingual, and
+/// provide a translated meaning in the reader's native language.
+///
+/// This is the main content that you want to show a user for a term lookup. The
+/// content is expressed as [structured content], which you are responsible for
+/// rendering out into a format which you can display.
+///
+/// [term]: Term
+/// [structured content]: structured
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Glossary {
+    /// Tags for this glossary.
+    pub tags: Vec<TermTag>,
+    /// Content of this glossary.
+    pub content: Vec<structured::Content>,
+}
+
+/// Categorises a [glossary] for a given [term].
+///
+/// These serve no functional purpose, but are useful for labelling and
+/// categorising this entry.
+///
+/// [glossary]: Glossary
+/// [term]: Term
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TermTag {
+    /// Human-readable name for this tag.
     pub name: String,
+    /// Human-readable description of what this tag means for this term.
     pub description: String,
+    /// What category this tag is defined as.
     pub category: Option<TagCategory>,
+    /// Order of this tag relative to other tags in the same dictionary.
+    ///
+    /// A higher value means the tag will appear later.
     pub order: i64,
 }
 
-// https://github.com/yomidevs/yomitan/blob/master/docs/making-yomitan-dictionaries.md#tag-categories
+/// Categorisation of a [term tag].
+///
+/// [term tag]: TermTag
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TagCategory {
     Name,
@@ -118,12 +156,6 @@ pub enum TagCategory {
     PartOfSpeech,
     Search,
     PronunciationDictionary,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Glossary {
-    pub tags: Vec<TermTag>,
-    pub content: Vec<structured::Content>,
 }
 
 /// How often a given [term] appears in a language.

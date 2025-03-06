@@ -24,7 +24,7 @@ pub struct SharedConfig {
     /// otherwise the server must return an error.
     ///
     /// [`Lookup::text`]: protocol::Lookup::text
-    pub max_lookup_len: u16,
+    pub max_lookup_len: u64,
 }
 
 impl Default for SharedConfig {

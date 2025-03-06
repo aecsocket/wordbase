@@ -82,6 +82,10 @@ mod tests {
         round_trip(FromClient::RemoveDictionary {
             dictionary_id: default(),
         });
+        round_trip(FromClient::SetDictionaryEnabled {
+            dictionary_id: default(),
+            enabled: default(),
+        });
 
         round_trip(FromServer::Error { message: default() });
         round_trip(FromServer::SyncConfig { config: default() });
@@ -95,6 +99,10 @@ mod tests {
         });
         round_trip(FromServer::RemoveDictionary { result: Ok(()) });
         round_trip(FromServer::RemoveDictionary {
+            result: Err(DictionaryNotFound),
+        });
+        round_trip(FromServer::SetDictionaryEnabled { result: Ok(()) });
+        round_trip(FromServer::SetDictionaryEnabled {
             result: Err(DictionaryNotFound),
         });
     }

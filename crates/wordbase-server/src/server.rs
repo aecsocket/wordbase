@@ -253,7 +253,7 @@ async fn do_lookup(
     let request_len = text.chars().count();
     let max_request_len = config.shared.max_lookup_len;
     let request_len_valid =
-        u16::try_from(request_len).is_ok_and(|request_len| request_len <= max_request_len);
+        u64::try_from(request_len).is_ok_and(|request_len| request_len <= max_request_len);
     if !request_len_valid {
         bail!("request too long - {request_len} / {max_request_len} characters");
     }
