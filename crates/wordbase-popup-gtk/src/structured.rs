@@ -2,10 +2,10 @@ use core::fmt::{self, Write as _};
 
 use gtk::{gdk, pango, prelude::*};
 use wordbase::yomitan::structured::{
-    self, ContentStyle, FontStyle, FontWeight, StyledElement, TextAlign, VerticalAlign,
+    Content, ContentStyle, Element, StyledElement, TextAlign, VerticalAlign,
 };
 
-pub fn to_ui(display: gdk::Display, content: &structured::Content) -> Option<gtk::Widget> {
+pub fn to_ui(display: gdk::Display, content: &Content) -> Option<gtk::Widget> {
     let mut css = String::new();
     let widget = make(&mut css, content)?;
 
@@ -19,9 +19,9 @@ pub fn to_ui(display: gdk::Display, content: &structured::Content) -> Option<gtk
     Some(widget)
 }
 
-fn make(css: &mut String, content: &structured::Content) -> Option<gtk::Widget> {
+fn make(css: &mut String, content: &Content) -> Option<gtk::Widget> {
     match content {
-        structured::Content::String(text) => {
+        Content::String(text) => {
             let label = gtk::Label::new(Some(text));
             label.set_selectable(true);
             label.set_wrap(true);
@@ -29,7 +29,7 @@ fn make(css: &mut String, content: &structured::Content) -> Option<gtk::Widget> 
             label.set_halign(gtk::Align::Start);
             Some(label.upcast())
         }
-        structured::Content::Content(children) => {
+        Content::Content(children) => {
             let container = gtk::Box::new(gtk::Orientation::Vertical, 4);
             for child in children {
                 if let Some(child) = make(css, child) {
@@ -38,85 +38,88 @@ fn make(css: &mut String, content: &structured::Content) -> Option<gtk::Widget> 
             }
             Some(container.upcast())
         }
-        structured::Content::Element(elem) => match &**elem {
-            structured::Element::Br { data: _ } => None,
-            structured::Element::Table(e) => {
+        Content::Element(elem) => match &**elem {
+            Element::Br { data: _ } => None,
+            Element::Table(e) => e.content.as_ref().map(|content| {
                 let grid = gtk::Grid::new();
-                if let Some(content) = &e.content {
-                    let mut row = 0i32;
-                    make_table(css, &grid, &mut row, content);
-                }
-                Some(grid.upcast())
-            }
-            structured::Element::Ruby(e)
-            | structured::Element::Rt(e)
-            | structured::Element::Rp(e)
-            | structured::Element::Table(e)
-            | structured::Element::Thead(e)
-            | structured::Element::Tbody(e)
-            | structured::Element::Tfoot(e)
-            | structured::Element::Tr(e) => e.content.as_ref().and_then(|e| make(css, e)),
-            structured::Element::Td(e) | structured::Element::Th(e) => {
-                e.content.as_ref().and_then(|e| make(css, e))
-            }
-            structured::Element::Span(e)
-            | structured::Element::Div(e)
-            | structured::Element::Ol(e)
-            | structured::Element::Ul(e)
-            | structured::Element::Li(e)
-            | structured::Element::Details(e)
-            | structured::Element::Summary(e) => make_styled(css, e),
-            structured::Element::Img(_) => {
+                let mut row = 0i32;
+                make_into_grid(css, &grid, &mut row, content);
+                grid.upcast()
+            }),
+            Element::Span(e) => e.content.as_ref().map(|content| {
+                let container = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+                make_into_box(css, &container, content);
+                container.upcast()
+            }),
+            Element::Ruby(e)
+            | Element::Rt(e)
+            | Element::Rp(e)
+            | Element::Table(e)
+            | Element::Thead(e)
+            | Element::Tbody(e)
+            | Element::Tfoot(e)
+            | Element::Tr(e) => e.content.as_ref().and_then(|e| make(css, e)),
+            Element::Td(e) | Element::Th(e) => e.content.as_ref().and_then(|e| make(css, e)),
+            Element::Span(e)
+            | Element::Div(e)
+            | Element::Ol(e)
+            | Element::Ul(e)
+            | Element::Li(e)
+            | Element::Details(e)
+            | Element::Summary(e) => make_styled(css, e),
+            Element::Img(_) => {
                 None // TODO
             }
-            structured::Element::A(e) => {
-                e.content.as_ref().and_then(|e| make(css, e)).map(|child| {
-                    let button = gtk::LinkButton::new(&e.href);
-                    button.set_child(Some(&child));
-                    button.upcast()
-                })
-            }
+            Element::A(e) => make_opt(css, &e.content).map(|child| {
+                let button = gtk::LinkButton::new(&e.href);
+                button.set_child(Some(&child));
+                button.upcast()
+            }),
         }
         .map(Cast::upcast),
     }
 }
 
-fn make_table(css: &mut String, grid: &gtk::Grid, row: &mut i32, content: &structured::Content) {
+fn make_opt(css: &mut String, content: &Option<Content>) -> Option<gtk::Widget> {
+    content.as_ref().and_then(|e| make(css, e))
+}
+
+fn make_into_grid(css: &mut String, grid: &gtk::Grid, row: &mut i32, content: &Content) {
     match content {
-        structured::Content::Content(children) => {
-            for child in children {
-                make_table(css, grid, row, child);
+        Content::Content(children) => {
+            for content in children {
+                make_into_grid(css, grid, row, content);
                 *row = row.saturating_add(1);
             }
         }
-        structured::Content::Element(elem) => {
-            if let structured::Element::Tr(e) = &**elem {
+        Content::Element(elem) => {
+            if let Element::Tr(e) = &**elem {
                 if let Some(content) = &e.content {
                     let mut col = 0i32;
-                    make_table_row(css, grid, *row, &mut col, content);
+                    make_into_table_row(css, grid, *row, &mut col, content);
                 }
             }
         }
-        structured::Content::String(_) => {}
+        Content::String(_) => {}
     }
 }
 
-fn make_table_row(
+fn make_into_table_row(
     css: &mut String,
     grid: &gtk::Grid,
     row: i32,
     col: &mut i32,
-    content: &structured::Content,
+    content: &Content,
 ) {
     match content {
-        structured::Content::Content(children) => {
-            for child in children {
-                make_table_row(css, grid, row, col, child);
+        Content::Content(children) => {
+            for content in children {
+                make_into_table_row(css, grid, row, col, content);
                 *col = col.saturating_add(1);
             }
         }
-        structured::Content::Element(elem) => {
-            if let structured::Element::Th(e) | structured::Element::Td(e) = &**elem {
+        Content::Element(elem) => {
+            if let Element::Th(e) | Element::Td(e) = &**elem {
                 if let Some(child) = e.content.as_ref().and_then(|e| make(css, e)) {
                     if let (Ok(width), Ok(height)) = (
                         i32::try_from(e.col_span.unwrap_or(1)),
@@ -127,7 +130,24 @@ fn make_table_row(
                 }
             }
         }
-        structured::Content::String(_) => {}
+        Content::String(_) => {}
+    }
+}
+
+fn make_into_box(css: &mut String, container: &gtk::Box, content: &Content) {
+    match content {
+        Content::Content(children) => {
+            for content in children {
+                if let Some(child) = make(css, content) {
+                    container.append(&child);
+                }
+            }
+        }
+        _ => {
+            if let Some(child) = make(css, content) {
+                container.append(&child);
+            }
+        }
     }
 }
 
@@ -212,8 +232,8 @@ fn to_css(s: &ContentStyle, mut w: impl fmt::Write) -> Result<(), fmt::Error> {
     forward_to_css!(w, s, border_radius, "border-radius");
     forward_to_css!(w, s, border_width, "border-width");
     // forward_to_css!(w, s, clip_path, "clip-path"); // unsupported
-    // forward_to_css!(w, s, vertical_align, "vertical-align"); // implemented via code
-    // forward_to_css!(w, s, text_align, "text-align"); // implemented via code
+    // forward_to_css!(w, s, vertical_align, "vertical-align"); // implemented in code
+    // forward_to_css!(w, s, text_align, "text-align"); // implemented in code
     // forward_to_css!(w, s, text_emphasis, "text-emphasis"); // unsupported
     forward_to_css!(w, s, text_shadow, "text-shadow");
     forward_to_css!(w, s, margin, "margin");
@@ -226,7 +246,7 @@ fn to_css(s: &ContentStyle, mut w: impl fmt::Write) -> Result<(), fmt::Error> {
     forward_to_css!(w, s, padding_left, "padding-left");
     forward_to_css!(w, s, padding_right, "padding-right");
     forward_to_css!(w, s, padding_bottom, "padding-bottom");
-    // forward_to_css!(w, s, word_break, "word-break"); // implemented via code
+    // forward_to_css!(w, s, word_break, "word-break"); // unsupported
     // forward_to_css!(w, s, white_space, "white-space"); // unsupported
     // forward_to_css!(w, s, cursor, "cursor"); // unsupported
     // forward_to_css!(w, s, list_style_type, "list-style-type"); // unsupported
