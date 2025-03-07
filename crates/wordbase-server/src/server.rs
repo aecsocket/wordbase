@@ -205,11 +205,13 @@ async fn handle_message(
             Ok(())
         }
         FromClient::Lookup { text } => {
-            let lookup = do_lookup(config, db, send_mecab_request, text)
+            do_lookup(config, db, send_mecab_request, connection, text)
                 .await
                 .context("failed to perform lookup")?;
             connection
-                .write(&FromServer::Lookup { lookup })
+                .write(&FromServer::Lookup {
+                    entries: Vec::new(),
+                })
                 .await
                 .context("failed to send response")
         }
@@ -241,10 +243,11 @@ async fn do_lookup(
     config: &Config,
     db: &Pool<Sqlite>,
     send_mecab_request: &mpsc::Sender<MecabRequest>,
+    connection: &mut Connection,
     text: String,
-) -> Result<Option<LookupInfo>> {
+) -> Result<()> {
     let request_len = text.chars().count();
-    let max_request_len = config.shared.max_lookup_len;
+    let max_request_len = config.lookup.max_request_len;
     let request_len_valid =
         u64::try_from(request_len).is_ok_and(|request_len| request_len <= max_request_len);
     if !request_len_valid {
@@ -259,9 +262,9 @@ async fn do_lookup(
         })
         .await;
     let Some(mecab) = recv_mecab_response.await.context("mecab channel dropped")? else {
-        return Ok(None);
+        return Ok(());
     };
 
     let info = db::lookup(db, mecab.lemma).await?;
-    Ok(Some(info))
+    Ok(())
 }

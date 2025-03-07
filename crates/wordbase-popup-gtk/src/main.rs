@@ -14,19 +14,23 @@ extern crate webkit6 as webkit;
 // mod format;
 mod ui;
 
-use std::{convert::Infallible, time::Duration};
+use std::{cell::RefCell, convert::Infallible, rc::Rc, time::Duration};
 
 use adw::prelude::*;
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use futures::StreamExt;
 use gtk::gdk;
 use log::warn;
 use tokio::{
-    sync::{broadcast, mpsc, oneshot},
+    sync::{broadcast, mpsc},
     time,
 };
-use wordbase::{Dictionary, DictionaryId, lookup::LookupInfo, protocol::NewSentence};
+use wordbase::{Dictionary, DictionaryId, lookup::LookupEntry, protocol::NewSentence};
 use wordbase_client_tokio::{IndexMap, SocketClient};
+
+const CHANNEL_BUF_CAP: usize = 4;
+
+type DictionaryMap = IndexMap<DictionaryId, Dictionary>;
 
 #[tokio::main]
 async fn main() {
@@ -36,8 +40,10 @@ async fn main() {
         .expect("failed to initialize logger");
     glib::log_set_default_handler(glib::rust_log_handler);
 
-    let (send_lookup_request, recv_lookup_request) = mpsc::channel::<LookupRequest>(4);
-    let (send_backend_event, recv_backend_event) = broadcast::channel::<BackendEvent>(4);
+    let (send_lookup_request, recv_lookup_request) =
+        mpsc::channel::<LookupRequest>(CHANNEL_BUF_CAP);
+    let (send_backend_event, recv_backend_event) =
+        broadcast::channel::<BackendEvent>(CHANNEL_BUF_CAP);
     tokio::spawn(tokio_backend(recv_lookup_request, send_backend_event));
 
     let app = adw::Application::builder()
@@ -62,14 +68,20 @@ async fn main() {
         let content = ui::Lookup::new();
         toast_overlay.set_child(Some(&content));
 
-        let send_lookup_request = send_lookup_request.clone();
-        content
-            .entry()
-            .connect_changed(move |entry| on_search_changed(entry, send_lookup_request.clone()));
+        let dictionaries = Rc::new(RefCell::new(DictionaryMap::default()));
+
+        {
+            let send_lookup_request = send_lookup_request.clone();
+            let dictionaries = dictionaries.clone();
+            content.entry().connect_changed(move |entry| {
+                on_search_changed(entry, send_lookup_request.clone(), dictionaries.clone());
+            });
+        }
 
         glib::spawn_future_local(local_backend(
             recv_backend_event.resubscribe(),
             toast_overlay.clone(),
+            dictionaries,
         ));
 
         adw::ApplicationWindow::builder()
@@ -85,48 +97,25 @@ async fn main() {
     app.run();
 }
 
-#[expect(
-    clippy::future_not_send,
-    reason = "this future is only ran on the main thread"
-)]
-async fn local_backend(
-    mut recv_backend_event: broadcast::Receiver<BackendEvent>,
-    toast_overlay: adw::ToastOverlay,
-) -> Result<()> {
-    loop {
-        let event = recv_backend_event
-            .recv()
-            .await
-            .context("event channel dropped")?;
-
-        match event {
-            BackendEvent::Connected => {
-                toast_overlay.add_toast(adw::Toast::new("Connected to server"));
-            }
-            BackendEvent::Disconnected => {
-                toast_overlay.add_toast(adw::Toast::new("Disconnected from server"));
-            }
-            BackendEvent::Sync { .. } => {
-                toast_overlay.add_toast(adw::Toast::new("Synced settings and dictionaries"));
-            }
-            BackendEvent::NewSentence(_) => {}
-        }
-    }
+#[derive(Debug)]
+struct LookupRequest {
+    query: String,
+    send_lookup: mpsc::Sender<LookupEntry>,
 }
 
-fn on_search_changed(entry: &gtk::Entry, send_lookup_request: mpsc::Sender<LookupRequest>) {
+fn on_search_changed(
+    entry: &gtk::Entry,
+    send_lookup_request: mpsc::Sender<LookupRequest>,
+    dictionaries: Rc<RefCell<DictionaryMap>>,
+) {
     let query = entry.text().to_string();
-    let (send_dictionaries, recv_dictionaries) = oneshot::channel();
-    let (send_lookup, recv_lookup) = mpsc::channel(4);
+    let (send_lookup, mut recv_lookup) = mpsc::channel(CHANNEL_BUF_CAP);
     glib::spawn_future_local(async move {
         send_lookup_request
-            .send(LookupRequest {
-                query,
-                send_dictionaries,
-                send_lookup,
-            })
+            .send(LookupRequest { query, send_lookup })
             .await?;
-        let dictionaries = recv_dictionaries.await?;
+
+        while let Some(lookup) = recv_lookup.recv().await {}
 
         // if let Some(response) = dictionaries {
         //     let terms = Terms::new(&response.dictionaries, response.info);
@@ -143,20 +132,44 @@ fn on_search_changed(entry: &gtk::Entry, send_lookup_request: mpsc::Sender<Looku
     });
 }
 
-#[derive(Debug)]
-struct LookupRequest {
-    query: String,
-    send_dictionaries: oneshot::Sender<IndexMap<DictionaryId, Dictionary>>,
-    send_lookup: mpsc::Sender<LookupInfo>,
+#[expect(
+    clippy::future_not_send,
+    reason = "this future is only ran on the main thread"
+)]
+async fn local_backend(
+    mut recv_backend_event: broadcast::Receiver<BackendEvent>,
+    toast_overlay: adw::ToastOverlay,
+    current_dictionaries: Rc<RefCell<DictionaryMap>>,
+) -> Result<()> {
+    loop {
+        let event = recv_backend_event
+            .recv()
+            .await
+            .context("event channel dropped")?;
+
+        match event {
+            BackendEvent::Connected { dictionaries } => {
+                toast_overlay.add_toast(adw::Toast::new("Connected to server"));
+                current_dictionaries.replace(dictionaries);
+            }
+            BackendEvent::Disconnected => {
+                toast_overlay.add_toast(adw::Toast::new("Disconnected from server"));
+                current_dictionaries.replace(DictionaryMap::default());
+            }
+            BackendEvent::Sync { dictionaries } => {
+                toast_overlay.add_toast(adw::Toast::new("Synced settings and dictionaries"));
+                current_dictionaries.replace(dictionaries);
+            }
+            BackendEvent::NewSentence(_) => {}
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 enum BackendEvent {
-    Connected,
+    Connected { dictionaries: DictionaryMap },
     Disconnected,
-    Sync {
-        dictionaries: IndexMap<DictionaryId, Dictionary>,
-    },
+    Sync { dictionaries: DictionaryMap },
     NewSentence(NewSentence),
 }
 
@@ -194,8 +207,7 @@ async fn handle_client(
     send_event: &broadcast::Sender<BackendEvent>,
     client: &mut SocketClient,
 ) -> Result<Infallible> {
-    send_event.send(BackendEvent::Connected)?;
-    send_event.send(BackendEvent::Sync {
+    send_event.send(BackendEvent::Connected {
         dictionaries: client.dictionaries().clone(),
     })?;
 
@@ -204,7 +216,7 @@ async fn handle_client(
         tokio::select! {
             event = client.poll() => {
                 let event = event?;
-                forward_event(send_event, client, event).await?;
+                forward_event(send_event, client, event)?;
             }
             request = recv_lookup_request.recv() => {
                 let request = request.context("request channel dropped")?;
@@ -214,7 +226,7 @@ async fn handle_client(
     }
 }
 
-async fn forward_event(
+fn forward_event(
     send_event: &broadcast::Sender<BackendEvent>,
     client: &SocketClient,
     event: wordbase_client_tokio::Event,
@@ -234,11 +246,6 @@ async fn forward_event(
 }
 
 async fn handle_request(client: &mut SocketClient, request: LookupRequest) -> Result<()> {
-    request
-        .send_dictionaries
-        .send(client.dictionaries().clone())
-        .map_err(|_| anyhow!("dictionary channel dropped"))?;
-
     let mut lookups = client
         .lookup(request.query)
         .await

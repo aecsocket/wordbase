@@ -9,9 +9,10 @@ use std::{
 use anyhow::{Context as _, Result};
 use sqlx::{Pool, Sqlite, Transaction};
 use tokio::{fs, sync::Mutex};
-use tracing::{info, warn};
+use tracing::info;
 use wordbase::{
-    schema::{DictionaryId, Frequency, Glossary, Pitch, TagCategory, TermTag},
+    DictionaryId, Frequency, Glossary, TagCategory, TermTag,
+    lang::jp,
     yomitan::{self, structured},
 };
 
@@ -26,26 +27,27 @@ pub async fn from_yomitan(db: Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()
     let (parser, index) = yomitan::Parse::new(|| Ok::<_, Infallible>(Cursor::new(&archive)))
         .context("failed to parse")?;
 
+    let name = index.title;
     let already_present = sqlx::query_scalar!(
         "SELECT EXISTS(
             SELECT 1
             FROM dictionaries
-            WHERE title = $1
+            WHERE name = $1
         )",
-        index.title
+        name
     )
     .fetch_one(&db)
     .await
     .context("failed to check if dictionary is already present")?;
     if already_present > 0 {
-        warn!("{} is already present, skipping...", index.title);
+        info!("{name} is already present, skipping...");
         return Ok(());
     }
 
     let tag_banks_left = AtomicUsize::new(parser.tag_banks().len());
     let term_banks_left = AtomicUsize::new(parser.term_banks().len());
     let term_meta_banks_left = AtomicUsize::new(parser.term_meta_banks().len());
-    info!("{}", index.title);
+    info!("Parsing: {name}");
 
     let tag_bank = Mutex::new(yomitan::TagBank::default());
     let term_bank = Mutex::new(yomitan::TermBank::default());
@@ -89,10 +91,10 @@ pub async fn from_yomitan(db: Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()
     let dictionary_id = {
         info!("Writing dictionary record...");
         let result = sqlx::query!(
-            "INSERT INTO dictionaries (title, revision)
+            "INSERT INTO dictionaries (name, version)
             VALUES ($1, $2)",
-            index.title,
-            index.revision
+            name,
+            index.revision,
         )
         .execute(&mut *tx)
         .await
@@ -138,7 +140,7 @@ async fn import_term_bank(
     let mut scratch = Vec::<u8>::new();
     let mut records_left = bank.len();
     for term in bank {
-        let expression = term.expression.clone();
+        let headword = term.expression.clone();
         let reading = none_if_empty(term.reading.clone());
 
         let tags = match_tags(
@@ -154,7 +156,9 @@ async fn import_term_bank(
             .filter_map(to_glossary_content)
             .collect();
 
-        let glossary = Glossary { tags, content };
+        let mut glossary = Glossary::default();
+        glossary.tags = tags;
+        glossary.html = todo!();
 
         async {
             scratch.clear();
@@ -162,10 +166,10 @@ async fn import_term_bank(
             let data = &scratch[..];
 
             sqlx::query!(
-                "INSERT INTO terms (source, expression, reading, data_kind, data)
-                    VALUES ($1, $2, $3, $4, $5)",
+                "INSERT INTO terms (source, headword, reading, data_kind, data)
+                VALUES ($1, $2, $3, $4, $5)",
                 source,
-                expression,
+                headword,
                 reading,
                 data_kind::GLOSSARY,
                 data
@@ -182,7 +186,7 @@ async fn import_term_bank(
             anyhow::Ok(())
         }
         .await
-        .with_context(|| format!("failed to import term {expression:?} ({reading:?})"))?;
+        .with_context(|| format!("failed to import term {headword:?} ({reading:?})"))?;
     }
     Ok(())
 }
@@ -212,7 +216,7 @@ async fn import_term_meta_bank(
     let mut scratch = Vec::<u8>::new();
     let mut records_left = bank.len();
     for term_meta in bank {
-        let expression = term_meta.expression.clone();
+        let headword = term_meta.expression.clone();
         async {
             match term_meta.data {
                 yomitan::TermMetaData::Frequency(frequency) => {
@@ -222,10 +226,10 @@ async fn import_term_meta_bank(
                         let data = &scratch[..];
 
                         sqlx::query!(
-                            "INSERT INTO terms (source, expression, reading, data_kind, data)
+                            "INSERT INTO terms (source, headword, reading, data_kind, data)
                             VALUES ($1, $2, $3, $4, $5)",
                             source,
-                            expression,
+                            headword,
                             reading,
                             data_kind::FREQUENCY,
                             data,
@@ -242,12 +246,12 @@ async fn import_term_meta_bank(
                         let data = &scratch[..];
 
                         sqlx::query!(
-                            "INSERT INTO terms (source, expression, reading, data_kind, data)
+                            "INSERT INTO terms (source, headword, reading, data_kind, data)
                             VALUES ($1, $2, $3, $4, $5)",
                             source,
-                            expression,
+                            headword,
                             reading,
-                            data_kind::PITCH,
+                            data_kind::JP_PITCH,
                             data,
                         )
                         .execute(&mut **tx)
@@ -266,7 +270,7 @@ async fn import_term_meta_bank(
             anyhow::Ok(())
         }
         .await
-        .with_context(|| format!("failed to import term meta {expression:?}"))?;
+        .with_context(|| format!("failed to import term meta {headword:?}"))?;
     }
     Ok(())
 }
@@ -338,11 +342,11 @@ fn to_frequencies(
     frequency.map(|new| (reading, new)).into_iter()
 }
 
-fn to_pitch(raw: yomitan::TermMetaPitch) -> impl Iterator<Item = (String, Pitch)> {
+fn to_pitch(raw: yomitan::TermMetaPitch) -> impl Iterator<Item = (String, jp::Pitch)> {
     raw.pitches.into_iter().map(move |pitch| {
         (
             raw.reading.clone(),
-            Pitch {
+            jp::Pitch {
                 position: pitch.position,
                 nasal: to_pitch_positions(pitch.nasal),
                 devoice: to_pitch_positions(pitch.devoice),

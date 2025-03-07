@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Dictionary, DictionaryId,
-    lookup::{LookupConfig, LookupInfo},
+    lookup::{LookupConfig, LookupEntry},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, From)]
@@ -41,7 +41,7 @@ pub enum FromServer {
     },
     NewSentence(NewSentence),
     Lookup {
-        lookups: Vec<LookupInfo>,
+        entries: Vec<LookupEntry>,
     },
     RemoveDictionary {
         result: Result<(), DictionaryNotFound>,
@@ -90,7 +90,7 @@ mod tests {
         });
         round_trip(FromServer::NewSentence(NewSentence::default()));
         round_trip(FromServer::Lookup {
-            lookups: vec![LookupInfo::default()],
+            entries: vec![LookupEntry::default()],
         });
         round_trip(FromServer::RemoveDictionary { result: Ok(()) });
         round_trip(FromServer::RemoveDictionary {

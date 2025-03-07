@@ -5,15 +5,14 @@ use futures::{StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
 use wordbase::{
-    protocol::DictionaryNotFound,
-    schema::{Dictionary, DictionaryId, Frequency, Glossary, LookupInfo, Pitch, Term},
+    Dictionary, DictionaryId, Frequency, Glossary, Term, lang::jp, protocol::DictionaryNotFound,
 };
 
 // keep this up to date with `setup_db.sql`
 pub mod data_kind {
     pub const GLOSSARY: u8 = 1;
     pub const FREQUENCY: u8 = 2;
-    pub const PITCH: u8 = 3;
+    pub const JP_PITCH: u8 = 3;
 }
 
 pub fn serialize(
@@ -33,13 +32,13 @@ pub async fn lookup(db: &Pool<Sqlite>, lemma: String) -> Result<LookupInfo> {
         ..Default::default()
     };
     let mut records = sqlx::query!(
-        "SELECT source, expression, reading, data_kind, data
+        "SELECT source, headword, reading, data_kind, data
         FROM terms t
         LEFT JOIN dictionaries
             ON t.source = dictionaries.id
         WHERE
             dictionaries.enabled = TRUE
-            AND (expression = $1 OR reading = $1)",
+            AND (headword = $1 OR reading = $1)",
         lemma
     )
     .fetch(db);
@@ -47,7 +46,7 @@ pub async fn lookup(db: &Pool<Sqlite>, lemma: String) -> Result<LookupInfo> {
         let record = record.context("failed to fetch record")?;
         let source = DictionaryId(record.source);
         let term = Term {
-            expression: record.expression,
+            headword: record.headword,
             reading: record.reading,
         };
 
@@ -62,9 +61,9 @@ pub async fn lookup(db: &Pool<Sqlite>, lemma: String) -> Result<LookupInfo> {
                     .context("failed to deserialize frequency data")?;
                 info.frequencies.push((source, term, data));
             }
-            Ok(data_kind::PITCH) => {
-                let data = deserialize::<Pitch>(&record.data)
-                    .context("failed to deserialize pitch data")?;
+            Ok(data_kind::JP_PITCH) => {
+                let data = deserialize::<jp::Pitch>(&record.data)
+                    .context("failed to deserialize jp_pitch data")?;
                 info.pitches.push((source, term, data));
             }
             _ => bail!("invalid data kind {}", record.data_kind),
@@ -76,7 +75,7 @@ pub async fn lookup(db: &Pool<Sqlite>, lemma: String) -> Result<LookupInfo> {
 
 pub async fn list_dictionaries(db: &Pool<Sqlite>) -> Result<Vec<Dictionary>> {
     sqlx::query!(
-        "SELECT id, title, revision, enabled
+        "SELECT id, name, version, position, enabled
         FROM dictionaries"
     )
     .fetch(db)
@@ -84,8 +83,9 @@ pub async fn list_dictionaries(db: &Pool<Sqlite>) -> Result<Vec<Dictionary>> {
         let record = record.context("failed to fetch record")?;
         anyhow::Ok(Dictionary {
             id: DictionaryId(record.id),
-            name: record.title,
-            revision: record.revision,
+            name: record.name,
+            version: record.version,
+            position: record.position,
             enabled: record.enabled,
         })
     })

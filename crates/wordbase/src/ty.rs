@@ -26,7 +26,7 @@ pub struct Dictionary {
     pub version: String,
     /// What position results from this dictionary will be displayed in,
     /// relative to other dictionaries.
-    pub order: i64,
+    pub position: i64,
     /// Whether this dictionary is used for returning results in lookup
     /// operations.
     pub enabled: bool,

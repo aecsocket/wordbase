@@ -16,7 +16,7 @@ use tokio_tungstenite::{
 };
 use wordbase::{
     Dictionary, DictionaryId,
-    lookup::{LookupConfig, LookupInfo},
+    lookup::{LookupConfig, LookupEntry},
     protocol::{DictionaryNotFound, FromClient, FromServer, NewSentence},
 };
 
@@ -56,6 +56,9 @@ pub enum ConnectionError {
     /// Failed to connect to server.
     #[display("failed to connect")]
     Connect(WsError),
+    /// Failed to complete handshaking with server.
+    #[display("failed to handshake")]
+    Handshake(Box<ConnectionError>),
     /// Failed to serialize request.
     #[display("failed to serialize request")]
     Serialize(serde_json::Error),
@@ -104,7 +107,9 @@ pub async fn connect(
     let (stream, _) = tokio_tungstenite::connect_async(request)
         .await
         .map_err(ConnectionError::Connect)?;
-    Client::handshake(stream).await.map_err(|(err, _)| err)
+    Client::handshake(stream)
+        .await
+        .map_err(|(err, _)| ConnectionError::Handshake(Box::new(err)))
 }
 
 #[derive(Debug)]
@@ -192,11 +197,29 @@ where
     pub async fn lookup(
         &mut self,
         text: impl Into<String>,
-    ) -> Result<Pin<Box<Lookup<'_, S>>>, ConnectionError> {
+    ) -> Result<Pin<Box<impl Stream<Item = Result<LookupEntry, ConnectionError>>>>, ConnectionError>
+    {
         self.connection
             .send(&FromClient::Lookup { text: text.into() })
             .await?;
-        Ok(Box::pin(Lookup { client: self }))
+
+        // TODO: use `Lookup`
+        let mut all_entries = Vec::<LookupEntry>::new();
+        loop {
+            match self.connection.recv().await? {
+                FromServer::Lookup { entries } => {
+                    if entries.is_empty() {
+                        break;
+                    }
+                    all_entries.extend_from_slice(&entries);
+                }
+                message => self.fallback_handle(message)?,
+            }
+        }
+
+        Ok(Box::pin(futures::stream::iter(
+            all_entries.into_iter().map(Ok),
+        )))
     }
 
     pub async fn remove_dictionary(
@@ -261,7 +284,7 @@ where
     }
 }
 
-pub struct Lookup<'c, S> {
+struct Lookup<'c, S> {
     client: &'c mut Client<S>,
 }
 
@@ -269,18 +292,12 @@ impl<S> Stream for Lookup<'_, S>
 where
     S: Stream<Item = Result<Message, WsError>> + Sink<Message, Error = WsError> + Unpin,
 {
-    type Item = Result<LookupInfo, ConnectionError>;
+    type Item = Result<LookupEntry, ConnectionError>;
 
     fn poll_next(
         self: Pin<&mut Self>,
         cx: &mut task::Context<'_>,
     ) -> task::Poll<Option<Self::Item>> {
         todo!()
-        // loop {
-        //     match self.client.connection.recv().await? {
-        //         FromServer::Lookup { lookup } => return Ok(lookup),
-        //         message => self.fallback_handle(message)?,
-        //     }
-        // }
     }
 }

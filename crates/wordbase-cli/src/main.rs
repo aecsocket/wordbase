@@ -85,12 +85,12 @@ async fn main() -> Result<()> {
 fn list_dictionaries(client: &SocketClient) {
     let dictionaries = client.dictionaries();
     println!("Dictionaries ({}):", dictionaries.len());
-    for dictionary in dictionaries {
+    for (index, dictionary) in dictionaries.values().enumerate() {
         let enabled = if dictionary.enabled { "[on]" } else { "[  ]" };
-        println!(
-            "  {}. {enabled} {} ver {}",
-            dictionary.id.0, dictionary.name, dictionary.version
-        );
+        let id = dictionary.id.0;
+        let name = &dictionary.name;
+        let version = &dictionary.version;
+        println!("  {enabled} #{index}) ID {id}: {name} ver {version}");
     }
 }
 
@@ -110,13 +110,13 @@ async fn disable_dictionary(client: &mut SocketClient, id: i64) -> Result<()> {
 }
 
 async fn lookup(client: &mut SocketClient, text: String) -> Result<()> {
-    let mut lookups = client
+    let mut entries = client
         .lookup(text)
         .await
         .context("failed to start lookup")?;
-    while let Some(lookup) = lookups.next().await {
-        let lookup = lookup.context("failed to receive lookup")?;
-        println!("{lookup:?}");
+    while let Some(entry) = entries.next().await {
+        let entry = entry.context("failed to receive lookup entry")?;
+        println!("{entry:?}");
     }
     Ok(())
 }

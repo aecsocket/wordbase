@@ -19,17 +19,19 @@ pub struct LookupConfig {
     /// otherwise the server will return an error.
     ///
     /// [`Lookup::text`]: crate::protocol::FromClient::Lookup::text
-    pub max_input_len: u64,
+    pub max_request_len: u64,
 }
 
 impl Default for LookupConfig {
     fn default() -> Self {
-        Self { max_input_len: 16 }
+        Self {
+            max_request_len: 16,
+        }
     }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct LookupInfo {
+pub struct LookupEntry {
     pub lemma: String,
     pub terms: Vec<(DictionaryId, Term, TermLookup)>,
 }
