@@ -25,8 +25,8 @@ import * as Wordbase from "./wordbase.js";
 
 /**
  * @typedef {Object} DialogBox
+ * @property {St.Widget} root
  * @property {St.Widget} history_container
- * @property {Wordbase.Client} wordbase
  * 
  * @typedef {Object} LookupConfig
  * @property {number} max_request_len
@@ -184,6 +184,7 @@ export default class WordbaseIntegrationExtension extends Extension {
                 dialog_box = this._new_dialog_box(global.window_group);
                 // END TODO
             }
+
             this._dialog_boxes.set(message.process_path, dialog_box);
         }
 
@@ -244,6 +245,8 @@ export default class WordbaseIntegrationExtension extends Extension {
             timestamp,
         });
         history_container.add_child(dialog_session_header);
+
+        return { root, history_container };
     }
 
     _setup_hover_opacity(widget) {
