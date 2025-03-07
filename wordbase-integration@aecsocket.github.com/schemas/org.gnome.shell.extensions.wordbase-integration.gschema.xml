@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.wordbase-integration"
+    path="/org/gnome/shell/extensions/wordbase-integration/">
+    <key name="wordbase-url" type="s">
+      <default>"ws://127.0.0.1:9518/"</default>
+      <summary>URL of the Wordbase server which provides texthooker integration and lookup info</summary>
+    </key>
+    <key name="dialog-opacity-idle" type="i">
+      <default>128</default>
+      <summary>Default opacity of the dialog box</summary>
+    </key>
+    <key name="dialog-opacity-hover" type="i">
+      <default>255</default>
+      <summary>Opacity of the dialog box when the pointer hovers over it</summary>
+    </key>
+  </schema>
+</schemalist>

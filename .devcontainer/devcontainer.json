@@ -54,7 +54,11 @@
         // GTK
         "bodil.blueprint-gtk",
         // SQLite
-        "qwtel.sqlite-viewer"
+        "qwtel.sqlite-viewer",
+        // GNOME extension
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "redhat.vscode-xml"
       ]
     }
   }

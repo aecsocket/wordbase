@@ -34,3 +34,7 @@ RUN yay -Syu --noconfirm \
     libadwaita webkitgtk-6.0 \
     meson blueprint-compiler python-sphinx-furo blueprint-compiler-docs-git \
     noto-fonts noto-fonts-cjk noto-fonts-emoji
+
+# install GNOME extension development tools
+RUN yay -Syu --noconfirm \
+    npm gnome-shell zip

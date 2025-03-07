@@ -1,0 +1,23 @@
+/*
+https://gitlab.gnome.org/GNOME/gnome-shell/-/tree/main/data/theme
+https://gitlab.gnome.org/GNOME/gnome-shell/-/blob/main/data/theme/gnome-shell-sass/widgets/_dialogs.scss
+*/
+
+.texthooker-dialog {
+    margin: 0;
+    padding: 8px 4px 8px 8px;
+    font-size: larger;
+}
+
+.texthooker-dialog .menu-button {
+    margin: 4px 20px;
+}
+
+.texthooker-dialog .session-header {
+    margin: 8px;
+}
+
+.texthooker-dialog .sentence {
+    background-color: rgba(255, 255, 255, 0.05);
+    margin: 8px 4px 0 0;
+}
