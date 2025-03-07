@@ -223,7 +223,8 @@ async fn handle_message(
                     entries: Vec::new(),
                 })
                 .await
-                .context("failed to send response")
+                .context("failed to send response")?;
+            Ok(())
         }
         FromClient::RemoveDictionary { dictionary_id } => {
             let result = db::remove_dictionary(db, dictionary_id)
@@ -232,7 +233,11 @@ async fn handle_message(
             connection
                 .write(&FromServer::RemoveDictionary { result })
                 .await
-                .context("failed to send response")
+                .context("failed to send response")?;
+            send_dictionary_sync(db, send_event)
+                .await
+                .context("failed to send dictionary sync")?;
+            Ok(())
         }
         FromClient::SetDictionaryEnabled {
             dictionary_id,
@@ -244,7 +249,11 @@ async fn handle_message(
             connection
                 .write(&FromServer::SetDictionaryEnabled { result })
                 .await
-                .context("failed to send response")
+                .context("failed to send response")?;
+            send_dictionary_sync(db, send_event)
+                .await
+                .context("failed to send dictionary sync")?;
+            Ok(())
         }
     }
 }
@@ -276,5 +285,17 @@ async fn do_lookup(
     };
 
     // let info = db::lookup(db, mecab.lemma).await?;
+    Ok(())
+}
+
+async fn send_dictionary_sync(
+    db: &Pool<Sqlite>,
+    send_event: &broadcast::Sender<Event>,
+) -> Result<()> {
+    let dictionaries = db::list_dictionaries(db)
+        .await
+        .context("failed to fetch dictionaries")?;
+
+    _ = send_event.send(Event::SyncDictionaries(dictionaries));
     Ok(())
 }

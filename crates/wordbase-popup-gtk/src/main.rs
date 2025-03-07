@@ -156,8 +156,8 @@ async fn local_backend(
                 toast_overlay.add_toast(adw::Toast::new("Disconnected from server"));
                 current_dictionaries.replace(DictionaryMap::default());
             }
-            BackendEvent::Sync { dictionaries } => {
-                toast_overlay.add_toast(adw::Toast::new("Synced settings and dictionaries"));
+            BackendEvent::SyncDictionaries { dictionaries } => {
+                toast_overlay.add_toast(adw::Toast::new("Updated dictionaries"));
                 current_dictionaries.replace(dictionaries);
             }
             BackendEvent::NewSentence(_) => {}
@@ -169,7 +169,7 @@ async fn local_backend(
 enum BackendEvent {
     Connected { dictionaries: DictionaryMap },
     Disconnected,
-    Sync { dictionaries: DictionaryMap },
+    SyncDictionaries { dictionaries: DictionaryMap },
     NewSentence(NewSentence),
 }
 
@@ -232,8 +232,9 @@ fn forward_event(
     event: wordbase_client_tokio::Event,
 ) -> Result<()> {
     match event {
-        wordbase_client_tokio::Event::Sync => {
-            send_event.send(BackendEvent::Sync {
+        wordbase_client_tokio::Event::SyncLookupConfig => Ok(()),
+        wordbase_client_tokio::Event::SyncDictionaries => {
+            send_event.send(BackendEvent::SyncDictionaries {
                 dictionaries: client.dictionaries().clone(),
             })?;
             Ok(())
