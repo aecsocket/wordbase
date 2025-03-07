@@ -18,13 +18,7 @@ workspace = true
 all-features = true
 
 [features]
-parse-yomitan = [
-    "dep:rayon",
-    "dep:regex",
-    "dep:serde_json",
-    "dep:serde_repr",
-    "dep:zip",
-]
+parse-yomitan = ["dep:rayon", "dep:regex", "dep:zip"]
 
 [dependencies]
 derive_more = { workspace = true, features = [
@@ -37,9 +31,9 @@ derive_more = { workspace = true, features = [
 foldhash = { workspace = true }
 html-escape = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+serde_repr = { workspace = true }
 
 rayon = { workspace = true, optional = true }
 regex = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
-serde_repr = { workspace = true, optional = true }
 zip = { workspace = true, optional = true }

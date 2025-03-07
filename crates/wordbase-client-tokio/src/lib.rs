@@ -15,9 +15,9 @@ use tokio_tungstenite::{
     tungstenite::{Message, client::IntoClientRequest},
 };
 use wordbase::{
-    Dictionary, DictionaryId,
-    lookup::{LookupConfig, LookupEntry},
-    protocol::{DictionaryNotFound, FromClient, FromServer, HookSentence},
+    Dictionary, DictionaryId, LookupConfig,
+    hook::HookSentence,
+    protocol::{DictionaryNotFound, FromClient, FromServer, RecordLookup},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -212,28 +212,26 @@ where
     pub async fn lookup(
         &mut self,
         text: impl Into<String>,
-    ) -> Result<Pin<Box<impl Stream<Item = Result<LookupEntry, ConnectionError>>>>, ConnectionError>
+    ) -> Result<Pin<Box<impl Stream<Item = Result<RecordLookup, ConnectionError>>>>, ConnectionError>
     {
         self.connection
             .send(&FromClient::Lookup { text: text.into() })
             .await?;
 
-        // TODO: use `Lookup`
-        let mut all_entries = Vec::<LookupEntry>::new();
+        // TODO: actual stream
+        let mut all_records = Vec::<RecordLookup>::new();
         loop {
             match self.connection.recv().await? {
-                FromServer::Lookup { entries } => {
-                    if entries.is_empty() {
-                        break;
-                    }
-                    all_entries.extend_from_slice(&entries);
+                FromServer::Lookup { record } => {
+                    all_records.push(record);
                 }
+                FromServer::LookupDone => break,
                 message => self.fallback_handle(message)?,
             }
         }
 
         Ok(Box::pin(futures::stream::iter(
-            all_entries.into_iter().map(Ok),
+            all_records.into_iter().map(Ok),
         )))
     }
 
@@ -307,7 +305,7 @@ impl<S> Stream for Lookup<'_, S>
 where
     S: Stream<Item = Result<Message, WsError>> + Sink<Message, Error = WsError> + Unpin,
 {
-    type Item = Result<LookupEntry, ConnectionError>;
+    type Item = Result<RecordLookup, ConnectionError>;
 
     fn poll_next(
         self: Pin<&mut Self>,

@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result};
 use futures::StreamExt;
-use wordbase::{DictionaryId, protocol::HookSentence};
+use wordbase::{DictionaryId, hook::HookSentence};
 use wordbase_client_tokio::SocketClient;
 
 /// Wordbase command line client.

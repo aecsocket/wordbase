@@ -20,7 +20,7 @@ pub enum FromClient {
     /// [records] for those terms.
     ///
     /// Server responds with 0 to N [`FromServer::Lookup`]s, ending with a final
-    /// [`FromServer::Lookup`] with zero entries, marking the lookup complete.
+    /// [`FromServer::LookupDone`].
     ///
     /// [records]: crate::Record
     /// [terms]: crate::Term
@@ -79,8 +79,9 @@ pub enum FromServer {
     /// See [`HookSentence`].
     HookSentence(HookSentence),
     Lookup {
-        records: Vec<RecordLookup>,
+        record: RecordLookup,
     },
+    LookupDone,
     RemoveDictionary {
         result: Result<(), DictionaryNotFound>,
     },
@@ -139,13 +140,13 @@ mod tests {
         });
         round_trip(FromServer::HookSentence(HookSentence::default()));
         round_trip(FromServer::Lookup {
-            records: vec![RecordLookup {
+            record: RecordLookup {
                 source: default(),
                 term: default(),
                 record: Record::Glossary(default()),
-            }],
+            },
         });
-        round_trip(FromServer::RemoveDictionary { result: Ok(()) });
+        round_trip(FromServer::LookupDone);
         round_trip(FromServer::RemoveDictionary {
             result: Err(DictionaryNotFound),
         });
