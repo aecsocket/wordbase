@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::content::Content;
-
 /// Metadata for a dictionary imported into a Wordbase server's database.
 ///
 /// Dictionaries contain records for [terms][term] in their chosen language, which
@@ -108,19 +106,100 @@ impl Term {
 /// a definition in the dictionary's own language. Others are bilingual, and
 /// provide a translated meaning in the reader's native language.
 ///
-/// This is the main content that you want to show a user for a term lookup. The
-/// content is expressed as [structured content], which you can render out into
-/// a presentable format.
+/// # Format
+///
+/// Glossaries are complicated - there are many different formats of glossaries
+/// in the wild, and each has their own format which they store content in,
+/// sometimes bespoke. The `pyglossary` project has a [list of supported
+/// glossary formats][formats] which is a good starting place to explore what
+/// formats exist. But due to this fragmentation, we cannot sanely define a
+/// single format to use for all glossaries, as we cannot guarantee that you
+/// can convert from one to another.
+///
+/// Instead of defining a single universal glossary format, we support
+/// glossaries in multiple formats. When importing a dictionary, the importer
+/// will convert it into one or multiple of these formats, and when looking up
+/// a [term], data for each format may or may not be present. We leave it up to
+/// you to determine which format is best for you to use. See the fields of this
+/// struct to see which formats are supported.
+///
+/// If multiple formats are present on the same glossary, **they must represent
+/// the same glossary content**, or at least as close as the two formats can
+/// get. If one format is unable to express information that another can, then
+/// the less detailed format should be emitted entirely.
+///
+/// Styling and other cosmetic details may be ignored, unless they directly
+/// affect how the content is read and interpreted.
+///
+/// This struct is marked as `#[non_exhaustive]` to leave the possibility of
+/// adding new formats open for the future, without breaking existing code.
+///
+/// # Examples
+///
+/// ```
+/// # use wordbase::{TermTag, Glossary};
+/// fn create_glossary(tags: Vec<TermTag>, html: String) -> Glossary {
+///     // we can't create a value using a struct expression,
+///     // since it's `#[non_exhaustive]`, so we make an empty one first...
+///     let mut glossary = Glossary::new(tags);
+///     // then set our content
+///     glossary.html = html;
+///     glossary
+/// }
+///
+/// fn display_glossary(glossary: &Glossary) {
+///     // let's assume we're drawing some widgets in a UI toolkit,
+///     // and we want to render this glossary in our UI
+///     if let Some(content) = &glossary.html {
+///         // we'll prioritise HTML, since we can load that directly in a WebView
+///         load_into_web_view(content);
+///     } else if let Some(content) = &glossary.plain_text {
+///         // if the glossary has no HTML content, we fall back to plain text
+///         // fortunately, a WebView can render text directly as well
+///         load_into_web_view(content);
+///     } else {
+///         // we can't render this glossary!
+///     }
+/// }
+/// # fn load_into_web_view(html: &str) { unreachable!() }
+/// ```
 ///
 /// [term]: Term
 /// [structured content]: structured
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// [formats]: https://github.com/ilius/pyglossary?tab=readme-ov-file#supported-formats
+/// [HTML]: Glossary::html
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[non_exhaustive]
 pub struct Glossary {
     /// Tags for this glossary.
     pub tags: Vec<TermTag>,
-    /// Content of this glossary.
-    pub content: Content,
+    /// Plain text format.
+    ///
+    /// This is the simplest glossary format, and should be used as a fallback
+    /// if there is no other way to express your glossary content. Similarly,
+    /// consumers should only use this as a fallback source for rendering.
+    pub plain_text: Option<String>,
+    /// HTML content of this definition.
+    ///
+    /// This is a well-supported format which is common in many dictionaries,
+    /// and can be easily rendered by many clients (as long as you have access
+    /// to a [`WebView`] widget).
+    ///
+    /// [`WebView`]: https://en.wikipedia.org/wiki/WebView
+    pub html: Option<String>,
+}
+
+impl Glossary {
+    /// Creates a new glossary entry with the given tags, with no data for any
+    /// format.
+    #[must_use]
+    pub fn new(tags: impl Into<Vec<TermTag>>) -> Self {
+        Self {
+            tags: tags.into(),
+            ..Default::default()
+        }
+    }
 }
 
 /// Categorises a [glossary] for a given [term].
@@ -141,7 +220,8 @@ pub struct TermTag {
     pub category: Option<TagCategory>,
     /// Order of this tag relative to other tags in the same dictionary.
     ///
-    /// A higher value means the tag will appear later.
+    /// This is purely a rendering hint for consumers. A higher value means
+    /// the tag will appear later.
     pub order: i64,
 }
 
