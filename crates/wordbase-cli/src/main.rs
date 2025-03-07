@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result};
 use futures::StreamExt;
-use wordbase::DictionaryId;
+use wordbase::{DictionaryId, protocol::HookSentence};
 use wordbase_client_tokio::SocketClient;
 
 /// Wordbase command line client.
@@ -22,16 +22,18 @@ enum Command {
     },
     #[clap(alias = "l")]
     Lookup { text: String },
+    Hook {
+        #[command(subcommand)]
+        command: HookCommand,
+    },
 }
 
 #[derive(Debug, clap::Subcommand)]
 enum DictionaryCommand {
     /// List all dictionaries
-    #[clap(alias = "ls")]
-    List,
+    Ls,
     /// Remove a dictionary with a specific ID
-    #[clap(alias = "rm")]
-    Remove {
+    Rm {
         /// ID of the dictionary, as seen in `dictionary list`
         id: i64,
     },
@@ -47,6 +49,14 @@ enum DictionaryCommand {
     },
 }
 
+#[derive(Debug, clap::Subcommand)]
+enum HookCommand {
+    /// Sends a texthooker sentence message
+    Send { text: String },
+    /// Watches for texthooker sentence messages and outputs them
+    Watch,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = <Args as clap::Parser>::parse();
@@ -59,13 +69,13 @@ async fn main() -> Result<()> {
     let result = (async {
         match args.command {
             Command::Dictionary {
-                command: DictionaryCommand::List,
+                command: DictionaryCommand::Ls,
             } => {
                 list_dictionaries(&client);
                 Ok(())
             }
             Command::Dictionary {
-                command: DictionaryCommand::Remove { id },
+                command: DictionaryCommand::Rm { id },
             } => remove_dictionary(&mut client, id).await,
             Command::Dictionary {
                 command: DictionaryCommand::Enable { id },
@@ -74,6 +84,12 @@ async fn main() -> Result<()> {
                 command: DictionaryCommand::Disable { id },
             } => disable_dictionary(&mut client, id).await,
             Command::Lookup { text } => lookup(&mut client, text).await,
+            Command::Hook {
+                command: HookCommand::Send { text },
+            } => send_hook_sentence(&mut client, text).await,
+            Command::Hook {
+                command: HookCommand::Watch,
+            } => watch_hook_sentences(&mut client).await,
         }
     })
     .await;
@@ -120,4 +136,25 @@ async fn lookup(client: &mut SocketClient, text: String) -> Result<()> {
         println!("{entry:?}");
     }
     Ok(())
+}
+
+async fn send_hook_sentence(client: &mut SocketClient, sentence: String) -> Result<()> {
+    client
+        .hook_sentence(HookSentence {
+            process_path: "wordbase-cli".into(),
+            sentence,
+        })
+        .await
+        .context("failed to send hook sentence")?;
+    Ok(())
+}
+
+async fn watch_hook_sentences(client: &mut SocketClient) -> Result<()> {
+    loop {
+        if let wordbase_client_tokio::Event::HookSentence(sentence) =
+            client.poll().await.context("failed to poll client")?
+        {
+            println!("{sentence:?}");
+        }
+    }
 }

@@ -31,6 +31,11 @@
       "type": "bind",
       "source": "${env:XDG_RUNTIME_DIR}/at-spi/bus",
       "target": "${localEnv:XDG_RUNTIME_DIR}/at-spi/bus"
+    },
+    {
+      "type": "bind",
+      "source": "${env:HOME}/.local/share/gnome-shell/extensions/",
+      "target": "/workspaces/gnome-shell-extensions"
     }
   ],
   "containerEnv": {

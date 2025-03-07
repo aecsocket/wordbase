@@ -7,17 +7,32 @@
  */
 
 import Soup from "gi://Soup";
+import GLib from "gi://GLib";
 
 /**
+ * @typedef {Object} HookSentence
+ * @property {string} process_path
+ * @property {string} sentence
+ * 
  * @typedef {Object} LookupResponse
  * @property {Object} json
  */
 
-export default class Client {
+export class Client {
     /** @private @type {Soup.WebsocketConnection} */
     _connection;
+    /** @type {(function(HookSentence): void)?} */
+    on_hook_sentence;
     /** @private @type {(function(LookupResponse): void)?} */
     _on_lookup_response;
+
+    /**
+     * @param {Soup.WebsocketConnection} connection 
+     */
+    constructor(connection) {
+        this._connection = connection;
+        this.on_hook_sentence = null;
+    }
 
     /**
      * @param {Soup.Session} soup
@@ -43,29 +58,32 @@ export default class Client {
                     on_error(err);
                     return;
                 }
-
-                // TODO fetch config
-                this._wordbase = { connection, lookup_config: { max_request_len: 16 } };
+                const client = new Client(connection);
 
                 const decoder = new TextDecoder();
-                connection.connect("message", (__, message_type, message) => {
+                connection.connect("message", (__, message_type, data) => {
                     if (message_type != Soup.WebsocketDataType.TEXT) {
                         return;
                     }
 
-                    const response = JSON.parse(decoder.decode(message.toArray()));
-                    switch (response.type) {
-                        case "Lookup":
-                            /** @type {LookupResponse} */
+                    const message = JSON.parse(decoder.decode(data.toArray()));
+                    switch (message.type) {
+                        case "HookSentence":
                             // TODO parse and error handling
-                            const lookup_response = response;
-                            this._on_lookup_response?.(lookup_response);
+                            /** @type {HookSentence} */
+                            const hook_sentence = message;
+                            client.on_hook_sentence?.(hook_sentence);
+                            break;
+                        case "Lookup":
+                            // TODO parse and error handling
+                            /** @type {LookupResponse} */
+                            const lookup_response = message;
+                            client._on_lookup_response?.(lookup_response);
                             break;
                     }
                 });
 
-                const client = new Client(connection);
-                on_connect()
+                on_connect(client);
             },
         );
     }

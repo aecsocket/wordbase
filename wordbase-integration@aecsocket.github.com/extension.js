@@ -24,17 +24,9 @@ import * as StickyScrollView from "./ui/stickyScrollView.js";
 import * as Wordbase from "./wordbase.js";
 
 /**
- * @typedef {Object} HookSentence
- * @property {string} process_path
- * @property {string} sentence
- * 
  * @typedef {Object} DialogBox
  * @property {St.Widget} history_container
  * @property {Wordbase.Client} wordbase
- * 
- * @typedef {Object} WordbaseClient
- * @property {Soup.WebsocketConnection} connection
- * @property {LookupConfig} lookup_config
  * 
  * @typedef {Object} LookupConfig
  * @property {number} max_request_len
@@ -51,33 +43,26 @@ export default class WordbaseIntegrationExtension extends Extension {
     _status_notification;
     /** @type {Map<string, DialogBox>} */
     _dialog_boxes;
-    /** @type {WordbaseClient} */
+    /** @type {Wordbase.Client} */
     _wordbase;
 
     enable() {
         this._settings = this.getSettings();
         this._soup = new Soup.Session();
-        this._notification_source = new MessageTray.Source({
-            title: this.metadata.name,
-            iconName: "dialog-information",
-            policy: new MessageTray.NotificationGenericPolicy(),
-        });
-        this._notification_source.connect("destroy", _ => {
-            this._notification_source = null;
-        });
-        Main.messageTray.add(this._notification_source);
         this._dialog_boxes = new Map();
 
         this._settings.connect("changed::wordbase-url", (__, ___) => {
             this._connect_wordbase();
         });
+        this._connect_wordbase();
 
-        GLib.timeout_add(0, 1000, () => {
-            if (!this._texthooker) {
-                this._connect_texthooker();
-            }
-            return true;
-        });
+        // GLib.timeout_add(0, 1000, () => {
+        //     log(`should connect? ${!this._wordbase}`);
+        //     if (!this._wordbase) {
+        //         this._connect_wordbase();
+        //     }
+        //     return true;
+        // });
     }
 
     disable() {
@@ -98,112 +83,91 @@ export default class WordbaseIntegrationExtension extends Extension {
     }
 
     /**
+     * @returns {MessageTray.Source}
+     */
+    _get_notification_source() {
+        return MessageTray.getSystemSource();
+
+        // if (!this._notification_source) {
+        //     this._notification_source = new MessageTray.Source({
+        //         title: this.metadata.name,
+        //         iconName: "dialog-information",
+        //         policy: new MessageTray.NotificationGenericPolicy(),
+        //     });
+        //     this._notification_source.connect("destroy", (_source) => {
+        //         this._notification_source = null;
+        //     });
+        //     Main.messageTray.add(this._notification_source);
+        // }
+
+        // return this._notification_source;
+    }
+
+    /**
      * @param {MessageTray.Notification} notification 
      */
     _show_status_notification(notification) {
         this._status_notification?.destroy(MessageTray.NotificationDestroyedReason.REPLACED);
-        this._status_notification.addNotification(notification);
+        this._get_notification_source().addNotification(notification);
         this._status_notification = notification;
-    }
-
-    _connect_texthooker() {
-        const url = this._settings.get_string("texthooker-url");
-        this._soup.websocket_connect_async(
-            new Soup.Message({
-                method: "GET",
-                uri: GLib.Uri.parse(url, GLib.UriFlags.NONE),
-            }),
-            "127.0.0.1",
-            [],
-            0,
-            null,
-            (session, res) => {
-                /** @type {Soup.WebsocketConnection} */
-                let connection;
-
-                try {
-                    connection = session.websocket_connect_finish(res);
-                } catch (err) {
-                    return;
-                }
-                this._texthooker = connection;
-
-                this._show_texthooker_notification(new MessageTray.Notification({
-                    source: this._notification_source,
-                    title: _("Texthooker connected"),
-                    urgency: MessageTray.Urgency.NORMAL,
-                }));
-
-                connection.connect("closed", (__) => {
-                    this._show_texthooker_notification(new MessageTray.Notification({
-                        source: this._notification_source,
-                        title: _("Texthooker disconnected"),
-                        urgency: MessageTray.Urgency.NORMAL,
-                    }));
-                    this._texthooker = null;
-                });
-                connection.connect("error", (__, err) => {
-                    this._show_texthooker_notification(new MessageTray.Notification({
-                        source: this._notification_source,
-                        title: _("Texthooker connection lost"),
-                        urgency: MessageTray.Urgency.NORMAL,
-                    }));
-                    this._texthooker = null;
-                });
-
-                const decoder = new TextDecoder();
-                connection.connect("message", (__, message_type, message) => {
-                    if (message_type != Soup.WebsocketDataType.TEXT) {
-                        return;
-                    }
-
-                    // TODO error handling
-                    /** @type {NewSentence} */
-                    const new_sentence = JSON.parse(decoder.decode(message.toArray()));
-                    this._on_new_sentence(new_sentence);
-                })
-            },
-        );
+        notification.connect("destroy", (__, ___) => {
+            this._status_notification = null;
+        });
     }
 
     _connect_wordbase() {
         const url = this._settings.get_string("wordbase-url");
-        Wordbase.Client
+        Wordbase.Client.connect(
+            this._soup,
+            url,
+            (_err) => { },
+            (client) => {
+                this._wordbase = client;
+                this._show_status_notification(new MessageTray.Notification({
+                    source: this._get_notification_source(),
+                    title: _("Wordbase connected"),
+                    urgency: MessageTray.Urgency.NORMAL,
+                }));
 
-        this._soup.websocket_connect_async(
-            new Soup.Message({
-                method: "GET",
-                uri: GLib.Uri.parse(url, GLib.UriFlags.NONE),
-            }),
-            "127.0.0.1",
-            [],
-            0,
-            null,
-            (session, res) => {
-                let connection;
-                try {
-                    connection = session.websocket_connect_finish(res);
-                } catch (err) {
-                    return;
-                }
-
-                // TODO fetch config
-                this._wordbase = { connection, lookup_config: { max_request_len: 16 } };
-
-                const decoder = new TextDecoder();
-                connection.connect("message", (__, message_type, message) => {
-                    if (message_type != Soup.WebsocketDataType.TEXT) {
-                        return;
-                    }
-
-                    log(`msg ${decoder.decode(message.toArray())}`);
+                client.connection.connect("closed", (_source) => {
+                    this._show_status_notification(new MessageTray.Notification({
+                        source: this._get_notification_source(),
+                        title: _("Wordbase connection closed"),
+                        urgency: MessageTray.Urgency.NORMAL,
+                    }));
+                    this._wordbase = null;
                 });
-            },
+
+                client.connection.connect("error", (_source) => {
+                    this._show_status_notification(new MessageTray.Notification({
+                        source: this._get_notification_source(),
+                        title: _("Wordbase connection lost"),
+                        urgency: MessageTray.Urgency.NORMAL,
+                    }));
+                    this._wordbase = null;
+                });
+
+                client.on_hook_sentence = (message) => {
+                    this._on_hook_sentence(message);
+                };
+
+                // const decoder = new TextDecoder();
+                // connection.connect("message", (__, message_type, message) => {
+                //     if (message_type != Soup.WebsocketDataType.TEXT) {
+                //         return;
+                //     }
+
+                //     // TODO error handling
+                //     /** @type {NewSentence} */
+                //     const new_sentence = JSON.parse(decoder.decode(message.toArray()));
+                //     this._on_new_sentence(new_sentence);
+                // });
+            }
         );
     }
 
     /**
-     * @param {HookSentence} message 
+     * @param {Wordbase.HookSentence} message 
      */
     _on_hook_sentence(message) {
         const sentence = message.sentence.trim();
@@ -231,7 +195,7 @@ export default class WordbaseIntegrationExtension extends Extension {
      * @param {Clutter.Actor} parent 
      * @returns {DialogBox}
      */
-    _new_dialog_box(parent, callback) {
+    _new_dialog_box(parent) {
         const root = new Area.DragArea({
             style_class: "modal-dialog texthooker-dialog",
         });
@@ -280,14 +244,6 @@ export default class WordbaseIntegrationExtension extends Extension {
             timestamp,
         });
         history_container.add_child(dialog_session_header);
-
-        this._new_wordbase_client(wordbase => {
-            callback({
-                root,
-                history_container,
-                wordbase,
-            })
-        });
     }
 
     _setup_hover_opacity(widget) {
@@ -361,11 +317,9 @@ export default class WordbaseIntegrationExtension extends Extension {
                     char_pos + this._wordbase.lookup_config.max_request_len,
                 );
 
-                this._wordbase.connection.send_text(JSON.stringify({
-                    type: "Lookup",
-                    text: lookup_text,
-                    wants_html: false,
-                }));
+                this._wordbase.lookup(lookup_text, (resp) => {
+                    // TODO
+                });
             },
         );
         return label;
