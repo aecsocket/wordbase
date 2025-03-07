@@ -30,7 +30,6 @@ form_urlencoded = { workspace = true, default-features = true }
 futures = { workspace = true }
 glib = { workspace = true, default-features = true, features = ["log"] }
 gtk4 = { workspace = true, features = ["gnome_47", "blueprint"] }
-indexmap = { workspace = true, default-features = true }
 libadwaita = { workspace = true, features = ["v1_6"] }
 log = { workspace = true }
 open = { workspace = true, default-features = true }
@@ -39,6 +38,7 @@ tokio = { workspace = true, features = ["full"] }
 webkit6 = { workspace = true, default-features = true }
 
 # enable features in transitive dependency crates
+
 bzip2 = { workspace = true, features = ["static"] }
 
 [package.metadata.cargo-shear]

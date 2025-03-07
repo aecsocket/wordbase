@@ -33,10 +33,10 @@ impl Default for LookupConfig {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LookupEntry {
     pub lemma: String,
-    pub terms: Vec<(DictionaryId, Term, TermLookup)>,
+    pub terms: Vec<(DictionaryId, Term, LookupTerm)>,
 }
 
-/// Response for a single [term] found in a single [dictionary].
+/// Lookup response for a single [term] found in a single [dictionary].
 ///
 /// # Language-specific details
 ///
@@ -51,7 +51,7 @@ pub struct LookupEntry {
 /// [glossaries]: crate::Glossary
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[non_exhaustive]
-pub struct TermLookup {
+pub struct LookupTerm {
     /// Glossaries for this term.
     pub glossaries: Vec<Glossary>,
     /// Frequencies for this term.

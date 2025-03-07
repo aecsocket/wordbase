@@ -20,7 +20,7 @@ enum Command {
         #[command(subcommand)]
         command: DictionaryCommand,
     },
-    #[clap(alias = "lk")]
+    #[clap(alias = "l")]
     Lookup { text: String },
 }
 

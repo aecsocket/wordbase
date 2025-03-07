@@ -22,7 +22,7 @@ static MODEL: LazyLock<Model> = LazyLock::new(|| {
 
     for dictionary in model.dictionary_info().iter() {
         info!(
-            "Loaded dictionary {:?} with {} entries",
+            "Loaded MeCab dictionary {:?} with {} entries",
             dictionary.filename, dictionary.size
         );
     }

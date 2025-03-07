@@ -36,9 +36,7 @@ derive_more = { workspace = true, features = [
     "deref_mut",
 ] }
 foldhash = { workspace = true }
-itertools = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-serde-value = { workspace = true }
 
 html-escape = { workspace = true, optional = true }
 rayon = { workspace = true, optional = true }
