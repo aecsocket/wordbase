@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS dictionaries (
+CREATE TABLE IF NOT EXISTS dictionary (
     id          INTEGER     PRIMARY KEY AUTOINCREMENT,
     name        TEXT        NOT NULL,
     version     TEXT        NOT NULL,
@@ -6,17 +6,14 @@ CREATE TABLE IF NOT EXISTS dictionaries (
     enabled     BOOLEAN     NOT NULL DEFAULT TRUE
 );
 
-CREATE TABLE IF NOT EXISTS terms (
-    source      INTEGER NOT NULL REFERENCES dictionaries(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS record (
+    source      INTEGER NOT NULL REFERENCES dictionary(id) ON DELETE CASCADE,
     headword    TEXT    NOT NULL,
     reading     TEXT,
-    -- keep this up to date with `db.rs`
-    -- 1: glossary
-    -- 2: frequency
-    -- 3: jp_pitch
-    data_kind   INTEGER NOT NULL CHECK (data_kind IN (1, 2, 3)),
+    -- keep this up to date with `record.rs`
+    kind        INTEGER NOT NULL CHECK (kind IN (1, 2, 3)),
     data        BLOB    NOT NULL
 );
-CREATE INDEX IF NOT EXISTS terms_headword ON terms(headword);
-CREATE INDEX IF NOT EXISTS terms_reading  ON terms(reading);
-CREATE INDEX IF NOT EXISTS terms_term     ON terms(headword, reading);
+CREATE INDEX IF NOT EXISTS record_headword ON record(headword);
+CREATE INDEX IF NOT EXISTS record_reading  ON record(reading);
+CREATE INDEX IF NOT EXISTS record_term     ON record(headword, reading);

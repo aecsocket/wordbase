@@ -4,7 +4,7 @@ use std::iter;
 
 use serde::{Deserialize, Serialize};
 
-/// Single pitch reading for a specific [term].
+/// Single pitch reading for a [term].
 ///
 /// Japanese [dictionaries] may collect information on how a specific [term] is
 /// [pronounced orally][jpa]. This information is represented in this type.

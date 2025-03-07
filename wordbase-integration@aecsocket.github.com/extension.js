@@ -19,7 +19,6 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Area from "./ui/dragArea.js";
 import * as RichLabel from "./ui/richLabel.js";
-import * as DateTimeLabel from "./ui/dateTimeLabel.js";
 import * as StickyScrollView from "./ui/stickyScrollView.js";
 import * as Wordbase from "./wordbase.js";
 
@@ -238,13 +237,6 @@ export default class WordbaseIntegrationExtension extends Extension {
             }),
         });
         history_scroll_view.set_child(history_container);
-
-        const timestamp = GLib.DateTime.new_now(GLib.TimeZone.new_local()).format_iso8601();
-        const dialog_session_header = new DateTimeLabel.DateTimeLabel({
-            style_class: "session-header",
-            timestamp,
-        });
-        history_container.add_child(dialog_session_header);
 
         return { root, history_container };
     }

@@ -6,6 +6,9 @@ use crate::{
     lookup::{LookupConfig, LookupEntry},
 };
 
+/// Default port which a Wordbase server listens on.
+pub const DEFAULT_PORT: u16 = 9518;
+
 #[derive(Debug, Clone, Serialize, Deserialize, From)]
 #[serde(tag = "type")]
 pub enum FromClient {

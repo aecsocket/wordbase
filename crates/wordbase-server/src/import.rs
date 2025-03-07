@@ -11,12 +11,12 @@ use sqlx::{Pool, Sqlite, Transaction};
 use tokio::{fs, sync::Mutex};
 use tracing::info;
 use wordbase::{
-    DictionaryId, Frequency, Glossary, TagCategory, TermTag,
+    DictionaryId, Frequency, Glossary, GlossaryTag, TagCategory,
     lang::jp,
     yomitan::{self, structured},
 };
 
-use crate::db::{data_kind, serialize};
+use crate::record::{data_kind, serialize};
 
 pub async fn from_yomitan(db: Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
     let path = path.as_ref();
@@ -142,7 +142,7 @@ async fn import_term_bank(
     DictionaryId(source): DictionaryId,
     tx: &mut Transaction<'_, Sqlite>,
     bank: yomitan::TermBank,
-    all_tags: &[TermTag],
+    all_tags: &[GlossaryTag],
 ) -> Result<()> {
     let mut scratch = Vec::<u8>::new();
     let mut records_left = bank.len();
@@ -194,9 +194,9 @@ async fn import_term_bank(
 
 // `all_tags` must be sorted longest-first
 fn match_tags<'a>(
-    all_tags: &'a [TermTag],
+    all_tags: &'a [GlossaryTag],
     mut definition_tags: &str,
-) -> impl Iterator<Item = &'a TermTag> {
+) -> impl Iterator<Item = &'a GlossaryTag> {
     iter::from_fn(move || {
         definition_tags = definition_tags.trim();
         for tag in all_tags {
@@ -276,8 +276,8 @@ async fn import_term_meta_bank(
     Ok(())
 }
 
-fn to_term_tag(raw: yomitan::Tag) -> TermTag {
-    TermTag {
+fn to_term_tag(raw: yomitan::Tag) -> GlossaryTag {
+    GlossaryTag {
         name: raw.name,
         category: match raw.category.as_str() {
             "name" => Some(TagCategory::Name),
@@ -347,7 +347,10 @@ fn to_frequencies(
         yomitan::GenericFrequencyData::Complex {
             value: rank,
             display_value: display_rank,
-        } => Some(Frequency { rank, display_rank }),
+        } => Some(Frequency {
+            rank,
+            display: display_rank,
+        }),
     };
 
     frequency.map(|new| (reading, new)).into_iter()
