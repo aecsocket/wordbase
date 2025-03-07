@@ -26,57 +26,58 @@ pub fn deserialize<'a, T: Deserialize<'a>>(buf: &'a [u8]) -> Result<T, rmp_serde
     rmp_serde::from_slice(buf)
 }
 
-pub async fn lookup(db: &Pool<Sqlite>, lemma: String) -> Result<LookupInfo> {
-    let mut info = LookupInfo {
-        lemma: lemma.clone(),
-        ..Default::default()
-    };
-    let mut records = sqlx::query!(
-        "SELECT source, headword, reading, data_kind, data
-        FROM terms t
-        LEFT JOIN dictionaries
-            ON t.source = dictionaries.id
-        WHERE
-            dictionaries.enabled = TRUE
-            AND (headword = $1 OR reading = $1)",
-        lemma
-    )
-    .fetch(db);
-    while let Some(record) = records.next().await {
-        let record = record.context("failed to fetch record")?;
-        let source = DictionaryId(record.source);
-        let term = Term {
-            headword: record.headword,
-            reading: record.reading,
-        };
+// pub async fn lookup(db: &Pool<Sqlite>, lemma: String) -> Result<LookupInfo> {
+//     let mut info = LookupInfo {
+//         lemma: lemma.clone(),
+//         ..Default::default()
+//     };
+//     let mut records = sqlx::query!(
+//         "SELECT source, headword, reading, data_kind, data
+//         FROM terms t
+//         LEFT JOIN dictionaries
+//             ON t.source = dictionaries.id
+//         WHERE
+//             dictionaries.enabled = TRUE
+//             AND (headword = $1 OR reading = $1)",
+//         lemma
+//     )
+//     .fetch(db);
+//     while let Some(record) = records.next().await {
+//         let record = record.context("failed to fetch record")?;
+//         let source = DictionaryId(record.source);
+//         let term = Term {
+//             headword: record.headword,
+//             reading: record.reading,
+//         };
 
-        match u8::try_from(record.data_kind) {
-            Ok(data_kind::GLOSSARY) => {
-                let data = deserialize::<Glossary>(&record.data)
-                    .context("failed to deserialize glossary data")?;
-                info.glossaries.push((source, term, data));
-            }
-            Ok(data_kind::FREQUENCY) => {
-                let data = deserialize::<Frequency>(&record.data)
-                    .context("failed to deserialize frequency data")?;
-                info.frequencies.push((source, term, data));
-            }
-            Ok(data_kind::JP_PITCH) => {
-                let data = deserialize::<jp::Pitch>(&record.data)
-                    .context("failed to deserialize jp_pitch data")?;
-                info.pitches.push((source, term, data));
-            }
-            _ => bail!("invalid data kind {}", record.data_kind),
-        }
-    }
+//         match u8::try_from(record.data_kind) {
+//             Ok(data_kind::GLOSSARY) => {
+//                 let data = deserialize::<Glossary>(&record.data)
+//                     .context("failed to deserialize glossary data")?;
+//                 info.glossaries.push((source, term, data));
+//             }
+//             Ok(data_kind::FREQUENCY) => {
+//                 let data = deserialize::<Frequency>(&record.data)
+//                     .context("failed to deserialize frequency data")?;
+//                 info.frequencies.push((source, term, data));
+//             }
+//             Ok(data_kind::JP_PITCH) => {
+//                 let data = deserialize::<jp::Pitch>(&record.data)
+//                     .context("failed to deserialize jp_pitch data")?;
+//                 info.pitches.push((source, term, data));
+//             }
+//             _ => bail!("invalid data kind {}", record.data_kind),
+//         }
+//     }
 
-    Ok(info)
-}
+//     Ok(info)
+// }
 
 pub async fn list_dictionaries(db: &Pool<Sqlite>) -> Result<Vec<Dictionary>> {
     sqlx::query!(
-        "SELECT id, name, version, position, enabled
-        FROM dictionaries"
+        r#"SELECT id as "id!", name, version, position, enabled
+        FROM dictionaries
+        ORDER BY position"#
     )
     .fetch(db)
     .map(|record| {

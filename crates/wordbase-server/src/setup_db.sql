@@ -1,4 +1,4 @@
-CREATE TABLE dictionaries (
+CREATE TABLE IF NOT EXISTS dictionaries (
     id          INTEGER     PRIMARY KEY AUTOINCREMENT,
     name        TEXT        NOT NULL,
     version     TEXT        NOT NULL,
@@ -6,7 +6,7 @@ CREATE TABLE dictionaries (
     enabled     BOOLEAN     NOT NULL DEFAULT TRUE
 );
 
-CREATE TABLE terms (
+CREATE TABLE IF NOT EXISTS terms (
     source      INTEGER NOT NULL REFERENCES dictionaries(id) ON DELETE CASCADE,
     headword    TEXT    NOT NULL,
     reading     TEXT,
@@ -17,6 +17,6 @@ CREATE TABLE terms (
     data_kind   INTEGER NOT NULL CHECK (data_kind IN (1, 2, 3)),
     data        BLOB    NOT NULL
 );
-CREATE INDEX terms_headword ON terms(headword);
-CREATE INDEX terms_reading  ON terms(reading);
-CREATE INDEX terms_term     ON terms(headword, reading);
+CREATE INDEX IF NOT EXISTS terms_headword ON terms(headword);
+CREATE INDEX IF NOT EXISTS terms_reading  ON terms(reading);
+CREATE INDEX IF NOT EXISTS terms_term     ON terms(headword, reading);

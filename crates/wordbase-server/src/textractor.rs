@@ -7,12 +7,9 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tracing::{info, trace};
 use wordbase::protocol::NewSentence;
 
-use crate::Config;
+use crate::{Config, Event};
 
-pub async fn run(
-    config: Arc<Config>,
-    send_new_sentence: broadcast::Sender<NewSentence>,
-) -> Result<Never> {
+pub async fn run(config: Arc<Config>, send_event: broadcast::Sender<Event>) -> Result<Never> {
     loop {
         tokio::time::sleep(config.textractor_connect_interval).await;
 
@@ -25,14 +22,14 @@ pub async fn run(
         };
 
         info!("Textractor connected");
-        let Err(err) = handle_stream(stream, send_new_sentence.clone()).await;
+        let Err(err) = handle_stream(stream, send_event.clone()).await;
         info!("Textractor disconnected: {err:?}");
     }
 }
 
 async fn handle_stream(
     mut stream: WebSocketStream<MaybeTlsStream<TcpStream>>,
-    send_new_sentence: broadcast::Sender<NewSentence>,
+    send_event: broadcast::Sender<Event>,
 ) -> Result<Never> {
     loop {
         let message = stream
@@ -43,7 +40,7 @@ async fn handle_stream(
             .into_text()
             .context("received message which is not UTF-8 text")?;
         let new_sentence = serde_json::from_str::<NewSentence>(&message)
-            .context("received message which is not a `NewSentence`")?;
-        _ = send_new_sentence.send(new_sentence);
+            .context("received message which is not a new sentence")?;
+        _ = send_event.send(Event::NewSentence(new_sentence));
     }
 }

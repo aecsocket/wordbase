@@ -89,12 +89,20 @@ pub async fn from_yomitan(db: Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()
     let mut tx = db.begin().await.context("failed to begin transaction")?;
 
     let dictionary_id = {
+        let max_position = sqlx::query_scalar!("SELECT MAX(position) FROM dictionaries")
+            .fetch_one(&mut *tx)
+            .await
+            .context("failed to fetch next dictionary position")?
+            .unwrap_or(1);
+        let next_position = max_position + 1;
+
         info!("Writing dictionary record...");
         let result = sqlx::query!(
-            "INSERT INTO dictionaries (name, version)
-            VALUES ($1, $2)",
+            "INSERT INTO dictionaries (name, version, position)
+            VALUES ($1, $2, $3)",
             name,
             index.revision,
+            next_position
         )
         .execute(&mut *tx)
         .await
@@ -120,7 +128,6 @@ pub async fn from_yomitan(db: Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()
         .await
         .context("failed to import term meta bank")?;
 
-    info!("Committing...");
     tx.commit().await.context("failed to commit transaction")?;
 
     info!("*=* COMPLETE *=*");
@@ -150,15 +157,9 @@ async fn import_term_bank(
         .cloned()
         .collect::<Vec<_>>();
 
-        let content = term
-            .glossary
-            .into_iter()
-            .filter_map(to_glossary_content)
-            .collect();
-
         let mut glossary = Glossary::default();
         glossary.tags = tags;
-        glossary.html = todo!();
+        glossary.html = Some(to_html(term.glossary.into_iter()));
 
         async {
             scratch.clear();
@@ -296,7 +297,17 @@ fn to_term_tag(raw: yomitan::Tag) -> TermTag {
     }
 }
 
-fn to_glossary_content(raw: yomitan::Glossary) -> Option<structured::Content> {
+fn to_html(raw: impl Iterator<Item = yomitan::Glossary>) -> String {
+    let mut html = String::new();
+    for glossary in raw {
+        if let Some(content) = to_content(glossary) {
+            _ = yomitan::html::render_to_writer(&mut html, &content);
+        }
+    }
+    html
+}
+
+fn to_content(raw: yomitan::Glossary) -> Option<structured::Content> {
     match raw {
         yomitan::Glossary::Deinflection(_) => None,
         yomitan::Glossary::String(text)

@@ -86,11 +86,12 @@ fn list_dictionaries(client: &SocketClient) {
     let dictionaries = client.dictionaries();
     println!("Dictionaries ({}):", dictionaries.len());
     for (index, dictionary) in dictionaries.values().enumerate() {
+        let index = index + 1;
         let enabled = if dictionary.enabled { "[on]" } else { "[  ]" };
         let id = dictionary.id.0;
         let name = &dictionary.name;
         let version = &dictionary.version;
-        println!("  {enabled} #{index}) ID {id}: {name} ver {version}");
+        println!("  {index}. {enabled} [ID {id}] {name} ver {version}");
     }
 }
 

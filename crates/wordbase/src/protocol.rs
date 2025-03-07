@@ -35,8 +35,10 @@ pub enum FromServer {
     Error {
         message: String,
     },
-    Sync {
+    SyncLookupConfig {
         lookup_config: LookupConfig,
+    },
+    SyncDictionaries {
         dictionaries: Vec<Dictionary>,
     },
     NewSentence(NewSentence),
@@ -84,13 +86,15 @@ mod tests {
         });
 
         round_trip(FromServer::Error { message: default() });
-        round_trip(FromServer::Sync {
+        round_trip(FromServer::SyncLookupConfig {
             lookup_config: default(),
-            dictionaries: vec![Dictionary::default()],
+        });
+        round_trip(FromServer::SyncDictionaries {
+            dictionaries: vec![default()],
         });
         round_trip(FromServer::NewSentence(NewSentence::default()));
         round_trip(FromServer::Lookup {
-            entries: vec![LookupEntry::default()],
+            entries: vec![default()],
         });
         round_trip(FromServer::RemoveDictionary { result: Ok(()) });
         round_trip(FromServer::RemoveDictionary {

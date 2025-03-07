@@ -17,14 +17,14 @@ use tracing::{Instrument, info, info_span, warn};
 use wordbase::protocol::{FromClient, FromServer, NewSentence};
 
 use crate::{
-    Config, db, import,
+    Config, Event, db, import,
     mecab::{MecabInfo, MecabRequest},
 };
 
 pub async fn run(
     config: Arc<Config>,
     send_mecab_request: mpsc::Sender<MecabRequest>,
-    send_new_sentence: broadcast::Sender<NewSentence>,
+    send_event: broadcast::Sender<Event>,
 ) -> Result<Never> {
     let db = SqlitePoolOptions::new()
     // todo fix
@@ -37,52 +37,56 @@ pub async fn run(
         )
         .await
         .context("failed to connect to database")?;
-    info!("Connected to SQLite database");
+    info!("Connected to database");
 
-    let initialize = true;
-    if initialize {
-        // TODO
-        const IMPORTS: &[&str] = &[
-            "1. jitendex-yomitan.zip",
-            "2. JMnedict.zip",
-            "3. [Grammar] Dictionary of Japanese Grammar 日本語文法辞典 (Recommended).zip",
-            "4. [Monolingual] 三省堂国語辞典　第八版 (Recommended).zip",
-            "5. [JA-JA] 明鏡国語辞典　第二版_2023_07_22.zip",
-            "6. 漢字ペディア同訓異義.zip",
-            "7. [Monolingual] デジタル大辞泉.zip",
-            "8. [Monolingual] PixivLight.zip",
-            "9. [Monolingual] 実用日本語表現辞典 Extended (Recommended).zip",
-            "10. kanjiten.zip",
-            "11. [Pitch] NHK 2016.zip",
-            "12. JPDB_v2.2_Frequency_Kana_2024-10-13.zip",
-            "13. [Freq] VN Freq v2.zip",
-            "14. [Freq] Novels.zip",
-            "15. [Freq] Anime & J-drama.zip",
-            "16. [JA Freq] YoutubeFreqV3.zip",
-            "17. [JA Freq] Wikipedia v2.zip",
-            "18. BCCWJ_SUW_LUW_combined.zip",
-            "19. [Freq] CC100.zip",
-            "20. [Freq] InnocentRanked.zip",
-            "21. [Freq] Narou Freq.zip",
-        ];
+    sqlx::query(include_str!("setup_db.sql"))
+        .execute(&db)
+        .await
+        .context("failed to set up database")?;
+    info!("Set up database");
 
-        // sqlx::query(include_str!("setup_db.sql"))
-        //     .execute(&db)
-        //     .await
-        //     .context("failed to set up database")?;
+    // TODO
+    const IMPORTS: &[&str] = &[
+        // "1. jitendex-yomitan.zip",
+        "2. JMnedict.zip",
+        "11. [Pitch] NHK 2016.zip",
+        "12. JPDB_v2.2_Frequency_Kana_2024-10-13.zip",
+    ];
+    // const IMPORTS: &[&str] = &[
+    //     "1. jitendex-yomitan.zip",
+    //     "2. JMnedict.zip",
+    //     "3. [Grammar] Dictionary of Japanese Grammar 日本語文法辞典 (Recommended).zip",
+    //     "4. [Monolingual] 三省堂国語辞典　第八版 (Recommended).zip",
+    //     "5. [JA-JA] 明鏡国語辞典　第二版_2023_07_22.zip",
+    //     "6. 漢字ペディア同訓異義.zip",
+    //     "7. [Monolingual] デジタル大辞泉.zip",
+    //     "8. [Monolingual] PixivLight.zip",
+    //     "9. [Monolingual] 実用日本語表現辞典 Extended (Recommended).zip",
+    //     "10. kanjiten.zip",
+    //     "11. [Pitch] NHK 2016.zip",
+    //     "12. JPDB_v2.2_Frequency_Kana_2024-10-13.zip",
+    //     "13. [Freq] VN Freq v2.zip",
+    //     "14. [Freq] Novels.zip",
+    //     "15. [Freq] Anime & J-drama.zip",
+    //     "16. [JA Freq] YoutubeFreqV3.zip",
+    //     "17. [JA Freq] Wikipedia v2.zip",
+    //     "18. BCCWJ_SUW_LUW_combined.zip",
+    //     "19. [Freq] CC100.zip",
+    //     "20. [Freq] InnocentRanked.zip",
+    //     "21. [Freq] Narou Freq.zip",
+    // ];
 
-        let mut joins = JoinSet::new();
-        for path in IMPORTS {
-            joins.spawn(
-                import::from_yomitan(db.clone(), format!("/home/dev/all-dictionaries/{path}"))
-                    .instrument(info_span!("import", %path)),
-            );
-        }
-        while let Some(result) = joins.join_next().await {
-            result
-                .context("cancelled import task")?
-                .context("failed to import")?;
-        }
+    let mut joins = JoinSet::new();
+    for path in IMPORTS {
+        joins.spawn(
+            import::from_yomitan(db.clone(), format!("/home/dev/all-dictionaries/{path}"))
+                .instrument(info_span!("import", %path)),
+        );
+    }
+    while let Some(result) = joins.join_next().await {
+        result
+            .context("cancelled import task")?
+            .context("failed to import")?;
     }
 
     let listener = TcpListener::bind(&config.listen_addr)
@@ -100,12 +104,12 @@ pub async fn run(
         let config = config.clone();
         let db = db.clone();
         let send_mecab_request = send_mecab_request.clone();
-        let send_new_sentence = send_new_sentence.clone();
+        let send_event = send_event.clone();
         tokio::spawn(
             async move {
                 info!("Incoming connection from {peer_addr:?}");
                 let Err(err) =
-                    handle_stream(config, db, send_mecab_request, send_new_sentence, stream).await;
+                    handle_stream(config, db, send_mecab_request, send_event, stream).await;
                 info!("Connection lost: {err:?}");
             }
             .instrument(info_span!("connection", id = %connection_id)),
@@ -129,31 +133,34 @@ async fn handle_stream(
     config: Arc<Config>,
     db: Pool<Sqlite>,
     send_mecab_request: mpsc::Sender<MecabRequest>,
-    send_new_sentence: broadcast::Sender<NewSentence>,
+    send_event: broadcast::Sender<Event>,
     stream: TcpStream,
 ) -> Result<Never> {
     let stream = tokio_tungstenite::accept_async(stream)
         .await
         .context("failed to accept WebSocket stream")?;
     let mut connection = Connection(stream);
-    let mut recv_new_sentence = send_new_sentence.subscribe();
+    let mut recv_event = send_event.subscribe();
 
     let dictionaries = db::list_dictionaries(&db)
         .await
         .context("failed to fetch dictionaries")?;
 
     connection
-        .write(&FromServer::Sync {
+        .write(&FromServer::SyncLookupConfig {
             lookup_config: config.lookup.clone(),
-            dictionaries,
         })
         .await
-        .context("failed to sync config")?;
+        .context("failed to sync lookup config")?;
+    connection
+        .write(&FromServer::SyncDictionaries { dictionaries })
+        .await
+        .context("failed to sync dictionaries")?;
 
     loop {
         tokio::select! {
-            Ok(new_sentence) = recv_new_sentence.recv() => {
-                forward_new_sentence(&mut connection, new_sentence).await;
+            Ok(event) = recv_event.recv() => {
+                forward_event(&mut connection, event).await;
             }
             data = connection.next() => {
                 let data = data
@@ -163,7 +170,7 @@ async fn handle_stream(
                     &config,
                     &db,
                     &send_mecab_request,
-                    &send_new_sentence,
+                    &send_event,
                     &mut connection,
                     data,
                 )
@@ -178,17 +185,20 @@ async fn handle_stream(
     }
 }
 
-async fn forward_new_sentence(connection: &mut Connection, new_sentence: NewSentence) {
-    _ = connection
-        .write(&FromServer::NewSentence(new_sentence))
-        .await;
+async fn forward_event(connection: &mut Connection, event: Event) {
+    let message = match event {
+        Event::NewSentence(new_sentence) => FromServer::NewSentence(new_sentence),
+        Event::SyncDictionaries(dictionaries) => FromServer::SyncDictionaries { dictionaries },
+    };
+
+    _ = connection.write(&message).await;
 }
 
 async fn handle_message(
     config: &Config,
     db: &Pool<Sqlite>,
     send_mecab_request: &mpsc::Sender<MecabRequest>,
-    send_new_sentence: &broadcast::Sender<NewSentence>,
+    send_event: &broadcast::Sender<Event>,
     connection: &mut Connection,
     data: Message,
 ) -> Result<()> {
@@ -201,7 +211,7 @@ async fn handle_message(
 
     match message {
         FromClient::NewSentence(new_sentence) => {
-            _ = send_new_sentence.send(new_sentence);
+            _ = send_event.send(Event::NewSentence(new_sentence));
             Ok(())
         }
         FromClient::Lookup { text } => {
@@ -265,6 +275,6 @@ async fn do_lookup(
         return Ok(());
     };
 
-    let info = db::lookup(db, mecab.lemma).await?;
+    // let info = db::lookup(db, mecab.lemma).await?;
     Ok(())
 }

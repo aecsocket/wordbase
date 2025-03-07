@@ -37,13 +37,14 @@ wordbase-client-tokio = { path = "crates/wordbase-client-tokio", default-feature
 anyhow = "1.0"
 bzip2 = "0.5"
 clap = "4.5"
+derive_more = "2.0"
 foldhash = "0.1.4"
 futures = "0.3"
 indexmap = "2.7"
 itertools = "0.14.0"
 serde-value = "0.7.0"
+zip = "2.2"
 
-derive_more = { version = "2.0", default-features = false }
 form_urlencoded = { version = "1.2", default-features = false }
 glib = { version = "0.20", default-features = false }
 gtk4 = { version = "0.9", default-features = false }
@@ -65,7 +66,6 @@ tokio-tungstenite = { version = "0.26", default-features = false }
 tracing = { version = "0.1", default-features = false }
 tracing-subscriber = { version = "0.3", default-features = false }
 webkit6 = { version = "0.4", default-features = false }
-zip = { version = "2.2", default-features = false }
 
 [workspace.metadata.cargo-shear]
 ignored = ["bzip2"]

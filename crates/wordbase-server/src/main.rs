@@ -15,7 +15,9 @@ use std::{
 use anyhow::Result;
 use mecab::MecabRequest;
 use tokio::sync::{broadcast, mpsc};
-use wordbase::{DEFAULT_PORT, lookup::LookupConfig, protocol::NewSentence};
+use wordbase::{DEFAULT_PORT, Dictionary, lookup::LookupConfig, protocol::NewSentence};
+
+const CHANNEL_BUF_CAP: usize = 4;
 
 #[derive(Debug)]
 struct Config {
@@ -36,13 +38,19 @@ impl Default for Config {
     }
 }
 
+#[derive(Debug, Clone)]
+enum Event {
+    NewSentence(NewSentence),
+    SyncDictionaries(Vec<Dictionary>),
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt().init();
     let config = Arc::new(Config::default());
 
-    let (send_mecab_request, recv_mecab_request) = mpsc::channel::<MecabRequest>(4);
-    let (send_new_sentence, _) = broadcast::channel::<NewSentence>(4);
+    let (send_mecab_request, recv_mecab_request) = mpsc::channel::<MecabRequest>(CHANNEL_BUF_CAP);
+    let (send_event, _) = broadcast::channel::<Event>(CHANNEL_BUF_CAP);
 
     #[expect(
         unreachable_code,
@@ -50,8 +58,8 @@ async fn main() -> Result<()> {
     )]
     tokio::try_join!(
         mecab::run(recv_mecab_request),
-        textractor::run(config.clone(), send_new_sentence.clone()),
-        server::run(config.clone(), send_mecab_request, send_new_sentence),
+        textractor::run(config.clone(), send_event.clone()),
+        server::run(config.clone(), send_mecab_request, send_event),
     )?;
     Ok(())
 }

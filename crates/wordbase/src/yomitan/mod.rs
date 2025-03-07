@@ -1,8 +1,8 @@
-mod html;
+pub mod html;
 mod parse;
 pub mod structured;
 
-pub use {html::*, parse::*};
+pub use parse::*;
 
 use derive_more::{Deref, DerefMut, From};
 use foldhash::HashMap;

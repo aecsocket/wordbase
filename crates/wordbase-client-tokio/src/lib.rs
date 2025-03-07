@@ -114,7 +114,8 @@ pub async fn connect(
 
 #[derive(Debug)]
 pub enum Event {
-    Sync,
+    SyncLookupConfig,
+    SyncDictionaries,
     NewSentence(NewSentence),
 }
 
@@ -124,22 +125,36 @@ where
 {
     pub async fn handshake(stream: S) -> Result<Self, (ConnectionError, S)> {
         let mut connection = Connection(stream);
-        match connection.recv().await {
-            Ok(FromServer::Sync {
-                lookup_config,
-                dictionaries,
-            }) => Ok(Self {
-                connection,
-                lookup_config,
-                dictionaries: dictionaries
-                    .into_iter()
-                    .map(|dict| (dict.id, dict))
-                    .collect(),
-                events: Vec::new(),
-            }),
-            Ok(_) => Err((ConnectionError::WrongMessageKind, connection.0)),
-            Err(err) => Err((err, connection.0)),
-        }
+
+        let lookup_config = match connection.recv().await {
+            Ok(FromServer::SyncLookupConfig { lookup_config }) => lookup_config,
+            Ok(_) => {
+                return Err((ConnectionError::WrongMessageKind, connection.0));
+            }
+            Err(err) => {
+                return Err((err, connection.0));
+            }
+        };
+
+        let dictionaries = match connection.recv().await {
+            Ok(FromServer::SyncDictionaries { dictionaries }) => dictionaries,
+            Ok(_) => {
+                return Err((ConnectionError::WrongMessageKind, connection.0));
+            }
+            Err(err) => {
+                return Err((err, connection.0));
+            }
+        };
+
+        Ok(Self {
+            connection,
+            lookup_config,
+            dictionaries: dictionaries
+                .into_iter()
+                .map(|dict| (dict.id, dict))
+                .collect(),
+            events: Vec::new(),
+        })
     }
 
     #[must_use]
@@ -156,16 +171,16 @@ where
     fn event_from(&mut self, message: FromServer) -> Result<Event, ConnectionError> {
         match message {
             FromServer::Error { message } => Err(ConnectionError::Server(message)),
-            FromServer::Sync {
-                lookup_config,
-                dictionaries,
-            } => {
+            FromServer::SyncLookupConfig { lookup_config } => {
                 self.lookup_config = lookup_config;
+                Ok(Event::SyncLookupConfig)
+            }
+            FromServer::SyncDictionaries { dictionaries } => {
                 self.dictionaries = dictionaries
                     .into_iter()
                     .map(|dict| (dict.id, dict))
                     .collect();
-                Ok(Event::Sync)
+                Ok(Event::SyncDictionaries)
             }
             FromServer::NewSentence(new_sentence) => Ok(Event::NewSentence(new_sentence)),
             _ => Err(ConnectionError::WrongMessageKind),
