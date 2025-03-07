@@ -14,7 +14,7 @@ use tokio::{
 };
 use tokio_tungstenite::{WebSocketStream, tungstenite::Message};
 use tracing::{Instrument, info, info_span, warn};
-use wordbase::protocol::{FromClient, FromServer, NewSentence};
+use wordbase::protocol::{FromClient, FromServer, HookSentence};
 
 use crate::{
     Config, Event, db, import,
@@ -187,7 +187,7 @@ async fn handle_stream(
 
 async fn forward_event(connection: &mut Connection, event: Event) {
     let message = match event {
-        Event::NewSentence(new_sentence) => FromServer::NewSentence(new_sentence),
+        Event::HookSentence(sentencece) => FromServer::HookSentence(sentencece),
         Event::SyncDictionaries(dictionaries) => FromServer::SyncDictionaries { dictionaries },
     };
 
@@ -210,8 +210,8 @@ async fn handle_message(
         serde_json::from_slice::<FromClient>(&data).context("received invalid message")?;
 
     match message {
-        FromClient::NewSentence(new_sentence) => {
-            _ = send_event.send(Event::NewSentence(new_sentence));
+        FromClient::HookSentence(sentence) => {
+            _ = send_event.send(Event::HookSentence(sentence));
             Ok(())
         }
         FromClient::Lookup { text } => {

@@ -21,15 +21,16 @@ import * as Area from "./ui/dragArea.js";
 import * as RichLabel from "./ui/richLabel.js";
 import * as DateTimeLabel from "./ui/dateTimeLabel.js";
 import * as StickyScrollView from "./ui/stickyScrollView.js";
+import * as Wordbase from "./wordbase.js";
 
 /**
- * @typedef {Object} NewSentence
+ * @typedef {Object} HookSentence
  * @property {string} process_path
  * @property {string} sentence
  * 
  * @typedef {Object} DialogBox
  * @property {St.Widget} history_container
- * @property {WordbaseClient} wordbase
+ * @property {Wordbase.Client} wordbase
  * 
  * @typedef {Object} WordbaseClient
  * @property {Soup.WebsocketConnection} connection
@@ -43,19 +44,19 @@ export default class WordbaseIntegrationExtension extends Extension {
     /** @type {Gio.Settings} */
     _settings;
     /** @type {Soup.Session} */
-    _ws_session;
+    _soup;
     /** @type {MessageTray.Source} */
     _notification_source;
+    /** @type {MessageTray.Notification?} */
+    _status_notification;
     /** @type {Map<string, DialogBox>} */
     _dialog_boxes;
-    /** @type {Soup.WebsocketConnection} */
-    _texthooker;
-    /** @type {MessageTray.Notification?} */
-    _texthooker_notification;
+    /** @type {WordbaseClient} */
+    _wordbase;
 
     enable() {
         this._settings = this.getSettings();
-        this._ws_session = new Soup.Session();
+        this._soup = new Soup.Session();
         this._notification_source = new MessageTray.Source({
             title: this.metadata.name,
             iconName: "dialog-information",
@@ -67,9 +68,6 @@ export default class WordbaseIntegrationExtension extends Extension {
         Main.messageTray.add(this._notification_source);
         this._dialog_boxes = new Map();
 
-        this._settings.connect("changed::texthooker-url", (__, ___) => {
-            this._connect_texthooker();
-        });
         this._settings.connect("changed::wordbase-url", (__, ___) => {
             this._connect_wordbase();
         });
@@ -84,33 +82,33 @@ export default class WordbaseIntegrationExtension extends Extension {
 
     disable() {
         this._settings = undefined;
-        this._ws_session = undefined;
+        this._soup = undefined;
 
         this._notification_source?.destroy();
         this._notification_source = undefined;
+        this._status_notification?.destroy();
+        this._status_notification = undefined;
 
         this._dialog_boxes.forEach((dialog_box, _) => {
             dialog_box.root.destroy();
         });
         this._dialog_boxes = undefined;
 
-        this._texthooker = undefined;
-        this._texthooker_notification?.destroy();
-        this._texthooker_notification = undefined;
+        this._wordbase = undefined;
     }
 
     /**
      * @param {MessageTray.Notification} notification 
      */
-    _show_texthooker_notification(notification) {
-        this._texthooker_notification?.destroy(MessageTray.NotificationDestroyedReason.REPLACED);
-        this._notification_source.addNotification(notification);
-        this._texthooker_notification = notification;
+    _show_status_notification(notification) {
+        this._status_notification?.destroy(MessageTray.NotificationDestroyedReason.REPLACED);
+        this._status_notification.addNotification(notification);
+        this._status_notification = notification;
     }
 
     _connect_texthooker() {
         const url = this._settings.get_string("texthooker-url");
-        this._ws_session.websocket_connect_async(
+        this._soup.websocket_connect_async(
             new Soup.Message({
                 method: "GET",
                 uri: GLib.Uri.parse(url, GLib.UriFlags.NONE),
@@ -168,12 +166,11 @@ export default class WordbaseIntegrationExtension extends Extension {
         );
     }
 
-    /**
-     * @param {function(WordbaseClient): void} callback 
-     */
-    _new_wordbase_client(callback) {
+    _connect_wordbase() {
         const url = this._settings.get_string("wordbase-url");
-        this._ws_session.websocket_connect_async(
+        Wordbase.Client
+
+        this._soup.websocket_connect_async(
             new Soup.Message({
                 method: "GET",
                 uri: GLib.Uri.parse(url, GLib.UriFlags.NONE),
@@ -206,12 +203,12 @@ export default class WordbaseIntegrationExtension extends Extension {
     }
 
     /**
-     * @param {NewSentence} new_sentence 
+     * @param {HookSentence} message 
      */
-    _on_new_sentence(new_sentence) {
-        const sentence = new_sentence.sentence.trim();
+    _on_hook_sentence(message) {
+        const sentence = message.sentence.trim();
 
-        let dialog_box = this._dialog_boxes.get(new_sentence.process_path);
+        let dialog_box = this._dialog_boxes.get(message.process_path);
         if (!dialog_box) {
             const target_window = global.display.get_focus_window();
             if (target_window) {
@@ -223,7 +220,7 @@ export default class WordbaseIntegrationExtension extends Extension {
                 dialog_box = this._new_dialog_box(global.window_group);
                 // END TODO
             }
-            this._dialog_boxes.set(new_sentence.process_path, dialog_box);
+            this._dialog_boxes.set(message.process_path, dialog_box);
         }
 
         const sentence_label = this._new_sentence_label(sentence);
@@ -333,10 +330,9 @@ export default class WordbaseIntegrationExtension extends Extension {
 
     /**
      * @param {string} sentence 
-     * @param {function(): WordbaseClient?} get_wordbase
      * @returns {RichLabel.RichLabel}
      */
-    _new_sentence_label(sentence, get_wordbase) {
+    _new_sentence_label(sentence) {
         const label = new RichLabel.RichLabel({
             text: sentence,
             x_expand: true,
@@ -350,7 +346,7 @@ export default class WordbaseIntegrationExtension extends Extension {
              * @returns {boolean}
              */
             (text, event) => {
-                const wordbase = get_wordbase();
+                const wordbase = this._wordbase;
                 if (!wordbase) {
                     return;
                 }
@@ -365,7 +361,7 @@ export default class WordbaseIntegrationExtension extends Extension {
                     char_pos + this._wordbase.lookup_config.max_request_len,
                 );
 
-                wordbase.connection.send_text(JSON.stringify({
+                this._wordbase.connection.send_text(JSON.stringify({
                     type: "Lookup",
                     text: lookup_text,
                     wants_html: false,

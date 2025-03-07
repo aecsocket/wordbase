@@ -5,7 +5,7 @@ use futures::{StreamExt, never::Never};
 use tokio::{net::TcpStream, sync::broadcast};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tracing::{info, trace};
-use wordbase::protocol::NewSentence;
+use wordbase::protocol::HookSentence;
 
 use crate::{Config, Event};
 
@@ -39,8 +39,8 @@ async fn handle_stream(
             .context("stream error")?
             .into_text()
             .context("received message which is not UTF-8 text")?;
-        let new_sentence = serde_json::from_str::<NewSentence>(&message)
-            .context("received message which is not a new sentence")?;
-        _ = send_event.send(Event::NewSentence(new_sentence));
+        let sentence = serde_json::from_str::<HookSentence>(&message)
+            .context("received message which is not a texthooker sentence")?;
+        _ = send_event.send(Event::HookSentence(sentence));
     }
 }

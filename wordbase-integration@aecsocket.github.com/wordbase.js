@@ -13,7 +13,7 @@ import Soup from "gi://Soup";
  * @property {Object} json
  */
 
-export default class WordbaseClient {
+export default class Client {
     /** @private @type {Soup.WebsocketConnection} */
     _connection;
     /** @private @type {(function(LookupResponse): void)?} */
@@ -23,7 +23,7 @@ export default class WordbaseClient {
      * @param {Soup.Session} soup
      * @param {string} url
      * @param {function(any): void} on_error
-     * @param {function(WordbaseClient): void} on_connect
+     * @param {function(Client): void} on_connect
      */
     static connect(soup, url, on_error, on_connect) {
         soup.websocket_connect_async(
@@ -64,7 +64,7 @@ export default class WordbaseClient {
                     }
                 });
 
-                const client = new WordbaseClient(connection);
+                const client = new Client(connection);
                 on_connect()
             },
         );
@@ -83,7 +83,6 @@ export default class WordbaseClient {
         this._connection.send_text(JSON.stringify({
             type: "Lookup",
             text,
-            wants_html: false,
         }));
     }
 }

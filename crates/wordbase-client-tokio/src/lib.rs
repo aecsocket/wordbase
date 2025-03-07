@@ -17,7 +17,7 @@ use tokio_tungstenite::{
 use wordbase::{
     Dictionary, DictionaryId,
     lookup::{LookupConfig, LookupEntry},
-    protocol::{DictionaryNotFound, FromClient, FromServer, NewSentence},
+    protocol::{DictionaryNotFound, FromClient, FromServer, HookSentence},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -116,7 +116,7 @@ pub async fn connect(
 pub enum Event {
     SyncLookupConfig,
     SyncDictionaries,
-    NewSentence(NewSentence),
+    HookSentence(HookSentence),
 }
 
 impl<S> Client<S>
@@ -182,7 +182,7 @@ where
                     .collect();
                 Ok(Event::SyncDictionaries)
             }
-            FromServer::NewSentence(new_sentence) => Ok(Event::NewSentence(new_sentence)),
+            FromServer::HookSentence(sentence) => Ok(Event::HookSentence(sentence)),
             _ => Err(ConnectionError::WrongMessageKind),
         }
     }
@@ -202,9 +202,9 @@ where
         Ok(())
     }
 
-    pub async fn new_sentence(&mut self, new_sentence: NewSentence) -> Result<(), ConnectionError> {
+    pub async fn hook_sentence(&mut self, sentence: HookSentence) -> Result<(), ConnectionError> {
         self.connection
-            .send(&FromClient::NewSentence(new_sentence))
+            .send(&FromClient::HookSentence(sentence))
             .await?;
         Ok(())
     }

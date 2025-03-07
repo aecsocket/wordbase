@@ -15,7 +15,7 @@ use std::{
 use anyhow::Result;
 use mecab::MecabRequest;
 use tokio::sync::{broadcast, mpsc};
-use wordbase::{DEFAULT_PORT, Dictionary, lookup::LookupConfig, protocol::NewSentence};
+use wordbase::{DEFAULT_PORT, Dictionary, lookup::LookupConfig, protocol::HookSentence};
 
 const CHANNEL_BUF_CAP: usize = 4;
 
@@ -40,7 +40,7 @@ impl Default for Config {
 
 #[derive(Debug, Clone)]
 enum Event {
-    NewSentence(NewSentence),
+    HookSentence(HookSentence),
     SyncDictionaries(Vec<Dictionary>),
 }
 

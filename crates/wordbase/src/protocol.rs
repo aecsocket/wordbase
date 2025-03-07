@@ -10,7 +10,7 @@ use crate::{
 #[serde(tag = "type")]
 pub enum FromClient {
     #[from]
-    NewSentence(NewSentence),
+    HookSentence(HookSentence),
     Lookup {
         text: String,
     },
@@ -24,7 +24,7 @@ pub enum FromClient {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct NewSentence {
+pub struct HookSentence {
     pub process_path: String,
     pub sentence: String,
 }
@@ -41,7 +41,7 @@ pub enum FromServer {
     SyncDictionaries {
         dictionaries: Vec<Dictionary>,
     },
-    NewSentence(NewSentence),
+    HookSentence(HookSentence),
     Lookup {
         entries: Vec<LookupEntry>,
     },
@@ -75,7 +75,7 @@ mod tests {
 
     #[test]
     fn round_trip_all() {
-        round_trip(FromClient::from(NewSentence::default()));
+        round_trip(FromClient::from(HookSentence::default()));
         round_trip(FromClient::Lookup { text: default() });
         round_trip(FromClient::RemoveDictionary {
             dictionary_id: default(),
@@ -92,7 +92,7 @@ mod tests {
         round_trip(FromServer::SyncDictionaries {
             dictionaries: vec![default()],
         });
-        round_trip(FromServer::NewSentence(NewSentence::default()));
+        round_trip(FromServer::HookSentence(HookSentence::default()));
         round_trip(FromServer::Lookup {
             entries: vec![default()],
         });

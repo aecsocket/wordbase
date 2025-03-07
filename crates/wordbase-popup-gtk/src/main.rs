@@ -25,7 +25,7 @@ use tokio::{
     sync::{broadcast, mpsc},
     time,
 };
-use wordbase::{Dictionary, DictionaryId, lookup::LookupEntry, protocol::NewSentence};
+use wordbase::{Dictionary, DictionaryId, lookup::LookupEntry, protocol::HookSentence};
 use wordbase_client_tokio::{IndexMap, SocketClient};
 
 const CHANNEL_BUF_CAP: usize = 4;
@@ -160,7 +160,7 @@ async fn local_backend(
                 toast_overlay.add_toast(adw::Toast::new("Updated dictionaries"));
                 current_dictionaries.replace(dictionaries);
             }
-            BackendEvent::NewSentence(_) => {}
+            BackendEvent::HookSentence(_) => {}
         }
     }
 }
@@ -170,7 +170,7 @@ enum BackendEvent {
     Connected { dictionaries: DictionaryMap },
     Disconnected,
     SyncDictionaries { dictionaries: DictionaryMap },
-    NewSentence(NewSentence),
+    HookSentence(HookSentence),
 }
 
 async fn tokio_backend(
@@ -239,8 +239,8 @@ fn forward_event(
             })?;
             Ok(())
         }
-        wordbase_client_tokio::Event::NewSentence(new_sentence) => {
-            send_event.send(BackendEvent::NewSentence(new_sentence))?;
+        wordbase_client_tokio::Event::HookSentence(sentence) => {
+            send_event.send(BackendEvent::HookSentence(sentence))?;
             Ok(())
         }
     }
