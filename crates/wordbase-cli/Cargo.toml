@@ -20,7 +20,7 @@ all-features = true
 [features]
 
 [dependencies]
-wordbase = { workspace = true, features = ["yomitan"] }
+wordbase = { workspace = true }
 wordbase-client-tokio = { workspace = true }
 
 anyhow = { workspace = true }

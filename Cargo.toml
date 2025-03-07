@@ -31,8 +31,8 @@ type_complexity = "allow"
 missing_errors_doc = "allow"
 
 [workspace.dependencies]
-wordbase = { path = "crates/wordbase", default-features = false }
-wordbase-client-tokio = { path = "crates/wordbase-client-tokio", default-features = false }
+wordbase = { path = "crates/wordbase" }
+wordbase-client-tokio = { path = "crates/wordbase-client-tokio" }
 
 anyhow = "1.0"
 bzip2 = "0.5"

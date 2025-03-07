@@ -23,19 +23,19 @@ all-features = true
 wordbase = { workspace = true }
 wordbase-client-tokio = { workspace = true }
 
-anyhow = { workspace = true, default-features = true }
+anyhow = { workspace = true }
 derive_more = { workspace = true, features = ["deref"] }
-foldhash = { workspace = true, default-features = true }
-form_urlencoded = { workspace = true, default-features = true }
+foldhash = { workspace = true }
+form_urlencoded = { workspace = true }
 futures = { workspace = true }
-glib = { workspace = true, default-features = true, features = ["log"] }
+glib = { workspace = true, features = ["log"] }
 gtk4 = { workspace = true, features = ["gnome_47", "blueprint"] }
 libadwaita = { workspace = true, features = ["v1_6"] }
 log = { workspace = true }
-open = { workspace = true, default-features = true }
+open = { workspace = true }
 pretty_env_logger = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-webkit6 = { workspace = true, default-features = true }
+webkit6 = { workspace = true }
 
 # enable features in transitive dependency crates
 
