@@ -5,31 +5,26 @@ use foldhash::HashMap;
 use gtk::{gdk, gio, prelude::*};
 use log::{info, warn};
 use webkit::prelude::{PolicyDecisionExt, WebViewExt};
-use wordbase::{
-    jp,
-    schema::{Dictionary, DictionaryId, Frequency, Glossary, LookupInfo, Pitch, Term},
-    yomitan::{self, structured},
-};
+use wordbase::{Dictionary, DictionaryId, Frequency, Glossary, Term, lang::jp, lookup::LookupInfo};
+use wordbase_client_tokio::IndexMap;
 
 use crate::ui;
 
 #[derive(Debug, Clone, Default, Deref, DerefMut)]
 pub struct Terms(pub IndexMap<Term, TermInfo>);
 
-type IndexMap<K, V> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
-
 #[derive(Debug, Clone, Default)]
 pub struct TermInfo {
-    pub glossaries: IndexMap<DictionaryId, (DictionaryTitle, Vec<Glossary>)>,
-    pub frequencies: IndexMap<DictionaryId, (DictionaryTitle, Vec<Frequency>)>,
-    pub pitches: IndexMap<DictionaryId, (DictionaryTitle, Vec<Pitch>)>,
+    pub glossaries: IndexMap<DictionaryId, (DictionaryName, Vec<Glossary>)>,
+    pub frequencies: IndexMap<DictionaryId, (DictionaryName, Vec<Frequency>)>,
+    pub jp_pitches: IndexMap<DictionaryId, (DictionaryName, Vec<jp::Pitch>)>,
 }
 
-pub type DictionaryTitle = String;
+pub type DictionaryName = String;
 
 impl Terms {
-    pub fn new(dictionaries: &HashMap<DictionaryId, Dictionary>, info: LookupInfo) -> Self {
-        let title_of = |id: DictionaryId| -> DictionaryTitle {
+    pub fn new(dictionaries: &IndexMap<DictionaryId, Dictionary>, lookup: LookupInfo) -> Self {
+        let name_of = |id: DictionaryId| -> DictionaryName {
             dictionaries
                 .get(&id)
                 .map_or_else(|| format!("{id:?}"), |dictionary| dictionary.name.clone())
@@ -37,32 +32,32 @@ impl Terms {
 
         let mut this = Self::default();
 
-        for (source, term, glossary) in info.glossaries {
+        for (source, term, glossary) in lookup.glossaries {
             this.entry(term)
                 .or_default()
                 .glossaries
                 .entry(source)
-                .or_insert_with(|| (title_of(source), Vec::new()))
+                .or_insert_with(|| (name_of(source), Vec::new()))
                 .1
                 .push(glossary);
         }
 
-        for (source, term, frequency) in info.frequencies {
+        for (source, term, frequency) in lookup.frequencies {
             this.entry(term)
                 .or_default()
                 .frequencies
                 .entry(source)
-                .or_insert_with(|| (title_of(source), Vec::new()))
+                .or_insert_with(|| (name_of(source), Vec::new()))
                 .1
                 .push(frequency);
         }
 
-        for (source, term, pitch) in info.pitches {
+        for (source, term, pitch) in lookup.pitches {
             this.entry(term)
                 .or_default()
                 .pitches
                 .entry(source)
-                .or_insert_with(|| (title_of(source), Vec::new()))
+                .or_insert_with(|| (name_of(source), Vec::new()))
                 .1
                 .push(pitch);
         }

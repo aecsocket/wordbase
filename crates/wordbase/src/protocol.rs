@@ -1,7 +1,10 @@
 use derive_more::{Display, Error, From};
 use serde::{Deserialize, Serialize};
 
-use crate::{Dictionary, DictionaryId, LookupInfo, SharedConfig};
+use crate::{
+    Dictionary, DictionaryId,
+    lookup::{LookupConfig, LookupInfo},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, From)]
 #[serde(tag = "type")]
@@ -11,7 +14,6 @@ pub enum FromClient {
     Lookup {
         text: String,
     },
-    ListDictionaries,
     RemoveDictionary {
         dictionary_id: DictionaryId,
     },
@@ -33,15 +35,13 @@ pub enum FromServer {
     Error {
         message: String,
     },
-    SyncConfig {
-        config: SharedConfig,
+    Sync {
+        lookup_config: LookupConfig,
+        dictionaries: Vec<Dictionary>,
     },
     NewSentence(NewSentence),
     Lookup {
-        lookup: Option<LookupInfo>,
-    },
-    ListDictionaries {
-        dictionaries: Vec<Dictionary>,
+        lookups: Vec<LookupInfo>,
     },
     RemoveDictionary {
         result: Result<(), DictionaryNotFound>,
@@ -75,7 +75,6 @@ mod tests {
     fn round_trip_all() {
         round_trip(FromClient::from(NewSentence::default()));
         round_trip(FromClient::Lookup { text: default() });
-        round_trip(FromClient::ListDictionaries);
         round_trip(FromClient::RemoveDictionary {
             dictionary_id: default(),
         });
@@ -85,14 +84,13 @@ mod tests {
         });
 
         round_trip(FromServer::Error { message: default() });
-        round_trip(FromServer::SyncConfig { config: default() });
-        round_trip(FromServer::NewSentence(NewSentence::default()));
-        round_trip(FromServer::Lookup { lookup: None });
-        round_trip(FromServer::Lookup {
-            lookup: Some(default()),
-        });
-        round_trip(FromServer::ListDictionaries {
+        round_trip(FromServer::Sync {
+            lookup_config: default(),
             dictionaries: vec![Dictionary::default()],
+        });
+        round_trip(FromServer::NewSentence(NewSentence::default()));
+        round_trip(FromServer::Lookup {
+            lookups: vec![LookupInfo::default()],
         });
         round_trip(FromServer::RemoveDictionary { result: Ok(()) });
         round_trip(FromServer::RemoveDictionary {

@@ -23,6 +23,7 @@ all-features = true
 wordbase = { workspace = true, features = ["yomitan"] }
 wordbase-client-tokio = { workspace = true }
 
-anyhow = { workspace = true, features = ["std"] }
-clap = { workspace = true, default-features = true, features = ["derive"] }
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+futures = { workspace = true }
 tokio = { workspace = true, features = ["full"] }

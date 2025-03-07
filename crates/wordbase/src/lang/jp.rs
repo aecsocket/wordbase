@@ -1,6 +1,27 @@
-//! Utilities for working with Japanese text.
+//! Japanese-specific items.
 
 use std::iter;
+
+use serde::{Deserialize, Serialize};
+
+/// Single pitch reading for a specific [term].
+///
+/// Japanese [dictionaries] may collect information on how a specific [term] is
+/// [pronounced orally][jpa]. This information is represented in this type.
+///
+/// A single [term] may have multiple ways of being pronounced, which maps to
+/// multiple [`Pitch`] values.
+///
+/// [term]: crate::Term
+/// [dictionaries]: crate::Dictionary
+/// [jpa]: https://en.wikipedia.org/wiki/Japanese_pitch_accent
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Pitch {
+    pub position: u64,
+    pub nasal: Vec<u64>,
+    pub devoice: Vec<u64>,
+}
 
 /// Checks if the given character is one of the small kana characters, either
 /// hiragana or katakana.
@@ -71,7 +92,7 @@ pub const fn is_high(downstep: usize, position: usize) -> bool {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn mora() {
+    fn morae() {
         fn splits_into<'a>(reading: &str, target: impl AsRef<[&'a str]>) {
             assert_eq!(&super::morae(reading).collect::<Vec<_>>(), target.as_ref());
         }

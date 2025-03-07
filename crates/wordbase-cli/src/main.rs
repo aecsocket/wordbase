@@ -1,7 +1,8 @@
 #![doc = include_str!("../README.md")]
 
 use anyhow::{Context, Result};
-use wordbase::schema::DictionaryId;
+use futures::StreamExt;
+use wordbase::DictionaryId;
 use wordbase_client_tokio::SocketClient;
 
 /// Wordbase command line client.
@@ -59,7 +60,10 @@ async fn main() -> Result<()> {
         match args.command {
             Command::Dictionary {
                 command: DictionaryCommand::List,
-            } => list_dictionaries(&mut client).await,
+            } => {
+                list_dictionaries(&client);
+                Ok(())
+            }
             Command::Dictionary {
                 command: DictionaryCommand::Remove { id },
             } => remove_dictionary(&mut client, id).await,
@@ -78,17 +82,16 @@ async fn main() -> Result<()> {
     result
 }
 
-async fn list_dictionaries(client: &mut SocketClient) -> Result<()> {
-    let dictionaries = client.list_dictionaries().await?;
+fn list_dictionaries(client: &SocketClient) {
+    let dictionaries = client.dictionaries();
     println!("Dictionaries ({}):", dictionaries.len());
     for dictionary in dictionaries {
         let enabled = if dictionary.enabled { "[on]" } else { "[  ]" };
         println!(
-            "  {}. {enabled} {} rev {}",
-            dictionary.id.0, dictionary.name, dictionary.revision
+            "  {}. {enabled} {} ver {}",
+            dictionary.id.0, dictionary.name, dictionary.version
         );
     }
-    Ok(())
 }
 
 async fn remove_dictionary(client: &mut SocketClient, id: i64) -> Result<()> {
@@ -107,7 +110,13 @@ async fn disable_dictionary(client: &mut SocketClient, id: i64) -> Result<()> {
 }
 
 async fn lookup(client: &mut SocketClient, text: String) -> Result<()> {
-    let info = client.lookup(text).await?.context("no lookup info")?;
-    println!("{info:#?}");
+    let mut lookups = client
+        .lookup(text)
+        .await
+        .context("failed to start lookup")?;
+    while let Some(lookup) = lookups.next().await {
+        let lookup = lookup.context("failed to receive lookup")?;
+        println!("{lookup:?}");
+    }
     Ok(())
 }

@@ -1,9 +1,11 @@
 #![doc = include_str!("../README.md")]
 
-use derive_more::{Display, Error};
-pub use wordbase;
+pub use {indexmap, wordbase};
 
-use futures::{Sink, SinkExt, Stream, StreamExt};
+use std::pin::Pin;
+
+use derive_more::{Display, Error};
+use futures::{Sink, SinkExt, Stream, StreamExt, task};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::TcpStream,
@@ -13,9 +15,9 @@ use tokio_tungstenite::{
     tungstenite::{Message, client::IntoClientRequest},
 };
 use wordbase::{
-    SharedConfig,
+    Dictionary, DictionaryId,
+    lookup::{LookupConfig, LookupInfo},
     protocol::{DictionaryNotFound, FromClient, FromServer, NewSentence},
-    schema::{Dictionary, DictionaryId, LookupInfo},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -80,15 +82,34 @@ pub enum ConnectionError {
 #[derive(Debug)]
 pub struct Client<S> {
     connection: Connection<S>,
-    config: SharedConfig,
+    lookup_config: LookupConfig,
+    dictionaries: IndexMap<DictionaryId, Dictionary>,
     events: Vec<Event>,
 }
 
+pub type IndexMap<K, V> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
+
 pub type SocketClient = Client<WebSocketStream<MaybeTlsStream<TcpStream>>>;
+
+/// Connects to a Wordbase server at the given URL and sets up a [`Client`].
+///
+/// See [`tokio_tungstenite::connect_async`] and [`Client::handshake`].
+///
+/// # Errors
+///
+/// See [`ConnectionError`].
+pub async fn connect(
+    request: impl IntoClientRequest + Unpin,
+) -> Result<SocketClient, ConnectionError> {
+    let (stream, _) = tokio_tungstenite::connect_async(request)
+        .await
+        .map_err(ConnectionError::Connect)?;
+    Client::handshake(stream).await.map_err(|(err, _)| err)
+}
 
 #[derive(Debug)]
 pub enum Event {
-    NewConfig,
+    Sync,
     NewSentence(NewSentence),
 }
 
@@ -98,29 +119,48 @@ where
 {
     pub async fn handshake(stream: S) -> Result<Self, (ConnectionError, S)> {
         let mut connection = Connection(stream);
-        let config = match connection.recv().await {
-            Ok(FromServer::SyncConfig { config }) => config,
-            Ok(_) => {
-                return Err((ConnectionError::WrongMessageKind, connection.0));
-            }
-            Err(err) => {
-                return Err((err, connection.0));
-            }
-        };
+        match connection.recv().await {
+            Ok(FromServer::Sync {
+                lookup_config,
+                dictionaries,
+            }) => Ok(Self {
+                connection,
+                lookup_config,
+                dictionaries: dictionaries
+                    .into_iter()
+                    .map(|dict| (dict.id, dict))
+                    .collect(),
+                events: Vec::new(),
+            }),
+            Ok(_) => Err((ConnectionError::WrongMessageKind, connection.0)),
+            Err(err) => Err((err, connection.0)),
+        }
+    }
 
-        Ok(Self {
-            connection,
-            config,
-            events: Vec::new(),
-        })
+    #[must_use]
+    pub const fn lookup_config(&self) -> &LookupConfig {
+        &self.lookup_config
+    }
+
+    // doc: guaranteed to be ordered by dict order
+    #[must_use]
+    pub const fn dictionaries(&self) -> &IndexMap<DictionaryId, Dictionary> {
+        &self.dictionaries
     }
 
     fn event_from(&mut self, message: FromServer) -> Result<Event, ConnectionError> {
         match message {
             FromServer::Error { message } => Err(ConnectionError::Server(message)),
-            FromServer::SyncConfig { config } => {
-                self.config = config;
-                Ok(Event::NewConfig)
+            FromServer::Sync {
+                lookup_config,
+                dictionaries,
+            } => {
+                self.lookup_config = lookup_config;
+                self.dictionaries = dictionaries
+                    .into_iter()
+                    .map(|dict| (dict.id, dict))
+                    .collect();
+                Ok(Event::Sync)
             }
             FromServer::NewSentence(new_sentence) => Ok(Event::NewSentence(new_sentence)),
             _ => Err(ConnectionError::WrongMessageKind),
@@ -152,26 +192,11 @@ where
     pub async fn lookup(
         &mut self,
         text: impl Into<String>,
-    ) -> Result<Option<LookupInfo>, ConnectionError> {
+    ) -> Result<Pin<Box<Lookup<'_, S>>>, ConnectionError> {
         self.connection
             .send(&FromClient::Lookup { text: text.into() })
             .await?;
-        loop {
-            match self.connection.recv().await? {
-                FromServer::Lookup { lookup } => return Ok(lookup),
-                message => self.fallback_handle(message)?,
-            }
-        }
-    }
-
-    pub async fn list_dictionaries(&mut self) -> Result<Vec<Dictionary>, ConnectionError> {
-        self.connection.send(&FromClient::ListDictionaries).await?;
-        loop {
-            match self.connection.recv().await? {
-                FromServer::ListDictionaries { dictionaries } => return Ok(dictionaries),
-                message => self.fallback_handle(message)?,
-            }
-        }
+        Ok(Box::pin(Lookup { client: self }))
     }
 
     pub async fn remove_dictionary(
@@ -236,18 +261,26 @@ where
     }
 }
 
-/// Connects to a Wordbase server at the given URL and sets up a [`Client`].
-///
-/// See [`tokio_tungstenite::connect_async`] and [`Client::handshake`].
-///
-/// # Errors
-///
-/// See [`ConnectionError`].
-pub async fn connect(
-    request: impl IntoClientRequest + Unpin,
-) -> Result<SocketClient, ConnectionError> {
-    let (stream, _) = tokio_tungstenite::connect_async(request)
-        .await
-        .map_err(ConnectionError::Connect)?;
-    Client::handshake(stream).await.map_err(|(err, _)| err)
+pub struct Lookup<'c, S> {
+    client: &'c mut Client<S>,
+}
+
+impl<S> Stream for Lookup<'_, S>
+where
+    S: Stream<Item = Result<Message, WsError>> + Sink<Message, Error = WsError> + Unpin,
+{
+    type Item = Result<LookupInfo, ConnectionError>;
+
+    fn poll_next(
+        self: Pin<&mut Self>,
+        cx: &mut task::Context<'_>,
+    ) -> task::Poll<Option<Self::Item>> {
+        todo!()
+        // loop {
+        //     match self.client.connection.recv().await? {
+        //         FromServer::Lookup { lookup } => return Ok(lookup),
+        //         message => self.fallback_handle(message)?,
+        //     }
+        // }
+    }
 }

@@ -23,13 +23,16 @@ pub struct Dictionary {
     ///
     /// This does not guarantee to conform to any existing format, e.g.
     /// semantic versioning.
-    pub revision: String,
+    pub version: String,
+    /// What position results from this dictionary will be displayed in,
+    /// relative to other dictionaries.
+    pub order: i64,
     /// Whether this dictionary is used for returning results in lookup
     /// operations.
     pub enabled: bool,
 }
 
-/// Opaque identifier for a single [`Dictionary`] in a database.
+/// Opaque and unique identifier for a single [`Dictionary`] in a database.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DictionaryId(pub i64);
 
@@ -46,19 +49,19 @@ pub struct DictionaryId(pub i64);
 /// // English word "rust"
 /// assert_eq!(
 ///     Term::without_reading("rust"),
-///     Term { expression: "rust".into(), reading: None }
+///     Term { headword: "rust".into(), reading: None }
 /// );
 ///
 /// // Greek word "σκουριά"
 /// assert_eq!(
 ///     Term::without_reading("σκουριά"),
-///     Term { expression: "σκουριά".into(), reading: None }
+///     Term { headword: "σκουριά".into(), reading: None }
 /// );
 ///
 /// // Japanese word "錆" ("さび")
 /// assert_eq!(
 ///     Term::with_reading("錆", "さび"),
-///     Term { expression: "錆".into(), reading: Some("さび".into()) }
+///     Term { headword: "錆".into(), reading: Some("さび".into()) }
 /// );
 /// ```
 ///
@@ -67,31 +70,34 @@ pub struct DictionaryId(pub i64);
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Term {
-    /// Canonical form of the term.
-    pub expression: String,
-    /// How the term is represented in its alternate form, e.g. kana.
+    /// [Canonical form][headword] of the term.
     ///
-    /// If this is [`None`], the reading is the same as the [expression].
+    /// [headword]: https://en.wikipedia.org/wiki/Lemma_(morphology)#Headword
+    pub headword: String,
+    /// How the term is represented in an alternate form, e.g. hiragana reading
+    /// in Japanese.
     ///
-    /// [expression]: Term::expression
+    /// If this is [`None`], the reading is the same as the [headword].
+    ///
+    /// [headword]: Term::headword
     pub reading: Option<String>,
 }
 
 impl Term {
-    /// Creates a term with an expression and reading.
+    /// Creates a term with a headword and reading.
     #[must_use]
-    pub fn with_reading(expression: impl Into<String>, reading: impl Into<String>) -> Self {
+    pub fn with_reading(headword: impl Into<String>, reading: impl Into<String>) -> Self {
         Self {
-            expression: expression.into(),
+            headword: headword.into(),
             reading: Some(reading.into()),
         }
     }
 
-    /// Creates a term with only an expression.
+    /// Creates a term with only a headword.
     #[must_use]
-    pub fn without_reading(expression: impl Into<String>) -> Self {
+    pub fn without_reading(headword: impl Into<String>) -> Self {
         Self {
-            expression: expression.into(),
+            headword: headword.into(),
             reading: None,
         }
     }
@@ -131,8 +137,8 @@ impl Term {
 /// Styling and other cosmetic details may be ignored, unless they directly
 /// affect how the content is read and interpreted.
 ///
-/// This struct is marked as `#[non_exhaustive]` to leave the possibility of
-/// adding new formats open for the future, without breaking existing code.
+/// This type is marked as `#[non_exhaustive]` to allow adding new formats in
+/// the future without breaking existing code.
 ///
 /// # Examples
 ///
@@ -141,7 +147,7 @@ impl Term {
 /// fn create_glossary(tags: Vec<TermTag>, html: String) -> Glossary {
 ///     // we can't create a value using a struct expression,
 ///     // since it's `#[non_exhaustive]`, so we make an empty one first...
-///     let mut glossary = Glossary::new(tags);
+///     let mut glossary = Glossary::default();
 ///     // then set our content
 ///     glossary.html = html;
 ///     glossary
@@ -188,18 +194,6 @@ pub struct Glossary {
     ///
     /// [`WebView`]: https://en.wikipedia.org/wiki/WebView
     pub html: Option<String>,
-}
-
-impl Glossary {
-    /// Creates a new glossary entry with the given tags, with no data for any
-    /// format.
-    #[must_use]
-    pub fn new(tags: impl Into<Vec<TermTag>>) -> Self {
-        Self {
-            tags: tags.into(),
-            ..Default::default()
-        }
-    }
 }
 
 /// Categorises a [glossary] for a given [term].
@@ -265,14 +259,7 @@ pub struct Frequency {
 }
 
 impl Frequency {
-    #[must_use]
-    pub const fn new(rank: u64) -> Self {
-        Self {
-            rank,
-            display_rank: None,
-        }
-    }
-
+    /// Creates a value with a rank and display value.
     #[must_use]
     pub fn with_display(rank: u64, display: impl Into<String>) -> Self {
         Self {
@@ -280,32 +267,13 @@ impl Frequency {
             display_rank: Some(display.into()),
         }
     }
-}
 
-/// Japanese pitch accent information for a specific [term].
-///
-/// Japanese [dictionaries] may collect information on how a specific [term] is
-/// [pronounced orally].
-///
-/// This type is currently specialized for Japanese pitch accent, however may be
-/// replaced in the future to represent more general pitch accent.
-///
-/// [term]: Term
-/// [dictionaries]: Dictionary
-/// [pronounced orally]: https://en.wikipedia.org/wiki/Japanese_pitch_accent
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Pitch {
-    pub position: u64,
-    pub nasal: Vec<u64>,
-    pub devoice: Vec<u64>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct LookupInfo {
-    pub lemma: String,
-    pub glossaries: Vec<(DictionaryId, Term, Glossary)>,
-    pub frequencies: Vec<(DictionaryId, Term, Frequency)>,
-    pub pitches: Vec<(DictionaryId, Term, Pitch)>,
+    /// Creates a value from only a rank.
+    #[must_use]
+    pub const fn new(rank: u64) -> Self {
+        Self {
+            rank,
+            display_rank: None,
+        }
+    }
 }

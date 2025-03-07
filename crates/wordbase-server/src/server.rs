@@ -14,10 +14,7 @@ use tokio::{
 };
 use tokio_tungstenite::{WebSocketStream, tungstenite::Message};
 use tracing::{Instrument, info, info_span, warn};
-use wordbase::{
-    protocol::{FromClient, FromServer, NewSentence},
-    schema::LookupInfo,
-};
+use wordbase::protocol::{FromClient, FromServer, NewSentence};
 
 use crate::{
     Config, db, import,
@@ -141,9 +138,14 @@ async fn handle_stream(
     let mut connection = Connection(stream);
     let mut recv_new_sentence = send_new_sentence.subscribe();
 
+    let dictionaries = db::list_dictionaries(&db)
+        .await
+        .context("failed to fetch dictionaries")?;
+
     connection
-        .write(&FromServer::SyncConfig {
-            config: config.shared.clone(),
+        .write(&FromServer::Sync {
+            lookup_config: config.lookup.clone(),
+            dictionaries,
         })
         .await
         .context("failed to sync config")?;
@@ -208,15 +210,6 @@ async fn handle_message(
                 .context("failed to perform lookup")?;
             connection
                 .write(&FromServer::Lookup { lookup })
-                .await
-                .context("failed to send response")
-        }
-        FromClient::ListDictionaries => {
-            let dictionaries = db::list_dictionaries(db)
-                .await
-                .context("failed to list dictionaries")?;
-            connection
-                .write(&FromServer::ListDictionaries { dictionaries })
                 .await
                 .context("failed to send response")
         }

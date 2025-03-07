@@ -15,14 +15,14 @@ use std::{
 use anyhow::Result;
 use mecab::MecabRequest;
 use tokio::sync::{broadcast, mpsc};
-use wordbase::{DEFAULT_PORT, SharedConfig, protocol::NewSentence};
+use wordbase::{DEFAULT_PORT, lookup::LookupConfig, protocol::NewSentence};
 
 #[derive(Debug)]
 struct Config {
     listen_addr: SocketAddr,
     textractor_url: String,
     textractor_connect_interval: Duration,
-    shared: SharedConfig,
+    lookup: LookupConfig,
 }
 
 impl Default for Config {
@@ -31,7 +31,7 @@ impl Default for Config {
             listen_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), DEFAULT_PORT),
             textractor_url: "ws://127.0.0.1:9001".into(),
             textractor_connect_interval: Duration::from_secs(1),
-            shared: SharedConfig::default(),
+            lookup: LookupConfig::default(),
         }
     }
 }

@@ -34,20 +34,20 @@ missing_errors_doc = "allow"
 wordbase = { path = "crates/wordbase", default-features = false }
 wordbase-client-tokio = { path = "crates/wordbase-client-tokio", default-features = false }
 
+anyhow = "1.0"
+bzip2 = "0.5"
+clap = "4.5"
+foldhash = "0.1.4"
+futures = "0.3"
+indexmap = "2.7"
 itertools = "0.14.0"
 serde-value = "0.7.0"
 
-anyhow = { version = "1.0", default-features = false }
-bzip2 = { version = "0.5" }
-clap = { version = "4.5", default-features = false }
 derive_more = { version = "2.0", default-features = false }
-foldhash = { version = "0.1.4" }
 form_urlencoded = { version = "1.2", default-features = false }
-futures = { version = "0.3", default-features = false }
 glib = { version = "0.20", default-features = false }
 gtk4 = { version = "0.9", default-features = false }
 html-escape = { version = "0.2", default-features = false }
-indexmap = { version = "2.7", default-features = false }
 libadwaita = { version = "0.7", default-features = false }
 log = { version = "0.4" }
 mecab = { version = "0.1.6", default-features = false }

@@ -6,6 +6,9 @@ use super::structured::{
     Content, ContentStyle, Data, Element, ImageElement, LinkElement, TableElement,
 };
 
+/// Renders [`Content`] to HTML, writing into a new string.
+///
+/// If you want to write into a [`fmt::Write`], see [`render_to_writer`].
 #[must_use]
 pub fn render_to_string(content: &Content) -> String {
     let mut html = String::new();
@@ -13,6 +16,7 @@ pub fn render_to_string(content: &Content) -> String {
     html
 }
 
+/// Renders [`Content`] to HTML, writing into a [`fmt::Write`].
 pub fn render_to_writer(mut w: impl fmt::Write, content: &Content) -> fmt::Result {
     write!(w, r#"<span class="gloss-content">"#)?;
     any(&mut w, content)?;
