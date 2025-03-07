@@ -6,18 +6,32 @@ use serde::{Deserialize, Serialize};
 
 /// Single pitch reading for a [term].
 ///
-/// Japanese [dictionaries] may collect information on how a specific [term] is
+/// Japanese [dictionaries] may collect information on how a specific term is
 /// [pronounced orally][jpa]. This information is represented in this type.
 ///
-/// A single [term] may have multiple ways of being pronounced, which maps to
+/// A single term may have multiple ways of being pronounced, which maps to
 /// multiple [`Pitch`] values.
+///
+/// Values in this type map to [morae] in an input string - see [`morae`].
 ///
 /// [term]: crate::Term
 /// [dictionaries]: crate::Dictionary
 /// [jpa]: https://en.wikipedia.org/wiki/Japanese_pitch_accent
+/// [morae]: https://en.wikipedia.org/wiki/Mora_(linguistics)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Pitch {
+    /// What [mora] the [downstep] is located on.
+    ///
+    /// This maps to a typical dictionary's "pitch position" entry:
+    /// - 0: *heiban*
+    /// - 1: *atamadaka*
+    /// - greater than 1: *nakadaka* or *odaka*
+    ///
+    /// See [Binary pitch](https://en.wikipedia.org/wiki/Japanese_pitch_accent#Binary_pitch).
+    ///
+    /// [mora]: https://en.wikipedia.org/wiki/Mora_(linguistics)
+    /// [downstep]: https://en.wikipedia.org/wiki/Downstep
     pub position: u64,
     pub nasal: Vec<u64>,
     pub devoice: Vec<u64>,
@@ -26,7 +40,7 @@ pub struct Pitch {
 /// Checks if the given character is one of the small kana characters, either
 /// hiragana or katakana.
 /// 
-/// This returns `false` for `っ` (see [`mora`]).
+/// This returns `false` for `っ` (see [`morae`]).
 #[must_use]
 #[rustfmt::skip]
 pub const fn is_small_kana(c: char) -> bool {

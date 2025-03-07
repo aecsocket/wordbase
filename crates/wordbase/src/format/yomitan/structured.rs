@@ -1,3 +1,8 @@
+//! Glossary structured content schema.
+//!
+//! See [`structured-content.d.ts`](https://github.com/yomidevs/yomitan/blob/master/types/ext/structured-content.d.ts).
+#![expect(missing_docs, reason = "these are not our types")]
+
 use derive_more::{Deref, DerefMut, Display};
 use foldhash::HashMap;
 use serde::{Deserialize, Serialize};

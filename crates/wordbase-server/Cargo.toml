@@ -20,7 +20,7 @@ all-features = true
 [features]
 
 [dependencies]
-wordbase = { workspace = true, features = ["yomitan"] }
+wordbase = { workspace = true, features = ["parse-yomitan"] }
 
 anyhow = { workspace = true }
 derive_more = { workspace = true, features = [

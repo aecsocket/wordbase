@@ -1,23 +1,16 @@
 use core::fmt;
 
-use crate::yomitan::structured::{StyledElement, UnstyledElement};
-
 use super::structured::{
-    Content, ContentStyle, Data, Element, ImageElement, LinkElement, TableElement,
+    Content, ContentStyle, Data, Element, ImageElement, LinkElement, StyledElement, TableElement,
+    UnstyledElement,
 };
 
-/// Renders [`Content`] to HTML, writing into a new string.
+/// Renders [`Content`] to an HTML string.
 ///
-/// If you want to write into a [`fmt::Write`], see [`render_to_writer`].
-#[must_use]
-pub fn render_to_string(content: &Content) -> String {
-    let mut html = String::new();
-    _ = render_to_writer(&mut html, content);
-    html
-}
-
-/// Renders [`Content`] to HTML, writing into a [`fmt::Write`].
-pub fn render_to_writer(mut w: impl fmt::Write, content: &Content) -> fmt::Result {
+/// # Errors
+///
+/// See [`fmt::Error`].
+pub fn render_to_html(mut w: impl fmt::Write, content: &Content) -> fmt::Result {
     write!(w, r#"<span class="gloss-content">"#)?;
     any(&mut w, content)?;
     write!(w, "</span>")

@@ -1,9 +1,21 @@
+//! [Yomitan] dictionary format.
+//!
+//! [Yomitan]: https://github.com/yomidevs/yomitan/
+
+pub mod schema;
+pub mod structured;
+
+mod html;
+pub use html::*;
+
+#[cfg(feature = "parse-yomitan")]
+mod parse;
+#[cfg(feature = "parse-yomitan")]
+pub use parse::*;
+
 use serde::{Deserialize, Serialize};
 
 /// Categorises a [glossary] for a given [term].
-///
-/// These serve no functional purpose, but are useful for labelling and
-/// categorising this entry.
 ///
 /// [glossary]: crate::Glossary
 /// [term]: crate::Term
@@ -18,13 +30,13 @@ pub struct GlossaryTag {
     pub category: Option<TagCategory>,
     /// Order of this tag relative to other tags in the same dictionary.
     ///
-    /// This is purely a rendering hint. A higher value means the tag will
-    /// appear later.
+    /// A higher value means the tag will be displayed later.
     pub order: i64,
 }
 
 /// Category of a [`GlossaryTag`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[expect(missing_docs, reason = "these tags are not documented well in Yomitan")]
 pub enum TagCategory {
     Name,
     Expression,

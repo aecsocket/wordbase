@@ -1,13 +1,14 @@
 #![doc = include_str!("../README.md")]
+#![warn(missing_docs)]
+#![warn(clippy::missing_errors_doc)]
 
 pub mod format;
+pub mod hook;
 pub mod lang;
-pub mod lookup;
 pub mod protocol;
 pub(crate) mod util;
-#[cfg(feature = "yomitan")]
-pub mod yomitan;
 
+use derive_more::From;
 use serde::{Deserialize, Serialize};
 
 /// Collection of [records] for [terms] imported into a Wordbase server.
@@ -36,8 +37,8 @@ pub struct Dictionary {
     /// What position [records] from this dictionary will be returned relative
     /// to other dictionaries.
     ///
-    /// A lower position means [records] from this dictionary will be returned
-    /// sooner.
+    /// A higher position means [records] from this dictionary will be returned
+    /// later, and should be displayed to the user with less priority.
     ///
     /// [records]: Record
     pub position: i64,
@@ -81,7 +82,7 @@ pub struct DictionaryId(pub i64);
 /// [record]: Record
 /// [dictionary]: Dictionary
 /// [glossaries]: Glossary
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Term {
     /// [Canonical form][headword] of the term.
@@ -139,7 +140,7 @@ impl Term {
 /// [term]: Term
 /// [terms]: Term
 /// [dictionary]: Dictionary
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, From, Serialize, Deserialize)]
 #[expect(missing_docs, reason = "contained type of each variant provides docs")]
 #[non_exhaustive]
 pub enum Record {
@@ -280,6 +281,32 @@ impl Frequency {
         Self {
             rank,
             ..Default::default()
+        }
+    }
+}
+
+/// Configuration for [lookup operations] shared between a Wordbase client and
+/// server.
+///
+/// [lookup operations]: protocol::FromClient::Lookup
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LookupConfig {
+    /// Maximum length, in **characters** (not bytes), that [`Lookup::text`] is
+    /// allowed to be.
+    ///
+    /// The maximum length of lookup requests is capped to avoid overloading the
+    /// server with extremely large lookup requests. Clients must respect the
+    /// server's configuration and not send any lookups longer than this,
+    /// otherwise the server will return an error.
+    ///
+    /// [`Lookup::text`]: protocol::FromClient::Lookup::text
+    pub max_request_len: u64,
+}
+
+impl Default for LookupConfig {
+    fn default() -> Self {
+        Self {
+            max_request_len: 16,
         }
     }
 }

@@ -10,11 +10,41 @@ use regex::Regex;
 use serde::de::DeserializeOwned;
 use zip::ZipArchive;
 
-use super::{Index, KanjiBank, KanjiMetaBank, TagBank, TermBank, TermMetaBank};
+use super::schema::{Index, KanjiBank, KanjiMetaBank, TagBank, TermBank, TermMetaBank};
 
 pub use serde_json::Error as JsonError;
 pub use zip::result::ZipError;
 
+/// Parses a [Yomitan] dictionary from a zip archive.
+///
+/// # Example
+///
+/// ```
+/// # use wordbase::format::yomitan::Parse;
+/// # fn run() {
+/// let archive = std::fs::read("jitendex.zip")
+///     .expect("failed to read dictionary to memory");
+///
+/// let (parser, index) = Parse::new(|| Ok(std::io::Cursor::new(&archive)))
+///     .expect("failed to parse index");
+///
+/// let term_banks_left = AtomicUsize::new(index.term_banks().len());
+///
+/// parser.run(
+///     |_, _tag_bank| {},
+///     |_, term_bank| {
+///         let left = term_banks_left.fetch_sub(1, atomic::Ordering::SeqCst) - 1;
+///         println!("{left} term banks left to parse");
+///     },
+///     |_, _term_meta_bank| {},
+///     |_, _kanji_bank| {},
+///     |_, _kanji_meta_bank| {},
+/// )
+/// .expect("failed to parse bank");
+/// # }
+/// ```
+///
+/// [Yomitan]: super
 pub struct Parse<F, R, E> {
     new_reader: F,
     tag_banks: Vec<String>,
@@ -25,34 +55,31 @@ pub struct Parse<F, R, E> {
     _phantom: PhantomData<fn() -> Result<R, E>>,
 }
 
-const INDEX_PATH: &str = "index.json";
-
-static TAG_BANK_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new("tag_bank_([0-9]+?)\\.json").expect("should be valid regex"));
-
-static TERM_BANK_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new("term_bank_([0-9]+?)\\.json").expect("should be valid regex"));
-
-static TERM_META_BANK_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new("term_meta_bank_([0-9]+?)\\.json").expect("should be valid regex"));
-
-static KANJI_BANK_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new("kanji_bank_([0-9]+?)\\.json").expect("should be valid regex"));
-
-static KANJI_META_BANK_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new("kanji_meta_bank_([0-9]+?)\\.json").expect("should be valid regex")
-});
-
+/// [`Parse`] error.
 #[derive(Debug, Display, Error)]
 pub enum ParseError<E> {
+    /// Failed to create a new archive reader.
     #[display("failed to create new archive reader")]
     NewReader(E),
+    /// Failed to open the given reader as a zip archive.
     #[display("failed to open archive")]
     OpenArchive(ZipError),
+    /// Failed to open an entry in the archive.
     #[display("failed to open {name:?}")]
-    OpenEntry { name: String, source: ZipError },
+    OpenEntry {
+        /// File name of the entry.
+        name: String,
+        /// Source error.
+        source: ZipError,
+    },
+    /// Failed to parse an entry in the archive as a bank.
     #[display("failed to parse {name:?}")]
-    ParseEntry { name: String, source: JsonError },
+    ParseEntry {
+        /// File name of the entry.
+        name: String,
+        /// Source error.
+        source: JsonError,
+    },
 }
 
 impl<F, R, E> Parse<F, R, E>
@@ -67,7 +94,38 @@ where
         Ok(archive)
     }
 
+    /// Creates a new parser and parses the dictionary [`Index`].
+    ///
+    /// `new_reader` is a function which creates a new `R` reader used to open
+    /// the archive. If this function returns `E`, [`ParseError::NewReader`] is
+    /// returned.
+    ///
+    /// # Errors
+    ///
+    /// Errors if the index could not be parsed.
     pub fn new(new_reader: F) -> Result<(Self, Index), ParseError<E>> {
+        const INDEX_PATH: &str = "index.json";
+
+        static TAG_BANK_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new("tag_bank_([0-9]+?)\\.json").expect("should be valid regex")
+        });
+
+        static TERM_BANK_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new("term_bank_([0-9]+?)\\.json").expect("should be valid regex")
+        });
+
+        static TERM_META_BANK_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new("term_meta_bank_([0-9]+?)\\.json").expect("should be valid regex")
+        });
+
+        static KANJI_BANK_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new("kanji_bank_([0-9]+?)\\.json").expect("should be valid regex")
+        });
+
+        static KANJI_META_BANK_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new("kanji_meta_bank_([0-9]+?)\\.json").expect("should be valid regex")
+        });
+
         let mut archive = Self::new_archive(&new_reader)?;
         let index = parse_from::<Index, E>(&mut archive, INDEX_PATH)?;
 
@@ -107,22 +165,27 @@ where
         ))
     }
 
+    /// [`TagBank`] file names in the archive.
     pub fn tag_banks(&self) -> &[String] {
         &self.tag_banks[..]
     }
 
+    /// [`TermBank`] file names in the archive.
     pub fn term_banks(&self) -> &[String] {
         &self.term_banks[..]
     }
 
+    /// [`TermMetaBank`] file names in the archive.
     pub fn term_meta_banks(&self) -> &[String] {
         &self.term_meta_banks[..]
     }
 
+    /// [`KanjiBank`] file names in the archive.
     pub fn kanji_banks(&self) -> &[String] {
         &self.kanji_banks[..]
     }
 
+    /// [`KanjiMetaBank`] file names in the archive.
     pub fn kanji_meta_banks(&self) -> &[String] {
         &self.kanji_meta_banks[..]
     }
@@ -140,6 +203,16 @@ where
         })
     }
 
+    /// Parses all banks in the archive.
+    ///
+    /// This uses [`rayon`] to parallelise parsing, creating a new reader for
+    /// each bank, and returning the result to your own callbacks. Therefore,
+    /// these callbacks will run on a different thread to the one that calls
+    /// [`Parse::run`].
+    ///
+    /// # Errors
+    ///
+    /// Errors if one of the banks could not be parsed, terminating early.
     pub fn run(
         self,
         use_tag_bank: impl Fn(&str, TagBank) + Send + Sync,
@@ -208,105 +281,3 @@ fn parse_from<T: DeserializeOwned, E>(
     })?;
     Ok(value)
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use std::{io::Cursor, sync::Mutex};
-
-//     use crate::yomitan::{Glossary, KanjiMetaBank};
-
-//     use super::*;
-
-//     #[test]
-//     fn jitendex() {
-//         let (index, tags, terms, term_metas, kanjis, kanji_metas) =
-//             parse(include_bytes!("../../../../dictionaries/jitendex.zip"));
-//         assert!(index.title.contains("Jitendex.org"));
-//         assert!(tags.iter().any(|tag| {
-//             tag.name == "★" && tag.category == "popular" && tag.notes == "high priority entry"
-//         }));
-//         assert!(
-//             terms
-//                 .iter()
-//                 .any(|term| { term.expression == "天" && term.reading == "てん" })
-//         );
-//         assert!(term_metas.is_empty());
-//         assert!(kanjis.is_empty());
-//         assert!(kanji_metas.is_empty());
-//     }
-
-//     #[test]
-//     fn jmnedict() {
-//         let (index, tags, terms, term_metas, kanjis, kanji_metas) =
-//             parse(include_bytes!("../../../../dictionaries/jmnedict.zip"));
-//         assert!(index.title.contains("JMnedict"));
-//         assert!(tags.iter().any(|tag| {
-//             tag.name == "given"
-//                 && tag.category == "name"
-//                 && tag.notes == "given name or forename, gender not specified"
-//         }));
-//         assert!(terms.iter().any(|term| {
-//             term.expression == "菊池大麓"
-//                 && term.reading == "きくちだいろく"
-//                 && term.definition_tags == Some("person".into())
-//                 && matches!(
-//                     term.glossary.first(),
-//                     Some(Glossary::String(s))
-//                     if s == "Kikuchi Dairoku"
-//                 )
-//         }));
-//         assert!(term_metas.is_empty());
-//         assert!(kanjis.is_empty());
-//         assert!(kanji_metas.is_empty());
-//     }
-
-//     #[test]
-//     fn dojg() {
-//         parse(include_bytes!("../../../../dictionaries/dojg.zip"));
-//     }
-
-//     fn parse(
-//         bytes: &[u8],
-//     ) -> (
-//         Index,
-//         TagBank,
-//         TermBank,
-//         TermMetaBank,
-//         KanjiBank,
-//         KanjiMetaBank,
-//     ) {
-//         let (parser, index) = Parse::new(|| Ok(Cursor::new(bytes))).unwrap();
-//         let tags = Mutex::new(TagBank::default());
-//         let terms = Mutex::new(TermBank::default());
-//         let term_metas = Mutex::new(TermMetaBank::default());
-//         let kanjis = Mutex::new(KanjiBank::default());
-//         let kanji_metas = Mutex::new(KanjiMetaBank::default());
-//         parser
-//             .run(
-//                 |_, bank| {
-//                     tags.lock().unwrap().extend_from_slice(&bank);
-//                 },
-//                 |_, bank| {
-//                     terms.lock().unwrap().extend_from_slice(&bank);
-//                 },
-//                 |_, bank| {
-//                     term_metas.lock().unwrap().extend_from_slice(&bank);
-//                 },
-//                 |_, bank| {
-//                     kanjis.lock().unwrap().extend_from_slice(&bank);
-//                 },
-//                 |_, bank| {
-//                     kanji_metas.lock().unwrap().extend_from_slice(&bank);
-//                 },
-//             )
-//             .unwrap();
-//         (
-//             index,
-//             tags.into_inner().unwrap(),
-//             terms.into_inner().unwrap(),
-//             term_metas.into_inner().unwrap(),
-//             kanjis.into_inner().unwrap(),
-//             kanji_metas.into_inner().unwrap(),
-//         )
-//     }
-// }

@@ -1,16 +1,15 @@
-pub mod html;
-mod parse;
-pub mod structured;
-
-pub use parse::*;
+//! General dictionary schema.
+//!
+//! See [`dictionary-data.d.ts`](https://github.com/yomidevs/yomitan/blob/master/types/ext/dictionary-data.d.ts).
+#![expect(missing_docs, reason = "these are not our types")]
 
 use derive_more::{Deref, DerefMut, From};
 use foldhash::HashMap;
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 
-// https://github.com/yomidevs/yomitan/blob/master/ext/data/schemas/dictionary-index-schema.json
-// https://github.com/yomidevs/yomitan/blob/3ca2800d4aeff0a93be23642db9892ddbae1aa55/types/ext/dictionary-data.d.ts#L22
+use super::structured;
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Index {
