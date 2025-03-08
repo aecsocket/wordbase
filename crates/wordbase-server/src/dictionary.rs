@@ -30,6 +30,21 @@ pub async fn insert(
     Ok(DictionaryId(result.last_insert_rowid()))
 }
 
+pub async fn exists_by_name<'e, 'c: 'e, E>(executor: E, name: &str) -> Result<bool>
+where
+    E: 'e + Executor<'c, Database = Sqlite>,
+{
+    let result = sqlx::query_scalar!(
+        "SELECT EXISTS(
+            SELECT 1 FROM dictionary WHERE name = $1
+        )",
+        name
+    )
+    .fetch_one(executor)
+    .await?;
+    Ok(result > 0)
+}
+
 pub async fn all<'e, 'c: 'e, E>(executor: E) -> Result<Vec<Dictionary>>
 where
     E: 'e + Executor<'c, Database = Sqlite>,
@@ -67,8 +82,7 @@ where
         dictionary_id.0
     )
     .execute(executor)
-    .await
-    .context("failed to delete record")?;
+    .await?;
     Ok(if result.rows_affected() > 0 {
         Ok(())
     } else {
@@ -92,8 +106,7 @@ where
         dictionary_id.0
     )
     .execute(executor)
-    .await
-    .context("failed to delete record")?;
+    .await?;
     Ok(if result.rows_affected() > 0 {
         Ok(())
     } else {

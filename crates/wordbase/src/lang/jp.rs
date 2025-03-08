@@ -22,10 +22,10 @@ use {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Pitch {
-    /// What [mora] the [downstep] is located on.
+    /// What [mora] position the [downstep] is located on.
     ///
     /// This maps to a typical dictionary's "pitch position" entry:
-    /// - 0: *heiban*
+    /// - 0: *heiban* (no downstep)
     /// - 1: *atamadaka*
     /// - greater than 1: *nakadaka* or *odaka*
     ///
@@ -34,7 +34,15 @@ pub struct Pitch {
     /// [mora]: https://en.wikipedia.org/wiki/Mora_(linguistics)
     /// [downstep]: https://en.wikipedia.org/wiki/Downstep
     pub position: u64,
+    /// What [morae][mora] positions have a [nasal] sound.
+    ///
+    /// [mora]: https://en.wikipedia.org/wiki/Mora_(linguistics)
+    /// [nasal]: https://en.wikipedia.org/wiki/Nasal_consonant
     pub nasal: Vec<u64>,
+    /// What [morae][mora] positions have a [devoiced] sound.
+    ///
+    /// [mora]: https://en.wikipedia.org/wiki/Mora_(linguistics)
+    /// [devoiced]: https://en.wikipedia.org/wiki/Devoicing
     pub devoice: Vec<u64>,
 }
 

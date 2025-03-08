@@ -41,11 +41,6 @@
             "type": "bind",
             "source": "${env:HOME}/.local/share/gnome-shell/extensions/",
             "target": "/workspaces/gnome-shell-extensions"
-        },
-        {
-            "type": "bind",
-            "source": "${env:XDG_RUNTIME_DIR}/gnupg/S.keyboxd",
-            "target": "${localEnv:HOME}/.gnupg/S.keyboxd"
         }
     ],
     "postCreateCommand": [

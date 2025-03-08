@@ -1,4 +1,5 @@
 use {
+    crate::dictionary,
     anyhow::{Context as _, Result},
     sqlx::{Pool, Sqlite, Transaction},
     std::{
@@ -10,10 +11,10 @@ use {
     },
     tokio::{fs, sync::Mutex},
     tracing::info,
-    wordbase::{DictionaryId, Frequency, Glossary, lang::jp},
+    wordbase::{DictionaryId, Frequency, Glossary, format::yomitan, lang::jp},
 };
 
-pub async fn from_yomitan(db: Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
+pub async fn import(db: Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
     let path = path.as_ref();
     let archive = fs::read(path)
         .await
@@ -23,19 +24,11 @@ pub async fn from_yomitan(db: Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()
         .context("failed to parse")?;
 
     let name = index.title;
-    let already_present = sqlx::query_scalar!(
-        "SELECT EXISTS(
-            SELECT 1
-            FROM dictionary
-            WHERE name = $1
-        )",
-        name
-    )
-    .fetch_one(&db)
-    .await
-    .context("failed to check if dictionary is already present")?;
-    if already_present > 0 {
-        info!("{name} is already present, skipping...");
+    let already_exists = dictionary::exists_by_name(&db, &name)
+        .await
+        .context("failed to check if dictionary exists")?;
+    if already_exists {
+        info!("{name} already exists, skipping...");
         return Ok(());
     }
 
@@ -44,8 +37,8 @@ pub async fn from_yomitan(db: Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()
     let term_meta_banks_left = AtomicUsize::new(parser.term_meta_banks().len());
     info!("Parsing: {name}");
 
-    let tag_bank = Mutex::new(yomitan::TagBank::default());
-    let term_bank = Mutex::new(yomitan::TermBank::default());
+    let tag_bank = Mutex::new(schema::TagBank::default());
+    let term_bank = Mutex::new(schema::TermBank::default());
     let term_meta_bank = Mutex::new(yomitan::TermMetaBank::default());
 
     info!("Parsing...");

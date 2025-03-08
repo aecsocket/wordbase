@@ -2,7 +2,7 @@
 
 use {
     derive_more::{Display, Error},
-    futures::{Sink, SinkExt, Stream, StreamExt, task},
+    futures::{Sink, SinkExt, Stream, StreamExt},
     std::pin::Pin,
     tokio::{
         io::{AsyncRead, AsyncWrite},
@@ -220,7 +220,7 @@ where
             .send(&FromClient::from(request.into()))
             .await?;
 
-        // TODO: actual stream
+        // TODO: we need async iterators!
         let mut all_responses = Vec::<LookupResponse>::new();
         loop {
             match self.connection.recv().await? {
@@ -296,23 +296,5 @@ where
             .close(None)
             .await
             .map_err(ConnectionError::Stream)
-    }
-}
-
-struct Lookup<'c, S> {
-    client: &'c mut Client<S>,
-}
-
-impl<S> Stream for Lookup<'_, S>
-where
-    S: Stream<Item = Result<Message, WsError>> + Sink<Message, Error = WsError> + Unpin,
-{
-    type Item = Result<LookupResponse, ConnectionError>;
-
-    fn poll_next(
-        self: Pin<&mut Self>,
-        cx: &mut task::Context<'_>,
-    ) -> task::Poll<Option<Self::Item>> {
-        todo!()
     }
 }

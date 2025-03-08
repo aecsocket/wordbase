@@ -1,6 +1,6 @@
 use {
     crate::{
-        Config, Event, dictionary, format,
+        Config, Event, dictionary, import,
         mecab::{MecabInfo, MecabRequest},
         term,
     },
@@ -78,7 +78,7 @@ pub async fn run(
     let mut joins = JoinSet::new();
     for path in IMPORTS {
         joins.spawn(
-            format::yomitan::import(db.clone(), format!("/home/dev/all-dictionaries/{path}"))
+            import::from_yomitan(db.clone(), format!("/home/dev/all-dictionaries/{path}"))
                 .instrument(info_span!("import", %path)),
         );
     }
@@ -291,15 +291,7 @@ async fn do_lookup(
         return Ok(());
     };
 
-    let records = term::lookup(db, &mecab.lemma, &include, &exclude)
-        .await
-        .context("failed to fetch records")?;
-    for record in records {
-        connection
-            .write(&FromServer::Lookup(record))
-            .await
-            .context("failed to send record")?;
-    }
+    let info = term::lookup(db, &mecab.lemma, &include, &exclude).await?;
     Ok(())
 }
 
