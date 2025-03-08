@@ -85,7 +85,5 @@ pub async fn lookup<'q>(
                 record,
             })
         }),
-    );
-
-    futures::stream::empty()
+    )
 }

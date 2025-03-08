@@ -68,13 +68,20 @@ pub enum FromServer {
     /// See [`HookSentence`].
     #[from]
     HookSentence(HookSentence),
+    /// Server sends a response to [`FromClient::Lookup`] containing a single record.
     #[from]
     Lookup(LookupResponse),
+    /// Server sends a response to [`FromClient::Lookup`] marking that all
+    /// records have been sent.
     LookupDone,
+    /// Response to [`FromClient::RemoveDictionary`].
     RemoveDictionary {
+        /// Result of the operation.
         result: Result<(), DictionaryNotFound>,
     },
+    /// Response to [`FromClient::SetDictionaryEnabled`].
     SetDictionaryEnabled {
+        /// Result of the operation.
         result: Result<(), DictionaryNotFound>,
     },
 }
@@ -116,10 +123,20 @@ impl<T: Into<String>> From<T> for LookupRequest {
     }
 }
 
+/// Single record returned by the server in response to a [`LookupRequest`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LookupResponse {
+    /// ID of the [dictionary] from which the record was retrieved.
+    ///
+    /// [dictionary]: Dictionary
     pub source: DictionaryId,
+    /// The [term] that this record is for.
+    ///
+    /// [term]: Term
     pub term: Term,
+    /// The [record] that was found.
+    ///
+    /// [record]: Record
     pub record: Record,
 }
 

@@ -40,7 +40,7 @@ pub struct Pitch {
 
 /// Checks if the given character is one of the small kana characters, either
 /// hiragana or katakana.
-/// 
+///
 /// This returns `false` for `っ` (see [`morae`]).
 #[must_use]
 #[rustfmt::skip]

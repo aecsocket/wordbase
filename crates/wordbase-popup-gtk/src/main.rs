@@ -25,7 +25,11 @@ use {
         sync::{broadcast, mpsc},
         time,
     },
-    wordbase::{Dictionary, DictionaryId, lookup::LookupEntry, protocol::HookSentence},
+    wordbase::{
+        Dictionary, DictionaryId,
+        hook::HookSentence,
+        protocol::{LookupRequest, LookupResponse},
+    },
     wordbase_client_tokio::{IndexMap, SocketClient},
 };
 
@@ -42,7 +46,7 @@ async fn main() {
     glib::log_set_default_handler(glib::rust_log_handler);
 
     let (send_lookup_request, recv_lookup_request) =
-        mpsc::channel::<LookupRequest>(CHANNEL_BUF_CAP);
+        mpsc::channel::<BackendRequest>(CHANNEL_BUF_CAP);
     let (send_backend_event, recv_backend_event) =
         broadcast::channel::<BackendEvent>(CHANNEL_BUF_CAP);
     tokio::spawn(tokio_backend(recv_lookup_request, send_backend_event));
@@ -99,24 +103,27 @@ async fn main() {
 }
 
 #[derive(Debug)]
-struct LookupRequest {
+struct BackendRequest {
     query: String,
-    send_lookup: mpsc::Sender<LookupEntry>,
+    send_response: mpsc::Sender<LookupResponse>,
 }
 
 fn on_search_changed(
     entry: &gtk::Entry,
-    send_lookup_request: mpsc::Sender<LookupRequest>,
+    send_lookup_request: mpsc::Sender<BackendRequest>,
     dictionaries: Rc<RefCell<DictionaryMap>>,
 ) {
     let query = entry.text().to_string();
-    let (send_lookup, mut recv_lookup) = mpsc::channel(CHANNEL_BUF_CAP);
+    let (send_response, mut recv_response) = mpsc::channel(CHANNEL_BUF_CAP);
     glib::spawn_future_local(async move {
         send_lookup_request
-            .send(LookupRequest { query, send_lookup })
+            .send(BackendRequest {
+                query,
+                send_response,
+            })
             .await?;
 
-        while let Some(lookup) = recv_lookup.recv().await {}
+        while let Some(lookup) = recv_response.recv().await {}
 
         // if let Some(response) = dictionaries {
         //     let terms = Terms::new(&response.dictionaries, response.info);
@@ -175,7 +182,7 @@ enum BackendEvent {
 }
 
 async fn tokio_backend(
-    mut recv_lookup_request: mpsc::Receiver<LookupRequest>,
+    mut recv_lookup_request: mpsc::Receiver<BackendRequest>,
     send_event: broadcast::Sender<BackendEvent>,
 ) -> Result<Infallible> {
     loop {
@@ -204,7 +211,7 @@ async fn tokio_backend(
 }
 
 async fn handle_client(
-    recv_lookup_request: &mut mpsc::Receiver<LookupRequest>,
+    recv_lookup_request: &mut mpsc::Receiver<BackendRequest>,
     send_event: &broadcast::Sender<BackendEvent>,
     client: &mut SocketClient,
 ) -> Result<Infallible> {
@@ -247,7 +254,7 @@ fn forward_event(
     }
 }
 
-async fn handle_request(client: &mut SocketClient, request: LookupRequest) -> Result<()> {
+async fn handle_request(client: &mut SocketClient, request: BackendRequest) -> Result<()> {
     let mut lookups = client
         .lookup(request.query)
         .await
@@ -255,7 +262,7 @@ async fn handle_request(client: &mut SocketClient, request: LookupRequest) -> Re
     while let Some(lookup) = lookups.next().await {
         let lookup = lookup.context("failed to receive lookup")?;
         request
-            .send_lookup
+            .send_response
             .send(lookup)
             .await
             .context("lookup channel dropped")?;

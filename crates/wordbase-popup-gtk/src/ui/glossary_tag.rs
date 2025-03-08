@@ -1,4 +1,4 @@
-use {adw::subclass::prelude::*, gtk::glib, wordbase::TagCategory};
+use {adw::subclass::prelude::*, gtk::glib};
 
 mod imp {
     use super::*;
@@ -36,18 +36,20 @@ impl GlossaryTag {
         glib::Object::new()
     }
 
-    pub const fn css_class_of(category: TagCategory) -> &'static str {
+    // https://github.com/yomidevs/yomitan/blob/48f1d012ad5045319d4e492dfbefa39da92817b2/ext/css/display.css#L136-L149
+    pub fn css_class_of(category: &str) -> Option<&'static str> {
         match category {
-            TagCategory::Name => "name",
-            TagCategory::Expression => "expression",
-            TagCategory::Popular => "popular",
-            TagCategory::Frequent => "frequent",
-            TagCategory::Archaism => "archaism",
-            TagCategory::Dictionary => "dictionary",
-            TagCategory::Frequency => "frequency",
-            TagCategory::PartOfSpeech => "part-of-speech",
-            TagCategory::Search => "search",
-            TagCategory::PronunciationDictionary => "pronunciation-dictionary",
+            "name" => Some("name"),
+            "expression" => Some("expression"),
+            "popular" => Some("popular"),
+            "frequent" => Some("frequent"),
+            "archaism" => Some("archaism"),
+            "dictionary" => Some("dictionary"),
+            "frequency" => Some("frequency"),
+            "partOfSpeech" => Some("part-of-speech"),
+            "search" => Some("search"),
+            "pronunciation-dictionary" => Some("pronunciation-dictionary"),
+            _ => None,
         }
     }
 }
