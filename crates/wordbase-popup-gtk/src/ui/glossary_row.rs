@@ -1,15 +1,14 @@
-use adw::subclass::prelude::*;
-use gtk::glib;
+use {adw::subclass::prelude::*, gtk::glib};
 
 mod imp {
-    use std::cell::RefCell;
-
-    use gtk::{
-        gio::{self, prelude::ListModelExt},
-        prelude::WidgetExt,
+    use {
+        super::*,
+        gtk::{
+            gio::{self, prelude::ListModelExt},
+            prelude::WidgetExt,
+        },
+        std::cell::RefCell,
     };
-
-    use super::*;
 
     #[derive(Debug, Default, gtk::CompositeTemplate)]
     #[template(file = "src/ui/glossary_row.blp")]

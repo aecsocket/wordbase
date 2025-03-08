@@ -1,8 +1,9 @@
 //! Japanese-specific items.
 
-use std::iter;
-
-use serde::{Deserialize, Serialize};
+use {
+    serde::{Deserialize, Serialize},
+    std::iter,
+};
 
 /// Single pitch reading for a [term].
 ///

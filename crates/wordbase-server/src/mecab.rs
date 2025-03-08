@@ -1,10 +1,11 @@
-use std::{cell::OnceCell, sync::LazyLock};
-
-use anyhow::{Context, Result};
-use futures::never::Never;
-use mecab::{Model, Tagger};
-use tokio::sync::{mpsc, oneshot};
-use tracing::info;
+use {
+    anyhow::{Context, Result},
+    futures::never::Never,
+    mecab::{Model, Tagger},
+    std::{cell::OnceCell, sync::LazyLock},
+    tokio::sync::{mpsc, oneshot},
+    tracing::info,
+};
 
 #[derive(Debug)]
 pub struct MecabRequest {

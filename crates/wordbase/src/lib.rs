@@ -8,8 +8,10 @@ pub mod lang;
 pub mod protocol;
 pub(crate) mod util;
 
-use derive_more::From;
-use serde::{Deserialize, Serialize};
+use {
+    derive_more::From,
+    serde::{Deserialize, Serialize},
+};
 
 /// Collection of [records] for [terms] imported into a Wordbase server.
 ///
@@ -53,8 +55,8 @@ pub struct Dictionary {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DictionaryId(pub i64);
 
-/// Key for a [record] in a [dictionary], representing a single interpretation of
-/// some text.
+/// Key for a [record] in a [dictionary], representing a single interpretation
+/// of some text.
 ///
 /// # Examples
 ///
@@ -63,19 +65,28 @@ pub struct DictionaryId(pub i64);
 /// // English word "rust"
 /// assert_eq!(
 ///     Term::without_reading("rust"),
-///     Term { headword: "rust".into(), reading: None }
+///     Term {
+///         headword: "rust".into(),
+///         reading: None
+///     }
 /// );
 ///
 /// // Greek word "σκουριά"
 /// assert_eq!(
 ///     Term::without_reading("σκουριά"),
-///     Term { headword: "σκουριά".into(), reading: None }
+///     Term {
+///         headword: "σκουριά".into(),
+///         reading: None
+///     }
 /// );
 ///
 /// // Japanese word "錆" ("さび")
 /// assert_eq!(
 ///     Term::with_reading("錆", "さび"),
-///     Term { headword: "錆".into(), reading: Some("さび".into()) }
+///     Term {
+///         headword: "錆".into(),
+///         reading: Some("さび".into())
+///     }
 /// );
 /// ```
 ///
@@ -118,32 +129,51 @@ impl Term {
     }
 }
 
-/// Data for a single [term] in a [dictionary].
-///
-/// Dictionaries contain records for individual terms, and may contain
-/// multiple records for the same term. Different dictionary formats store
-/// different types of data for each term, so instead of attempting to normalize
-/// all these types into a single universal type, we store all the data in its
-/// original form (or converted to a slightly more structured form). These
-/// different types of data are then expressed as different variants of this
-/// record enum.
-///
-/// A record kind may also be specific to a single language, or a single
-/// dictionary format. In this case, the variant name is prefixed with the
-/// identifier of that language or format.
-///
-/// Since support for more dictionary formats may be added later, and adding a
-/// new format must not break existing code, **all record-related data should be
-/// treated as non-exhaustive** (and are indeed marked `#[non_exhaustive]`)
-/// unless directly stated otherwise.
-///
-/// [term]: Term
-/// [terms]: Term
-/// [dictionary]: Dictionary
-#[derive(Debug, Clone, From, Serialize, Deserialize)]
-#[expect(missing_docs, reason = "contained type of each variant provides docs")]
-#[non_exhaustive]
-pub enum Record {
+macro_rules! record_kinds {
+    ( $($kind:ident($data_ty:path)),* $(,)? ) => {
+        /// Data for a single [term] in a [dictionary].
+        ///
+        /// Dictionaries contain records for individual terms, and may contain
+        /// multiple records for the same term. Different dictionary formats store
+        /// different types of data for each term, so instead of attempting to normalize
+        /// all these types into a single universal type, we store all the data in its
+        /// original form (or converted to a slightly more structured form). These
+        /// different types of data are then expressed as different variants of this
+        /// record enum.
+        ///
+        /// A record kind may also be specific to a single language, or a single
+        /// dictionary format. In this case, the variant name is prefixed with the
+        /// identifier of that language or format.
+        ///
+        /// Since support for more dictionary formats may be added later, and adding a
+        /// new format must not break existing code, **all record-related data should be
+        /// treated as non-exhaustive** (and are indeed marked `#[non_exhaustive]`)
+        /// unless directly stated otherwise.
+        ///
+        /// [term]: Term
+        /// [terms]: Term
+        /// [dictionary]: Dictionary
+        #[derive(Debug, Clone, From, Serialize, Deserialize)]
+        #[expect(missing_docs, reason = "contained type of each variant provides docs")]
+        #[non_exhaustive]
+        pub enum Record {
+            $($kind($data_ty),)*
+        }
+
+        /// Kind of a [record].
+        ///
+        /// [record]: Record
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+        #[expect(missing_docs, reason = "`Record` has more info")]
+        #[repr(u16)]
+        #[non_exhaustive]
+        pub enum RecordKind {
+            $($kind,)*
+        }
+    };
+}
+
+record_kinds! {
     // generic
     Glossary(Glossary),
     Frequency(Frequency),
@@ -257,7 +287,6 @@ pub struct Glossary {
 /// [corpus]: https://en.wikipedia.org/wiki/Text_corpus
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[non_exhaustive]
 pub struct Frequency {
     /// This [term]'s position in the frequency ranking of this [dictionary]'s
     /// [corpus].

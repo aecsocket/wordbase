@@ -8,7 +8,7 @@ RUN mkdir -p "$HOME/.vscode-server"
 
 # setup dev tools
 RUN sudo pacman -Syu --noconfirm \
-    git openssh gnupg fish starship man-db less ripgrep fzf unzip bat exa zoxide yq just zellij helix typos && \
+    bat exa fish fzf git gnupg helix just less man-db openssh ripgrep starship typos unzip yq zellij zoxide && \
     git clone https://aur.archlinux.org/yay-bin.git /tmp/yay && \
     cd /tmp/yay && \
     makepkg -si --noconfirm

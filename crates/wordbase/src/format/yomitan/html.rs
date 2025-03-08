@@ -1,8 +1,9 @@
-use core::fmt;
-
-use super::structured::{
-    Content, ContentStyle, Data, Element, ImageElement, LinkElement, StyledElement, TableElement,
-    UnstyledElement,
+use {
+    super::structured::{
+        Content, ContentStyle, Data, Element, ImageElement, LinkElement, StyledElement,
+        TableElement, UnstyledElement,
+    },
+    core::fmt,
 };
 
 /// Renders [`Content`] to an HTML string.

@@ -1,22 +1,17 @@
-use std::{
-    convert::Infallible,
-    io::Cursor,
-    iter,
-    path::Path,
-    sync::atomic::{self, AtomicUsize},
+use {
+    anyhow::{Context as _, Result},
+    sqlx::{Pool, Sqlite, Transaction},
+    std::{
+        convert::Infallible,
+        io::Cursor,
+        iter,
+        path::Path,
+        sync::atomic::{self, AtomicUsize},
+    },
+    tokio::{fs, sync::Mutex},
+    tracing::info,
+    wordbase::{DictionaryId, Frequency, Glossary, lang::jp},
 };
-
-use anyhow::{Context as _, Result};
-use sqlx::{Pool, Sqlite, Transaction};
-use tokio::{fs, sync::Mutex};
-use tracing::info;
-use wordbase::{
-    DictionaryId, Frequency, Glossary, GlossaryTag, TagCategory,
-    lang::jp,
-    yomitan::{self, structured},
-};
-
-use crate::record::{data_kind, serialize};
 
 pub async fn from_yomitan(db: Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
     let path = path.as_ref();

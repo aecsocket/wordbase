@@ -1,9 +1,11 @@
 #![doc = include_str!("../README.md")]
 
-use anyhow::{Context, Result};
-use futures::StreamExt;
-use wordbase::{DictionaryId, hook::HookSentence};
-use wordbase_client_tokio::SocketClient;
+use {
+    anyhow::{Context, Result},
+    futures::StreamExt,
+    wordbase::{DictionaryId, hook::HookSentence},
+    wordbase_client_tokio::SocketClient,
+};
 
 /// Wordbase command line client.
 #[derive(Debug, clap::Parser)]
@@ -127,11 +129,11 @@ async fn disable_dictionary(client: &mut SocketClient, id: i64) -> Result<()> {
 }
 
 async fn lookup(client: &mut SocketClient, text: String) -> Result<()> {
-    let mut entries = client
+    let mut responses = client
         .lookup(text)
         .await
         .context("failed to start lookup")?;
-    while let Some(entry) = entries.next().await {
+    while let Some(entry) = responses.next().await {
         let entry = entry.context("failed to receive lookup entry")?;
         println!("{entry:?}");
     }

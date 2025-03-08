@@ -3,12 +3,13 @@
 //! See [`dictionary-data.d.ts`](https://github.com/yomidevs/yomitan/blob/master/types/ext/dictionary-data.d.ts).
 #![expect(missing_docs, reason = "these are not our types")]
 
-use derive_more::{Deref, DerefMut, From};
-use foldhash::HashMap;
-use serde::Deserialize;
-use serde_repr::Deserialize_repr;
-
-use super::structured;
+use {
+    super::structured,
+    derive_more::{Deref, DerefMut, From},
+    foldhash::HashMap,
+    serde::Deserialize,
+    serde_repr::Deserialize_repr,
+};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]

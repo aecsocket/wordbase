@@ -1,24 +1,24 @@
 #![doc = include_str!("../README.md")]
 
+use {
+    derive_more::{Display, Error},
+    futures::{Sink, SinkExt, Stream, StreamExt, task},
+    std::pin::Pin,
+    tokio::{
+        io::{AsyncRead, AsyncWrite},
+        net::TcpStream,
+    },
+    tokio_tungstenite::{
+        MaybeTlsStream, WebSocketStream,
+        tungstenite::{Message, client::IntoClientRequest},
+    },
+    wordbase::{
+        Dictionary, DictionaryId, LookupConfig,
+        hook::HookSentence,
+        protocol::{DictionaryNotFound, FromClient, FromServer, LookupRequest, LookupResponse},
+    },
+};
 pub use {indexmap, wordbase};
-
-use std::pin::Pin;
-
-use derive_more::{Display, Error};
-use futures::{Sink, SinkExt, Stream, StreamExt, task};
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    net::TcpStream,
-};
-use tokio_tungstenite::{
-    MaybeTlsStream, WebSocketStream,
-    tungstenite::{Message, client::IntoClientRequest},
-};
-use wordbase::{
-    Dictionary, DictionaryId, LookupConfig,
-    hook::HookSentence,
-    protocol::{DictionaryNotFound, FromClient, FromServer, RecordLookup},
-};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Connection<S>(pub S);
@@ -211,19 +211,21 @@ where
 
     pub async fn lookup(
         &mut self,
-        text: impl Into<String>,
-    ) -> Result<Pin<Box<impl Stream<Item = Result<RecordLookup, ConnectionError>>>>, ConnectionError>
-    {
+        request: impl Into<LookupRequest>,
+    ) -> Result<
+        Pin<Box<impl Stream<Item = Result<LookupResponse, ConnectionError>>>>,
+        ConnectionError,
+    > {
         self.connection
-            .send(&FromClient::Lookup { text: text.into() })
+            .send(&FromClient::from(request.into()))
             .await?;
 
         // TODO: actual stream
-        let mut all_records = Vec::<RecordLookup>::new();
+        let mut all_responses = Vec::<LookupResponse>::new();
         loop {
             match self.connection.recv().await? {
-                FromServer::Lookup { record } => {
-                    all_records.push(record);
+                FromServer::Lookup(response) => {
+                    all_responses.push(response);
                 }
                 FromServer::LookupDone => break,
                 message => self.fallback_handle(message)?,
@@ -231,7 +233,7 @@ where
         }
 
         Ok(Box::pin(futures::stream::iter(
-            all_records.into_iter().map(Ok),
+            all_responses.into_iter().map(Ok),
         )))
     }
 
@@ -305,7 +307,7 @@ impl<S> Stream for Lookup<'_, S>
 where
     S: Stream<Item = Result<Message, WsError>> + Sink<Message, Error = WsError> + Unpin,
 {
-    type Item = Result<RecordLookup, ConnectionError>;
+    type Item = Result<LookupResponse, ConnectionError>;
 
     fn poll_next(
         self: Pin<&mut Self>,

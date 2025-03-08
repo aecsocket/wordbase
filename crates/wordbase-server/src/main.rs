@@ -1,41 +1,54 @@
 #![doc = include_str!("../README.md")]
 
-pub(crate) mod db;
-pub(crate) mod import;
+mod dictionary;
+mod hook_pull;
+mod import;
 mod mecab;
 mod server;
-mod textractor;
+mod term;
 
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    sync::Arc,
-    time::Duration,
+use {
+    anyhow::{Context, Result},
+    mecab::MecabRequest,
+    std::{
+        net::{Ipv4Addr, SocketAddr},
+        sync::Arc,
+        time::Duration,
+    },
+    tokio::{
+        sync::{broadcast, mpsc},
+        task::JoinSet,
+    },
+    tracing::{Instrument, info_span},
+    wordbase::{Dictionary, LookupConfig, hook::HookSentence, protocol::DEFAULT_PORT},
 };
-
-use anyhow::Result;
-use mecab::MecabRequest;
-use tokio::sync::{broadcast, mpsc};
-use wordbase::{DEFAULT_PORT, Dictionary, lookup::LookupConfig, protocol::HookSentence};
 
 const CHANNEL_BUF_CAP: usize = 4;
 
 #[derive(Debug)]
 struct Config {
     listen_addr: SocketAddr,
-    textractor_url: String,
-    textractor_connect_interval: Duration,
     lookup: LookupConfig,
+    texthooker_sources: Vec<Arc<TexthookerSource>>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            listen_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), DEFAULT_PORT),
-            textractor_url: "ws://127.0.0.1:9001".into(),
-            textractor_connect_interval: Duration::from_secs(1),
+            listen_addr: SocketAddr::new(Ipv4Addr::LOCALHOST.into(), DEFAULT_PORT),
             lookup: LookupConfig::default(),
+            texthooker_sources: vec![Arc::new(TexthookerSource {
+                url: "ws://127.0.0.1:9001".into(),
+                connect_interval: Duration::from_secs(1),
+            })],
         }
     }
+}
+
+#[derive(Debug)]
+struct TexthookerSource {
+    url: String,
+    connect_interval: Duration,
 }
 
 #[derive(Debug, Clone)]
@@ -52,14 +65,19 @@ async fn main() -> Result<()> {
     let (send_mecab_request, recv_mecab_request) = mpsc::channel::<MecabRequest>(CHANNEL_BUF_CAP);
     let (send_event, _) = broadcast::channel::<Event>(CHANNEL_BUF_CAP);
 
-    #[expect(
-        unreachable_code,
-        reason = "macro generates code which reads values in uninhabited types"
-    )]
-    tokio::try_join!(
-        mecab::run(recv_mecab_request),
-        textractor::run(config.clone(), send_event.clone()),
-        server::run(config.clone(), send_mecab_request, send_event),
-    )?;
+    let mut tasks = JoinSet::new();
+
+    for source_config in &config.texthooker_sources {
+        tasks.spawn(
+            hook_pull::run(source_config.clone(), send_event.clone())
+                .instrument(info_span!("texthooker", url = source_config.url)),
+        );
+    }
+    tasks.spawn(mecab::run(recv_mecab_request));
+    tasks.spawn(server::run(config, send_mecab_request, send_event));
+
+    while let Some(result) = tasks.join_next().await {
+        result.context("task dropped")??;
+    }
     Ok(())
 }

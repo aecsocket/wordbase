@@ -1,29 +1,32 @@
-use std::sync::Arc;
+use {
+    crate::{Event, TexthookerSource},
+    anyhow::{Context, Result},
+    futures::{StreamExt, never::Never},
+    std::sync::Arc,
+    tokio::{net::TcpStream, sync::broadcast},
+    tokio_tungstenite::{MaybeTlsStream, WebSocketStream},
+    tracing::{info, trace},
+    wordbase::hook::HookSentence,
+};
 
-use anyhow::{Context, Result};
-use futures::{StreamExt, never::Never};
-use tokio::{net::TcpStream, sync::broadcast};
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
-use tracing::{info, trace};
-use wordbase::protocol::HookSentence;
-
-use crate::{Config, Event};
-
-pub async fn run(config: Arc<Config>, send_event: broadcast::Sender<Event>) -> Result<Never> {
+pub async fn run(
+    config: Arc<TexthookerSource>,
+    send_event: broadcast::Sender<Event>,
+) -> Result<Never> {
     loop {
-        tokio::time::sleep(config.textractor_connect_interval).await;
+        tokio::time::sleep(config.connect_interval).await;
 
-        let (stream, _) = match tokio_tungstenite::connect_async(&config.textractor_url).await {
+        let (stream, _) = match tokio_tungstenite::connect_async(&config.url).await {
             Ok(stream) => stream,
             Err(err) => {
-                trace!("Failed to connect to Textractor: {err:?}");
+                trace!("Failed to connect: {err:?}");
                 continue;
             }
         };
 
-        info!("Textractor connected");
+        info!("Connected");
         let Err(err) = handle_stream(stream, send_event.clone()).await;
-        info!("Textractor disconnected: {err:?}");
+        info!("Disconnected: {err:?}");
     }
 }
 

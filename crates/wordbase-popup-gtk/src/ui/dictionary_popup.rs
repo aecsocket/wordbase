@@ -1,7 +1,8 @@
-use adw::{prelude::BinExt, subclass::prelude::*};
-use gtk::glib;
-
-use super::Dictionary;
+use {
+    super::Dictionary,
+    adw::{prelude::BinExt, subclass::prelude::*},
+    gtk::glib,
+};
 
 mod imp {
     use super::*;

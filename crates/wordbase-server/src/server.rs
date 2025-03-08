@@ -1,24 +1,25 @@
-use std::{num::Wrapping, str::FromStr, sync::Arc, time::Duration};
-
-use anyhow::{Context as _, Result, bail};
-use derive_more::{Deref, DerefMut};
-use futures::{SinkExt as _, StreamExt as _, never::Never};
-use sqlx::{
-    Pool, Sqlite,
-    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
-};
-use tokio::{
-    net::{TcpListener, TcpStream},
-    sync::{broadcast, mpsc, oneshot},
-    task::JoinSet,
-};
-use tokio_tungstenite::{WebSocketStream, tungstenite::Message};
-use tracing::{Instrument, info, info_span, warn};
-use wordbase::protocol::{FromClient, FromServer, HookSentence};
-
-use crate::{
-    Config, Event, db, import,
-    mecab::{MecabInfo, MecabRequest},
+use {
+    crate::{
+        Config, Event, dictionary, import,
+        mecab::{MecabInfo, MecabRequest},
+        term,
+    },
+    anyhow::{Context as _, Result, bail},
+    derive_more::{Deref, DerefMut},
+    futures::{SinkExt as _, StreamExt as _, never::Never},
+    sqlx::{
+        Pool, Sqlite,
+        sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
+    },
+    std::{num::Wrapping, str::FromStr, sync::Arc, time::Duration},
+    tokio::{
+        net::{TcpListener, TcpStream},
+        sync::{broadcast, mpsc, oneshot},
+        task::JoinSet,
+    },
+    tokio_tungstenite::{WebSocketStream, tungstenite::Message},
+    tracing::{Instrument, info, info_span, warn},
+    wordbase::protocol::{FromClient, FromServer, LookupRequest},
 };
 
 pub async fn run(
@@ -37,13 +38,11 @@ pub async fn run(
         )
         .await
         .context("failed to connect to database")?;
-    info!("Connected to database");
-
     sqlx::query(include_str!("setup_db.sql"))
         .execute(&db)
         .await
         .context("failed to set up database")?;
-    info!("Set up database");
+    info!("Connected to database");
 
     // TODO
     const IMPORTS: &[&str] = &[
@@ -55,9 +54,9 @@ pub async fn run(
     // const IMPORTS: &[&str] = &[
     //     "1. jitendex-yomitan.zip",
     //     "2. JMnedict.zip",
-    //     "3. [Grammar] Dictionary of Japanese Grammar 日本語文法辞典 (Recommended).zip",
-    //     "4. [Monolingual] 三省堂国語辞典　第八版 (Recommended).zip",
-    //     "5. [JA-JA] 明鏡国語辞典　第二版_2023_07_22.zip",
+    //     "3. [Grammar] Dictionary of Japanese Grammar 日本語文法辞典
+    // (Recommended).zip",     "4. [Monolingual] 三省堂国語辞典　第八版
+    // (Recommended).zip",     "5. [JA-JA] 明鏡国語辞典　第二版_2023_07_22.zip",
     //     "6. 漢字ペディア同訓異義.zip",
     //     "7. [Monolingual] デジタル大辞泉.zip",
     //     "8. [Monolingual] PixivLight.zip",
@@ -142,7 +141,7 @@ async fn handle_stream(
     let mut connection = Connection(stream);
     let mut recv_event = send_event.subscribe();
 
-    let dictionaries = db::list_dictionaries(&db)
+    let dictionaries = dictionary::all(&db)
         .await
         .context("failed to fetch dictionaries")?;
 
@@ -214,20 +213,18 @@ async fn handle_message(
             _ = send_event.send(Event::HookSentence(sentence));
             Ok(())
         }
-        FromClient::Lookup { text } => {
-            do_lookup(config, db, send_mecab_request, connection, text)
+        FromClient::Lookup(request) => {
+            do_lookup(config, db, send_mecab_request, connection, request)
                 .await
                 .context("failed to perform lookup")?;
             connection
-                .write(&FromServer::Lookup {
-                    entries: Vec::new(),
-                })
+                .write(&FromServer::LookupDone)
                 .await
-                .context("failed to send response")?;
+                .context("failed to send final response")?;
             Ok(())
         }
         FromClient::RemoveDictionary { dictionary_id } => {
-            let result = db::remove_dictionary(db, dictionary_id)
+            let result = dictionary::remove(db, dictionary_id)
                 .await
                 .context("failed to remove dictionary")?;
             connection
@@ -243,7 +240,7 @@ async fn handle_message(
             dictionary_id,
             enabled,
         } => {
-            let result = db::set_dictionary_enabled(db, dictionary_id, enabled)
+            let result = dictionary::set_enabled(db, dictionary_id, enabled)
                 .await
                 .context("failed to set dictionary enabled state")?;
             connection
@@ -263,28 +260,38 @@ async fn do_lookup(
     db: &Pool<Sqlite>,
     send_mecab_request: &mpsc::Sender<MecabRequest>,
     connection: &mut Connection,
-    text: String,
+    request: LookupRequest,
 ) -> Result<()> {
-    let request_len = text.chars().count();
+    let LookupRequest {
+        text,
+        include,
+        exclude,
+    } = request;
+
+    // count like this instead of using `.count()`
+    // because `count` does not short-circuit
+    let mut request_chars = text.chars();
+    let mut num_request_chars = 0u64;
     let max_request_len = config.lookup.max_request_len;
-    let request_len_valid =
-        u64::try_from(request_len).is_ok_and(|request_len| request_len <= max_request_len);
-    if !request_len_valid {
-        bail!("request too long - {request_len} / {max_request_len} characters");
+    while let Some(_) = request_chars.next() {
+        num_request_chars += 1;
+        if num_request_chars > max_request_len {
+            bail!("request too long - max {max_request_len} characters");
+        }
     }
 
-    let (send_mecab_response, recv_mecab_response) = oneshot::channel::<Option<MecabInfo>>();
+    let (send_mecab_info, recv_mecab_info) = oneshot::channel::<Option<MecabInfo>>();
     _ = send_mecab_request
         .send(MecabRequest {
             text,
-            send_info: send_mecab_response,
+            send_info: send_mecab_info,
         })
         .await;
-    let Some(mecab) = recv_mecab_response.await.context("mecab channel dropped")? else {
+    let Some(mecab) = recv_mecab_info.await.context("mecab channel dropped")? else {
         return Ok(());
     };
 
-    // let info = db::lookup(db, mecab.lemma).await?;
+    let info = term::lookup(db, mecab.lemma, &include, &exclude).await?;
     Ok(())
 }
 
@@ -292,7 +299,7 @@ async fn send_dictionary_sync(
     db: &Pool<Sqlite>,
     send_event: &broadcast::Sender<Event>,
 ) -> Result<()> {
-    let dictionaries = db::list_dictionaries(db)
+    let dictionaries = dictionary::all(db)
         .await
         .context("failed to fetch dictionaries")?;
 

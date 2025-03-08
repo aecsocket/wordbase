@@ -1,6 +1,4 @@
-use adw::subclass::prelude::*;
-use gtk::glib;
-use wordbase::TagCategory;
+use {adw::subclass::prelude::*, gtk::glib, wordbase::TagCategory};
 
 mod imp {
     use super::*;

@@ -1,5 +1,4 @@
-use adw::subclass::prelude::*;
-use gtk::glib;
+use {adw::subclass::prelude::*, gtk::glib};
 
 mod imp {
     use super::*;

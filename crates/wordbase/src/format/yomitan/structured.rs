@@ -3,9 +3,11 @@
 //! See [`structured-content.d.ts`](https://github.com/yomidevs/yomitan/blob/master/types/ext/structured-content.d.ts).
 #![expect(missing_docs, reason = "these are not our types")]
 
-use derive_more::{Deref, DerefMut, Display};
-use foldhash::HashMap;
-use serde::{Deserialize, Serialize};
+use {
+    derive_more::{Deref, DerefMut, Display},
+    foldhash::HashMap,
+    serde::{Deserialize, Serialize},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]

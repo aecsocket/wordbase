@@ -14,19 +14,20 @@ extern crate webkit6 as webkit;
 // mod format;
 mod ui;
 
-use std::{cell::RefCell, convert::Infallible, rc::Rc, time::Duration};
-
-use adw::prelude::*;
-use anyhow::{Context, Result};
-use futures::StreamExt;
-use gtk::gdk;
-use log::warn;
-use tokio::{
-    sync::{broadcast, mpsc},
-    time,
+use {
+    adw::prelude::*,
+    anyhow::{Context, Result},
+    futures::StreamExt,
+    gtk::gdk,
+    log::warn,
+    std::{cell::RefCell, convert::Infallible, rc::Rc, time::Duration},
+    tokio::{
+        sync::{broadcast, mpsc},
+        time,
+    },
+    wordbase::{Dictionary, DictionaryId, lookup::LookupEntry, protocol::HookSentence},
+    wordbase_client_tokio::{IndexMap, SocketClient},
 };
-use wordbase::{Dictionary, DictionaryId, lookup::LookupEntry, protocol::HookSentence};
-use wordbase_client_tokio::{IndexMap, SocketClient};
 
 const CHANNEL_BUF_CAP: usize = 4;
 

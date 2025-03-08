@@ -8,11 +8,13 @@
 //! open a WebSocket server which sends clients the extracted sentences.
 //!
 //! The Wordbase server is able to connect to a texthooker server, receive
-//! [sentences], and forward them out to connected clients. Clients are also
-//! able to connect to the Wordbase server and send out sentences, which are
-//! then forwarded to all clients (including the sender). In this way, the
-//! Wordbase server effectively acts as a broker between texthookers and
-//! clients.
+//! [sentences], and forward them out to connected clients. This is the "pull"
+//! mode.
+//!
+//! Clients are also able to connect to the Wordbase server and send out
+//! sentences, which are then forwarded to all clients (including the sender).
+//! In this way, the Wordbase server effectively acts as a broker between
+//! texthookers and clients. This is the "broker" mode.
 //!
 //! [Textractor]: https://github.com/Artikash/Textractor/
 //! [vn]: https://learnjapanese.moe/vn/

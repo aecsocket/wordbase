@@ -1,19 +1,17 @@
-use std::{
-    io::{Read, Seek},
-    marker::PhantomData,
-    sync::LazyLock,
+use {
+    super::schema::{Index, KanjiBank, KanjiMetaBank, TagBank, TermBank, TermMetaBank},
+    derive_more::{Display, Error},
+    rayon::prelude::*,
+    regex::Regex,
+    serde::de::DeserializeOwned,
+    std::{
+        io::{Read, Seek},
+        marker::PhantomData,
+        sync::LazyLock,
+    },
+    zip::ZipArchive,
 };
-
-use derive_more::{Display, Error};
-use rayon::prelude::*;
-use regex::Regex;
-use serde::de::DeserializeOwned;
-use zip::ZipArchive;
-
-use super::schema::{Index, KanjiBank, KanjiMetaBank, TagBank, TermBank, TermMetaBank};
-
-pub use serde_json::Error as JsonError;
-pub use zip::result::ZipError;
+pub use {serde_json::Error as JsonError, zip::result::ZipError};
 
 /// Parses a [Yomitan] dictionary from a zip archive.
 ///
@@ -22,25 +20,25 @@ pub use zip::result::ZipError;
 /// ```
 /// # use wordbase::format::yomitan::Parse;
 /// # fn run() {
-/// let archive = std::fs::read("jitendex.zip")
-///     .expect("failed to read dictionary to memory");
+/// let archive = std::fs::read("jitendex.zip").expect("failed to read dictionary to memory");
 ///
-/// let (parser, index) = Parse::new(|| Ok(std::io::Cursor::new(&archive)))
-///     .expect("failed to parse index");
+/// let (parser, index) =
+///     Parse::new(|| Ok(std::io::Cursor::new(&archive))).expect("failed to parse index");
 ///
 /// let term_banks_left = AtomicUsize::new(index.term_banks().len());
 ///
-/// parser.run(
-///     |_, _tag_bank| {},
-///     |_, term_bank| {
-///         let left = term_banks_left.fetch_sub(1, atomic::Ordering::SeqCst) - 1;
-///         println!("{left} term banks left to parse");
-///     },
-///     |_, _term_meta_bank| {},
-///     |_, _kanji_bank| {},
-///     |_, _kanji_meta_bank| {},
-/// )
-/// .expect("failed to parse bank");
+/// parser
+///     .run(
+///         |_, _tag_bank| {},
+///         |_, term_bank| {
+///             let left = term_banks_left.fetch_sub(1, atomic::Ordering::SeqCst) - 1;
+///             println!("{left} term banks left to parse");
+///         },
+///         |_, _term_meta_bank| {},
+///         |_, _kanji_bank| {},
+///         |_, _kanji_meta_bank| {},
+///     )
+///     .expect("failed to parse bank");
 /// # }
 /// ```
 ///

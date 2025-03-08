@@ -1,10 +1,11 @@
 //! Types defining the messages exchanged between a client and server over a
 //! WebSocket connection.
 
-use derive_more::{Display, Error, From};
-use serde::{Deserialize, Serialize};
-
-use crate::{Dictionary, DictionaryId, LookupConfig, Record, Term, hook::HookSentence};
+use {
+    crate::{Dictionary, DictionaryId, LookupConfig, Record, RecordKind, Term, hook::HookSentence},
+    derive_more::{Display, Error, From},
+    serde::{Deserialize, Serialize},
+};
 
 /// Default port which a Wordbase server listens on.
 pub const DEFAULT_PORT: u16 = 9518;
@@ -16,21 +17,9 @@ pub enum FromClient {
     /// See [`HookSentence`].
     #[from]
     HookSentence(HookSentence),
-    /// Requests the server to find the first [terms] in some text, and return
-    /// [records] for those terms.
-    ///
-    /// Server responds with 0 to N [`FromServer::Lookup`]s, ending with a final
-    /// [`FromServer::LookupDone`].
-    ///
-    /// [records]: crate::Record
-    /// [terms]: crate::Term
-    Lookup {
-        /// Text to search in.
-        ///
-        /// This must not be longer **in characters** than
-        /// [`LookupConfig::max_request_len`].
-        text: String,
-    },
+    /// See [`LookupRequest`].
+    #[from]
+    Lookup(LookupRequest),
     /// Requests to remove a [dictionary] from the server's database.
     ///
     /// Server responds with [`FromServer::RemoveDictionary`].
@@ -56,7 +45,7 @@ pub enum FromClient {
 }
 
 /// Server-to-client WebSocket message, encoded as JSON.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
 #[serde(tag = "type")]
 pub enum FromServer {
     /// An unknown error occurred.
@@ -77,10 +66,10 @@ pub enum FromServer {
         dictionaries: Vec<Dictionary>,
     },
     /// See [`HookSentence`].
+    #[from]
     HookSentence(HookSentence),
-    Lookup {
-        record: RecordLookup,
-    },
+    #[from]
+    Lookup(LookupResponse),
     LookupDone,
     RemoveDictionary {
         result: Result<(), DictionaryNotFound>,
@@ -90,8 +79,45 @@ pub enum FromServer {
     },
 }
 
+/// Requests the server to find the first [terms] in some text, and return
+/// [records] for those terms.
+///
+/// Server responds with 0 to N [`FromServer::Lookup`]s, ending with a final
+/// [`FromServer::LookupDone`].
+///
+/// [records]: crate::Record
+/// [terms]: crate::Term
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct LookupRequest {
+    /// Text to search in.
+    ///
+    /// This must not be longer **in characters** than
+    /// [`LookupConfig::max_request_len`].
+    pub text: String,
+    /// What kinds of records the server should send us.
+    ///
+    /// If this is empty, all record kinds are sent. Otherwise, only records
+    /// of the given kinds are sent.
+    pub include: Vec<RecordKind>,
+    /// What kinds of records the server should not send us.
+    ///
+    /// This applies on top of [`include`].
+    ///
+    /// [`include`]: LookupRequest::include
+    pub exclude: Vec<RecordKind>,
+}
+
+impl<T: Into<String>> From<T> for LookupRequest {
+    fn from(value: T) -> Self {
+        Self {
+            text: value.into(),
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RecordLookup {
+pub struct LookupResponse {
     pub source: DictionaryId,
     pub term: Term,
     pub record: Record,
@@ -99,15 +125,13 @@ pub struct RecordLookup {
 
 /// Attempted to perform an operation on a [`DictionaryId`] which does not
 /// exist.
-#[derive(Debug, Clone, Display, Error, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Display, Error, Serialize, Deserialize)]
 #[display("dictionary not found")]
 pub struct DictionaryNotFound;
 
 #[cfg(test)]
 mod tests {
-    use serde::de::DeserializeOwned;
-
-    use super::*;
+    use {super::*, serde::de::DeserializeOwned};
 
     fn default<T: Default>() -> T {
         T::default()
@@ -122,7 +146,11 @@ mod tests {
     #[test]
     fn round_trip_all() {
         round_trip(FromClient::from(HookSentence::default()));
-        round_trip(FromClient::Lookup { text: default() });
+        round_trip(FromClient::from(LookupRequest {
+            text: default(),
+            include: vec![RecordKind::Glossary],
+            exclude: vec![RecordKind::Frequency],
+        }));
         round_trip(FromClient::RemoveDictionary {
             dictionary_id: default(),
         });
@@ -138,14 +166,12 @@ mod tests {
         round_trip(FromServer::SyncDictionaries {
             dictionaries: vec![default()],
         });
-        round_trip(FromServer::HookSentence(HookSentence::default()));
-        round_trip(FromServer::Lookup {
-            record: RecordLookup {
-                source: default(),
-                term: default(),
-                record: Record::Glossary(default()),
-            },
-        });
+        round_trip(FromServer::from(HookSentence::default()));
+        round_trip(FromServer::from(LookupResponse {
+            source: default(),
+            term: default(),
+            record: Record::Glossary(default()),
+        }));
         round_trip(FromServer::LookupDone);
         round_trip(FromServer::RemoveDictionary {
             result: Err(DictionaryNotFound),
