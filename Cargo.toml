@@ -12,7 +12,7 @@ repository = "https://github.com/aecsocket/wordbase"
 rust-version = "1.85.0"
 
 [workspace.lints.rust]
-# missing_docs = "warn"
+missing_docs = "warn"
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
 
 [workspace.lints.clippy]
@@ -25,10 +25,7 @@ unwrap_used = "warn"
 module_name_repetitions = "allow"
 needless_pass_by_value = "allow"
 similar_names = "allow"
-too_many_arguments = "allow"
 type_complexity = "allow"
-
-missing_errors_doc = "allow"
 
 [workspace.dependencies]
 wordbase = { path = "crates/wordbase" }

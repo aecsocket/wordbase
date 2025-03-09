@@ -25,11 +25,7 @@ use {
         sync::{broadcast, mpsc},
         time,
     },
-    wordbase::{
-        DictionaryState, DictionaryId,
-        hook::HookSentence,
-        protocol::{LookupRequest, LookupResponse},
-    },
+    wordbase::{DictionaryId, DictionaryState, hook::HookSentence, protocol::LookupResponse},
     wordbase_client_tokio::{IndexMap, SocketClient},
 };
 

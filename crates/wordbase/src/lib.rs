@@ -1,11 +1,10 @@
 #![doc = include_str!("../README.md")]
-#![warn(missing_docs)]
-#![warn(clippy::missing_errors_doc)]
 
 // required for macro invocations
 extern crate self as wordbase;
 
 pub mod format;
+pub mod glossary;
 pub mod hook;
 pub mod lang;
 pub mod protocol;
@@ -42,7 +41,7 @@ use {
 ///
 /// ```
 /// macro_rules! my_macro {
-///     ( $($kind:ident($data_ty:path))* ) => {
+///     ( $($kind:ident($data_ty:path)),* $(,)? ) => {
 ///         // your code here
 ///     }
 /// }
@@ -52,7 +51,7 @@ use {
 ///
 /// ```
 /// # macro_rules! my_macro {
-/// #   ( $($kind:ident($data_ty:path))* ) => {
+/// #   ( $($kind:ident($data_ty:path)),* $(,)? ) => {
 /// #       // your code here
 /// #   }
 /// # }
@@ -71,7 +70,7 @@ use {
 /// ```
 /// macro_rules! define_record_wrapper {
 ///     // note the single `{` at the end of this line...
-///     ( $($kind:ident($data_ty:path))* ) => {
+///     ( $($kind:ident($data_ty:path)),* $(,)? ) => {
 ///         pub enum MyRecordWrapper {
 ///             $($kind {
 ///                 data: $data_ty,
@@ -88,7 +87,7 @@ use {
 /// fn deserialize(kind: u16, data: &[u8]) {
 ///     macro_rules! deserialize_record {
 ///         // note the double `{` at the end of this line...
-///         ( $($kind:ident($data_ty:path))* ) => {{
+///         ( $($kind:ident($data_ty:path)),* $(,)? ) => {{
 ///             mod discrim {
 ///                 use wordbase::RecordKind;
 ///
@@ -114,12 +113,13 @@ use {
 macro_rules! for_record_kinds {
     ($macro:ident) => {
         $macro!(
-            // note: no comma separator
-            GlossaryPlainText(wordbase::record::GlossaryPlainText)
-            GlossaryHtml(wordbase::record::GlossaryHtml)
-            Frequency(wordbase::record::Frequency)
-            JpPitch(wordbase::lang::jp::Pitch)
-            YomitanGlossary(wordbase::format::yomitan::Glossary)
+            GlossaryPlainText(wordbase::glossary::PlainText),
+            GlossaryPlainTextFallback(wordbase::glossary::PlainTextFallback),
+            GlossaryHtml(wordbase::glossary::Html),
+            GlossaryHtmlFallback(wordbase::glossary::HtmlFallback),
+            Frequency(wordbase::record::Frequency),
+            JpPitch(wordbase::lang::jp::Pitch),
+            YomitanGlossary(wordbase::format::yomitan::Glossary),
         );
     };
 }
@@ -259,7 +259,7 @@ impl Term {
     }
 }
 
-macro_rules! define_record_types { ($($kind:ident($data_ty:path))*) => {
+macro_rules! define_record_types { ($($kind:ident($data_ty:path)),* $(,)?) => {
 /// Data for a single [term] in a [dictionary].
 ///
 /// Dictionaries contain records for individual terms, and may contain
@@ -278,6 +278,10 @@ macro_rules! define_record_types { ($($kind:ident($data_ty:path))*) => {
 /// new format must not break existing code, **all record-related data should be
 /// treated as non-exhaustive** (and are indeed marked `#[non_exhaustive]`)
 /// unless directly stated otherwise.
+///
+/// Some kinds of records may be *dynamic records* - they may be sent by the
+/// server or not, [depending on what kinds of records the client requests][rk]
+///
 ///
 /// # Glossaries
 ///
@@ -327,6 +331,7 @@ macro_rules! define_record_types { ($($kind:ident($data_ty:path))*) => {
 /// [content]: format::yomitan::structured::Content
 /// [`YomitanGlossary`]: format::yomitan::Glossary
 /// [`GlossaryHtml`]: record::GlossaryHtml
+/// [rk]: protocol::LookupRequest::record_kinds
 #[derive(Debug, Clone, From, Serialize, Deserialize)]
 #[expect(missing_docs, reason = "contained type of each variant provides docs")]
 #[non_exhaustive]
