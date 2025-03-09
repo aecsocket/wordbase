@@ -14,16 +14,20 @@ mod parse;
 pub use parse::*;
 use serde::{Deserialize, Serialize};
 
+/// Yomitan-specific glossary format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Glossary {
+    /// Tags applied to this glossary record.
     pub tags: Vec<GlossaryTag>,
+    /// Structured contents of this record.
+    ///
+    /// You can render this to HTML using [`render_to_html`].
     pub content: Vec<structured::Content>,
 }
 
-/// Categorises a [glossary] for a given [term].
+/// Categorises a glossary for a given [term].
 ///
-/// [glossary]: crate::Glossary
 /// [term]: crate::Term
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

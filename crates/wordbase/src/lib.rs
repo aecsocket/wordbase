@@ -302,10 +302,31 @@ macro_rules! define_record_types { ($($kind:ident($data_ty:path))*) => {
 /// most convenient for you if it is present, or fallback to a different format
 /// (potentially to multiple different formats).
 ///
+// TODO: is this a good idea?
+/// # Dynamic records
+///
+/// Some records, such as certain kinds of glossary records, may be *dynamic*.
+/// This means that their contents aren't actually stored in the server's
+/// database, but are instead computed on-the-fly from the data that it *does*
+/// have when you make your request. It may even provide or omit entire records
+/// based on what record kinds you request.
+///
+/// For example, the server may store a [Yomitan structured content][content]
+/// record internally for a given term. If you request a [`YomitanGlossary`],
+/// the server will provide you with this, but will *not* provide a
+/// [`GlossaryHtml`] - you can compute that yourself from the structured content
+/// you're given, and render it in your own way. However, if you don't request a
+/// [`YomitanGlossary`], the server falls back to generating HTML by itself and
+/// sending you the result - it will assume that you don't know what a Yomitan
+/// glossary is, but still wants to provide a result.
+///
 /// [term]: Term
 /// [terms]: Term
 /// [dictionary]: Dictionary
 /// [formats]: https://github.com/ilius/pyglossary/#supported-formats
+/// [content]: format::yomitan::structured::Content
+/// [`YomitanGlossary`]: format::yomitan::Glossary
+/// [`GlossaryHtml`]: record::GlossaryHtml
 #[derive(Debug, Clone, From, Serialize, Deserialize)]
 #[expect(missing_docs, reason = "contained type of each variant provides docs")]
 #[non_exhaustive]

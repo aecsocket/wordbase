@@ -145,7 +145,7 @@ async fn lookup(client: &mut SocketClient, text: String) -> Result<()> {
     while let Some(record) = records.next().await {
         let record = record.context("failed to receive record")?;
         num_records += 1;
-        println!("{record:?}");
+        println!("{record:#?}");
     }
     println!("Total records: {num_records}");
     Ok(())
