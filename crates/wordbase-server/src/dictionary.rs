@@ -2,10 +2,10 @@ use {
     anyhow::{Context, Result},
     futures::{StreamExt, TryStreamExt},
     sqlx::{Executor, Sqlite},
-    wordbase::{Dictionary, DictionaryId, protocol::DictionaryNotFound},
+    wordbase::{DictionaryId, DictionaryMeta, DictionaryState, protocol::DictionaryNotFound},
 };
 
-pub async fn insert<'e, 'c: 'e, E>(executor: E, dictionary: &Dictionary) -> Result<DictionaryId>
+pub async fn insert<'e, 'c: 'e, E>(executor: E, dictionary: &DictionaryMeta) -> Result<DictionaryId>
 where
     E: 'e + Executor<'c, Database = Sqlite>,
 {
@@ -33,7 +33,7 @@ where
     Ok(result > 0)
 }
 
-pub async fn all<'e, 'c: 'e, E>(executor: E) -> Result<Vec<Dictionary>>
+pub async fn all<'e, 'c: 'e, E>(executor: E) -> Result<Vec<DictionaryState>>
 where
     E: 'e + Executor<'c, Database = Sqlite>,
 {
@@ -45,10 +45,12 @@ where
     .fetch(executor)
     .map(|record| {
         let record = record.context("failed to fetch record")?;
-        anyhow::Ok(Dictionary {
+        anyhow::Ok(DictionaryState {
+            meta: DictionaryMeta {
+                name: record.name,
+                version: record.version,
+            },
             id: DictionaryId(record.id),
-            name: record.name,
-            version: record.version,
             position: record.position,
             enabled: record.enabled,
         })

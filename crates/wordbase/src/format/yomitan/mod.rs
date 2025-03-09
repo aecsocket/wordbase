@@ -14,6 +14,13 @@ mod parse;
 pub use parse::*;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Glossary {
+    pub tags: Vec<GlossaryTag>,
+    pub content: Vec<structured::Content>,
+}
+
 /// Categorises a [glossary] for a given [term].
 ///
 /// [glossary]: crate::Glossary

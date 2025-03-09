@@ -3,9 +3,9 @@ use {
     crate::{
         CHANNEL_BUF_CAP, dictionary,
         import::{Parsed, ReadMeta},
+        term,
     },
     anyhow::{Context as _, Result},
-    futures::TryFutureExt,
     sqlx::{Pool, Sqlite, Transaction},
     std::{
         convert::Infallible,
@@ -18,11 +18,15 @@ use {
         fs,
         sync::{Mutex, mpsc, oneshot},
     },
-    tracing::{debug, info},
+    tracing::debug,
     wordbase::{
-        Dictionary, DictionaryId,
-        format::yomitan::{self, schema},
-        lang::jp,
+        DictionaryId, DictionaryMeta, Term,
+        format::{
+            self,
+            yomitan::{self, GlossaryTag, schema, structured},
+        },
+        lang,
+        record::Frequency,
     },
 };
 
@@ -41,10 +45,9 @@ pub async fn yomitan(
 
     let (parser, index) = yomitan::Parse::new(|| Ok::<_, Infallible>(Cursor::new(&archive)))
         .context("failed to parse")?;
-    let meta = Dictionary {
+    let meta = DictionaryMeta {
         name: index.title,
         version: index.revision,
-        ..Default::default()
     };
     let banks_len = parser.tag_banks().len()
         + parser.term_banks().len()
@@ -57,12 +60,12 @@ pub async fn yomitan(
         "{:?} version {:?} - {banks_len} items",
         meta.name, meta.version
     );
-    let (send_items_left, recv_items_left) = mpsc::channel(CHANNEL_BUF_CAP);
+    let (send_banks_left, recv_banks_left) = mpsc::channel(CHANNEL_BUF_CAP);
     let (send_parsed, recv_parsed) = oneshot::channel();
     _ = send_read_meta.send(ReadMeta {
         meta: meta.clone(),
         banks_len,
-        recv_items_left,
+        recv_banks_left,
         recv_parsed,
     });
 
@@ -82,7 +85,7 @@ pub async fn yomitan(
 
     let notify_parsed = || {
         let items_left = banks_left.fetch_sub(1, atomic::Ordering::SeqCst) - 1;
-        _ = send_items_left.try_send(items_left);
+        _ = send_banks_left.try_send(items_left);
     };
     parser
         .run(
@@ -106,7 +109,7 @@ pub async fn yomitan(
             },
         )
         .context("failed to parse banks")?;
-    drop(send_items_left);
+    drop(send_banks_left);
     let tag_bank = tag_bank.into_inner();
     let term_bank = term_bank.into_inner();
     let term_meta_bank = term_meta_bank.into_inner();
@@ -139,20 +142,26 @@ pub async fn yomitan(
     debug!("Importing records");
     let notify_inserted = || {
         let records_left = records_left.fetch_sub(1, atomic::Ordering::SeqCst) - 1;
-        _ = send_records_left.try_send(records_left);
+        if records_left % 1000 == 0 {
+            _ = send_records_left.try_send(records_left);
+        }
     };
-    tokio::try_join!(
-        import_term_bank(
-            dictionary_id,
-            &mut tx,
-            term_bank,
-            notify_inserted,
-            &all_tags,
-        )
-        .map_err(|err| err.context("failed to import term bank")),
-        import_term_meta_bank(dictionary_id, &mut tx, term_meta_bank, notify_inserted)
-            .map_err(|err| err.context("failed to import term meta bank"))
-    )?;
+    let mut scratch = Vec::<u8>::new();
+    for term in term_bank {
+        let headword = term.expression.clone();
+        let reading = term.reading.clone();
+        import_term(dictionary_id, &mut tx, term, &all_tags, &mut scratch)
+            .await
+            .with_context(|| format!("failed to import term ({headword:?}, {reading:?})"))?;
+        notify_inserted();
+    }
+    for term_meta in term_meta_bank {
+        let headword = term_meta.expression.clone();
+        import_term_meta(dictionary_id, &mut tx, term_meta, &mut scratch)
+            .await
+            .with_context(|| format!("failed to import term meta {headword:?}"))?;
+        notify_inserted();
+    }
     drop(send_records_left);
 
     _ = send_inserted.send(());
@@ -164,58 +173,33 @@ fn none_if_empty(s: String) -> Option<String> {
     if s.trim().is_empty() { None } else { Some(s) }
 }
 
-async fn import_term_bank(
-    DictionaryId(source): DictionaryId,
+async fn import_term(
+    source: DictionaryId,
     tx: &mut Transaction<'_, Sqlite>,
-    bank: schema::TermBank,
-    notify_inserted: impl Fn(),
+    term: schema::Term,
     all_tags: &[GlossaryTag],
+    scratch: &mut Vec<u8>,
 ) -> Result<()> {
-    let mut scratch = Vec::<u8>::new();
-    let mut records_left = bank.len();
-    for term in bank {
-        let headword = term.expression.clone();
-        let reading = none_if_empty(term.reading.clone());
+    let headword = term.expression.clone();
+    let reading = none_if_empty(term.reading.clone());
 
-        let tags = match_tags(
-            all_tags,
-            term.definition_tags.as_deref().unwrap_or_default(),
-        )
-        .cloned()
-        .collect::<Vec<_>>();
+    let tags = match_tags(
+        all_tags,
+        term.definition_tags.as_deref().unwrap_or_default(),
+    )
+    .cloned()
+    .collect::<Vec<_>>();
+    let content = term.glossary.into_iter().filter_map(to_content).collect();
+    let glossary = format::yomitan::Glossary { tags, content };
 
-        let mut glossary = Glossary::default();
-        glossary.tags = tags;
-        glossary.html = Some(to_html(term.glossary.into_iter()));
-
-        async {
-            scratch.clear();
-            serialize(&glossary, &mut scratch).context("failed to serialize data")?;
-            let data = &scratch[..];
-
-            sqlx::query!(
-                "INSERT INTO terms (source, headword, reading, data_kind, data)
-                VALUES ($1, $2, $3, $4, $5)",
-                source,
-                headword,
-                reading,
-                data_kind::GLOSSARY,
-                data
-            )
-            .execute(&mut **tx)
-            .await
-            .context("failed to insert record")?;
-
-            records_left -= 1;
-            if records_left % 10000 == 0 {
-                info!("IMPORT: {records_left} term records left");
-            }
-
-            anyhow::Ok(())
-        }
-        .await
-        .with_context(|| format!("failed to import term {headword:?} ({reading:?})"))?;
-    }
+    term::insert(
+        &mut **tx,
+        source,
+        &Term { headword, reading },
+        &glossary,
+        scratch,
+    )
+    .await?;
     Ok(())
 }
 
@@ -236,109 +220,65 @@ fn match_tags<'a>(
     })
 }
 
-async fn import_term_meta_bank(
-    DictionaryId(source): DictionaryId,
+async fn import_term_meta(
+    source: DictionaryId,
     tx: &mut Transaction<'_, Sqlite>,
-    bank: schema::TermMetaBank,
-    notify_inserted: impl Fn(),
+    term_meta: schema::TermMeta,
+    scratch: &mut Vec<u8>,
 ) -> Result<()> {
-    let mut scratch = Vec::<u8>::new();
-    let mut records_left = bank.len();
-    for term_meta in bank {
-        let headword = term_meta.expression.clone();
-        async {
-            match term_meta.data {
-                schema::TermMetaData::Frequency(frequency) => {
-                    for (reading, frequency) in to_frequencies(frequency) {
-                        scratch.clear();
-                        serialize(&frequency, &mut scratch).context("failed to serialize data")?;
-                        let data = &scratch[..];
-
-                        sqlx::query!(
-                            "INSERT INTO terms (source, headword, reading, data_kind, data)
-                            VALUES ($1, $2, $3, $4, $5)",
-                            source,
-                            headword,
-                            reading,
-                            data_kind::FREQUENCY,
-                            data,
-                        )
-                        .execute(&mut **tx)
-                        .await
-                        .context("failed to insert record")?;
-                    }
-                }
-                schema::TermMetaData::Pitch(pitch) => {
-                    for (reading, pitch) in to_pitch(pitch) {
-                        scratch.clear();
-                        serialize(&pitch, &mut scratch).context("failed to serialize data")?;
-                        let data = &scratch[..];
-
-                        sqlx::query!(
-                            "INSERT INTO terms (source, headword, reading, data_kind, data)
-                            VALUES ($1, $2, $3, $4, $5)",
-                            source,
-                            headword,
-                            reading,
-                            data_kind::JP_PITCH,
-                            data,
-                        )
-                        .execute(&mut **tx)
-                        .await
-                        .context("failed to insert record")?;
-                    }
-                }
-                schema::TermMetaData::Phonetic(_) => {}
+    let headword = term_meta.expression;
+    match term_meta.data {
+        schema::TermMetaData::Frequency(frequency) => {
+            for (reading, record) in to_frequencies(frequency) {
+                term::insert(
+                    &mut **tx,
+                    source,
+                    &Term {
+                        headword: headword.clone(),
+                        reading,
+                    },
+                    &record,
+                    scratch,
+                )
+                .await
+                .context("failed to insert frequency record")?;
             }
-
-            notify_inserted();
-            anyhow::Ok(())
         }
-        .await
-        .with_context(|| format!("failed to import term meta {headword:?}"))?;
+        schema::TermMetaData::Pitch(pitch) => {
+            for (reading, record) in to_pitch(pitch) {
+                term::insert(
+                    &mut **tx,
+                    source,
+                    &Term::with_reading(headword.clone(), reading),
+                    &record,
+                    scratch,
+                )
+                .await
+                .context("failed to insert pitch data")?;
+            }
+        }
+        schema::TermMetaData::Phonetic(_) => {}
     }
     Ok(())
 }
 
-fn to_term_tag(raw: yomitan::Tag) -> GlossaryTag {
+fn to_term_tag(raw: schema::Tag) -> GlossaryTag {
     GlossaryTag {
         name: raw.name,
-        category: match raw.category.as_str() {
-            "name" => Some(TagCategory::Name),
-            "expression" => Some(TagCategory::Expression),
-            "popular" => Some(TagCategory::Popular),
-            "frequent" => Some(TagCategory::Frequent),
-            "archaism" => Some(TagCategory::Archaism),
-            "dictionary" => Some(TagCategory::Dictionary),
-            "frequency" => Some(TagCategory::Frequency),
-            "partOfSpeech" => Some(TagCategory::PartOfSpeech),
-            "search" => Some(TagCategory::Search),
-            "pronunciation-dictionary" => Some(TagCategory::PronunciationDictionary),
-            _ => None,
-        },
+        category: raw.category,
         description: raw.notes,
         order: raw.order,
     }
 }
 
-fn to_html(raw: impl Iterator<Item = yomitan::Glossary>) -> String {
-    let mut html = String::new();
-    for glossary in raw {
-        if let Some(content) = to_content(glossary) {
-            _ = yomitan::html::render_to_writer(&mut html, &content);
-        }
-    }
-    html
-}
-
-fn to_content(raw: yomitan::Glossary) -> Option<structured::Content> {
+fn to_content(raw: schema::Glossary) -> Option<structured::Content> {
     match raw {
-        yomitan::Glossary::Deinflection(_) => None,
-        yomitan::Glossary::String(text)
-        | yomitan::Glossary::Content(yomitan::GlossaryContent::Text { text }) => {
+        schema::Glossary::Deinflection(_) => None,
+        schema::Glossary::String(text)
+        | schema::Glossary::Content(schema::GlossaryContent::Text { text }) => {
             Some(structured::Content::String(text))
         }
-        yomitan::Glossary::Content(yomitan::GlossaryContent::Image(base)) => {
+        schema::Glossary::Content(schema::GlossaryContent::Image(base)) => {
             Some(structured::Content::Element(Box::new(
                 structured::Element::Img(structured::ImageElement {
                     base,
@@ -346,45 +286,40 @@ fn to_content(raw: yomitan::Glossary) -> Option<structured::Content> {
                 }),
             )))
         }
-        yomitan::Glossary::Content(yomitan::GlossaryContent::StructuredContent { content }) => {
+        schema::Glossary::Content(schema::GlossaryContent::StructuredContent { content }) => {
             Some(content)
         }
     }
 }
 
 fn to_frequencies(
-    raw: yomitan::TermMetaFrequency,
+    raw: schema::TermMetaFrequency,
 ) -> impl Iterator<Item = (Option<String>, Frequency)> {
     let (reading, generic) = match raw {
-        yomitan::TermMetaFrequency::Generic(generic) => (None, generic),
-        yomitan::TermMetaFrequency::WithReading { reading, frequency } => {
-            (Some(reading), frequency)
-        }
+        schema::TermMetaFrequency::Generic(generic) => (None, generic),
+        schema::TermMetaFrequency::WithReading { reading, frequency } => (Some(reading), frequency),
     };
 
     let frequency = match generic {
-        yomitan::GenericFrequencyData::Number(rank) => Some(Frequency::new(rank)),
-        yomitan::GenericFrequencyData::String(rank) => {
+        schema::GenericFrequencyData::Number(rank) => Some(Frequency::new(rank)),
+        schema::GenericFrequencyData::String(rank) => {
             // best-effort attempt
             rank.trim().parse::<u64>().map(Frequency::new).ok()
         }
-        yomitan::GenericFrequencyData::Complex {
+        schema::GenericFrequencyData::Complex {
             value: rank,
-            display_value: display_rank,
-        } => Some(Frequency {
-            rank,
-            display: display_rank,
-        }),
+            display_value: display,
+        } => Some(Frequency { rank, display }),
     };
 
     frequency.map(|new| (reading, new)).into_iter()
 }
 
-fn to_pitch(raw: yomitan::TermMetaPitch) -> impl Iterator<Item = (String, jp::Pitch)> {
+fn to_pitch(raw: schema::TermMetaPitch) -> impl Iterator<Item = (String, lang::jp::Pitch)> {
     raw.pitches.into_iter().map(move |pitch| {
         (
             raw.reading.clone(),
-            jp::Pitch {
+            lang::jp::Pitch {
                 position: pitch.position,
                 nasal: to_pitch_positions(pitch.nasal),
                 devoice: to_pitch_positions(pitch.devoice),
@@ -393,10 +328,10 @@ fn to_pitch(raw: yomitan::TermMetaPitch) -> impl Iterator<Item = (String, jp::Pi
     })
 }
 
-fn to_pitch_positions(raw: Option<yomitan::PitchPosition>) -> Vec<u64> {
+fn to_pitch_positions(raw: Option<schema::PitchPosition>) -> Vec<u64> {
     match raw {
         None => vec![],
-        Some(yomitan::PitchPosition::One(position)) => vec![position],
-        Some(yomitan::PitchPosition::Many(positions)) => positions,
+        Some(schema::PitchPosition::One(position)) => vec![position],
+        Some(schema::PitchPosition::Many(positions)) => positions,
     }
 }

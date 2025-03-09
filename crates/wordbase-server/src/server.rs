@@ -1,6 +1,7 @@
 use {
     crate::{
-        Config, Event, dictionary, import,
+        Config, Event, dictionary,
+        import::{self, AlreadyExists},
         mecab::{MecabInfo, MecabRequest},
         term,
     },
@@ -75,37 +76,66 @@ pub async fn run(
     //     "21. [Freq] Narou Freq.zip",
     // ];
 
-    let mut joins = JoinSet::new();
+    let mut joins = JoinSet::<Result<()>>::new();
     for path in IMPORTS {
         let span = info_span!("import", %path);
-        // let (send_event, recv_event) = mpsc::channel::<ImportEvent>(4);
+        let (send_read_to_memory, recv_read_to_memory) = oneshot::channel();
+        let db = db.clone();
         joins.spawn(
             async move {
-                import::yomitan(
-                    db.clone(),
+                match import::yomitan(
+                    db,
                     format!("/home/dev/all-dictionaries/{path}"),
-                    todo!(),
+                    send_read_to_memory,
                 )
-                .await;
+                .await?
+                {
+                    Ok(()) => {
+                        info!("Import complete");
+                    }
+                    Err(AlreadyExists) => {
+                        info!("Dictionary already exists, skipping");
+                    }
+                }
+                Ok(())
             }
             .instrument(span.clone()),
         );
-        // joins.spawn(
-        //     async move {
-        //         while let Some(event) = recv_event.recv().await {
-        //             match event {
-        //                 ImportEvent::ReadToMemory => {
-        //                     info!("Read to memory");
-        //                 }
-        //                 ImportEvent::ReadMeta { meta, items_len } => {
-        //                     info!("{} version {} - {items_len} items", meta.)
-        //                 }
-        //             }
-        //             info!("foo");
-        //         }
-        //     }
-        //     .instrument(span),
-        // );
+        joins.spawn(
+            async move {
+                let Ok(next) = recv_read_to_memory.await else {
+                    return Ok(());
+                };
+                info!("Read to memory");
+
+                let Ok(mut next) = next.recv_read_meta.await else {
+                    return Ok(());
+                };
+                info!(
+                    "{} version {} - {} banks",
+                    next.meta.name, next.meta.version, next.banks_len
+                );
+
+                while let Some(banks_left) = next.recv_banks_left.recv().await {
+                    info!("{banks_left} banks left to parse");
+                }
+                let Ok(mut next) = next.recv_parsed.await else {
+                    return Ok(());
+                };
+                info!("Parsing complete - {} records to insert", next.records_len);
+
+                while let Some(records_left) = next.recv_records_left.recv().await {
+                    info!("{records_left} records left to insert");
+                }
+                if next.recv_inserted.await.is_err() {
+                    return Ok(());
+                }
+                info!("Inserted all records, committing to database");
+
+                Ok(())
+            }
+            .instrument(span),
+        );
     }
     while let Some(result) = joins.join_next().await {
         result

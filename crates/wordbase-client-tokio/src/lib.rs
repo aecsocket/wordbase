@@ -13,7 +13,7 @@ use {
         tungstenite::{Message, client::IntoClientRequest},
     },
     wordbase::{
-        Dictionary, DictionaryId,
+        DictionaryId, DictionaryState,
         hook::HookSentence,
         protocol::{
             DictionaryNotFound, FromClient, FromServer, LookupConfig, LookupRequest, LookupResponse,
@@ -88,7 +88,7 @@ pub enum ConnectionError {
 pub struct Client<S> {
     connection: Connection<S>,
     lookup_config: LookupConfig,
-    dictionaries: IndexMap<DictionaryId, Dictionary>,
+    dictionaries: IndexMap<DictionaryId, DictionaryState>,
     events: Vec<Event>,
 }
 
@@ -166,7 +166,7 @@ where
 
     // doc: guaranteed to be ordered by dict order
     #[must_use]
-    pub const fn dictionaries(&self) -> &IndexMap<DictionaryId, Dictionary> {
+    pub const fn dictionaries(&self) -> &IndexMap<DictionaryId, DictionaryState> {
         &self.dictionaries
     }
 
@@ -213,14 +213,12 @@ where
 
     pub async fn lookup(
         &mut self,
-        request: impl Into<LookupRequest>,
+        request: LookupRequest,
     ) -> Result<
         Pin<Box<impl Stream<Item = Result<LookupResponse, ConnectionError>>>>,
         ConnectionError,
     > {
-        self.connection
-            .send(&FromClient::from(request.into()))
-            .await?;
+        self.connection.send(&FromClient::from(request)).await?;
 
         // TODO: we need async iterators!
         let mut all_responses = Vec::<LookupResponse>::new();

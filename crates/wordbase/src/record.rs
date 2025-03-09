@@ -50,3 +50,14 @@ pub struct Frequency {
     /// If this is omitted, [`Frequency::rank`] should be presented directly.
     pub display: Option<String>,
 }
+
+impl Frequency {
+    /// Creates a new value from just a rank.
+    #[must_use]
+    pub const fn new(rank: u64) -> Self {
+        Self {
+            rank,
+            display: None,
+        }
+    }
+}

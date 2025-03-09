@@ -4,7 +4,7 @@ use tokio::sync::{mpsc, oneshot};
 pub use yomitan::yomitan;
 
 use derive_more::{Display, Error};
-use wordbase::Dictionary;
+use wordbase::DictionaryMeta;
 
 #[derive(Debug, Clone, Display, Error)]
 #[display("already exists")]
@@ -17,9 +17,9 @@ pub struct ReadToMemory {
 
 #[derive(Debug)]
 pub struct ReadMeta {
-    pub meta: Dictionary,
+    pub meta: DictionaryMeta,
     pub banks_len: usize,
-    pub recv_items_left: mpsc::Receiver<usize>,
+    pub recv_banks_left: mpsc::Receiver<usize>,
     pub recv_parsed: oneshot::Receiver<Parsed>,
 }
 

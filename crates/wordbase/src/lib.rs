@@ -117,21 +117,27 @@ macro_rules! for_record_kinds {
             // note: no comma separator
             GlossaryPlainText(wordbase::record::GlossaryPlainText)
             GlossaryHtml(wordbase::record::GlossaryHtml)
+            Frequency(wordbase::record::Frequency)
+            JpPitch(wordbase::lang::jp::Pitch)
+            YomitanGlossary(wordbase::format::yomitan::Glossary)
         );
     };
 }
 
-/// Collection of [records] for [terms] imported into a Wordbase server.
+/// Metadata for a collection of [records] in a Wordbase server.
 ///
-/// This type stores the metadata of a dictionary, not the records themselves.
+/// This type only stores the metadata of a dictionary, such as the name and
+/// version. Related types:
+/// - [`Dictionary`]: data for a dictionary which has been imported into a
+///   server, storing stateful data such as whether the dictionary is enabled,
+///   and its user-configurable sorting position.
+/// - [`Record`]: single entry for a [term] in a dictionary.
 ///
 /// [records]: Record
-/// [terms]: Term
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// [term]: Term
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Dictionary {
-    /// Unique identifier for this dictionary in the database.
-    pub id: DictionaryId,
+pub struct DictionaryMeta {
     /// Human-readable display name.
     ///
     /// This value is **not guaranteed to be unique** across a single server,
@@ -144,6 +150,22 @@ pub struct Dictionary {
     /// This does not guarantee to conform to any format, e.g. semantic
     /// versioning.
     pub version: String,
+}
+
+/// Imported collection of [records] in a Wordbase server.
+///
+/// This stores the [`DictionaryMeta`] plus stateful data which may be
+/// configured by the user after import.
+///
+/// [records]: Record
+/// [terms]: Term
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DictionaryState {
+    /// Dictionary metadata.
+    pub meta: DictionaryMeta,
+    /// Unique identifier for this dictionary in the database.
+    pub id: DictionaryId,
     /// What position [records] from this dictionary will be returned relative
     /// to other dictionaries.
     ///
@@ -157,18 +179,6 @@ pub struct Dictionary {
     ///
     /// This may be used to temporarily hide a specific dictionary.
     pub enabled: bool,
-}
-
-impl Default for Dictionary {
-    fn default() -> Self {
-        Self {
-            id: DictionaryId::default(),
-            name: String::default(),
-            version: String::default(),
-            position: 0,
-            enabled: true,
-        }
-    }
 }
 
 /// Opaque and unique identifier for a single [`Dictionary`] in a database.
@@ -301,6 +311,16 @@ macro_rules! define_record_types { ($($kind:ident($data_ty:path))*) => {
 #[non_exhaustive]
 pub enum Record { $($kind($data_ty),)* }
 
+impl Record {
+    /// Gets the [`RecordKind`] of this record.
+    #[must_use]
+    pub const fn kind(&self) -> RecordKind {
+        match self {
+            $(Self::$kind(_) => RecordKind::$kind,)*
+        }
+    }
+}
+
 /// Kind of a [record].
 ///
 /// [record]: Record
@@ -309,6 +329,34 @@ pub enum Record { $($kind($data_ty),)* }
 #[repr(u16)]
 #[non_exhaustive]
 pub enum RecordKind { $($kind,)* }
+
+mod sealed {
+    pub trait RecordType {}
+}
+
+/// Provides type bounds for variants of [`Record`], and guarantees that this
+/// type can be converted into a variant of [`Record`].
+///
+/// This trait is sealed, and cannot be implemented by users.
+pub trait RecordType:
+    sealed::RecordType
+    + Sized
+    + std::fmt::Debug
+    + Clone
+    + Serialize
+    + serde::de::DeserializeOwned
+    + Into<Record>
+{
+    /// [`RecordKind`] of this record data type.
+    const KIND: RecordKind;
+}
+
+$(
+impl sealed::RecordType for $data_ty {}
+impl RecordType for $data_ty {
+    const KIND: RecordKind = RecordKind::$kind;
+}
+)*
 }}
 
 for_record_kinds!(define_record_types);

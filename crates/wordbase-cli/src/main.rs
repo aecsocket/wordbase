@@ -3,7 +3,7 @@
 use {
     anyhow::{Context, Result},
     futures::StreamExt,
-    wordbase::{DictionaryId, hook::HookSentence},
+    wordbase::{DictionaryId, RecordKind, hook::HookSentence, protocol::LookupRequest},
     wordbase_client_tokio::SocketClient,
 };
 
@@ -103,13 +103,13 @@ async fn main() -> Result<()> {
 fn list_dictionaries(client: &SocketClient) {
     let dictionaries = client.dictionaries();
     println!("Dictionaries ({}):", dictionaries.len());
-    for (index, dictionary) in dictionaries.values().enumerate() {
-        let index = index + 1;
+    for dictionary in dictionaries.values() {
+        let position = dictionary.position;
         let enabled = if dictionary.enabled { "[on]" } else { "[  ]" };
         let id = dictionary.id.0;
-        let name = &dictionary.name;
-        let version = &dictionary.version;
-        println!("  {index}. {enabled} [ID {id}] {name} ver {version}");
+        let name = &dictionary.meta.name;
+        let version = &dictionary.meta.version;
+        println!("  {position}. {enabled} [ID {id}] {name} ver {version}");
     }
 }
 
@@ -129,14 +129,25 @@ async fn disable_dictionary(client: &mut SocketClient, id: i64) -> Result<()> {
 }
 
 async fn lookup(client: &mut SocketClient, text: String) -> Result<()> {
-    let mut responses = client
-        .lookup(text)
+    let mut num_records = 0usize;
+    let mut records = client
+        .lookup(LookupRequest {
+            text,
+            record_kinds: vec![
+                RecordKind::GlossaryPlainText,
+                RecordKind::GlossaryHtml,
+                RecordKind::GlossaryPlainText,
+                RecordKind::YomitanGlossary,
+            ],
+        })
         .await
         .context("failed to start lookup")?;
-    while let Some(entry) = responses.next().await {
-        let entry = entry.context("failed to receive lookup entry")?;
-        println!("{entry:?}");
+    while let Some(record) = records.next().await {
+        let record = record.context("failed to receive record")?;
+        num_records += 1;
+        println!("{record:?}");
     }
+    println!("Total records: {num_records}");
     Ok(())
 }
 

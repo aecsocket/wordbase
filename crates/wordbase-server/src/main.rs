@@ -21,7 +21,7 @@ use {
     },
     tracing::{Instrument, info_span},
     wordbase::{
-        Dictionary,
+        DictionaryState,
         hook::HookSentence,
         protocol::{DEFAULT_PORT, LookupConfig},
     },
@@ -58,7 +58,7 @@ struct TexthookerSource {
 #[derive(Debug, Clone)]
 enum Event {
     HookSentence(HookSentence),
-    SyncDictionaries(Vec<Dictionary>),
+    SyncDictionaries(Vec<DictionaryState>),
 }
 
 #[tokio::main]

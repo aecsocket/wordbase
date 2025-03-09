@@ -2,7 +2,7 @@
 //! WebSocket connection.
 
 use {
-    crate::{Dictionary, DictionaryId, Record, RecordKind, Term, hook::HookSentence},
+    crate::{DictionaryId, DictionaryState, Record, RecordKind, Term, hook::HookSentence},
     derive_more::{Display, Error, From},
     serde::{Deserialize, Serialize},
 };
@@ -63,7 +63,7 @@ pub enum FromServer {
     /// This is sent when dictionaries are modified - added, removed, etc.
     SyncDictionaries {
         /// Dictionaries.
-        dictionaries: Vec<Dictionary>,
+        dictionaries: Vec<DictionaryState>,
     },
     /// See [`HookSentence`].
     #[from]
@@ -133,15 +133,6 @@ pub struct LookupRequest {
     /// as it is possible (and expected!) that clients won't be able to process
     /// all of them.
     pub record_kinds: Vec<RecordKind>,
-}
-
-impl<T: Into<String>> From<T> for LookupRequest {
-    fn from(value: T) -> Self {
-        Self {
-            text: value.into(),
-            ..Default::default()
-        }
-    }
 }
 
 /// Single record returned by the server in response to a [`LookupRequest`].

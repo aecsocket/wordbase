@@ -26,7 +26,7 @@ use {
         time,
     },
     wordbase::{
-        Dictionary, DictionaryId,
+        DictionaryState, DictionaryId,
         hook::HookSentence,
         protocol::{LookupRequest, LookupResponse},
     },
@@ -35,7 +35,7 @@ use {
 
 const CHANNEL_BUF_CAP: usize = 4;
 
-type DictionaryMap = IndexMap<DictionaryId, Dictionary>;
+type DictionaryMap = IndexMap<DictionaryId, DictionaryState>;
 
 #[tokio::main]
 async fn main() {
