@@ -13,9 +13,11 @@ use {
         tungstenite::{Message, client::IntoClientRequest},
     },
     wordbase::{
-        Dictionary, DictionaryId, LookupConfig,
+        Dictionary, DictionaryId,
         hook::HookSentence,
-        protocol::{DictionaryNotFound, FromClient, FromServer, LookupRequest, LookupResponse},
+        protocol::{
+            DictionaryNotFound, FromClient, FromServer, LookupConfig, LookupRequest, LookupResponse,
+        },
     },
 };
 pub use {indexmap, wordbase};

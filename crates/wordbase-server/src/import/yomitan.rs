@@ -1,6 +1,11 @@
 use {
-    crate::dictionary,
+    super::{AlreadyExists, ReadToMemory},
+    crate::{
+        CHANNEL_BUF_CAP, dictionary,
+        import::{Parsed, ReadMeta},
+    },
     anyhow::{Context as _, Result},
+    futures::TryFutureExt,
     sqlx::{Pool, Sqlite, Transaction},
     std::{
         convert::Infallible,
@@ -9,117 +14,150 @@ use {
         path::Path,
         sync::atomic::{self, AtomicUsize},
     },
-    tokio::{fs, sync::Mutex},
-    tracing::info,
-    wordbase::{DictionaryId, Frequency, Glossary, format::yomitan, lang::jp},
+    tokio::{
+        fs,
+        sync::{Mutex, mpsc, oneshot},
+    },
+    tracing::{debug, info},
+    wordbase::{
+        Dictionary, DictionaryId, Frequency, Glossary,
+        format::yomitan::{self, schema},
+        lang::jp,
+    },
 };
 
-pub async fn import(db: Pool<Sqlite>, path: impl AsRef<Path>) -> Result<()> {
+pub async fn yomitan(
+    db: Pool<Sqlite>,
+    path: impl AsRef<Path>,
+    send_read_to_memory: oneshot::Sender<ReadToMemory>,
+) -> Result<Result<(), AlreadyExists>> {
     let path = path.as_ref();
     let archive = fs::read(path)
         .await
         .context("failed to read file into memory")?;
 
+    let (send_read_meta, recv_read_meta) = oneshot::channel();
+    _ = send_read_to_memory.send(ReadToMemory { recv_read_meta });
+
     let (parser, index) = yomitan::Parse::new(|| Ok::<_, Infallible>(Cursor::new(&archive)))
         .context("failed to parse")?;
+    let meta = Dictionary {
+        name: index.title,
+        version: index.revision,
+        ..Default::default()
+    };
+    let banks_len = parser.tag_banks().len()
+        + parser.term_banks().len()
+        + parser.term_meta_banks().len()
+        + parser.kanji_banks().len()
+        + parser.kanji_meta_banks().len();
+    let banks_left = AtomicUsize::new(banks_len);
 
-    let name = index.title;
-    let already_exists = dictionary::exists_by_name(&db, &name)
+    debug!(
+        "{:?} version {:?} - {banks_len} items",
+        meta.name, meta.version
+    );
+    let (send_items_left, recv_items_left) = mpsc::channel(CHANNEL_BUF_CAP);
+    let (send_parsed, recv_parsed) = oneshot::channel();
+    _ = send_read_meta.send(ReadMeta {
+        meta: meta.clone(),
+        banks_len,
+        recv_items_left,
+        recv_parsed,
+    });
+
+    let already_exists = dictionary::exists_by_name(&db, &meta.name)
         .await
         .context("failed to check if dictionary exists")?;
     if already_exists {
-        info!("{name} already exists, skipping...");
-        return Ok(());
+        debug!("Dictionary already exists");
+        return Ok(Err(AlreadyExists));
     }
-
-    let tag_banks_left = AtomicUsize::new(parser.tag_banks().len());
-    let term_banks_left = AtomicUsize::new(parser.term_banks().len());
-    let term_meta_banks_left = AtomicUsize::new(parser.term_meta_banks().len());
-    info!("Parsing: {name}");
 
     let tag_bank = Mutex::new(schema::TagBank::default());
     let term_bank = Mutex::new(schema::TermBank::default());
-    let term_meta_bank = Mutex::new(yomitan::TermMetaBank::default());
+    let term_meta_bank = Mutex::new(schema::TermMetaBank::default());
+    let kanji_bank = Mutex::new(schema::KanjiBank::default());
+    let kanji_meta_bank = Mutex::new(schema::KanjiMetaBank::default());
 
-    info!("Parsing...");
-    let span = tracing::Span::current();
+    let notify_parsed = || {
+        let items_left = banks_left.fetch_sub(1, atomic::Ordering::SeqCst) - 1;
+        _ = send_items_left.try_send(items_left);
+    };
     parser
         .run(
             |_, bank| {
-                let _span = span.enter();
                 tag_bank.blocking_lock().extend_from_slice(&bank);
-                let left = tag_banks_left.fetch_sub(1, atomic::Ordering::SeqCst) - 1;
-                _ = left;
+                notify_parsed();
             },
             |_, bank| {
-                let _span = span.enter();
                 term_bank.blocking_lock().extend_from_slice(&bank);
-
-                let left = term_banks_left.fetch_sub(1, atomic::Ordering::SeqCst) - 1;
-                if left % 10 == 0 {
-                    info!("{left} term banks left");
-                }
+                notify_parsed();
             },
             |_, bank| {
-                let _span = span.enter();
                 term_meta_bank.blocking_lock().extend_from_slice(&bank);
-
-                let left = term_meta_banks_left.fetch_sub(1, atomic::Ordering::SeqCst) - 1;
-                if left % 10 == 0 {
-                    info!("{left} term meta banks left");
-                }
+                notify_parsed();
             },
-            |_, _| {},
-            |_, _| {},
+            |_, _bank| {
+                notify_parsed();
+            },
+            |_, _bank| {
+                notify_parsed();
+            },
         )
         .context("failed to parse banks")?;
-    info!("Parse complete, starting transaction...");
+    drop(send_items_left);
+    let tag_bank = tag_bank.into_inner();
+    let term_bank = term_bank.into_inner();
+    let term_meta_bank = term_meta_bank.into_inner();
+    let kanji_bank = kanji_bank.into_inner();
+    let kanji_meta_bank = kanji_meta_bank.into_inner();
+
+    let records_len =
+        term_bank.len() + term_meta_bank.len() + kanji_bank.len() + kanji_meta_bank.len();
+    let records_left = AtomicUsize::new(records_len);
+
+    debug!("Parse complete, inserting {records_len} records");
+    let (send_records_left, recv_records_left) = mpsc::channel(CHANNEL_BUF_CAP);
+    let (send_inserted, recv_inserted) = oneshot::channel();
+    _ = send_parsed.send(Parsed {
+        records_len,
+        recv_records_left,
+        recv_inserted,
+    });
+
     let mut tx = db.begin().await.context("failed to begin transaction")?;
 
-    let dictionary_id = {
-        let max_position = sqlx::query_scalar!("SELECT MAX(position) FROM dictionaries")
-            .fetch_one(&mut *tx)
-            .await
-            .context("failed to fetch next dictionary position")?
-            .unwrap_or(1);
-        let next_position = max_position + 1;
-
-        info!("Writing dictionary record...");
-        let result = sqlx::query!(
-            "INSERT INTO dictionaries (name, version, position)
-            VALUES ($1, $2, $3)",
-            name,
-            index.revision,
-            next_position
-        )
-        .execute(&mut *tx)
+    let dictionary_id = dictionary::insert(&mut *tx, &meta)
         .await
         .context("failed to insert dictionary")?;
+    debug!("Inserted with ID {dictionary_id:?}");
 
-        DictionaryId(result.last_insert_rowid())
-    };
-
-    let mut all_tags = tag_bank
-        .into_inner()
-        .into_iter()
-        .map(to_term_tag)
-        .collect::<Vec<_>>();
+    let mut all_tags = tag_bank.into_iter().map(to_term_tag).collect::<Vec<_>>();
     all_tags.sort_by(|tag_a, tag_b| tag_b.name.len().cmp(&tag_a.name.len()));
 
-    info!("Importing term bank");
-    import_term_bank(dictionary_id, &mut tx, term_bank.into_inner(), &all_tags)
-        .await
-        .context("failed to import term bank")?;
+    debug!("Importing records");
+    let notify_inserted = || {
+        let records_left = records_left.fetch_sub(1, atomic::Ordering::SeqCst) - 1;
+        _ = send_records_left.try_send(records_left);
+    };
+    tokio::try_join!(
+        import_term_bank(
+            dictionary_id,
+            &mut tx,
+            term_bank,
+            notify_inserted,
+            &all_tags,
+        )
+        .map_err(|err| err.context("failed to import term bank")),
+        import_term_meta_bank(dictionary_id, &mut tx, term_meta_bank, notify_inserted)
+            .map_err(|err| err.context("failed to import term meta bank"))
+    )?;
+    drop(send_records_left);
 
-    info!("Importing term meta bank");
-    import_term_meta_bank(dictionary_id, &mut tx, term_meta_bank.into_inner())
-        .await
-        .context("failed to import term meta bank")?;
-
+    _ = send_inserted.send(());
     tx.commit().await.context("failed to commit transaction")?;
-
-    info!("*=* COMPLETE *=*");
-    Ok(())
+    Ok(Ok(()))
 }
 
 fn none_if_empty(s: String) -> Option<String> {
@@ -129,7 +167,8 @@ fn none_if_empty(s: String) -> Option<String> {
 async fn import_term_bank(
     DictionaryId(source): DictionaryId,
     tx: &mut Transaction<'_, Sqlite>,
-    bank: yomitan::TermBank,
+    bank: schema::TermBank,
+    notify_inserted: impl Fn(),
     all_tags: &[GlossaryTag],
 ) -> Result<()> {
     let mut scratch = Vec::<u8>::new();
@@ -200,7 +239,8 @@ fn match_tags<'a>(
 async fn import_term_meta_bank(
     DictionaryId(source): DictionaryId,
     tx: &mut Transaction<'_, Sqlite>,
-    bank: yomitan::TermMetaBank,
+    bank: schema::TermMetaBank,
+    notify_inserted: impl Fn(),
 ) -> Result<()> {
     let mut scratch = Vec::<u8>::new();
     let mut records_left = bank.len();
@@ -208,7 +248,7 @@ async fn import_term_meta_bank(
         let headword = term_meta.expression.clone();
         async {
             match term_meta.data {
-                yomitan::TermMetaData::Frequency(frequency) => {
+                schema::TermMetaData::Frequency(frequency) => {
                     for (reading, frequency) in to_frequencies(frequency) {
                         scratch.clear();
                         serialize(&frequency, &mut scratch).context("failed to serialize data")?;
@@ -228,7 +268,7 @@ async fn import_term_meta_bank(
                         .context("failed to insert record")?;
                     }
                 }
-                yomitan::TermMetaData::Pitch(pitch) => {
+                schema::TermMetaData::Pitch(pitch) => {
                     for (reading, pitch) in to_pitch(pitch) {
                         scratch.clear();
                         serialize(&pitch, &mut scratch).context("failed to serialize data")?;
@@ -248,14 +288,10 @@ async fn import_term_meta_bank(
                         .context("failed to insert record")?;
                     }
                 }
-                yomitan::TermMetaData::Phonetic(_) => {}
+                schema::TermMetaData::Phonetic(_) => {}
             }
 
-            records_left -= 1;
-            if records_left % 10000 == 0 {
-                info!("IMPORT: {records_left} term meta records left");
-            }
-
+            notify_inserted();
             anyhow::Ok(())
         }
         .await

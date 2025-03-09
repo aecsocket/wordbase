@@ -1,6 +1,7 @@
 use {
     crate::{
-        Config, Event, dictionary, format,
+        Config, Event, dictionary,
+        import::{self, ImportEvent},
         mecab::{MecabInfo, MecabRequest},
         term,
     },
@@ -77,9 +78,34 @@ pub async fn run(
 
     let mut joins = JoinSet::new();
     for path in IMPORTS {
+        let span = info_span!("import", %path);
+        let (send_event, recv_event) = mpsc::channel::<ImportEvent>(4);
         joins.spawn(
-            format::yomitan::import(db.clone(), format!("/home/dev/all-dictionaries/{path}"))
-                .instrument(info_span!("import", %path)),
+            async move {
+                import::yomitan(
+                    db.clone(),
+                    format!("/home/dev/all-dictionaries/{path}"),
+                    send_event,
+                )
+                .await;
+            }
+            .instrument(span.clone()),
+        );
+        joins.spawn(
+            async move {
+                while let Some(event) = recv_event.recv().await {
+                    match event {
+                        ImportEvent::ReadToMemory => {
+                            info!("Read to memory");
+                        }
+                        ImportEvent::ReadMeta { meta, items_len } => {
+                            info!("{} version {} - {items_len} items", meta.)
+                        }
+                    }
+                    info!("foo");
+                }
+            }
+            .instrument(span),
         );
     }
     while let Some(result) = joins.join_next().await {
@@ -264,7 +290,7 @@ async fn do_lookup(
 ) -> Result<()> {
     let LookupRequest {
         text,
-        include,
+        record_kinds: include,
         exclude,
     } = request;
 

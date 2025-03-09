@@ -2,9 +2,11 @@ use {
     anyhow::{Context as _, Result, bail},
     futures::{StreamExt, TryStreamExt},
     serde::{Deserialize, Serialize},
-    sqlx::{Pool, Row, Sqlite},
+    sqlx::{Pool, QueryBuilder, Row, Sqlite},
     std::io,
-    wordbase::{DictionaryId, Record, RecordKind, Term, protocol::LookupResponse},
+    wordbase::{
+        DictionaryId, Record, RecordKind, Term, for_record_kinds, protocol::LookupResponse,
+    },
 };
 
 pub fn serialize(
@@ -25,84 +27,40 @@ pub async fn lookup(
     include: &[RecordKind],
     exclude: &[RecordKind],
 ) -> Result<Vec<LookupResponse>> {
-    macro_rules! deserialize_record_kinds {
-        ( $record:expr, $($kind:ident),* $(,)? ) => {{
-            #[expect(
-                non_upper_case_globals,
-                reason = "cannot capitalize ident in macro invocation"
-            )]
-            mod discrim {
-                use super::RecordKind;
-
-                $(pub const $kind: u16 = RecordKind::$kind as u16;)*
-            }
-
-            match u16::try_from($record.kind) {
-                $(
-                    Ok(discrim::$kind) => {
-                        let record = deserialize(&($record.data))
-                            .with_context(|| format!("failed to deserialize {} record", stringify!($kind)))?;
-                        Record::$kind(record)
-                    }
-                )*
-                _ => bail!("invalid record kind {}", $record.kind),
-            }
-        }};
-    }
-
-    let mut query = sqlx::QueryBuilder::new(
+    let mut query = QueryBuilder::new(
         "SELECT source, headword, reading, kind, data
         FROM term t
         LEFT JOIN dictionary
             ON t.source = dictionary.id
         WHERE
-            dictionary.enabled = TRUE",
+            dictionary.enabled = TRUE
+            AND (headword = ",
     );
+    query.push_bind(text);
+    query.push(" OR reading = ");
+    query.push_bind(text);
+    query.push(") ");
 
-    let sql = {
-        let include = if include.is_empty() {
-            String::new()
-        } else {
-            let include = (0..include.len())
-                .map(|i| format!("${}", 2 + i))
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("AND kind IN ({})", include)
-        };
-
-        let exclude = if exclude.is_empty() {
-            String::new()
-        } else {
-            let exclude = (0..exclude.len())
-                .map(|i| format!("${}", 2 + include.len() + i))
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("AND kind NOT IN ({})", exclude)
-        };
-
-        format!(
-            "SELECT source, headword, reading, kind, data
-            FROM term t
-            LEFT JOIN dictionary
-                ON t.source = dictionary.id
-            WHERE
-                dictionary.enabled = TRUE
-                AND (headword = $1 OR reading = $1)
-                {include}
-                {exclude}",
-        )
-    };
-
-    let mut query = sqlx::query(&sql).bind(text);
-    for record_kind in include {
-        query = query.bind(*record_kind as u16);
+    if !include.is_empty() {
+        query.push("AND kind IN (");
+        let mut query = query.separated(", ");
+        for record_kind in include {
+            query.push_bind(*record_kind as u16);
+        }
+        query.push_unseparated(")");
     }
-    for record_kind in exclude {
-        query = query.bind(*record_kind as u16);
+
+    if !exclude.is_empty() {
+        query.push("AND kind NOT IN (");
+        let mut query = query.separated(", ");
+        for record_kind in exclude {
+            query.push_bind(*record_kind as u16);
+        }
+        query.push_unseparated(")");
     }
 
     query
-        .bind(text)
+        .build()
         .fetch(db)
         .map(|record| {
             struct QueryRecord {
@@ -128,11 +86,27 @@ pub async fn lookup(
                 reading: record.reading,
             };
 
-            let record = deserialize_record_kinds! {
-                record,
-                Glossary,
-                Frequency,
-                JpPitch,
+            let record = for_record_kinds! {
+                #[allow(
+                    non_upper_case_globals,
+                    reason = "cannot capitalize ident in macro invocation"
+                )]
+                mod discrim {
+                    use super::RecordKind;
+
+                    #(pub const #kind: u16 = RecordKind::#kind as u16;)
+                }
+
+                match u16::try_from(record.kind) {
+                    #(
+                        Ok(discrim::#kind) => {
+                            let record = deserialize(&($record.data))
+                                .with_context(|| format!("failed to deserialize {} record", stringify!(#kind)))?;
+                            Record::#kind(record)
+                        }
+                    )*
+                    _ => bail!("invalid record kind {}", record.kind),
+                }
             };
 
             Ok(LookupResponse {

@@ -1,8 +1,8 @@
 #![doc = include_str!("../README.md")]
 
 mod dictionary;
-mod format;
 mod hook_pull;
+mod import;
 mod mecab;
 mod server;
 mod term;

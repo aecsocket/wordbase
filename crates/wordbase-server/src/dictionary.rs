@@ -1,32 +1,22 @@
 use {
     anyhow::{Context, Result},
     futures::{StreamExt, TryStreamExt},
-    sqlx::{Executor, Sqlite, Transaction},
+    sqlx::{Executor, Sqlite},
     wordbase::{Dictionary, DictionaryId, protocol::DictionaryNotFound},
 };
 
-pub async fn insert(
-    tx: &mut Transaction<'_, Sqlite>,
-    dictionary: &Dictionary,
-) -> Result<DictionaryId> {
-    let max_position = sqlx::query_scalar!("SELECT MAX(position) FROM dictionary")
-        .fetch_one(&mut **tx)
-        .await
-        .context("failed to fetch max dictionary position")?
-        .unwrap_or(1);
-    let next_position = max_position + 1;
-
+pub async fn insert<'e, 'c: 'e, E>(executor: E, dictionary: &Dictionary) -> Result<DictionaryId>
+where
+    E: 'e + Executor<'c, Database = Sqlite>,
+{
     let result = sqlx::query!(
         "INSERT INTO dictionary (name, version, position)
-        VALUES ($1, $2, $3)",
+        VALUES ($1, $2, (SELECT COALESCE(MAX(position), 0) + 1 FROM dictionary))",
         dictionary.name,
-        dictionary.version,
-        next_position
+        dictionary.version
     )
-    .execute(&mut **tx)
-    .await
-    .context("failed to insert dictionary")?;
-
+    .execute(executor)
+    .await?;
     Ok(DictionaryId(result.last_insert_rowid()))
 }
 
@@ -35,9 +25,7 @@ where
     E: 'e + Executor<'c, Database = Sqlite>,
 {
     let result = sqlx::query_scalar!(
-        "SELECT EXISTS(
-            SELECT 1 FROM dictionary WHERE name = $1
-        )",
+        "SELECT EXISTS(SELECT 1 FROM dictionary WHERE name = $1)",
         name
     )
     .fetch_one(executor)

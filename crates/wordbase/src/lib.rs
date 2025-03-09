@@ -2,10 +2,14 @@
 #![warn(missing_docs)]
 #![warn(clippy::missing_errors_doc)]
 
+// required for macro invocations
+extern crate self as wordbase;
+
 pub mod format;
 pub mod hook;
 pub mod lang;
 pub mod protocol;
+pub mod record;
 pub(crate) mod util;
 
 use {
@@ -13,13 +17,91 @@ use {
     serde::{Deserialize, Serialize},
 };
 
+/// Invokes your own macro, passing in all existing [record] kinds as arguments.
+///
+/// [`Record`] and [`RecordKind`] are marked as `#[non_exhaustive]`, so adding
+/// new variants is not a breaking change. However, this also means that if a
+/// new variant is added, user code may not handle this case since it won't
+/// cause a compilation failure. For many cases this is expected behavior, as
+/// a user may not be able to handle or may not want to the new variant - for
+/// example, a client which only cares about records for Japanese words (e.g.
+/// pitch accent) should not have to care about a new record kind which only
+/// applies to a European language dictionary.
+///
+/// However, some code may treat all record kinds equally (e.g. deserialization)
+/// in which case adding a new variant would silently break existing code. To
+/// avoid this, this macro can be used to ensure that code is generated for all
+/// record kinds without you having to manually update it.
+///
+/// # Usage
+///
+/// Define a macro in a local scope which accepts the following pattern:
+///
+/// ```
+/// macro_rules! my_macro {
+///     ( $($kind:ident($data_ty:path))* ) => {
+///         // your code here
+///     }
+/// }
+/// ```
+///
+/// Then invoke it using:
+///
+/// ```
+/// # macro_rules! my_macro {
+/// #   ( $($kind:ident($data_ty:path))* ) => {
+/// #       // your code here
+/// #   }
+/// # }
+/// wordbase::for_record_kinds!(my_macro);
+/// ```
+///
+/// - Use `$kind` to refer to the ident of the [`RecordKind`], i.e.
+///   `GlossaryPlainText`
+/// - Use `$data_ty` to refer to the data type that the [`Record`] variant
+///   carries, i.e. `wordbase::record::GlossaryPlainText`
+///
+/// # Examples
+///
+/// ```
+/// fn deserialize(kind: u16, data: &[u8]) {
+///     macro_rules! deserialize_record { ( $($kind:ident($data_ty:path))* ) => {
+///         mod discrim {
+///             use wordbase::RecordKind;
+///
+///             $(pub const $kind: u16 = RecordKind::$data_ty as u16;)*
+///         }
+///
+///         match kind {
+///             $(discrim::$kind => {
+///                 from_json(data)
+///             })*
+///         }
+///     }}
+///
+///     let record = wordbase::for_record_kinds!(deserialize_record);
+/// }
+/// # fn from_json(data: &[u8]) { unimplemented!() }
+/// ```
+///
+/// [record]: Record
+#[macro_export]
+macro_rules! for_record_kinds {
+   ($macro:path) => {
+       $macro!(
+           GlossaryPlainText(wordbase::record::GlossaryPlainText)
+           GlossaryHtml(wordbase::record::GlossaryHtml)
+       );
+   };
+}
+
 /// Collection of [records] for [terms] imported into a Wordbase server.
 ///
 /// This type stores the metadata of a dictionary, not the records themselves.
 ///
 /// [records]: Record
 /// [terms]: Term
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Dictionary {
     /// Unique identifier for this dictionary in the database.
@@ -51,6 +133,18 @@ pub struct Dictionary {
     pub enabled: bool,
 }
 
+impl Default for Dictionary {
+    fn default() -> Self {
+        Self {
+            id: DictionaryId::default(),
+            name: String::default(),
+            version: String::default(),
+            position: 0,
+            enabled: true,
+        }
+    }
+}
+
 /// Opaque and unique identifier for a single [`Dictionary`] in a database.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DictionaryId(pub i64);
@@ -61,7 +155,7 @@ pub struct DictionaryId(pub i64);
 /// # Examples
 ///
 /// ```
-/// # use wordbase::schema::Term;
+/// # use wordbase::Term;
 /// // English word "rust"
 /// assert_eq!(
 ///     Term::without_reading("rust"),
@@ -129,64 +223,32 @@ impl Term {
     }
 }
 
-macro_rules! record_kinds {
-    ( $($kind:ident($data_ty:path)),* $(,)? ) => {
-        /// Data for a single [term] in a [dictionary].
-        ///
-        /// Dictionaries contain records for individual terms, and may contain
-        /// multiple records for the same term. Different dictionary formats store
-        /// different types of data for each term, so instead of attempting to normalize
-        /// all these types into a single universal type, we store all the data in its
-        /// original form (or converted to a slightly more structured form). These
-        /// different types of data are then expressed as different variants of this
-        /// record enum.
-        ///
-        /// A record kind may also be specific to a single language, or a single
-        /// dictionary format. In this case, the variant name is prefixed with the
-        /// identifier of that language or format.
-        ///
-        /// Since support for more dictionary formats may be added later, and adding a
-        /// new format must not break existing code, **all record-related data should be
-        /// treated as non-exhaustive** (and are indeed marked `#[non_exhaustive]`)
-        /// unless directly stated otherwise.
-        ///
-        /// [term]: Term
-        /// [terms]: Term
-        /// [dictionary]: Dictionary
-        #[derive(Debug, Clone, From, Serialize, Deserialize)]
-        #[expect(missing_docs, reason = "contained type of each variant provides docs")]
-        #[non_exhaustive]
-        pub enum Record {
-            $($kind($data_ty),)*
-        }
-
-        /// Kind of a [record].
-        ///
-        /// [record]: Record
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-        #[expect(missing_docs, reason = "`Record` has more info")]
-        #[repr(u16)]
-        #[non_exhaustive]
-        pub enum RecordKind {
-            $($kind,)*
-        }
-    };
-}
-
-record_kinds! {
-    // generic
-    Glossary(Glossary),
-    Frequency(Frequency),
-    // language-specific
-    JpPitch(lang::jp::Pitch),
-    // format-specific
-}
-
-/// Provides the meaning or definition of a [term].
+macro_rules! define_record_types { ( $($kind:ident($data_ty:path))* ) => {
+/// Data for a single [term] in a [dictionary].
 ///
-/// This defines what a term actually means in human-readable terms - the
+/// Dictionaries contain records for individual terms, and may contain
+/// multiple records for the same term. Different dictionary formats store
+/// different types of data for each term, so instead of attempting to normalize
+/// all these types into a single universal type, we store all the data in its
+/// original form (or converted to a slightly more structured form). These
+/// different types of data are then expressed as different variants of this
+/// record enum.
+///
+/// A record kind may also be specific to a single language, or a single
+/// dictionary format. In this case, the variant name is prefixed with the
+/// identifier of that language or format.
+///
+/// Since support for more dictionary formats may be added later, and adding a
+/// new format must not break existing code, **all record-related data should be
+/// treated as non-exhaustive** (and are indeed marked `#[non_exhaustive]`)
+/// unless directly stated otherwise.
+///
+/// # Glossaries
+///
+/// The record kind which you are probably most interested in is the *glossary*,
+/// which defines what a term actually means in human-readable terms - the
 /// natural meaning of "dictionary entry". However, the content is left
-/// deliberately undefined, and it is up to the [dictionary] to fill out what it
+/// deliberately undefined, and it is up to the dictionary to fill out what it
 /// wants for its glossaries. Some dictionaries are monolingual, and may provide
 /// a definition in the dictionary's own language. Others are bilingual, and
 /// provide a translated meaning in the reader's native language.
@@ -204,138 +266,23 @@ record_kinds! {
 /// most convenient for you if it is present, or fallback to a different format
 /// (potentially to multiple different formats).
 ///
-/// If multiple formats are present on the same glossary, **they must represent
-/// the same content**, or at least as close as the two formats can get. If one
-/// format is unable to express information that another can, then the less
-/// detailed format should be omitted entirely.
-///
-/// Styling and other cosmetic details may be ignored, unless they directly
-/// affect how the content is read and interpreted.
-///
-/// A glossary may also contain language-specific or dictionary format-specific
-/// fields. In this case, the field name is prefixed with the identifier of that
-/// language or format.
-///
-/// # Examples
-///
-/// ```
-/// # use wordbase::Glossary;
-/// fn create_glossary(html: String) -> Glossary {
-///     // we can't create a value using a struct expression,
-///     // since it's `#[non_exhaustive]`, so we make an empty one first...
-///     let mut glossary = Glossary::default();
-///     // then set our content
-///     glossary.html = html;
-///     glossary
-/// }
-///
-/// fn display_glossary(glossary: &Glossary) {
-///     // let's assume we're drawing some widgets in a UI toolkit,
-///     // and we want to render this glossary in our UI
-///     if let Some(content) = &glossary.html {
-///         // we'll prioritise HTML, since we can load that directly in a WebView
-///         load_into_web_view(content);
-///     } else if let Some(content) = &glossary.plain_text {
-///         // if the glossary has no HTML content, we fall back to plain text
-///         // fortunately, a WebView can render text directly as well
-///         load_into_web_view(content);
-///     } else {
-///         // we can't render this glossary!
-///     }
-/// }
-/// # fn load_into_web_view(html: &str) { unreachable!() }
-/// ```
-///
 /// [term]: Term
+/// [terms]: Term
 /// [dictionary]: Dictionary
 /// [formats]: https://github.com/ilius/pyglossary/#supported-formats
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Clone, From, Serialize, Deserialize)]
+#[expect(missing_docs, reason = "contained type of each variant provides docs")]
 #[non_exhaustive]
-pub struct Glossary {
-    // generic
-    /// Plain text format.
-    ///
-    /// This is the simplest glossary format, and should be used as a fallback
-    /// if there is no other way to express your glossary content. Similarly,
-    /// consumers should only use this as a fallback source for rendering.
-    pub plain_text: Option<String>,
-    /// HTML content of this definition.
-    ///
-    /// This is a well-supported format which is common in many dictionaries,
-    /// and can be easily rendered by many clients (as long as you have access
-    /// to a [`WebView`] widget, or are rendering inside a browser).
-    ///
-    /// [`WebView`]: https://en.wikipedia.org/wiki/WebView
-    pub html: Option<String>,
+pub enum Record { $($kind($data_ty),)* }
 
-    // language-specific
-
-    // format-specific
-    /// ([`format::yomitan`]) Category tags for this glossary entry.
-    pub yomitan_tags: Vec<format::yomitan::GlossaryTag>,
-}
-
-/// How often a given [term] appears in a [dictionary]'s [corpus].
+/// Kind of a [record].
 ///
-/// Each text corpus which a dictionary is based on will naturally have some
-/// terms appear more frequently than others. This type represents some of this
-/// frequency information.
-///
-/// [term]: Term
-/// [dictionary]: Dictionary
-/// [corpus]: https://en.wikipedia.org/wiki/Text_corpus
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Frequency {
-    /// This [term]'s position in the frequency ranking of this [dictionary]'s
-    /// [corpus].
-    ///
-    /// A lower ranking means this term appears more frequently.
-    ///
-    /// [term]: Term
-    /// [dictionary]: Dictionary
-    /// [corpus]: https://en.wikipedia.org/wiki/Text_corpus
-    pub rank: u64,
-    /// Human-readable display value for [`Frequency::rank`].
-    ///
-    /// If this is omitted, [`Frequency::rank`] should be presented directly.
-    pub display: Option<String>,
-}
+/// [record]: Record
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[expect(missing_docs, reason = "`Record` has more info")]
+#[repr(u16)]
+#[non_exhaustive]
+pub enum RecordKind { $($kind,)* }
+}}
 
-impl Frequency {
-    /// Creates a value from a rank.
-    #[must_use]
-    pub fn new(rank: u64) -> Self {
-        Self {
-            rank,
-            ..Default::default()
-        }
-    }
-}
-
-/// Configuration for [lookup operations] shared between a Wordbase client and
-/// server.
-///
-/// [lookup operations]: protocol::FromClient::Lookup
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LookupConfig {
-    /// Maximum length, in **characters** (not bytes), that [`Lookup::text`] is
-    /// allowed to be.
-    ///
-    /// The maximum length of lookup requests is capped to avoid overloading the
-    /// server with extremely large lookup requests. Clients must respect the
-    /// server's configuration and not send any lookups longer than this,
-    /// otherwise the server will return an error.
-    ///
-    /// [`Lookup::text`]: protocol::FromClient::Lookup::text
-    pub max_request_len: u64,
-}
-
-impl Default for LookupConfig {
-    fn default() -> Self {
-        Self {
-            max_request_len: 16,
-        }
-    }
-}
+for_record_kinds!(define_record_types);

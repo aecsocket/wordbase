@@ -2,7 +2,7 @@
 //! WebSocket connection.
 
 use {
-    crate::{Dictionary, DictionaryId, LookupConfig, Record, RecordKind, Term, hook::HookSentence},
+    crate::{Dictionary, DictionaryId, Record, RecordKind, Term, hook::HookSentence},
     derive_more::{Display, Error, From},
     serde::{Deserialize, Serialize},
 };
@@ -86,6 +86,32 @@ pub enum FromServer {
     },
 }
 
+/// Configuration for [lookup operations] shared between a Wordbase client and
+/// server.
+///
+/// [lookup operations]: protocol::FromClient::Lookup
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LookupConfig {
+    /// Maximum length, in **characters** (not bytes), that [`Lookup::text`] is
+    /// allowed to be.
+    ///
+    /// The maximum length of lookup requests is capped to avoid overloading the
+    /// server with extremely large lookup requests. Clients must respect the
+    /// server's configuration and not send any lookups longer than this,
+    /// otherwise the server will return an error.
+    ///
+    /// [`Lookup::text`]: protocol::FromClient::Lookup::text
+    pub max_request_len: u64,
+}
+
+impl Default for LookupConfig {
+    fn default() -> Self {
+        Self {
+            max_request_len: 16,
+        }
+    }
+}
+
 /// Requests the server to find the first [terms] in some text, and return
 /// [records] for those terms.
 ///
@@ -103,15 +129,10 @@ pub struct LookupRequest {
     pub text: String,
     /// What kinds of records the server should send us.
     ///
-    /// If this is empty, all record kinds are sent. Otherwise, only records
-    /// of the given kinds are sent.
-    pub include: Vec<RecordKind>,
-    /// What kinds of records the server should not send us.
-    ///
-    /// This applies on top of [`include`].
-    ///
-    /// [`include`]: LookupRequest::include
-    pub exclude: Vec<RecordKind>,
+    /// Clients must explicitly list what kinds of records they want to receive,
+    /// as it is possible (and expected!) that clients won't be able to process
+    /// all of them.
+    pub record_kinds: Vec<RecordKind>,
 }
 
 impl<T: Into<String>> From<T> for LookupRequest {
@@ -165,8 +186,7 @@ mod tests {
         round_trip(FromClient::from(HookSentence::default()));
         round_trip(FromClient::from(LookupRequest {
             text: default(),
-            include: vec![RecordKind::Glossary],
-            exclude: vec![RecordKind::Frequency],
+            record_kinds: vec![RecordKind::GlossaryHtml],
         }));
         round_trip(FromClient::RemoveDictionary {
             dictionary_id: default(),
@@ -187,7 +207,7 @@ mod tests {
         round_trip(FromServer::from(LookupResponse {
             source: default(),
             term: default(),
-            record: Record::Glossary(default()),
+            record: Record::GlossaryHtml(default()),
         }));
         round_trip(FromServer::LookupDone);
         round_trip(FromServer::RemoveDictionary {
