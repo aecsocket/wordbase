@@ -20,7 +20,11 @@ use {
         task::JoinSet,
     },
     tracing::{Instrument, info_span},
-    wordbase::{Dictionary, LookupConfig, hook::HookSentence, protocol::DEFAULT_PORT},
+    wordbase::{
+        Dictionary,
+        hook::HookSentence,
+        protocol::{DEFAULT_PORT, LookupConfig},
+    },
 };
 
 const CHANNEL_BUF_CAP: usize = 4;

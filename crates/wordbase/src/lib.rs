@@ -33,6 +33,9 @@ use {
 /// avoid this, this macro can be used to ensure that code is generated for all
 /// record kinds without you having to manually update it.
 ///
+/// This macro also serves as the source of truth for all record kinds. If you
+/// want to add a new record kind, add it here.
+///
 /// # Usage
 ///
 /// Define a macro in a local scope which accepts the following pattern:
@@ -63,21 +66,43 @@ use {
 ///
 /// # Examples
 ///
+/// Generating top-level items:
+///
+/// ```
+/// macro_rules! define_record_wrapper {
+///     // note the single `{` at the end of this line...
+///     ( $($kind:ident($data_ty:path))* ) => {
+///         pub enum MyRecordWrapper {
+///             $($kind {
+///                 data: $data_ty,
+///                 extra: i32,
+///             },)*
+///         }
+///     } // ...and the single `}` here
+/// }
+/// ```
+///
+/// Generating an expression:
+///
 /// ```
 /// fn deserialize(kind: u16, data: &[u8]) {
-///     macro_rules! deserialize_record { ( $($kind:ident($data_ty:path))* ) => {
-///         mod discrim {
-///             use wordbase::RecordKind;
+///     macro_rules! deserialize_record {
+///         // note the double `{` at the end of this line...
+///         ( $($kind:ident($data_ty:path))* ) => {{
+///             mod discrim {
+///                 use wordbase::RecordKind;
 ///
-///             $(pub const $kind: u16 = RecordKind::$data_ty as u16;)*
-///         }
+///                 $(pub const $kind: u16 = RecordKind::$kind as u16;)*
+///             }
 ///
-///         match kind {
-///             $(discrim::$kind => {
-///                 from_json(data)
-///             })*
-///         }
-///     }}
+///             match kind {
+///                 $(discrim::$kind => {
+///                     from_json(data)
+///                 })*
+///                 _ => panic!("unknown kind"),
+///             }
+///         }} // ...and the double `}` here
+///     }
 ///
 ///     let record = wordbase::for_record_kinds!(deserialize_record);
 /// }
@@ -87,12 +112,13 @@ use {
 /// [record]: Record
 #[macro_export]
 macro_rules! for_record_kinds {
-   ($macro:path) => {
-       $macro!(
-           GlossaryPlainText(wordbase::record::GlossaryPlainText)
-           GlossaryHtml(wordbase::record::GlossaryHtml)
-       );
-   };
+    ($macro:ident) => {
+        $macro!(
+            // note: no comma separator
+            GlossaryPlainText(wordbase::record::GlossaryPlainText)
+            GlossaryHtml(wordbase::record::GlossaryHtml)
+        );
+    };
 }
 
 /// Collection of [records] for [terms] imported into a Wordbase server.
@@ -223,7 +249,7 @@ impl Term {
     }
 }
 
-macro_rules! define_record_types { ( $($kind:ident($data_ty:path))* ) => {
+macro_rules! define_record_types { ($($kind:ident($data_ty:path))*) => {
 /// Data for a single [term] in a [dictionary].
 ///
 /// Dictionaries contain records for individual terms, and may contain

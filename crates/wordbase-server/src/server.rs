@@ -1,7 +1,6 @@
 use {
     crate::{
-        Config, Event, dictionary,
-        import::{self, ImportEvent},
+        Config, Event, dictionary, import,
         mecab::{MecabInfo, MecabRequest},
         term,
     },
@@ -79,34 +78,34 @@ pub async fn run(
     let mut joins = JoinSet::new();
     for path in IMPORTS {
         let span = info_span!("import", %path);
-        let (send_event, recv_event) = mpsc::channel::<ImportEvent>(4);
+        // let (send_event, recv_event) = mpsc::channel::<ImportEvent>(4);
         joins.spawn(
             async move {
                 import::yomitan(
                     db.clone(),
                     format!("/home/dev/all-dictionaries/{path}"),
-                    send_event,
+                    todo!(),
                 )
                 .await;
             }
             .instrument(span.clone()),
         );
-        joins.spawn(
-            async move {
-                while let Some(event) = recv_event.recv().await {
-                    match event {
-                        ImportEvent::ReadToMemory => {
-                            info!("Read to memory");
-                        }
-                        ImportEvent::ReadMeta { meta, items_len } => {
-                            info!("{} version {} - {items_len} items", meta.)
-                        }
-                    }
-                    info!("foo");
-                }
-            }
-            .instrument(span),
-        );
+        // joins.spawn(
+        //     async move {
+        //         while let Some(event) = recv_event.recv().await {
+        //             match event {
+        //                 ImportEvent::ReadToMemory => {
+        //                     info!("Read to memory");
+        //                 }
+        //                 ImportEvent::ReadMeta { meta, items_len } => {
+        //                     info!("{} version {} - {items_len} items", meta.)
+        //                 }
+        //             }
+        //             info!("foo");
+        //         }
+        //     }
+        //     .instrument(span),
+        // );
     }
     while let Some(result) = joins.join_next().await {
         result
@@ -288,11 +287,7 @@ async fn do_lookup(
     connection: &mut Connection,
     request: LookupRequest,
 ) -> Result<()> {
-    let LookupRequest {
-        text,
-        record_kinds: include,
-        exclude,
-    } = request;
+    let LookupRequest { text, record_kinds } = request;
 
     // count like this instead of using `.count()`
     // because `count` does not short-circuit
@@ -317,7 +312,7 @@ async fn do_lookup(
         return Ok(());
     };
 
-    let records = term::lookup(db, &mecab.lemma, &include, &exclude)
+    let records = term::lookup(db, &mecab.lemma, &record_kinds)
         .await
         .context("failed to fetch records")?;
     for record in records {

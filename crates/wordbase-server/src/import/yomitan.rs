@@ -20,7 +20,7 @@ use {
     },
     tracing::{debug, info},
     wordbase::{
-        Dictionary, DictionaryId, Frequency, Glossary,
+        Dictionary, DictionaryId,
         format::yomitan::{self, schema},
         lang::jp,
     },

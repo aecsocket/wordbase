@@ -24,8 +24,7 @@ pub fn deserialize<'a, T: Deserialize<'a>>(buf: &'a [u8]) -> Result<T, rmp_serde
 pub async fn lookup(
     db: &Pool<Sqlite>,
     text: &str,
-    include: &[RecordKind],
-    exclude: &[RecordKind],
+    record_kinds: &[RecordKind],
 ) -> Result<Vec<LookupResponse>> {
     let mut query = QueryBuilder::new(
         "SELECT source, headword, reading, kind, data
@@ -39,21 +38,10 @@ pub async fn lookup(
     query.push_bind(text);
     query.push(" OR reading = ");
     query.push_bind(text);
-    query.push(") ");
-
-    if !include.is_empty() {
-        query.push("AND kind IN (");
+    query.push(") AND kind IN (");
+    {
         let mut query = query.separated(", ");
-        for record_kind in include {
-            query.push_bind(*record_kind as u16);
-        }
-        query.push_unseparated(")");
-    }
-
-    if !exclude.is_empty() {
-        query.push("AND kind NOT IN (");
-        let mut query = query.separated(", ");
-        for record_kind in exclude {
+        for record_kind in record_kinds {
             query.push_bind(*record_kind as u16);
         }
         query.push_unseparated(")");
@@ -86,7 +74,7 @@ pub async fn lookup(
                 reading: record.reading,
             };
 
-            let record = for_record_kinds! {
+            macro_rules! deserialize_record { ( $($kind:ident($data_ty:path))* ) => {{
                 #[allow(
                     non_upper_case_globals,
                     reason = "cannot capitalize ident in macro invocation"
@@ -94,20 +82,22 @@ pub async fn lookup(
                 mod discrim {
                     use super::RecordKind;
 
-                    #(pub const #kind: u16 = RecordKind::#kind as u16;)
+                    $(pub const $kind: u16 = RecordKind::$kind as u16;)*
                 }
 
                 match u16::try_from(record.kind) {
-                    #(
-                        Ok(discrim::#kind) => {
-                            let record = deserialize(&($record.data))
+                    $(
+                        Ok(discrim::$kind) => {
+                            let record = deserialize(&record.data)
                                 .with_context(|| format!("failed to deserialize {} record", stringify!(#kind)))?;
-                            Record::#kind(record)
+                            Record::$kind(record)
                         }
                     )*
                     _ => bail!("invalid record kind {}", record.kind),
                 }
-            };
+            }}}
+
+            let record = for_record_kinds!(deserialize_record);
 
             Ok(LookupResponse {
                 source,
