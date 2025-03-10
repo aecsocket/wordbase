@@ -30,6 +30,7 @@ type_complexity = "allow"
 [workspace.dependencies]
 wordbase = { path = "crates/wordbase" }
 wordbase-client-tokio = { path = "crates/wordbase-client-tokio" }
+wordbase-gtk-ui = { path = "crates/wordbase-gtk-ui" }
 
 proc-macro2 = "1.0"
 quote = "1.0"

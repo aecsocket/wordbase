@@ -21,27 +21,8 @@ all-features = true
 
 [dependencies]
 wordbase = { workspace = true }
-wordbase-client-tokio = { workspace = true }
 
-anyhow = { workspace = true }
-clap = { workspace = true, features = ["derive"] }
-derive_more = { workspace = true, features = ["deref"] }
-foldhash = { workspace = true }
-form_urlencoded = { workspace = true }
-futures = { workspace = true }
-glib = { workspace = true, features = ["log"] }
 gtk4 = { workspace = true, features = ["gnome_47", "blueprint"] }
-interprocess = { workspace = true, features = ["tokio"] }
 libadwaita = { workspace = true, features = ["v1_6"] }
 open = { workspace = true }
-tokio = { workspace = true, features = ["full"] }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
 webkit6 = { workspace = true }
-
-# enable features in transitive dependency crates
-
-bzip2 = { workspace = true, features = ["static"] }
-
-[package.metadata.cargo-shear]
-ignored = ["bzip2"]

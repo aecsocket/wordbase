@@ -3,17 +3,13 @@ use {
         Config, Event, dictionary,
         import::{self, AlreadyExists},
         mecab::{MecabInfo, MecabRequest},
-        popup::Popups,
         term,
     },
     anyhow::{Context as _, Result, bail},
     derive_more::{Deref, DerefMut},
     futures::{SinkExt as _, StreamExt as _, never::Never},
-    sqlx::{
-        Pool, Sqlite,
-        sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
-    },
-    std::{num::Wrapping, str::FromStr, sync::Arc, time::Duration},
+    sqlx::{Pool, Sqlite},
+    std::{num::Wrapping, sync::Arc},
     tokio::{
         net::{TcpListener, TcpStream},
         sync::{broadcast, mpsc, oneshot},
@@ -21,32 +17,16 @@ use {
     },
     tokio_tungstenite::{WebSocketStream, tungstenite::Message},
     tracing::{Instrument, debug, info, info_span, warn},
-    wordbase::protocol::{FromClient, FromServer, LookupRequest},
+    wordbase::protocol::{FromClient, FromServer, LookupRequest, ShowPopupRequest},
 };
 
 pub async fn run(
+    db: Pool<Sqlite>,
     config: Arc<Config>,
-    popups: Arc<dyn Popups>,
     send_mecab_request: mpsc::Sender<MecabRequest>,
     send_event: broadcast::Sender<Event>,
+    send_popup_request: broadcast::Sender<ShowPopupRequest>,
 ) -> Result<Never> {
-    let db = SqlitePoolOptions::new()
-    // todo fix
-        .max_connections(1)
-        .acquire_timeout(Duration::from_secs(99999))
-        .connect_with(
-            SqliteConnectOptions::from_str("sqlite://wordbase.db")?
-                .create_if_missing(true)
-                .journal_mode(SqliteJournalMode::Wal),
-        )
-        .await
-        .context("failed to connect to database")?;
-    sqlx::query(include_str!("setup_db.sql"))
-        .execute(&db)
-        .await
-        .context("failed to set up database")?;
-    info!("Connected to database");
-
     // TODO
     const IMPORTS: &[&str] = &[
         // "1. jitendex-yomitan.zip",
@@ -158,15 +138,22 @@ pub async fn run(
             .context("failed to accept TCP stream")?;
 
         let config = config.clone();
-        let popups = popups.clone();
         let db = db.clone();
         let send_mecab_request = send_mecab_request.clone();
         let send_event = send_event.clone();
+        let send_popup_request = send_popup_request.clone();
         tokio::spawn(
             async move {
                 info!("Incoming connection from {peer_addr:?}");
-                let Err(err) =
-                    handle_stream(config, popups, db, send_mecab_request, send_event, stream).await;
+                let Err(err) = handle_stream(
+                    config,
+                    db,
+                    send_mecab_request,
+                    send_event,
+                    send_popup_request,
+                    stream,
+                )
+                .await;
                 info!("Connection lost: {err:?}");
             }
             .instrument(info_span!("connection", id = %connection_id)),
@@ -188,10 +175,10 @@ impl Connection {
 
 async fn handle_stream(
     config: Arc<Config>,
-    popups: Arc<dyn Popups>,
     db: Pool<Sqlite>,
     send_mecab_request: mpsc::Sender<MecabRequest>,
     send_event: broadcast::Sender<Event>,
+    send_popup_request: broadcast::Sender<ShowPopupRequest>,
     stream: TcpStream,
 ) -> Result<Never> {
     let stream = tokio_tungstenite::accept_async(stream)
@@ -226,10 +213,10 @@ async fn handle_stream(
                     .context("stream error")?;
                 if let Err(err) = handle_message(
                     &config,
-                    &*popups,
                     &db,
                     &send_mecab_request,
                     &send_event,
+                    &send_popup_request,
                     &mut connection,
                     data,
                 )
@@ -255,10 +242,10 @@ async fn forward_event(connection: &mut Connection, event: Event) {
 
 async fn handle_message(
     config: &Config,
-    popups: &dyn Popups,
     db: &Pool<Sqlite>,
     send_mecab_request: &mpsc::Sender<MecabRequest>,
     send_event: &broadcast::Sender<Event>,
+    send_popup_request: &broadcast::Sender<ShowPopupRequest>,
     connection: &mut Connection,
     data: Message,
 ) -> Result<()> {
@@ -286,9 +273,11 @@ async fn handle_message(
             Ok(())
         }
         FromClient::ShowPopup(request) => {
-            popups.show(request).context("failed to show popup")?;
+            send_popup_request
+                .send(request)
+                .context("failed to send popup request")?;
             connection
-                .write(&FromServer::Popup)
+                .write(&FromServer::ShowPopup)
                 .await
                 .context("failed to send show popup response")?;
             Ok(())

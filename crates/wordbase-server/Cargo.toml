@@ -18,6 +18,13 @@ workspace = true
 all-features = true
 
 [features]
+default = [
+    "popup",
+    "dep:glib",
+    "dep:gtk4",
+    "dep:libadwaita",
+    "dep:wordbase-gtk-ui",
+]
 popup = []
 
 [dependencies]
@@ -41,3 +48,18 @@ tokio = { workspace = true, features = ["full"] }
 tokio-tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+glib = { workspace = true, optional = true, features = ["log"] }
+gtk4 = { workspace = true, optional = true, features = [
+    "gnome_47",
+    "blueprint",
+] }
+libadwaita = { workspace = true, optional = true, features = ["v1_6"] }
+wordbase-gtk-ui = { workspace = true, optional = true }
+
+# enable features in transitive dependency crates
+
+bzip2 = { workspace = true, features = ["static"] }
+
+[package.metadata.cargo-shear]
+ignored = ["bzip2"]

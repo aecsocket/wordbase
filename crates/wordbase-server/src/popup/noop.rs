@@ -1,19 +1,7 @@
-use anyhow::{Result, bail};
+use tokio::sync::mpsc;
+use tracing::info;
 use wordbase::protocol::ShowPopupRequest;
 
-use super::Popups;
-
-pub struct NoopPopups;
-
-impl NoopPopups {
-    #[must_use]
-    pub const fn new() -> Self {
-        Self
-    }
-}
-
-impl Popups for NoopPopups {
-    fn show(&self, _: ShowPopupRequest) -> Result<()> {
-        bail!("unsupported")
-    }
+pub fn run(_: mpsc::Receiver<ShowPopupRequest>) {
+    info!("Running server compiled without popup support");
 }

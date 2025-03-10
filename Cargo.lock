@@ -497,12 +497,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "doctest-file"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aac81fa3e28d21450aa4d2ac065992ba96a1d7303efbce51a95f4fd175b67562"
-
-[[package]]
 name = "dotenvy"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1245,21 +1239,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "interprocess"
-version = "2.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d941b405bd2322993887859a8ee6ac9134945a24ec5ec763a8a962fc64dfec2d"
-dependencies = [
- "doctest-file",
- "futures-core",
- "libc",
- "recvmsg",
- "tokio",
- "widestring",
- "windows-sys 0.52.0",
-]
-
-[[package]]
 name = "is-docker"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1834,12 +1813,6 @@ dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
 ]
-
-[[package]]
-name = "recvmsg"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3edd4d5d42c92f0a659926464d4cce56b562761267ecf0f469d85b7de384175"
 
 [[package]]
 name = "redox_syscall"
@@ -2935,12 +2908,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "widestring"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7219d36b6eac893fa81e84ebe06485e7dcbb616177469b142df14f1f4deb1311"
-
-[[package]]
 name = "winapi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3173,24 +3140,11 @@ dependencies = [
 name = "wordbase-gtk-ui"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "bzip2",
- "clap",
- "derive_more",
- "foldhash",
- "form_urlencoded",
- "futures",
- "glib",
  "gtk4",
- "interprocess",
  "libadwaita",
  "open",
- "tokio",
- "tracing",
- "tracing-subscriber",
  "webkit6",
  "wordbase",
- "wordbase-client-tokio",
 ]
 
 [[package]]
@@ -3198,9 +3152,13 @@ name = "wordbase-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bzip2",
  "cfg-if",
  "derive_more",
  "futures",
+ "glib",
+ "gtk4",
+ "libadwaita",
  "mecab",
  "rmp-serde",
  "serde",
@@ -3211,6 +3169,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wordbase",
+ "wordbase-gtk-ui",
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
-#![allow(missing_docs)]
-#![allow(clippy::missing_errors_doc)]
+#![expect(missing_docs)]
+#![expect(clippy::missing_errors_doc)]
 
 use {
     derive_more::{Display, Error},
@@ -18,7 +18,8 @@ use {
         DictionaryId, DictionaryState,
         hook::HookSentence,
         protocol::{
-            DictionaryNotFound, FromClient, FromServer, LookupConfig, LookupRequest, LookupResponse,
+            DictionaryNotFound, FromClient, FromServer, LookupConfig, LookupRequest,
+            LookupResponse, ShowPopupRequest,
         },
     },
 };
@@ -237,6 +238,16 @@ where
         Ok(Box::pin(futures::stream::iter(
             all_responses.into_iter().map(Ok),
         )))
+    }
+
+    pub async fn show_popup(&mut self, request: ShowPopupRequest) -> Result<(), ConnectionError> {
+        self.connection.send(&FromClient::from(request)).await?;
+        loop {
+            match self.connection.recv().await? {
+                FromServer::ShowPopup => return Ok(()),
+                message => self.fallback_handle(message)?,
+            }
+        }
     }
 
     pub async fn remove_dictionary(

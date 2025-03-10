@@ -74,7 +74,7 @@ pub enum FromServer {
     /// Server sends a response to [`FromClient::Lookup`] containing a single record.
     #[from]
     Lookup(LookupResponse),
-    Popup,
+    ShowPopup,
     /// Server sends a response to [`FromClient::Lookup`] marking that all
     /// records have been sent.
     LookupDone,

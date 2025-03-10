@@ -9,24 +9,26 @@ mod term;
 mod texthooker;
 
 use {
-    anyhow::Result,
+    anyhow::{Context, Result},
     mecab::MecabRequest,
-    popup::DefaultPopups,
+    sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
     std::{
         net::{Ipv4Addr, SocketAddr},
+        str::FromStr,
         sync::Arc,
+        thread,
         time::Duration,
     },
     tokio::{
         sync::{broadcast, mpsc},
         task::JoinSet,
     },
-    tracing::{Instrument, info_span, level_filters::LevelFilter},
+    tracing::{Instrument, info, info_span, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
     wordbase::{
         DictionaryState,
         hook::HookSentence,
-        protocol::{DEFAULT_PORT, LookupConfig},
+        protocol::{DEFAULT_PORT, LookupConfig, ShowPopupRequest},
     },
 };
 
@@ -75,11 +77,29 @@ async fn main() -> Result<()> {
         )
         .init();
     let config = Arc::new(Config::default());
-    let popups = Arc::new(DefaultPopups::new());
+
+    let db = SqlitePoolOptions::new()
+        .max_connections(1)
+        .acquire_timeout(Duration::from_secs(99999))
+        .connect_with(
+            SqliteConnectOptions::from_str("sqlite://wordbase.db")?
+                .create_if_missing(true)
+                .journal_mode(SqliteJournalMode::Wal),
+        )
+        .await
+        .context("failed to connect to database")?;
+    sqlx::query(include_str!("setup_db.sql"))
+        .execute(&db)
+        .await
+        .context("failed to set up database")?;
+    info!("Connected to database");
 
     let (send_mecab_request, recv_mecab_request) = mpsc::channel::<MecabRequest>(CHANNEL_BUF_CAP);
     let (send_event, _) = broadcast::channel::<Event>(CHANNEL_BUF_CAP);
+    let (send_popup_request, recv_popup_request) =
+        broadcast::channel::<ShowPopupRequest>(CHANNEL_BUF_CAP);
 
+    let rt = tokio::runtime::Handle::current();
     let mut tasks = JoinSet::new();
 
     for source_config in &config.texthooker_sources {
@@ -89,7 +109,14 @@ async fn main() -> Result<()> {
         );
     }
     tasks.spawn(mecab::run(recv_mecab_request));
-    tasks.spawn(server::run(config, popups, send_mecab_request, send_event));
+    tasks.spawn(server::run(
+        db.clone(),
+        config,
+        send_mecab_request,
+        send_event,
+        send_popup_request,
+    ));
+    thread::spawn(move || popup::default::run(db, rt, recv_popup_request));
 
     while let Some(result) = tasks.join_next().await {
         result??;

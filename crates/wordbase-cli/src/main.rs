@@ -3,7 +3,11 @@
 use {
     anyhow::{Context, Result},
     futures::StreamExt,
-    wordbase::{DictionaryId, RecordKind, hook::HookSentence, protocol::LookupRequest},
+    wordbase::{
+        DictionaryId, RecordKind,
+        hook::HookSentence,
+        protocol::{LookupRequest, PopupAnchor, ShowPopupRequest},
+    },
     wordbase_client_tokio::SocketClient,
 };
 
@@ -22,8 +26,12 @@ enum Command {
         #[command(subcommand)]
         command: DictionaryCommand,
     },
-    #[clap(alias = "l")]
-    Lookup { text: String },
+    Lookup {
+        text: String,
+    },
+    Popup {
+        text: String,
+    },
     Hook {
         #[command(subcommand)]
         command: HookCommand,
@@ -86,6 +94,7 @@ async fn main() -> Result<()> {
                 command: DictionaryCommand::Disable { id },
             } => disable_dictionary(&mut client, id).await,
             Command::Lookup { text } => lookup(&mut client, text).await,
+            Command::Popup { text } => show_popup(&mut client, text).await,
             Command::Hook {
                 command: HookCommand::Send { text },
             } => send_hook_sentence(&mut client, text).await,
@@ -151,14 +160,25 @@ async fn lookup(client: &mut SocketClient, text: String) -> Result<()> {
     Ok(())
 }
 
+async fn show_popup(client: &mut SocketClient, text: String) -> Result<()> {
+    client
+        .show_popup(ShowPopupRequest {
+            text,
+            pid: 0,
+            origin: (0, 0),
+            anchor: PopupAnchor::TopLeft,
+        })
+        .await?;
+    Ok(())
+}
+
 async fn send_hook_sentence(client: &mut SocketClient, sentence: String) -> Result<()> {
     client
         .hook_sentence(HookSentence {
             process_path: "wordbase-cli".into(),
             sentence,
         })
-        .await
-        .context("failed to send hook sentence")?;
+        .await?;
     Ok(())
 }
 
