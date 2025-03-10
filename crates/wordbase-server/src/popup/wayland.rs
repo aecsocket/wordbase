@@ -10,23 +10,23 @@ use gtk4::{
     prelude::*,
 };
 use libadwaita::prelude::BinExt;
-use sqlx::{Pool, Sqlite};
 use tokio::sync::broadcast;
 use tracing::{error, info, warn};
 use wordbase::{
     DictionaryId, DictionaryState,
-    protocol::{NoRecords, ShowPopupRequest, ShowPopupResponse},
+    protocol::{LookupRequest, NoRecords, ShowPopupRequest, ShowPopupResponse},
 };
 
-use crate::{BackendPopupRequest, ServerEvent, term};
+use crate::{ServerEvent, lookup};
+
+use super::Request;
 
 const APP_ID: &str = "com.github.aecsocket.Wordbase";
 
 pub fn run(
-    db: Pool<Sqlite>,
-    rt: tokio::runtime::Handle,
-    recv_popup_request: broadcast::Receiver<BackendPopupRequest>,
+    lookups: lookup::Client,
     recv_server_event: broadcast::Receiver<ServerEvent>,
+    recv_request: broadcast::Receiver<Request>,
 ) -> Result<()> {
     info!("Using Wayland popup backend via GTK/Adwaita");
     glib::log_set_default_handler(glib::rust_log_handler);
@@ -43,36 +43,25 @@ pub fn run(
         );
     });
     app.connect_activate(move |app| {
-        let db = db.clone();
-        let rt = rt.clone();
-        let recv_popup_request = recv_popup_request.resubscribe();
+        let lookups = lookups.clone();
+        let recv_request = recv_request.resubscribe();
         let recv_server_event = recv_server_event.resubscribe();
         let app = app.clone();
         // make the app not close when all its windows are closed
         let hold_guard = app.hold();
         glib::spawn_future_local(async move {
-            let Err(err) = backend(
-                db,
-                rt,
-                recv_popup_request,
-                recv_server_event,
-                app,
-                hold_guard,
-            )
-            .await;
+            let Err(err) = backend(lookups, recv_request, recv_server_event, app, hold_guard).await;
             error!("GTK app backend closed: {err:?}");
         });
     });
 
     app.run();
-    error!("GTK application closed - the main server is probably about to close");
-    Ok(())
+    bail!("GTK application closed")
 }
 
 async fn backend(
-    db: Pool<Sqlite>,
-    rt: tokio::runtime::Handle,
-    mut recv_popup_request: broadcast::Receiver<BackendPopupRequest>,
+    lookups: lookup::Client,
+    mut recv_request: broadcast::Receiver<Request>,
     mut recv_server_event: broadcast::Receiver<ServerEvent>,
     app: adw::Application,
     _hold_guard: ApplicationHoldGuard,
@@ -80,7 +69,7 @@ async fn backend(
     let mut dictionaries = HashMap::<DictionaryId, DictionaryState>::new();
     loop {
         let request = tokio::select! {
-            request = recv_popup_request.recv() => request,
+            request = recv_request.recv() => request,
             Ok(ServerEvent::SyncDictionaries(new_dictionaries)) = recv_server_event.recv() => {
                 dictionaries = new_dictionaries
                     .into_iter()
@@ -93,42 +82,41 @@ async fn backend(
             Ok(request) => request,
             Err(broadcast::error::RecvError::Closed) => bail!("popup request channel closed"),
             Err(broadcast::error::RecvError::Lagged(n)) => {
-                warn!("Popup show thread lagged by {n} requests");
+                warn!("Popup thread lagged by {n} requests");
                 continue;
             }
         };
 
-        match handle_request(db.clone(), &rt, &app, &dictionaries, request.request).await {
-            Ok(result) => {
-                _ = request.send_response.send(result).await;
-            }
-            Err(err) => {
-                warn!("Failed to handle popup request: {err:?}");
-            }
-        }
+        let result = handle_request(&lookups, &app, &dictionaries, request.request).await;
+        _ = request.send_response.send(result).await;
     }
 }
 
 async fn handle_request(
-    db: Pool<Sqlite>,
-    rt: &tokio::runtime::Handle,
+    lookups: &lookup::Client,
     app: &adw::Application,
     dictionaries: &HashMap<DictionaryId, DictionaryState>,
     request: ShowPopupRequest,
 ) -> Result<Result<ShowPopupResponse, NoRecords>> {
     const MARGIN: i32 = 16;
 
-    let chars_scanned = request.text.chars().count() as u64;
-    let records = rt
-        .spawn(async move {
-            term::lookup(&db, &request.text, wordbase_gtk::SUPPORTED_RECORD_KINDS).await
+    let records = lookups
+        .lookup(LookupRequest {
+            text: request.text,
+            record_kinds: wordbase_gtk::SUPPORTED_RECORD_KINDS.to_vec(),
         })
         .await
-        .context("fetch record task dropped")?
-        .context("failed to fetch records")?;
+        .context("failed to perform lookup")?;
     if records.is_empty() {
         return Ok(Err(NoRecords));
     }
+
+    let chars_scanned = records
+        .iter()
+        .map(|record| record.lemma.chars().count())
+        .max()
+        .and_then(|c| u64::try_from(c).ok())
+        .unwrap_or_default();
 
     let content = gtk::ScrolledWindow::new();
 

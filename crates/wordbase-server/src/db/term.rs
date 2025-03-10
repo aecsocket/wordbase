@@ -53,7 +53,7 @@ where
 // TODO: make this return a stream when async iterators are stabilized
 pub async fn lookup(
     db: &Pool<Sqlite>,
-    text: &str,
+    lemma: &str,
     record_kinds: &[RecordKind],
 ) -> Result<Vec<LookupResponse>> {
     let mut query = QueryBuilder::new(
@@ -65,9 +65,9 @@ pub async fn lookup(
             dictionary.enabled = TRUE
             AND (headword = ",
     );
-    query.push_bind(text);
+    query.push_bind(lemma);
     query.push(" OR reading = ");
-    query.push_bind(text);
+    query.push_bind(lemma);
     query.push(") AND kind IN (");
     {
         let mut query = query.separated(", ");
@@ -128,6 +128,7 @@ pub async fn lookup(
             let record = for_record_kinds!(deserialize_record);
 
             Ok(LookupResponse {
+                lemma: lemma.into(),
                 source,
                 term,
                 record,

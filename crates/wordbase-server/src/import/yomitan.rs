@@ -1,9 +1,8 @@
 use {
     super::{ImportError, ReadToMemory},
     crate::{
-        CHANNEL_BUF_CAP, dictionary,
+        CHANNEL_BUF_CAP, db,
         import::{Parsed, ReadMeta},
-        term,
     },
     anyhow::{Context as _, Result},
     sqlx::{Pool, Sqlite, Transaction},
@@ -73,7 +72,7 @@ pub async fn yomitan(
         recv_parsed,
     });
 
-    let already_exists = dictionary::exists_by_name(&db, &meta.name)
+    let already_exists = db::dictionary::exists_by_name(&db, &meta.name)
         .await
         .context("failed to check if dictionary exists")?;
     if already_exists {
@@ -146,7 +145,7 @@ pub async fn yomitan(
     let mut tx = db.begin().await.context("failed to begin transaction")?;
     debug!("Started transaction");
 
-    let dictionary_id = dictionary::insert(&mut *tx, &meta)
+    let dictionary_id = db::dictionary::insert(&mut *tx, &meta)
         .await
         .context("failed to insert dictionary")?;
     debug!("Inserted with ID {dictionary_id:?}");
@@ -207,7 +206,7 @@ async fn import_term(
     let content = term.glossary.into_iter().filter_map(to_content).collect();
     let glossary = format::yomitan::Glossary { tags, content };
 
-    term::insert(
+    db::term::insert(
         &mut **tx,
         source,
         &Term { headword, reading },
@@ -245,7 +244,7 @@ async fn import_term_meta(
     match term_meta.data {
         schema::TermMetaData::Frequency(frequency) => {
             for (reading, record) in to_frequencies(frequency) {
-                term::insert(
+                db::term::insert(
                     &mut **tx,
                     source,
                     &Term {
@@ -261,7 +260,7 @@ async fn import_term_meta(
         }
         schema::TermMetaData::Pitch(pitch) => {
             for (reading, record) in to_pitch(pitch) {
-                term::insert(
+                db::term::insert(
                     &mut **tx,
                     source,
                     &Term::with_reading(headword.clone(), reading),

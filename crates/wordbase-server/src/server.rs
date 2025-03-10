@@ -1,31 +1,30 @@
 use {
     crate::{
-        BackendPopupRequest, CHANNEL_BUF_CAP, Config, ServerEvent, dictionary,
+        Config, ServerEvent, db,
         import::{self, ImportError},
-        mecab::{MecabInfo, MecabRequest},
-        term,
+        lookup, popup,
     },
-    anyhow::{Context as _, Result, bail},
+    anyhow::{Context as _, Result},
     derive_more::{Deref, DerefMut},
     futures::{SinkExt as _, StreamExt as _, never::Never},
     sqlx::{Pool, Sqlite},
     std::{num::Wrapping, sync::Arc},
     tokio::{
         net::{TcpListener, TcpStream},
-        sync::{Semaphore, broadcast, mpsc, oneshot},
+        sync::{Semaphore, broadcast, oneshot},
         task::JoinSet,
     },
     tokio_tungstenite::{WebSocketStream, tungstenite::Message},
     tracing::{Instrument, debug, info, info_span, warn},
-    wordbase::protocol::{FromClient, FromServer, LookupRequest, NoRecords, ShowPopupResponse},
+    wordbase::protocol::{FromClient, FromServer},
 };
 
 pub async fn run(
-    db: Pool<Sqlite>,
     config: Arc<Config>,
-    send_mecab_request: mpsc::Sender<MecabRequest>,
+    db: Pool<Sqlite>,
+    lookups: lookup::Client,
+    popups: popup::Client,
     send_event: broadcast::Sender<ServerEvent>,
-    send_popup_request: broadcast::Sender<BackendPopupRequest>,
 ) -> Result<Never> {
     // TODO
     // const IMPORTS: &[&str] = &[
@@ -150,21 +149,13 @@ pub async fn run(
 
         let config = config.clone();
         let db = db.clone();
-        let send_mecab_request = send_mecab_request.clone();
+        let lookups = lookups.clone();
+        let popups = popups.clone();
         let send_event = send_event.clone();
-        let send_popup_request = send_popup_request.clone();
         tokio::spawn(
             async move {
                 info!("Incoming connection from {peer_addr:?}");
-                let Err(err) = handle_stream(
-                    config,
-                    db,
-                    send_mecab_request,
-                    send_event,
-                    send_popup_request,
-                    stream,
-                )
-                .await;
+                let Err(err) = handle_stream(config, db, lookups, popups, send_event, stream).await;
                 info!("Connection lost: {err:?}");
             }
             .instrument(info_span!("connection", id = %connection_id)),
@@ -187,9 +178,9 @@ impl Connection {
 async fn handle_stream(
     config: Arc<Config>,
     db: Pool<Sqlite>,
-    send_mecab_request: mpsc::Sender<MecabRequest>,
+    lookups: lookup::Client,
+    popups: popup::Client,
     send_event: broadcast::Sender<ServerEvent>,
-    send_popup_request: broadcast::Sender<BackendPopupRequest>,
     stream: TcpStream,
 ) -> Result<Never> {
     let stream = tokio_tungstenite::accept_async(stream)
@@ -198,7 +189,7 @@ async fn handle_stream(
     let mut connection = Connection(stream);
     let mut recv_event = send_event.subscribe();
 
-    let dictionaries = dictionary::all(&db)
+    let dictionaries = db::dictionary::all(&db)
         .await
         .context("failed to fetch dictionaries")?;
 
@@ -223,11 +214,10 @@ async fn handle_stream(
                     .context("stream closed")?
                     .context("stream error")?;
                 if let Err(err) = handle_message(
-                    &config,
                     &db,
-                    &send_mecab_request,
+                    &lookups,
+                    &popups,
                     &send_event,
-                    &send_popup_request,
                     &mut connection,
                     data,
                 )
@@ -254,11 +244,10 @@ async fn forward_event(connection: &mut Connection, event: ServerEvent) {
 }
 
 async fn handle_message(
-    config: &Config,
     db: &Pool<Sqlite>,
-    send_mecab_request: &mpsc::Sender<MecabRequest>,
+    lookups: &lookup::Client,
+    popups: &popup::Client,
     send_event: &broadcast::Sender<ServerEvent>,
-    send_popup_request: &broadcast::Sender<BackendPopupRequest>,
     connection: &mut Connection,
     data: Message,
 ) -> Result<()> {
@@ -276,28 +265,24 @@ async fn handle_message(
             Ok(())
         }
         FromClient::Lookup(request) => {
-            do_lookup(config, db, send_mecab_request, connection, request)
+            let records = lookups
+                .lookup(request)
                 .await
                 .context("failed to perform lookup")?;
+            for record in records {
+                connection
+                    .write(&FromServer::Lookup(record))
+                    .await
+                    .context("failed to send record")?;
+            }
             connection
                 .write(&FromServer::LookupDone)
                 .await
-                .context("failed to send final response")?;
+                .context("failed to send lookup done")?;
             Ok(())
         }
         FromClient::ShowPopup(request) => {
-            let (send_response, mut recv_response) =
-                mpsc::channel::<Result<ShowPopupResponse, NoRecords>>(CHANNEL_BUF_CAP);
-            send_popup_request
-                .send(BackendPopupRequest {
-                    request,
-                    send_response,
-                })
-                .context("failed to send popup request")?;
-            let result = recv_response
-                .recv()
-                .await
-                .context("failed to receive popup response from backend")?;
+            let result = popups.show(request).await.context("failed to show popup")?;
             connection
                 .write(&FromServer::ShowPopup { result })
                 .await
@@ -305,7 +290,7 @@ async fn handle_message(
             Ok(())
         }
         FromClient::RemoveDictionary { dictionary_id } => {
-            let result = dictionary::remove(db, dictionary_id)
+            let result = db::dictionary::remove(db, dictionary_id)
                 .await
                 .context("failed to remove dictionary")?;
             connection
@@ -321,7 +306,7 @@ async fn handle_message(
             dictionary_id,
             enabled,
         } => {
-            let result = dictionary::set_enabled(db, dictionary_id, enabled)
+            let result = db::dictionary::set_enabled(db, dictionary_id, enabled)
                 .await
                 .context("failed to set dictionary enabled state")?;
             connection
@@ -336,55 +321,11 @@ async fn handle_message(
     }
 }
 
-async fn do_lookup(
-    config: &Config,
-    db: &Pool<Sqlite>,
-    send_mecab_request: &mpsc::Sender<MecabRequest>,
-    connection: &mut Connection,
-    request: LookupRequest,
-) -> Result<()> {
-    let LookupRequest { text, record_kinds } = request;
-
-    // count like this instead of using `.count()`
-    // because `count` does not short-circuit
-    let mut request_chars = text.chars();
-    let mut num_request_chars = 0u64;
-    let max_request_len = config.lookup.max_request_len;
-    while let Some(_) = request_chars.next() {
-        num_request_chars += 1;
-        if num_request_chars > max_request_len {
-            bail!("request too long - max {max_request_len} characters");
-        }
-    }
-
-    let (send_mecab_info, recv_mecab_info) = oneshot::channel::<Option<MecabInfo>>();
-    _ = send_mecab_request
-        .send(MecabRequest {
-            text,
-            send_info: send_mecab_info,
-        })
-        .await;
-    let Some(mecab) = recv_mecab_info.await.context("mecab channel dropped")? else {
-        return Ok(());
-    };
-
-    let records = term::lookup(db, &mecab.lemma, &record_kinds)
-        .await
-        .context("failed to fetch records")?;
-    for record in records {
-        connection
-            .write(&FromServer::Lookup(record))
-            .await
-            .context("failed to send record")?;
-    }
-    Ok(())
-}
-
 async fn send_dictionary_sync(
     db: &Pool<Sqlite>,
     send_event: &broadcast::Sender<ServerEvent>,
 ) -> Result<()> {
-    let dictionaries = dictionary::all(db)
+    let dictionaries = db::dictionary::all(db)
         .await
         .context("failed to fetch dictionaries")?;
 

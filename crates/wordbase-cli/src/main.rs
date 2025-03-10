@@ -161,14 +161,15 @@ async fn lookup(client: &mut SocketClient, text: String) -> Result<()> {
 }
 
 async fn show_popup(client: &mut SocketClient, text: String) -> Result<()> {
-    client
+    let response = client
         .show_popup(ShowPopupRequest {
             text,
             pid: 0,
             origin: (0, 0),
             anchor: PopupAnchor::TopLeft,
         })
-        .await??;
+        .await?;
+    println!("{response:?}");
     Ok(())
 }
 

@@ -1,4 +1,5 @@
 use {
+    crate::CHANNEL_BUF_CAP,
     anyhow::{Context, Result},
     futures::never::Never,
     mecab::{Model, Tagger},
@@ -7,15 +8,40 @@ use {
     tracing::info,
 };
 
-#[derive(Debug)]
-pub struct MecabRequest {
-    pub text: String,
-    pub send_info: oneshot::Sender<Option<MecabInfo>>,
+#[derive(Debug, Clone)]
+pub struct Client {
+    send_request: mpsc::Sender<Request>,
+}
+
+impl Client {
+    pub async fn new() -> Self {
+        let (send_request, recv_request) = mpsc::channel(CHANNEL_BUF_CAP);
+        tokio::spawn(run(recv_request));
+        Self { send_request }
+    }
+
+    pub async fn get_info(&self, text: impl Into<String>) -> Result<Option<MecabInfo>> {
+        let (send_info, recv_info) = oneshot::channel();
+        self.send_request
+            .send(Request {
+                text: text.into(),
+                send_info,
+            })
+            .await?;
+        let info = recv_info.await?;
+        Ok(info)
+    }
 }
 
 #[derive(Debug)]
 pub struct MecabInfo {
     pub lemma: String,
+}
+
+#[derive(Debug)]
+struct Request {
+    text: String,
+    send_info: oneshot::Sender<Option<MecabInfo>>,
 }
 
 static MODEL: LazyLock<Model> = LazyLock::new(|| {
@@ -35,7 +61,7 @@ thread_local! {
     static TAGGER: OnceCell<Tagger> = const { OnceCell::new() };
 }
 
-pub async fn run(mut recv_request: mpsc::Receiver<MecabRequest>) -> Result<Never> {
+async fn run(mut recv_request: mpsc::Receiver<Request>) -> Result<Never> {
     // initialize the model before we even get any requests
     _ = *MODEL;
 

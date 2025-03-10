@@ -1,35 +1,29 @@
 #![doc = include_str!("../README.md")]
 
-mod dictionary;
+mod db;
 mod import;
-mod mecab;
+mod lookup;
 mod popup;
 mod server;
-mod term;
 mod texthooker;
 
 use {
     anyhow::{Context, Result},
     futures::TryFutureExt,
-    mecab::MecabRequest,
     sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
     std::{
         net::{Ipv4Addr, SocketAddr},
         str::FromStr,
         sync::Arc,
-        thread,
         time::Duration,
     },
-    tokio::{
-        sync::{broadcast, mpsc, oneshot},
-        task::JoinSet,
-    },
+    tokio::{sync::broadcast, task::JoinSet},
     tracing::{Instrument, info, info_span, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
     wordbase::{
         DictionaryState,
         hook::HookSentence,
-        protocol::{DEFAULT_PORT, LookupConfig, NoRecords, ShowPopupRequest, ShowPopupResponse},
+        protocol::{DEFAULT_PORT, LookupConfig},
     },
 };
 
@@ -39,6 +33,7 @@ const CHANNEL_BUF_CAP: usize = 4;
 struct Config {
     listen_addr: SocketAddr,
     lookup: LookupConfig,
+    db_max_connections: u32,
     texthooker_sources: Vec<Arc<TexthookerSource>>,
 }
 
@@ -47,6 +42,7 @@ impl Default for Config {
         Self {
             listen_addr: SocketAddr::new(Ipv4Addr::LOCALHOST.into(), DEFAULT_PORT),
             lookup: LookupConfig::default(),
+            db_max_connections: 8,
             texthooker_sources: vec![Arc::new(TexthookerSource {
                 url: "ws://host.docker.internal:9001".into(),
                 // url: "ws://127.0.0.1:9001".into(),
@@ -68,12 +64,6 @@ enum ServerEvent {
     SyncDictionaries(Vec<DictionaryState>),
 }
 
-#[derive(Debug, Clone)]
-struct BackendPopupRequest {
-    request: ShowPopupRequest,
-    send_response: mpsc::Sender<Result<ShowPopupResponse, NoRecords>>,
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
@@ -86,7 +76,7 @@ async fn main() -> Result<()> {
     let config = Arc::new(Config::default());
 
     let db = SqlitePoolOptions::new()
-        .max_connections(8)
+        .max_connections(config.db_max_connections)
         .connect_with(
             SqliteConnectOptions::from_str("sqlite://wordbase.db")?
                 .create_if_missing(true)
@@ -100,14 +90,13 @@ async fn main() -> Result<()> {
         .context("failed to set up database")?;
     info!("Connected to database");
 
-    let (send_mecab_request, recv_mecab_request) = mpsc::channel::<MecabRequest>(CHANNEL_BUF_CAP);
     let (send_server_event, recv_server_event) = broadcast::channel::<ServerEvent>(CHANNEL_BUF_CAP);
-    let (send_popup_request, recv_popup_request) =
-        broadcast::channel::<BackendPopupRequest>(CHANNEL_BUF_CAP);
-
-    let rt = tokio::runtime::Handle::current();
     let mut tasks = JoinSet::new();
 
+    let (lookups, lookup_task) = lookup::Client::new(config.clone(), db.clone());
+    let popups = popup::Client::new(lookups.clone(), recv_server_event);
+
+    tasks.spawn(lookup_task.map_err(|err| err.context("lookup task error")));
     for source_config in &config.texthooker_sources {
         tasks.spawn(
             texthooker::run(source_config.clone(), send_server_event.clone())
@@ -115,18 +104,10 @@ async fn main() -> Result<()> {
                 .map_err(|err| err.context("texthooker error")),
         );
     }
-    tasks.spawn(mecab::run(recv_mecab_request).map_err(|err| err.context("MeCab error")));
     tasks.spawn(
-        server::run(
-            db.clone(),
-            config,
-            send_mecab_request,
-            send_server_event,
-            send_popup_request,
-        )
-        .map_err(|err| err.context("server error")),
+        server::run(config, db, lookups, popups, send_server_event)
+            .map_err(|err| err.context("server error")),
     );
-    thread::spawn(move || popup::default::run(db, rt, recv_popup_request, recv_server_event));
 
     while let Some(result) = tasks.join_next().await {
         result??;

@@ -144,6 +144,8 @@ pub struct LookupRequest {
 /// Single record returned by the server in response to a [`LookupRequest`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LookupResponse {
+    /// Canonical dictionary form of the term for which this record is for.
+    pub lemma: String,
     /// ID of the [dictionary] from which the record was retrieved.
     ///
     /// [dictionary]: Dictionary
@@ -245,6 +247,7 @@ mod tests {
         });
         round_trip(FromServer::from(HookSentence::default()));
         round_trip(FromServer::from(LookupResponse {
+            lemma: default(),
             source: default(),
             term: default(),
             record: Record::GlossaryHtml(default()),
