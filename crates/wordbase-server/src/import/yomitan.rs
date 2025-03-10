@@ -1,5 +1,5 @@
 use {
-    super::{AlreadyExists, ReadToMemory},
+    super::{ImportError, ReadToMemory},
     crate::{
         CHANNEL_BUF_CAP, dictionary,
         import::{Parsed, ReadMeta},
@@ -38,7 +38,7 @@ pub async fn yomitan(
     import_semaphore: Arc<Semaphore>,
     path: impl AsRef<Path>,
     send_read_to_memory: oneshot::Sender<ReadToMemory>,
-) -> Result<Result<(), AlreadyExists>> {
+) -> Result<Result<(), ImportError>> {
     let path = path.as_ref();
     let archive = fs::read(path)
         .await
@@ -78,7 +78,7 @@ pub async fn yomitan(
         .context("failed to check if dictionary exists")?;
     if already_exists {
         debug!("Dictionary already exists");
-        return Ok(Err(AlreadyExists));
+        return Ok(Err(ImportError::AlreadyExists));
     }
 
     let tag_bank = Mutex::new(schema::TagBank::default());
@@ -123,6 +123,10 @@ pub async fn yomitan(
     let records_len =
         term_bank.len() + term_meta_bank.len() + kanji_bank.len() + kanji_meta_bank.len();
     let records_left = AtomicUsize::new(records_len);
+    if records_len == 0 {
+        debug!("Parse complete, no records to insert");
+        return Ok(Err(ImportError::NoRecords));
+    }
 
     debug!("Parse complete, inserting {records_len} records");
     let (send_records_left, recv_records_left) = mpsc::channel(CHANNEL_BUF_CAP);

@@ -88,6 +88,7 @@ pub enum TextAlign {
 crate::util::display_as_serialize!(TextAlign);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum SizeUnits {
     Px,
     Em,
@@ -199,7 +200,7 @@ pub struct StyledElement {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct ImageElementBase {
     pub data: Option<Data>,
     pub path: String,
@@ -264,7 +265,7 @@ pub enum Element {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged, deny_unknown_fields)]
+#[serde(untagged)]
 pub enum Content {
     // todo doc: must not have \n's
     String(String),

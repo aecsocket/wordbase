@@ -7,8 +7,12 @@ use derive_more::{Display, Error};
 use wordbase::DictionaryMeta;
 
 #[derive(Debug, Clone, Display, Error)]
-#[display("already exists")]
-pub struct AlreadyExists;
+pub enum ImportError {
+    #[display("already exists")]
+    AlreadyExists,
+    #[display("no records to insert")]
+    NoRecords,
+}
 
 #[derive(Debug)]
 pub struct ReadToMemory {

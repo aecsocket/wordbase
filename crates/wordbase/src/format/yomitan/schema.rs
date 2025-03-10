@@ -371,8 +371,165 @@ mod tests {
         1968780,
         ""
     ]
-]
-            "##,
+]"##,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn case_2() {
+        serde_json::from_str::<TermBank>(
+r##"
+[
+    [
+        "される",
+        "",
+        null,
+        "v1",
+        0,
+        [
+            {
+                "type": "structured-content",
+                "content": [
+                    "さ・れる\n〘動下一〙\n",
+                    {
+                        "tag": "span",
+                        "content": {
+                            "tag": "img",
+                            "appearance": "monochrome",
+                            "height": 1.0,
+                            "width": 1.0,
+                            "sizeUnits": "em",
+                            "collapsible": false,
+                            "collapsed": false,
+                            "background": false,
+                            "path": "meikyo2/B172.png"
+                        },
+                        "style": {
+                            "verticalAlign": "text-bottom",
+                            "marginRight": 0.25
+                        }
+                    },
+                    " 〘他〙\n❶ 他動詞「する」の尊敬語。なさる。\n「先生が講演を━」\n「これからどう━おつもりですか」\n❷ 他動詞「する」の受身の形。\n「仲間に意地悪を━」\n",
+                    {
+                        "tag": "span",
+                        "content": {
+                            "tag": "img",
+                            "appearance": "monochrome",
+                            "height": 1.0,
+                            "width": 1.0,
+                            "sizeUnits": "em",
+                            "collapsible": false,
+                            "collapsed": false,
+                            "background": false,
+                            "path": "meikyo2/B173.png"
+                        },
+                        "style": {
+                            "verticalAlign": "text-bottom",
+                            "marginRight": 0.25
+                        }
+                    },
+                    " 〘自他〙\n❶ サ変動詞「…する」の尊敬語。なさる。\n「さぞかしびっくり━・れたことでしょう」\n「先生は物理学を研究━・れています」\n❷ サ変動詞「…する」の受身の形。\n「山田氏は誰からも尊敬━・れている」\n「田中氏が学位を授与━・れる」\n",
+                    {
+                        "tag": "span",
+                        "content": {
+                            "tag": "img",
+                            "appearance": "monochrome",
+                            "height": 1.0,
+                            "width": 1.0,
+                            "sizeUnits": "em",
+                            "collapsible": false,
+                            "collapsed": false,
+                            "background": false,
+                            "path": "meikyo2/B174.png"
+                        },
+                        "style": {
+                            "verticalAlign": "text-bottom",
+                            "marginRight": 0.25
+                        }
+                    },
+                    " 〘自〙《「…と━」の形で》ある意見や考えが、個人的なものではなく、一般的なものだとして提示する。一般に…と言われ（てい）る、…と考えられている。\n「一般に成功は難しいと━」\n「鶴は千年亀は万年生きると━」\n◆「する」の未然形＋助動詞「れる」から。\n",
+                    {
+                        "tag": "span",
+                        "content": {
+                            "tag": "img",
+                            "title": "注意",
+                            "appearance": "auto",
+                            "height": 1.0,
+                            "width": 3.0,
+                            "sizeUnits": "em",
+                            "collapsible": false,
+                            "collapsed": false,
+                            "background": false,
+                            "path": "meikyo2/B932.png"
+                        },
+                        "style": {
+                            "verticalAlign": "text-bottom",
+                            "marginRight": 0.25
+                        }
+                    },
+                    "謙譲の「お［ご］…する」に尊敬の「れる」を続けた「お［ご］…される」は誤り。助詞「を」を入れたり、「お［ご］…になる」「お［ご］…なさる」を使うのが適切。「課長が×ご説明された（○ご説明をされた）件ですが…」「先生が×お話しされた（○お話しになった）問題」"
+                ]
+            }
+        ],
+        26503,
+        ""
+    ]
+]"##
+        ).unwrap();
+    }
+
+    #[test]
+    fn case_3() {
+        serde_json::from_str::<GlossaryContent>(
+            r##"
+{
+    "type": "structured-content",
+    "content": [
+        "さ・れる\n〘動下一〙\n",
+        {
+            "tag": "span",
+            "content": {
+                "tag": "img",
+                "appearance": "monochrome",
+                "height": 1.0,
+                "width": 1.0,
+                "sizeUnits": "em",
+                "collapsible": false,
+                "collapsed": false,
+                "background": false,
+                "path": "meikyo2/B172.png"
+            },
+            "style": {
+                "verticalAlign": "text-bottom",
+                "marginRight": 0.25
+            }
+        },
+        " 〘他〙\n❶ 他動詞「する」の尊敬語。なさる。\n「先生が講演を━」\n「これからどう━おつもりですか」\n❷ 他動詞「する」の受身の形。\n「仲間に意地悪を━」\n",
+        " 〘自他〙\n❶ サ変動詞「…する」の尊敬語。なさる。\n「さぞかしびっくり━・れたことでしょう」\n「先生は物理学を研究━・れています」\n❷ サ変動詞「…する」の受身の形。\n「山田氏は誰からも尊敬━・れている」\n「田中氏が学位を授与━・れる」\n",
+        " 〘自〙《「…と━」の形で》ある意見や考えが、個人的なものではなく、一般的なものだとして提示する。一般に…と言われ（てい）る、…と考えられている。\n「一般に成功は難しいと━」\n「鶴は千年亀は万年生きると━」\n◆「する」の未然形＋助動詞「れる」から。\n",
+        "謙譲の「お［ご］…する」に尊敬の「れる」を続けた「お［ご］…される」は誤り。助詞「を」を入れたり、「お［ご］…になる」「お［ご］…なさる」を使うのが適切。「課長が×ご説明された（○ご説明をされた）件ですが…」「先生が×お話しされた（○お話しになった）問題」"
+    ]
+}"##,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn case_4() {
+        serde_json::from_str::<structured::ImageElement>(
+            r##"
+{
+    "tag": "img",
+    "appearance": "monochrome",
+    "height": 1.0,
+    "width": 1.0,
+    "sizeUnits": "em",
+    "collapsible": false,
+    "collapsed": false,
+    "background": false,
+    "path": "meikyo2/B172.png"
+}"##,
         )
         .unwrap();
     }

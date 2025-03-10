@@ -10,6 +10,7 @@ mod texthooker;
 
 use {
     anyhow::{Context, Result},
+    futures::TryFutureExt,
     mecab::MecabRequest,
     sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
     std::{
@@ -104,17 +105,21 @@ async fn main() -> Result<()> {
     for source_config in &config.texthooker_sources {
         tasks.spawn(
             texthooker::run(source_config.clone(), send_event.clone())
-                .instrument(info_span!("texthooker", url = source_config.url)),
+                .instrument(info_span!("texthooker", url = source_config.url))
+                .map_err(|err| err.context("texthooker error")),
         );
     }
-    tasks.spawn(mecab::run(recv_mecab_request));
-    tasks.spawn(server::run(
-        db.clone(),
-        config,
-        send_mecab_request,
-        send_event,
-        send_popup_request,
-    ));
+    tasks.spawn(mecab::run(recv_mecab_request).map_err(|err| err.context("MeCab error")));
+    tasks.spawn(
+        server::run(
+            db.clone(),
+            config,
+            send_mecab_request,
+            send_event,
+            send_popup_request,
+        )
+        .map_err(|err| err.context("server error")),
+    );
     thread::spawn(move || popup::default::run(db, rt, recv_popup_request));
 
     while let Some(result) = tasks.join_next().await {

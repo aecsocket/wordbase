@@ -11,7 +11,7 @@ use gtk4::{
 use libadwaita::prelude::BinExt;
 use sqlx::{Pool, Sqlite};
 use tokio::sync::broadcast;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 use wordbase::protocol::ShowPopupRequest;
 
 use crate::term;
@@ -22,7 +22,7 @@ pub fn run(
     db: Pool<Sqlite>,
     rt: tokio::runtime::Handle,
     recv_popup_request: broadcast::Receiver<ShowPopupRequest>,
-) -> Result<Never> {
+) -> Result<()> {
     info!("Using Wayland popup backend via GTK/Adwaita");
     glib::log_set_default_handler(glib::rust_log_handler);
 
@@ -44,11 +44,15 @@ pub fn run(
         let app = app.clone();
         // make the app not close when all its windows are closed
         let hold_guard = app.hold();
-        glib::spawn_future_local(backend(db, rt, recv_popup_request, app, hold_guard));
+        glib::spawn_future_local(async move {
+            let Err(err) = backend(db, rt, recv_popup_request, app, hold_guard).await;
+            error!("GTK app backend closed: {err:?}");
+        });
     });
 
     app.run();
-    panic!("GTK application closed");
+    error!("GTK application closed - the main server is probably about to close");
+    Ok(())
 }
 
 async fn backend(

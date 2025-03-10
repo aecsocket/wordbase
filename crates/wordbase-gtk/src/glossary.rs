@@ -74,6 +74,7 @@ pub fn html(write_html: impl FnOnce(&mut String)) -> gtk::Widget {
     // avoid errors about allocating GBM buffer of size WIDTHx0
     // we'll resize the view once we have an actual height
     // also, if we can't allocate a buffer now, it will be empty forever
+    view.set_width_request(1);
     view.set_height_request(1);
     view.set_background_color(&gdk::RGBA::new(0.0, 0.0, 0.0, 0.0));
 

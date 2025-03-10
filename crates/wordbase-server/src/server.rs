@@ -1,7 +1,7 @@
 use {
     crate::{
         Config, Event, dictionary,
-        import::{self, AlreadyExists},
+        import::{self, ImportError},
         mecab::{MecabInfo, MecabRequest},
         term,
     },
@@ -28,35 +28,35 @@ pub async fn run(
     send_popup_request: broadcast::Sender<ShowPopupRequest>,
 ) -> Result<Never> {
     // TODO
+    // const IMPORTS: &[&str] = &[
+    //     // "1. jitendex-yomitan.zip",
+    //     // "2. JMnedict.zip",
+    //     // "11. [Pitch] NHK 2016.zip",
+    //     // "12. JPDB_v2.2_Frequency_Kana_2024-10-13.zip",
+    // ];
     const IMPORTS: &[&str] = &[
-        // "1. jitendex-yomitan.zip",
+        "1. jitendex-yomitan.zip",
         "2. JMnedict.zip",
+        "3. [Grammar] Dictionary of Japanese Grammar 日本語文法辞典 (Recommended).zip",
+        "4. [Monolingual] 三省堂国語辞典　第八版 (Recommended).zip",
+        "5. [JA-JA] 明鏡国語辞典　第二版_2023_07_22.zip",
+        "6. 漢字ペディア同訓異義.zip",
+        "7. [Monolingual] デジタル大辞泉.zip",
+        "8. [Monolingual] PixivLight.zip",
+        "9. [Monolingual] 実用日本語表現辞典 Extended (Recommended).zip",
+        "10. kanjiten.zip",
         "11. [Pitch] NHK 2016.zip",
         "12. JPDB_v2.2_Frequency_Kana_2024-10-13.zip",
+        "13. [Freq] VN Freq v2.zip",
+        "14. [Freq] Novels.zip",
+        "15. [Freq] Anime & J-drama.zip",
+        "16. [JA Freq] YoutubeFreqV3.zip",
+        "17. [JA Freq] Wikipedia v2.zip",
+        "18. BCCWJ_SUW_LUW_combined.zip",
+        "19. [Freq] CC100.zip",
+        "20. [Freq] InnocentRanked.zip",
+        "21. [Freq] Narou Freq.zip",
     ];
-    // const IMPORTS: &[&str] = &[
-    //     "1. jitendex-yomitan.zip",
-    //     "2. JMnedict.zip",
-    //     "3. [Grammar] Dictionary of Japanese Grammar 日本語文法辞典
-    // (Recommended).zip",     "4. [Monolingual] 三省堂国語辞典　第八版
-    // (Recommended).zip",     "5. [JA-JA] 明鏡国語辞典　第二版_2023_07_22.zip",
-    //     "6. 漢字ペディア同訓異義.zip",
-    //     "7. [Monolingual] デジタル大辞泉.zip",
-    //     "8. [Monolingual] PixivLight.zip",
-    //     "9. [Monolingual] 実用日本語表現辞典 Extended (Recommended).zip",
-    //     "10. kanjiten.zip",
-    //     "11. [Pitch] NHK 2016.zip",
-    //     "12. JPDB_v2.2_Frequency_Kana_2024-10-13.zip",
-    //     "13. [Freq] VN Freq v2.zip",
-    //     "14. [Freq] Novels.zip",
-    //     "15. [Freq] Anime & J-drama.zip",
-    //     "16. [JA Freq] YoutubeFreqV3.zip",
-    //     "17. [JA Freq] Wikipedia v2.zip",
-    //     "18. BCCWJ_SUW_LUW_combined.zip",
-    //     "19. [Freq] CC100.zip",
-    //     "20. [Freq] InnocentRanked.zip",
-    //     "21. [Freq] Narou Freq.zip",
-    // ];
 
     let mut joins = JoinSet::<Result<()>>::new();
     let import_semaphore = Arc::new(Semaphore::new(1));
@@ -73,13 +73,17 @@ pub async fn run(
                     format!("/home/dev/all-dictionaries/{path}"),
                     send_read_to_memory,
                 )
-                .await?
+                .await
+                .with_context(|| format!("while importing {path:?}"))?
                 {
                     Ok(()) => {
                         info!("Import complete");
                     }
-                    Err(AlreadyExists) => {
+                    Err(ImportError::AlreadyExists) => {
                         info!("Dictionary already exists, skipping");
+                    }
+                    Err(ImportError::NoRecords) => {
+                        info!("Dictionary has no records, skipping");
                     }
                 }
                 Ok(())
