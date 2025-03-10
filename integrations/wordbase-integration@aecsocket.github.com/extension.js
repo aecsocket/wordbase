@@ -358,11 +358,15 @@ export default class WordbaseIntegrationExtension extends Extension {
                         anchor: "BottomLeft",
                         text: lookup_text,
                     },
-                    (response) => {
+                    (result) => {
+                        if (!result.Ok) {
+                            return;
+                        }
+
                         clutter_text.grab_key_focus();
                         clutter_text.set_selection(
                             char_pos,
-                            char_pos + response.chars_scanned,
+                            char_pos + result.Ok.chars_scanned,
                         );
                     },
                 );

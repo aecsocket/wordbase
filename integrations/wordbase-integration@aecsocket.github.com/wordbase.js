@@ -36,7 +36,6 @@ export class Client {
     _lookup_config;
     /** @type {(function(HookSentence): void)?} */
     on_hook_sentence;
-    /** @type {(function(ShowPopupResponse): void)?} */
     _on_popup_response;
 
     /**
@@ -93,8 +92,8 @@ export class Client {
                                 client.on_hook_sentence?.(hook_sentence);
                                 break;
                             case "ShowPopup":
-                                const response = message;
-                                client._on_popup_response?.(response);
+                                const result = message.result;
+                                client._on_popup_response?.(result);
                                 break;
                         }
                     });

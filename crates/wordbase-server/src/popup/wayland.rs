@@ -4,11 +4,7 @@ extern crate libadwaita as adw;
 use anyhow::{Context, Result, bail};
 use foldhash::{HashMap, HashMapExt};
 use futures::never::Never;
-use gtk4::{
-    gdk,
-    gio::{ApplicationHoldGuard, prelude::*},
-    prelude::*,
-};
+use gtk4::{gdk, gio::prelude::*, prelude::*};
 use libadwaita::prelude::BinExt;
 use tokio::sync::broadcast;
 use tracing::{error, info, warn};
@@ -32,7 +28,12 @@ pub fn run(
     glib::log_set_default_handler(glib::rust_log_handler);
 
     let app = adw::Application::builder().application_id(APP_ID).build();
+    // make the app not close when all its windows are closed
+    let _hold_guard = app.hold();
+
     app.connect_startup(|_| {
+        info!("TODO: STARTUP");
+
         let provider = gtk::CssProvider::new();
         provider.load_from_string(wordbase_gtk::STYLESHEET);
 
@@ -43,14 +44,14 @@ pub fn run(
         );
     });
     app.connect_activate(move |app| {
+        info!("TODO: ACTIVATE");
+
         let lookups = lookups.clone();
         let recv_request = recv_request.resubscribe();
         let recv_server_event = recv_server_event.resubscribe();
         let app = app.clone();
-        // make the app not close when all its windows are closed
-        let hold_guard = app.hold();
         glib::spawn_future_local(async move {
-            let Err(err) = backend(lookups, recv_request, recv_server_event, app, hold_guard).await;
+            let Err(err) = backend(lookups, recv_request, recv_server_event, app).await;
             error!("GTK app backend closed: {err:?}");
         });
     });
@@ -64,10 +65,9 @@ async fn backend(
     mut recv_request: broadcast::Receiver<Request>,
     mut recv_server_event: broadcast::Receiver<ServerEvent>,
     app: adw::Application,
-    _hold_guard: ApplicationHoldGuard,
 ) -> Result<Never> {
+    let popup = create_popup(&app);
     let mut dictionaries = HashMap::<DictionaryId, DictionaryState>::new();
-    let mut current_window = None::<gtk::Window>;
     loop {
         let request = tokio::select! {
             request = recv_request.recv() => request,
@@ -88,31 +88,17 @@ async fn backend(
             }
         };
 
-        if let Some(window) = current_window.take() {
-            window.close();
-        }
-
-        let result = handle_request(
-            &lookups,
-            &app,
-            &dictionaries,
-            request.request,
-            &mut current_window,
-        )
-        .await;
+        let result = handle_request(&lookups, &popup, &dictionaries, request.request).await;
         _ = request.send_response.send(result).await;
     }
 }
 
 async fn handle_request(
     lookups: &lookup::Client,
-    app: &adw::Application,
+    popup: &PopupInfo,
     dictionaries: &HashMap<DictionaryId, DictionaryState>,
     request: ShowPopupRequest,
-    current_window: &mut Option<gtk::Window>,
 ) -> Result<Result<ShowPopupResponse, NoRecords>> {
-    const MARGIN: i32 = 16;
-
     let records = lookups
         .lookup(LookupRequest {
             text: request.text,
@@ -131,6 +117,29 @@ async fn handle_request(
         .and_then(|c| u64::try_from(c).ok())
         .unwrap_or_default();
 
+    // let dictionary = wordbase_gtk::ui_for(
+    //     |source| {
+    //         dictionaries
+    //             .get(&source)
+    //             .map(|state| state.meta.name.as_str())
+    //             .unwrap_or("?")
+    //     },
+    //     records,
+    // );
+    // popup.dictionary_container.set_child(Some(&dictionary));
+    // popup.window.set_visible(true);
+
+    Ok(Ok(ShowPopupResponse { chars_scanned }))
+}
+
+struct PopupInfo {
+    window: gtk::Window,
+    dictionary_container: adw::Bin,
+}
+
+fn create_popup(app: &adw::Application) -> PopupInfo {
+    const MARGIN: i32 = 16;
+
     let content = gtk::ScrolledWindow::new();
 
     let dictionary_container = adw::Bin::builder()
@@ -140,17 +149,6 @@ async fn handle_request(
         .margin_end(MARGIN)
         .build();
     content.set_child(Some(&dictionary_container));
-
-    let dictionary = wordbase_gtk::ui_for(
-        |source| {
-            dictionaries
-                .get(&source)
-                .map(|state| state.meta.name.as_str())
-                .unwrap_or("?")
-        },
-        records,
-    );
-    dictionary_container.set_child(Some(&dictionary));
 
     let window = adw::ApplicationWindow::builder()
         .application(app)
@@ -165,19 +163,12 @@ async fn handle_request(
     controller.connect_leave({
         let window = window.clone();
         move |_| {
-            window.close();
+            window.set_visible(false);
         }
     });
 
-    window.present();
-
-    let w = window.clone();
-    glib::timeout_add_local(std::time::Duration::from_secs(1), move || {
-        w.set_visible(!w.is_visible());
-        glib::ControlFlow::Continue
-    });
-
-    *current_window = Some(window.upcast());
-
-    Ok(Ok(ShowPopupResponse { chars_scanned }))
+    PopupInfo {
+        window: window.upcast(),
+        dictionary_container,
+    }
 }

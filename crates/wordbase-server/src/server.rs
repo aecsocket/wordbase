@@ -94,7 +94,6 @@ pub async fn run(
                 let Ok(next) = recv_read_to_memory.await else {
                     return Ok(());
                 };
-                info!("Read to memory");
 
                 let Ok(mut next) = next.recv_read_meta.await else {
                     return Ok(());
