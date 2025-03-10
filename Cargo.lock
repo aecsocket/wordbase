@@ -3159,6 +3159,7 @@ dependencies = [
  "bzip2",
  "cfg-if",
  "derive_more",
+ "foldhash",
  "futures",
  "glib",
  "gtk4",

@@ -1,6 +1,6 @@
 use {
     crate::{
-        Config, Event, dictionary,
+        Config, ServerEvent, dictionary,
         import::{self, ImportError},
         mecab::{MecabInfo, MecabRequest},
         term,
@@ -24,7 +24,7 @@ pub async fn run(
     db: Pool<Sqlite>,
     config: Arc<Config>,
     send_mecab_request: mpsc::Sender<MecabRequest>,
-    send_event: broadcast::Sender<Event>,
+    send_event: broadcast::Sender<ServerEvent>,
     send_popup_request: broadcast::Sender<ShowPopupRequest>,
 ) -> Result<Never> {
     // TODO
@@ -132,6 +132,10 @@ pub async fn run(
             .context("failed to import")?;
     }
 
+    send_dictionary_sync(&db, &send_event)
+        .await
+        .context("failed to sync initial dictionaries")?;
+
     let listener = TcpListener::bind(&config.listen_addr)
         .await
         .context("failed to bind TCP listener")?;
@@ -184,7 +188,7 @@ async fn handle_stream(
     config: Arc<Config>,
     db: Pool<Sqlite>,
     send_mecab_request: mpsc::Sender<MecabRequest>,
-    send_event: broadcast::Sender<Event>,
+    send_event: broadcast::Sender<ServerEvent>,
     send_popup_request: broadcast::Sender<ShowPopupRequest>,
     stream: TcpStream,
 ) -> Result<Never> {
@@ -238,10 +242,12 @@ async fn handle_stream(
     }
 }
 
-async fn forward_event(connection: &mut Connection, event: Event) {
+async fn forward_event(connection: &mut Connection, event: ServerEvent) {
     let message = match event {
-        Event::HookSentence(sentencece) => FromServer::HookSentence(sentencece),
-        Event::SyncDictionaries(dictionaries) => FromServer::SyncDictionaries { dictionaries },
+        ServerEvent::HookSentence(sentencece) => FromServer::HookSentence(sentencece),
+        ServerEvent::SyncDictionaries(dictionaries) => {
+            FromServer::SyncDictionaries { dictionaries }
+        }
     };
 
     _ = connection.write(&message).await;
@@ -251,7 +257,7 @@ async fn handle_message(
     config: &Config,
     db: &Pool<Sqlite>,
     send_mecab_request: &mpsc::Sender<MecabRequest>,
-    send_event: &broadcast::Sender<Event>,
+    send_event: &broadcast::Sender<ServerEvent>,
     send_popup_request: &broadcast::Sender<ShowPopupRequest>,
     connection: &mut Connection,
     data: Message,
@@ -266,7 +272,7 @@ async fn handle_message(
     match message {
         FromClient::HookSentence(sentence) => {
             debug!("{sentence:#?}");
-            _ = send_event.send(Event::HookSentence(sentence));
+            _ = send_event.send(ServerEvent::HookSentence(sentence));
             Ok(())
         }
         FromClient::Lookup(request) => {
@@ -367,12 +373,12 @@ async fn do_lookup(
 
 async fn send_dictionary_sync(
     db: &Pool<Sqlite>,
-    send_event: &broadcast::Sender<Event>,
+    send_event: &broadcast::Sender<ServerEvent>,
 ) -> Result<()> {
     let dictionaries = dictionary::all(db)
         .await
         .context("failed to fetch dictionaries")?;
 
-    _ = send_event.send(Event::SyncDictionaries(dictionaries));
+    _ = send_event.send(ServerEvent::SyncDictionaries(dictionaries));
     Ok(())
 }

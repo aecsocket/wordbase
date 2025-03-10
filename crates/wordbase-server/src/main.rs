@@ -63,7 +63,7 @@ struct TexthookerSource {
 }
 
 #[derive(Debug, Clone)]
-enum Event {
+enum ServerEvent {
     HookSentence(HookSentence),
     SyncDictionaries(Vec<DictionaryState>),
 }
@@ -95,7 +95,7 @@ async fn main() -> Result<()> {
     info!("Connected to database");
 
     let (send_mecab_request, recv_mecab_request) = mpsc::channel::<MecabRequest>(CHANNEL_BUF_CAP);
-    let (send_event, _) = broadcast::channel::<Event>(CHANNEL_BUF_CAP);
+    let (send_server_event, recv_server_event) = broadcast::channel::<ServerEvent>(CHANNEL_BUF_CAP);
     let (send_popup_request, recv_popup_request) =
         broadcast::channel::<ShowPopupRequest>(CHANNEL_BUF_CAP);
 
@@ -104,7 +104,7 @@ async fn main() -> Result<()> {
 
     for source_config in &config.texthooker_sources {
         tasks.spawn(
-            texthooker::run(source_config.clone(), send_event.clone())
+            texthooker::run(source_config.clone(), send_server_event.clone())
                 .instrument(info_span!("texthooker", url = source_config.url))
                 .map_err(|err| err.context("texthooker error")),
         );
@@ -115,12 +115,12 @@ async fn main() -> Result<()> {
             db.clone(),
             config,
             send_mecab_request,
-            send_event,
+            send_server_event,
             send_popup_request,
         )
         .map_err(|err| err.context("server error")),
     );
-    thread::spawn(move || popup::default::run(db, rt, recv_popup_request));
+    thread::spawn(move || popup::default::run(db, rt, recv_popup_request, recv_server_event));
 
     while let Some(result) = tasks.join_next().await {
         result??;

@@ -1,5 +1,5 @@
 use {
-    crate::{Event, TexthookerSource},
+    crate::{ServerEvent, TexthookerSource},
     anyhow::{Context, Result},
     futures::{StreamExt, never::Never},
     std::sync::Arc,
@@ -11,7 +11,7 @@ use {
 
 pub async fn run(
     config: Arc<TexthookerSource>,
-    send_event: broadcast::Sender<Event>,
+    send_event: broadcast::Sender<ServerEvent>,
 ) -> Result<Never> {
     loop {
         trace!("Attempting connection");
@@ -32,7 +32,7 @@ pub async fn run(
 
 async fn handle_stream(
     mut stream: WebSocketStream<MaybeTlsStream<TcpStream>>,
-    send_event: broadcast::Sender<Event>,
+    send_event: broadcast::Sender<ServerEvent>,
 ) -> Result<Never> {
     loop {
         let message = stream
@@ -45,6 +45,6 @@ async fn handle_stream(
         let sentence = serde_json::from_str::<HookSentence>(&message)
             .context("received message which is not a texthooker sentence")?;
         debug!("{sentence:#?}");
-        _ = send_event.send(Event::HookSentence(sentence));
+        _ = send_event.send(ServerEvent::HookSentence(sentence));
     }
 }

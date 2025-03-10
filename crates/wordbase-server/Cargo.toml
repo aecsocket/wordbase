@@ -38,6 +38,7 @@ derive_more = { workspace = true, features = [
     "deref",
     "deref_mut",
 ] }
+foldhash = { workspace = true }
 futures = { workspace = true }
 mecab = { workspace = true }
 rmp-serde = { workspace = true }

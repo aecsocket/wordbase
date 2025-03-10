@@ -6,7 +6,9 @@
     "forwardPorts": [9518],
     "runArgs": [
         "--add-host=host.docker.internal:host-gateway",
+        "--privileged",
         "--cap-add=SYS_ADMIN",
+        "--cap-add=SYS_CHROOT",
         "--security-opt",
         "seccomp=unconfined",
         "--security-opt",

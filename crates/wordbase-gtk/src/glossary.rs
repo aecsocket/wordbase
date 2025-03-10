@@ -64,18 +64,25 @@ pub fn html(write_html: impl FnOnce(&mut String)) -> gtk::Widget {
 
     // why are we wrapping the webview in a container?
     // it's a surprise tool for later ;)
-    let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    let container = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        // if the WebView is allocated with either a width or height of 0,
+        // we will fail to allocate a GBM buffer, and nothing will render
+        .width_request(1)
+        .height_request(1)
+        .build();
 
-    let view = webkit::WebView::new();
+    let view = webkit::WebView::builder()
+        // ditto
+        .width_request(1)
+        .height_request(1)
+        // also, the WebView might try to allocate before we have anything loaded
+        // so we allocate a 0x0 buffer anyway
+        // we make it visible when we actually have content
+        .visible(false)
+        .build();
     container.append(&view);
 
-    view.set_hexpand(true);
-    view.set_vexpand(true);
-    // avoid errors about allocating GBM buffer of size WIDTHx0
-    // we'll resize the view once we have an actual height
-    // also, if we can't allocate a buffer now, it will be empty forever
-    view.set_width_request(1);
-    view.set_height_request(1);
     view.set_background_color(&gdk::RGBA::new(0.0, 0.0, 0.0, 0.0));
 
     let mut html = GLOSSARY_HTML.to_string();
@@ -108,7 +115,10 @@ pub fn html(write_html: impl FnOnce(&mut String)) -> gtk::Widget {
     });
 
     // resize the view height to the content *when the webpage loads*
-    view.connect_load_changed(move |view, _| resize_view(view.clone()));
+    view.connect_load_changed(move |view, _| {
+        view.set_visible(true);
+        resize_view(view.clone());
+    });
 
     // resize the view height to the content *when the container changes size*
     // we use a DrawingArea to detect when the container size changes,
