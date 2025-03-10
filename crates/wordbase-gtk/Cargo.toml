@@ -1,6 +1,6 @@
 [package]
 description = "TODO"
-name = "wordbase-gtk-ui"
+name = "wordbase-gtk"
 version = "0.1.0"
 
 authors.workspace = true
@@ -22,7 +22,11 @@ all-features = true
 [dependencies]
 wordbase = { workspace = true }
 
+foldhash = { workspace = true }
+form_urlencoded = { workspace = true }
 gtk4 = { workspace = true, features = ["gnome_47", "blueprint"] }
+indexmap = { workspace = true }
 libadwaita = { workspace = true, features = ["v1_6"] }
 open = { workspace = true }
+tracing = { workspace = true }
 webkit6 = { workspace = true }

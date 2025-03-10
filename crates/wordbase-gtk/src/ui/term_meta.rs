@@ -9,11 +9,11 @@ mod imp {
         #[template_child]
         pub reading: TemplateChild<gtk::Label>,
         #[template_child]
-        pub expression: TemplateChild<gtk::Label>,
+        pub headword: TemplateChild<gtk::Label>,
         #[template_child]
         pub pitches: TemplateChild<gtk::Box>,
         #[template_child]
-        pub frequency_tags: TemplateChild<gtk::Box>,
+        pub frequencies: TemplateChild<gtk::Box>,
     }
 
     #[glib::object_subclass]
@@ -52,8 +52,8 @@ impl TermMeta {
     }
 
     #[must_use]
-    pub fn expression(&self) -> gtk::Label {
-        self.imp().expression.get()
+    pub fn headword(&self) -> gtk::Label {
+        self.imp().headword.get()
     }
 
     #[must_use]
@@ -62,7 +62,7 @@ impl TermMeta {
     }
 
     #[must_use]
-    pub fn frequency_tags(&self) -> gtk::Box {
-        self.imp().frequency_tags.get()
+    pub fn frequencies(&self) -> gtk::Box {
+        self.imp().frequencies.get()
     }
 }

@@ -24,7 +24,7 @@ interface with the server. The server is responsible for:
 - text lookup logic
 - [lemmatisation](https://en.wikipedia.org/wiki/Lemmatization)
 - connecting to [texthooker servers](https://github.com/KamWithK/TextractorSender)
-- spawning dictionary pop-ups
+- spawning dictionary popups
 
 ### [`wordbase-cli`](./crates/wordbase-cli)
 
@@ -103,7 +103,7 @@ Unsupported due to platform limitations. Apps can't spawn arbitrary windows on t
 Client library written in Rust used to interface with a Wordbase server via WebSockets. This is a
 reference implementation of a client library.
 
-### [`wordbase-gtk-ui`](./crates/wordbase-gtk-ui)
+### [`wordbase-gtk`](./crates/wordbase-gtk)
 
 Provides GTK widgets for rendering dictionary elements. This is used internally by the manager app
 and the pop-up dictionary.

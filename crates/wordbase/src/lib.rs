@@ -61,7 +61,8 @@ use {
 /// - Use `$kind` to refer to the ident of the [`RecordKind`], i.e.
 ///   `GlossaryPlainText`
 /// - Use `$data_ty` to refer to the data type that the [`Record`] variant
-///   carries, i.e. `wordbase::record::GlossaryPlainText`
+///   carries, i.e. `record::GlossaryPlainText`
+///   - Note that this does not include the `wordbase::` prefix
 ///
 /// # Examples
 ///
@@ -73,7 +74,7 @@ use {
 ///     ( $($kind:ident($data_ty:path)),* $(,)? ) => {
 ///         pub enum MyRecordWrapper {
 ///             $($kind {
-///                 data: $data_ty,
+///                 data: wordbase::$data_ty,
 ///                 extra: i32,
 ///             },)*
 ///         }
@@ -95,9 +96,7 @@ use {
 ///             }
 ///
 ///             match kind {
-///                 $(discrim::$kind => {
-///                     from_json(data)
-///                 })*
+///                 $(discrim::$kind => from_json(data),)*
 ///                 _ => panic!("unknown kind"),
 ///             }
 ///         }} // ...and the double `}` here
@@ -113,13 +112,13 @@ use {
 macro_rules! for_record_kinds {
     ($macro:ident) => {
         $macro!(
-            GlossaryPlainText(wordbase::glossary::PlainText),
-            GlossaryPlainTextFallback(wordbase::glossary::PlainTextFallback),
-            GlossaryHtml(wordbase::glossary::Html),
-            GlossaryHtmlFallback(wordbase::glossary::HtmlFallback),
-            Frequency(wordbase::record::Frequency),
-            JpPitch(wordbase::lang::jp::Pitch),
-            YomitanGlossary(wordbase::format::yomitan::Glossary),
+            GlossaryPlainText(glossary::PlainText),
+            GlossaryPlainTextFallback(glossary::PlainTextFallback),
+            GlossaryHtml(glossary::Html),
+            GlossaryHtmlFallback(glossary::HtmlFallback),
+            Frequency(record::Frequency),
+            JpPitch(lang::jp::Pitch),
+            YomitanGlossary(format::yomitan::Glossary),
         );
     };
 }

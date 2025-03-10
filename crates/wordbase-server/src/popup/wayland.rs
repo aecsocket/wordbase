@@ -1,13 +1,14 @@
 extern crate gtk4 as gtk;
 extern crate libadwaita as adw;
-extern crate wordbase_gtk_ui as ui;
 
 use anyhow::{Context, Result};
 use futures::never::Never;
 use gtk4::{
+    gdk,
     gio::{ApplicationHoldGuard, prelude::*},
     prelude::*,
 };
+use libadwaita::prelude::BinExt;
 use sqlx::{Pool, Sqlite};
 use tokio::sync::broadcast;
 use tracing::{info, warn};
@@ -26,6 +27,16 @@ pub fn run(
     glib::log_set_default_handler(glib::rust_log_handler);
 
     let app = adw::Application::builder().application_id(APP_ID).build();
+    app.connect_startup(|_| {
+        let provider = gtk::CssProvider::new();
+        provider.load_from_string(wordbase_gtk::STYLESHEET);
+
+        gtk::style_context_add_provider_for_display(
+            &gdk::Display::default().expect("failed to get display"),
+            &provider,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+    });
     app.connect_activate(move |app| {
         let db = db.clone();
         let rt = rt.clone();
@@ -65,16 +76,28 @@ async fn handle_request(
     app: &adw::Application,
     request: ShowPopupRequest,
 ) -> Result<()> {
+    const MARGIN: i32 = 16;
+
     let records = rt
         .spawn(async move {
-            term::lookup(&db, &request.text, ui::Dictionary::SUPPORTED_RECORD_KINDS).await
+            term::lookup(&db, &request.text, wordbase_gtk::SUPPORTED_RECORD_KINDS).await
         })
         .await
         .context("fetch record task dropped")?
         .context("failed to fetch records")?;
 
-    info!("TODO: records = {records:#?}");
-    let content = ui::Dictionary::from(&records);
+    let content = gtk::ScrolledWindow::new();
+
+    let dictionary_container = adw::Bin::builder()
+        .margin_top(MARGIN)
+        .margin_bottom(MARGIN)
+        .margin_start(MARGIN)
+        .margin_end(MARGIN)
+        .build();
+    content.set_child(Some(&dictionary_container));
+
+    let dictionary = wordbase_gtk::ui_for(|source| "TODO", records);
+    dictionary_container.set_child(Some(&dictionary));
 
     let window = adw::ApplicationWindow::builder()
         .application(app)

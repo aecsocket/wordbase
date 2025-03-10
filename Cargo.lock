@@ -3137,12 +3137,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "wordbase-gtk-ui"
+name = "wordbase-gtk"
 version = "0.1.0"
 dependencies = [
+ "foldhash",
+ "form_urlencoded",
  "gtk4",
+ "indexmap",
  "libadwaita",
  "open",
+ "tracing",
  "webkit6",
  "wordbase",
 ]
@@ -3169,7 +3173,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wordbase",
- "wordbase-gtk-ui",
+ "wordbase-gtk",
 ]
 
 [[package]]

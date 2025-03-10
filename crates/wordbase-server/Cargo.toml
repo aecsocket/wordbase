@@ -23,7 +23,7 @@ default = [
     "dep:glib",
     "dep:gtk4",
     "dep:libadwaita",
-    "dep:wordbase-gtk-ui",
+    "dep:wordbase-gtk",
 ]
 popup = []
 
@@ -55,7 +55,7 @@ gtk4 = { workspace = true, optional = true, features = [
     "blueprint",
 ] }
 libadwaita = { workspace = true, optional = true, features = ["v1_6"] }
-wordbase-gtk-ui = { workspace = true, optional = true }
+wordbase-gtk = { workspace = true, optional = true }
 
 # enable features in transitive dependency crates
 

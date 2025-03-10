@@ -156,19 +156,29 @@ pub struct LookupResponse {
     pub record: Record,
 }
 
+/// Requests the server to create a dictionary popup window and show it on the
+/// user's window manager.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShowPopupRequest {
-    /// [Process ID][pid] of the window to draw the pop-up on top of.
+    /// [Process ID][pid] of the window to draw the popup on top of.
     ///
     /// [pid]: std::process::pid
     pub pid: u32,
-    /// X and Y position of the pop-up origin, in surface-local coordinates.
+    /// X and Y position of the pop-up [origin], in surface-local coordinates.
+    ///
+    /// [origin]: ShowPopupRequest::anchor
     pub origin: (u32, u32),
+    /// What corner the popup will expand out from.
     pub anchor: PopupAnchor,
+    /// Text to look up in the dictionary.
+    ///
+    /// You don't need to do any lookups yourself - the server and popup will
+    /// handle this themselves.
     pub text: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[expect(missing_docs, reason = "self-explanatory")]
 pub enum PopupAnchor {
     TopLeft,
     TopCenter,

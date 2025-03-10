@@ -30,7 +30,7 @@ pub async fn run(
     // TODO
     const IMPORTS: &[&str] = &[
         // "1. jitendex-yomitan.zip",
-        // "2. JMnedict.zip",
+        "2. JMnedict.zip",
         "11. [Pitch] NHK 2016.zip",
         "12. JPDB_v2.2_Frequency_Kana_2024-10-13.zip",
     ];
