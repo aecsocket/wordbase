@@ -21,19 +21,19 @@ impl AddToTermInfo for yomitan::Glossary {
             ui.upcast()
         }));
 
-        glossary_info.content.push(glossary::html(|mut s| {
-            _ = write!(
-                &mut s,
-                r#"<ul class="gloss-list" data-count="{}">"#,
-                self.content.len()
-            );
-            for content in self.content {
-                _ = write!(&mut s, "<li>");
-                _ = yomitan::render_to_html(&mut s, &content);
-                _ = write!(&mut s, "</li>");
-            }
-            _ = write!(s, "</ul>");
-        }));
+        // glossary_info.content.push(glossary::html(|mut s| {
+        //     _ = write!(
+        //         &mut s,
+        //         r#"<ul class="gloss-list" data-count="{}">"#,
+        //         self.content.len()
+        //     );
+        //     for content in self.content {
+        //         _ = write!(&mut s, "<li>");
+        //         _ = yomitan::render_to_html(&mut s, &content);
+        //         _ = write!(&mut s, "</li>");
+        //     }
+        //     _ = write!(s, "</ul>");
+        // }));
 
         cx.glossary_group.push(glossary_info);
     }

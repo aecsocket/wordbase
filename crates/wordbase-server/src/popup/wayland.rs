@@ -66,7 +66,7 @@ async fn backend(
     mut recv_server_event: broadcast::Receiver<ServerEvent>,
     app: adw::Application,
 ) -> Result<Never> {
-    let popup = create_popup(&app);
+    let mut popup = None::<PopupInfo>;
     let mut dictionaries = HashMap::<DictionaryId, DictionaryState>::new();
     loop {
         let request = tokio::select! {
@@ -88,14 +88,16 @@ async fn backend(
             }
         };
 
-        let result = handle_request(&lookups, &popup, &dictionaries, request.request).await;
+        let result =
+            handle_request(&lookups, &app, &mut popup, &dictionaries, request.request).await;
         _ = request.send_response.send(result).await;
     }
 }
 
 async fn handle_request(
     lookups: &lookup::Client,
-    popup: &PopupInfo,
+    app: &adw::Application,
+    popup: &mut Option<PopupInfo>,
     dictionaries: &HashMap<DictionaryId, DictionaryState>,
     request: ShowPopupRequest,
 ) -> Result<Result<ShowPopupResponse, NoRecords>> {
@@ -117,17 +119,20 @@ async fn handle_request(
         .and_then(|c| u64::try_from(c).ok())
         .unwrap_or_default();
 
-    // let dictionary = wordbase_gtk::ui_for(
-    //     |source| {
-    //         dictionaries
-    //             .get(&source)
-    //             .map(|state| state.meta.name.as_str())
-    //             .unwrap_or("?")
-    //     },
-    //     records,
-    // );
-    // popup.dictionary_container.set_child(Some(&dictionary));
-    // popup.window.set_visible(true);
+    let dictionary = wordbase_gtk::ui_for(
+        |source| {
+            dictionaries
+                .get(&source)
+                .map(|state| state.meta.name.as_str())
+                .unwrap_or("?")
+        },
+        records,
+    );
+
+    let popup = popup.get_or_insert_with(|| create_popup(app));
+
+    popup.dictionary_container.set_child(Some(&dictionary));
+    popup.window.set_visible(true);
 
     Ok(Ok(ShowPopupResponse { chars_scanned }))
 }
@@ -154,6 +159,7 @@ fn create_popup(app: &adw::Application) -> PopupInfo {
         .application(app)
         .default_width(600)
         .default_height(300)
+        .hide_on_close(true)
         .content(&content)
         .build();
 
@@ -163,9 +169,11 @@ fn create_popup(app: &adw::Application) -> PopupInfo {
     controller.connect_leave({
         let window = window.clone();
         move |_| {
-            window.set_visible(false);
+            // window.set_visible(false);
         }
     });
+
+    window.present();
 
     PopupInfo {
         window: window.upcast(),
