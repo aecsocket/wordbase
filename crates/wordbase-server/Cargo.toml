@@ -18,11 +18,13 @@ workspace = true
 all-features = true
 
 [features]
+popup = []
 
 [dependencies]
 wordbase = { workspace = true, features = ["parse-yomitan"] }
 
 anyhow = { workspace = true }
+cfg-if = { workspace = true }
 derive_more = { workspace = true, features = [
     "display",
     "error",

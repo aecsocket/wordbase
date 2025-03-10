@@ -21,12 +21,13 @@ use {
     anyhow::{Context, Result},
     futures::StreamExt,
     gtk::gdk,
-    log::warn,
-    std::{cell::RefCell, convert::Infallible, rc::Rc, time::Duration},
+    std::{cell::RefCell, convert::Infallible, os::fd::OwnedFd, rc::Rc, time::Duration},
     tokio::{
         sync::{broadcast, mpsc},
         time,
     },
+    tracing::{level_filters::LevelFilter, warn},
+    tracing_subscriber::EnvFilter,
     wordbase::{
         DictionaryId, DictionaryState,
         hook::HookSentence,
@@ -35,17 +36,29 @@ use {
     wordbase_client_tokio::{IndexMap, SocketClient},
 };
 
+const APP_ID: &str = "com.github.aecsocket.Wordbase";
 const CHANNEL_BUF_CAP: usize = 4;
-
 type DictionaryMap = IndexMap<DictionaryId, DictionaryState>;
+
+#[derive(Debug, clap::Parser)]
+struct Args {
+    #[arg(long)]
+    popup_daemon_pipe_fd: Option<i32>,
+}
 
 #[tokio::main]
 async fn main() {
-    pretty_env_logger::formatted_builder()
-        .filter_level(log::LevelFilter::Info)
-        .try_init()
-        .expect("failed to initialize logger");
+    let args = <Args as clap::Parser>::parse();
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::builder()
+                .with_default_directive(LevelFilter::INFO.into())
+                .from_env_lossy(),
+        )
+        .init();
     glib::log_set_default_handler(glib::rust_log_handler);
+
+    if let Some(popup_daemon_pipe_fd) = args.popup_daemon_pipe_fd {}
 
     let (send_lookup_request, recv_lookup_request) =
         mpsc::channel::<BackendRequest>(CHANNEL_BUF_CAP);
@@ -53,9 +66,7 @@ async fn main() {
         broadcast::channel::<BackendEvent>(CHANNEL_BUF_CAP);
     tokio::spawn(tokio_backend(recv_lookup_request, send_backend_event));
 
-    let app = adw::Application::builder()
-        .application_id("com.github.aecsocket.WordbasePopup")
-        .build();
+    let app = adw::Application::builder().application_id(APP_ID).build();
 
     app.connect_startup(|_| {
         let css_provider = gtk::CssProvider::new();

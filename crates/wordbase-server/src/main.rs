@@ -3,7 +3,7 @@
 mod dictionary;
 mod import;
 mod mecab;
-mod platform;
+mod popup;
 mod server;
 mod term;
 mod texthooker;
@@ -11,6 +11,7 @@ mod texthooker;
 use {
     anyhow::Result,
     mecab::MecabRequest,
+    popup::DefaultPopups,
     std::{
         net::{Ipv4Addr, SocketAddr},
         sync::Arc,
@@ -74,7 +75,7 @@ async fn main() -> Result<()> {
         )
         .init();
     let config = Arc::new(Config::default());
-    let platform = platform::default();
+    let popups = Arc::new(DefaultPopups::new());
 
     let (send_mecab_request, recv_mecab_request) = mpsc::channel::<MecabRequest>(CHANNEL_BUF_CAP);
     let (send_event, _) = broadcast::channel::<Event>(CHANNEL_BUF_CAP);
@@ -88,12 +89,7 @@ async fn main() -> Result<()> {
         );
     }
     tasks.spawn(mecab::run(recv_mecab_request));
-    tasks.spawn(server::run(
-        config,
-        platform,
-        send_mecab_request,
-        send_event,
-    ));
+    tasks.spawn(server::run(config, popups, send_mecab_request, send_event));
 
     while let Some(result) = tasks.join_next().await {
         result??;

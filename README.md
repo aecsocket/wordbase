@@ -1,3 +1,12 @@
+# Overview
+
+Wordbase is a set of tools and services for using dictionaries, looking up words, and integrating
+tightly with your desktop to provide a seamless experience for language learning.
+
+# Installation
+
+TODO
+
 # Architecture
 
 Wordbase is a large project, spanning multiple different programming languages, environments, and
@@ -35,6 +44,10 @@ Wordbase clients may request the server to spawn a pop-up dictionary to query fo
 client-provided text at a client-specified position (relative to its own surface). This makes it
 stupid simple for clients to integrate pop-up dictionary functionality, as they don't need to handle
 performing a lookup or rendering contents; they just request the server to handle it for them.
+
+This pop-up is shown as a window which is placed above all other windows on the desktop, and is
+integrated into the server itself. It is not a standalone binary which can be launched outside of
+the server.
 
 However, this is a fairly platform-specific feature, and comes with some challenges to solve.
 
@@ -79,26 +92,18 @@ TODO: so what do we do? I don't use X11 so...
 
 ### 🛠️ MacOS
 
-# Notes
+### Android + iOS
 
-how to perform a lookup:
-- kanji/expression
-  - find the lemma (mecab)
-    - 食べなかった -> 食べる
-    - たべなかった -> 食べる
-  - find database records where `expression = lemma`
+Unsupported due to platform limitations. Apps can't spawn arbitrary windows on top of other apps.
 
-schema design decisions:
-- we are working off of the yomitan format closely
-- for meta stuff (dictionary, frequency, pitch etc.) we can make our own format
-  which is convertible from yomitans
-  - try to retain as much "machine-readable" info as possible, i.e. all frequencies
-    have an integer value
-- for glossary/rendering stuff, we'll use yomitan's own structured content format
-  - easy to convert
-  - easy to turn into html
-  - not necessarily machine-readable, i.e. you can't read the font size as an integer,
-    it's just a CSS `text-size` string
+## Libraries
 
-reference:
-- https://github.com/sunwxg/gnome-shell-extension-arrangeWindows/blob/master/arrangeWindows%40sun.wxg%40gmail.com/extension.js
+### [`wordbase-client-tokio`](./crates/wordbase-client-tokio)
+
+Client library written in Rust used to interface with a Wordbase server via WebSockets. This is a
+reference implementation of a client library.
+
+### [`wordbase-gtk-ui`](./crates/wordbase-gtk-ui)
+
+Provides GTK widgets for rendering dictionary elements. This is used internally by the manager app
+and the pop-up dictionary.

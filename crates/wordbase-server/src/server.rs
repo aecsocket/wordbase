@@ -3,7 +3,7 @@ use {
         Config, Event, dictionary,
         import::{self, AlreadyExists},
         mecab::{MecabInfo, MecabRequest},
-        platform::Platform,
+        popup::Popups,
         term,
     },
     anyhow::{Context as _, Result, bail},
@@ -26,7 +26,7 @@ use {
 
 pub async fn run(
     config: Arc<Config>,
-    platform: Arc<dyn Platform>,
+    popups: Arc<dyn Popups>,
     send_mecab_request: mpsc::Sender<MecabRequest>,
     send_event: broadcast::Sender<Event>,
 ) -> Result<Never> {
@@ -158,7 +158,7 @@ pub async fn run(
             .context("failed to accept TCP stream")?;
 
         let config = config.clone();
-        let platform = platform.clone();
+        let popups = popups.clone();
         let db = db.clone();
         let send_mecab_request = send_mecab_request.clone();
         let send_event = send_event.clone();
@@ -166,8 +166,7 @@ pub async fn run(
             async move {
                 info!("Incoming connection from {peer_addr:?}");
                 let Err(err) =
-                    handle_stream(config, platform, db, send_mecab_request, send_event, stream)
-                        .await;
+                    handle_stream(config, popups, db, send_mecab_request, send_event, stream).await;
                 info!("Connection lost: {err:?}");
             }
             .instrument(info_span!("connection", id = %connection_id)),
@@ -189,7 +188,7 @@ impl Connection {
 
 async fn handle_stream(
     config: Arc<Config>,
-    platform: Arc<dyn Platform>,
+    popups: Arc<dyn Popups>,
     db: Pool<Sqlite>,
     send_mecab_request: mpsc::Sender<MecabRequest>,
     send_event: broadcast::Sender<Event>,
@@ -227,7 +226,7 @@ async fn handle_stream(
                     .context("stream error")?;
                 if let Err(err) = handle_message(
                     &config,
-                    &*platform,
+                    &*popups,
                     &db,
                     &send_mecab_request,
                     &send_event,
@@ -256,7 +255,7 @@ async fn forward_event(connection: &mut Connection, event: Event) {
 
 async fn handle_message(
     config: &Config,
-    platform: &dyn Platform,
+    popups: &dyn Popups,
     db: &Pool<Sqlite>,
     send_mecab_request: &mpsc::Sender<MecabRequest>,
     send_event: &broadcast::Sender<Event>,
@@ -287,13 +286,11 @@ async fn handle_message(
             Ok(())
         }
         FromClient::ShowPopup(request) => {
-            platform
-                .spawn_popup(request)
-                .context("failed to spawn popup")?;
+            popups.show(request).context("failed to show popup")?;
             connection
                 .write(&FromServer::Popup)
                 .await
-                .context("failed to send popup response")?;
+                .context("failed to send show popup response")?;
             Ok(())
         }
         FromClient::RemoveDictionary { dictionary_id } => {

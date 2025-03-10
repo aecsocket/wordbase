@@ -1,7 +1,7 @@
 use anyhow::Result;
 use wordbase::protocol::ShowPopupRequest;
 
-use super::Platform;
+use super::Popups;
 
 #[derive(Debug)]
 pub struct WaylandPlatform {}
@@ -12,8 +12,8 @@ impl WaylandPlatform {
     }
 }
 
-impl Platform for WaylandPlatform {
-    fn spawn_popup(&self, request: ShowPopupRequest) -> Result<()> {
+impl Popups for WaylandPlatform {
+    fn show(&self, request: ShowPopupRequest) -> Result<()> {
         todo!()
     }
 }

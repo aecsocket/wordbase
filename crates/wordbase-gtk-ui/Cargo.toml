@@ -1,6 +1,6 @@
 [package]
 description = "TODO"
-name = "wordbase-popup-gtk"
+name = "wordbase-gtk-ui"
 version = "0.1.0"
 
 authors.workspace = true
@@ -24,17 +24,19 @@ wordbase = { workspace = true }
 wordbase-client-tokio = { workspace = true }
 
 anyhow = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
 derive_more = { workspace = true, features = ["deref"] }
 foldhash = { workspace = true }
 form_urlencoded = { workspace = true }
 futures = { workspace = true }
 glib = { workspace = true, features = ["log"] }
 gtk4 = { workspace = true, features = ["gnome_47", "blueprint"] }
+interprocess = { workspace = true, features = ["tokio"] }
 libadwaita = { workspace = true, features = ["v1_6"] }
-log = { workspace = true }
 open = { workspace = true }
-pretty_env_logger = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 webkit6 = { workspace = true }
 
 # enable features in transitive dependency crates
