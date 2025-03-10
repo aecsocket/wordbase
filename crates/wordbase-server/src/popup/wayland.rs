@@ -32,8 +32,6 @@ pub fn run(
     let _hold_guard = app.hold();
 
     app.connect_startup(|_| {
-        info!("TODO: STARTUP");
-
         let provider = gtk::CssProvider::new();
         provider.load_from_string(wordbase_gtk::STYLESHEET);
 
@@ -44,8 +42,6 @@ pub fn run(
         );
     });
     app.connect_activate(move |app| {
-        info!("TODO: ACTIVATE");
-
         let lookups = lookups.clone();
         let recv_request = recv_request.resubscribe();
         let recv_server_event = recv_server_event.resubscribe();
@@ -169,7 +165,7 @@ fn create_popup(app: &adw::Application) -> PopupInfo {
     controller.connect_leave({
         let window = window.clone();
         move |_| {
-            // window.set_visible(false);
+            window.set_visible(false);
         }
     });
 

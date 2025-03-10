@@ -1,4 +1,4 @@
-use std::{fmt::Write as _, sync::LazyLock, time::Duration};
+use std::{cell::LazyCell, fmt::Write as _, sync::LazyLock, time::Duration};
 
 use gtk::{gdk, gio, glib, prelude::*};
 use tracing::{info, warn};
@@ -62,6 +62,28 @@ pub fn html(write_html: impl FnOnce(&mut String)) -> gtk::Widget {
         format!("<style>{css}</style>")
     });
 
+    thread_local! {
+        static SETTINGS: LazyCell<webkit::Settings> = LazyCell::new(|| {
+            webkit::Settings::builder()
+                .allow_file_access_from_file_urls(false)
+                .enable_back_forward_navigation_gestures(false)
+                .enable_caret_browsing(false)
+                .enable_developer_extras(false)
+                .enable_encrypted_media(false)
+                .enable_fullscreen(false)
+                .enable_html5_database(false)
+                .enable_html5_local_storage(false)
+                .enable_javascript(false)
+                .enable_javascript_markup(false)
+                .enable_media(false)
+                .enable_page_cache(false)
+                .enable_webaudio(false)
+                .enable_webgl(false)
+                .enable_webrtc(false)
+                .build()
+        });
+    }
+
     // why are we wrapping the webview in a container?
     // it's a surprise tool for later ;)
     let container = gtk::Box::builder()
@@ -72,15 +94,14 @@ pub fn html(write_html: impl FnOnce(&mut String)) -> gtk::Widget {
         .height_request(1)
         .build();
 
-    let view = webkit::WebView::builder()
-        // ditto
-        .width_request(1)
-        .height_request(1)
-        // also, the WebView might try to allocate before we have anything loaded
-        // so we allocate a 0x0 buffer anyway
-        // we make it visible when we actually have content
-        .visible(false)
-        .build();
+    let view = SETTINGS.with(|settings| {
+        webkit::WebView::builder()
+            .width_request(1)
+            .height_request(1)
+            .settings(settings)
+            .visible(false)
+            .build()
+    });
     container.append(&view);
 
     view.set_background_color(&gdk::RGBA::new(0.0, 0.0, 0.0, 0.0));
