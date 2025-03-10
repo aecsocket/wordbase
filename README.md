@@ -18,3 +18,6 @@ schema design decisions:
   - easy to turn into html
   - not necessarily machine-readable, i.e. you can't read the font size as an integer,
     it's just a CSS `text-size` string
+
+reference:
+- https://github.com/sunwxg/gnome-shell-extension-arrangeWindows/blob/master/arrangeWindows%40sun.wxg%40gmail.com/extension.js

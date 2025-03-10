@@ -104,7 +104,7 @@ pub async fn lookup(
                 reading: record.reading,
             };
 
-            macro_rules! deserialize_record { ($($kind:ident($data_ty:path))*) => {{
+            macro_rules! deserialize_record { ($($kind:ident($data_ty:path)),* $(,)?) => {{
                 #[allow(
                     non_upper_case_globals,
                     reason = "cannot capitalize ident in macro invocation"

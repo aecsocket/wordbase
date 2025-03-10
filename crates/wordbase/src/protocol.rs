@@ -20,6 +20,9 @@ pub enum FromClient {
     /// See [`LookupRequest`].
     #[from]
     Lookup(LookupRequest),
+    /// See [`ShowPopupRequest`].
+    #[from]
+    ShowPopup(ShowPopupRequest),
     /// Requests to remove a [dictionary] from the server's database.
     ///
     /// Server responds with [`FromServer::RemoveDictionary`].
@@ -71,6 +74,7 @@ pub enum FromServer {
     /// Server sends a response to [`FromClient::Lookup`] containing a single record.
     #[from]
     Lookup(LookupResponse),
+    Popup,
     /// Server sends a response to [`FromClient::Lookup`] marking that all
     /// records have been sent.
     LookupDone,
@@ -150,6 +154,30 @@ pub struct LookupResponse {
     ///
     /// [record]: Record
     pub record: Record,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShowPopupRequest {
+    /// [Process ID][pid] of the window to draw the pop-up on top of.
+    ///
+    /// [pid]: std::process::pid
+    pub pid: u32,
+    /// X and Y position of the pop-up origin, in surface-local coordinates.
+    pub origin: (u32, u32),
+    pub anchor: PopupAnchor,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum PopupAnchor {
+    TopLeft,
+    TopCenter,
+    TopRight,
+    MiddleLeft,
+    MiddleRight,
+    BottomLeft,
+    BottomCenter,
+    BottomRight,
 }
 
 /// Attempted to perform an operation on a [`DictionaryId`] which does not

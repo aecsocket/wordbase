@@ -6,6 +6,8 @@
     clippy::new_without_default,
     reason = "`gtk` types do not follow this pattern, so neither do we"
 )]
+#![expect(missing_docs)]
+#![expect(clippy::missing_errors_doc)]
 
 extern crate gtk4 as gtk;
 extern crate libadwaita as adw;
@@ -25,7 +27,11 @@ use {
         sync::{broadcast, mpsc},
         time,
     },
-    wordbase::{DictionaryId, DictionaryState, hook::HookSentence, protocol::LookupResponse},
+    wordbase::{
+        DictionaryId, DictionaryState,
+        hook::HookSentence,
+        protocol::{LookupRequest, LookupResponse},
+    },
     wordbase_client_tokio::{IndexMap, SocketClient},
 };
 
@@ -85,14 +91,14 @@ async fn main() {
             dictionaries,
         ));
 
-        adw::ApplicationWindow::builder()
+        let window = adw::ApplicationWindow::builder()
             .application(app)
             .title("Dictionary")
             .content(&toast_overlay)
             .default_width(800)
             .default_height(400)
-            .build()
-            .present();
+            .build();
+        window.present();
     });
 
     app.run();
@@ -252,7 +258,10 @@ fn forward_event(
 
 async fn handle_request(client: &mut SocketClient, request: BackendRequest) -> Result<()> {
     let mut lookups = client
-        .lookup(request.query)
+        .lookup(LookupRequest {
+            text: request.query,
+            record_kinds: vec![], // todo
+        })
         .await
         .context("failed to start lookup")?;
     while let Some(lookup) = lookups.next().await {

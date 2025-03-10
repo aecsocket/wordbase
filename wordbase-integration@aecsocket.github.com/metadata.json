@@ -1,10 +1,8 @@
 {
-  "uuid": "wordbase-integration@aecsocket.github.com",
-  "name": "Wordbase Integration",
-  "description": "Integrates with Wordbase, letting you do lookups from texthooker content from your desktop",
-  "url": "https://github.com/aecsocket/wordbase",
-  "settings-schema": "org.gnome.shell.extensions.wordbase-integration",
-  "shell-version": [
-    "47"
-  ]
+    "uuid": "wordbase-integration@aecsocket.github.com",
+    "name": "Wordbase Integration",
+    "description": "Integrates with Wordbase, allowing lookups from texthooker content from your desktop",
+    "url": "https://github.com/aecsocket/wordbase",
+    "settings-schema": "org.gnome.shell.extensions.wordbase-integration",
+    "shell-version": ["47"]
 }

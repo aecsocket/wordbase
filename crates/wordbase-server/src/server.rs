@@ -3,6 +3,7 @@ use {
         Config, Event, dictionary,
         import::{self, AlreadyExists},
         mecab::{MecabInfo, MecabRequest},
+        platform::Platform,
         term,
     },
     anyhow::{Context as _, Result, bail},
@@ -19,12 +20,13 @@ use {
         task::JoinSet,
     },
     tokio_tungstenite::{WebSocketStream, tungstenite::Message},
-    tracing::{Instrument, info, info_span, warn},
+    tracing::{Instrument, debug, info, info_span, warn},
     wordbase::protocol::{FromClient, FromServer, LookupRequest},
 };
 
 pub async fn run(
     config: Arc<Config>,
+    platform: Arc<dyn Platform>,
     send_mecab_request: mpsc::Sender<MecabRequest>,
     send_event: broadcast::Sender<Event>,
 ) -> Result<Never> {
@@ -156,6 +158,7 @@ pub async fn run(
             .context("failed to accept TCP stream")?;
 
         let config = config.clone();
+        let platform = platform.clone();
         let db = db.clone();
         let send_mecab_request = send_mecab_request.clone();
         let send_event = send_event.clone();
@@ -163,7 +166,8 @@ pub async fn run(
             async move {
                 info!("Incoming connection from {peer_addr:?}");
                 let Err(err) =
-                    handle_stream(config, db, send_mecab_request, send_event, stream).await;
+                    handle_stream(config, platform, db, send_mecab_request, send_event, stream)
+                        .await;
                 info!("Connection lost: {err:?}");
             }
             .instrument(info_span!("connection", id = %connection_id)),
@@ -185,6 +189,7 @@ impl Connection {
 
 async fn handle_stream(
     config: Arc<Config>,
+    platform: Arc<dyn Platform>,
     db: Pool<Sqlite>,
     send_mecab_request: mpsc::Sender<MecabRequest>,
     send_event: broadcast::Sender<Event>,
@@ -222,6 +227,7 @@ async fn handle_stream(
                     .context("stream error")?;
                 if let Err(err) = handle_message(
                     &config,
+                    &*platform,
                     &db,
                     &send_mecab_request,
                     &send_event,
@@ -250,6 +256,7 @@ async fn forward_event(connection: &mut Connection, event: Event) {
 
 async fn handle_message(
     config: &Config,
+    platform: &dyn Platform,
     db: &Pool<Sqlite>,
     send_mecab_request: &mpsc::Sender<MecabRequest>,
     send_event: &broadcast::Sender<Event>,
@@ -265,6 +272,7 @@ async fn handle_message(
 
     match message {
         FromClient::HookSentence(sentence) => {
+            debug!("{sentence:#?}");
             _ = send_event.send(Event::HookSentence(sentence));
             Ok(())
         }
@@ -276,6 +284,16 @@ async fn handle_message(
                 .write(&FromServer::LookupDone)
                 .await
                 .context("failed to send final response")?;
+            Ok(())
+        }
+        FromClient::ShowPopup(request) => {
+            platform
+                .spawn_popup(request)
+                .context("failed to spawn popup")?;
+            connection
+                .write(&FromServer::Popup)
+                .await
+                .context("failed to send popup response")?;
             Ok(())
         }
         FromClient::RemoveDictionary { dictionary_id } => {

@@ -1,14 +1,15 @@
 #![doc = include_str!("../README.md")]
 
 mod dictionary;
-mod hook_pull;
 mod import;
 mod mecab;
+mod platform;
 mod server;
 mod term;
+mod texthooker;
 
 use {
-    anyhow::{Context, Result},
+    anyhow::Result,
     mecab::MecabRequest,
     std::{
         net::{Ipv4Addr, SocketAddr},
@@ -19,7 +20,8 @@ use {
         sync::{broadcast, mpsc},
         task::JoinSet,
     },
-    tracing::{Instrument, info_span},
+    tracing::{Instrument, info_span, level_filters::LevelFilter},
+    tracing_subscriber::EnvFilter,
     wordbase::{
         DictionaryState,
         hook::HookSentence,
@@ -42,7 +44,8 @@ impl Default for Config {
             listen_addr: SocketAddr::new(Ipv4Addr::LOCALHOST.into(), DEFAULT_PORT),
             lookup: LookupConfig::default(),
             texthooker_sources: vec![Arc::new(TexthookerSource {
-                url: "ws://127.0.0.1:9001".into(),
+                url: "ws://host.docker.internal:9001".into(),
+                // url: "ws://127.0.0.1:9001".into(),
                 connect_interval: Duration::from_secs(1),
             })],
         }
@@ -63,8 +66,15 @@ enum Event {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt().init();
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::builder()
+                .with_default_directive(LevelFilter::INFO.into())
+                .from_env_lossy(),
+        )
+        .init();
     let config = Arc::new(Config::default());
+    let platform = platform::default();
 
     let (send_mecab_request, recv_mecab_request) = mpsc::channel::<MecabRequest>(CHANNEL_BUF_CAP);
     let (send_event, _) = broadcast::channel::<Event>(CHANNEL_BUF_CAP);
@@ -73,15 +83,20 @@ async fn main() -> Result<()> {
 
     for source_config in &config.texthooker_sources {
         tasks.spawn(
-            hook_pull::run(source_config.clone(), send_event.clone())
+            texthooker::run(source_config.clone(), send_event.clone())
                 .instrument(info_span!("texthooker", url = source_config.url)),
         );
     }
     tasks.spawn(mecab::run(recv_mecab_request));
-    tasks.spawn(server::run(config, send_mecab_request, send_event));
+    tasks.spawn(server::run(
+        config,
+        platform,
+        send_mecab_request,
+        send_event,
+    ));
 
     while let Some(result) = tasks.join_next().await {
-        result.context("task dropped")??;
+        result??;
     }
     Ok(())
 }

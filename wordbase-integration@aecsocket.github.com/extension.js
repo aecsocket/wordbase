@@ -10,13 +10,13 @@ import Soup from "gi://Soup";
 import GLib from "gi://GLib";
 import Gio from "gi://Gio";
 import St from "gi://St";
-import Clutter from 'gi://Clutter';
-import Meta from 'gi://Meta';
+import Clutter from "gi://Clutter";
+import Meta from "gi://Meta";
 
 import { Extension } from "resource:///org/gnome/shell/extensions/extension.js";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
-import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
-import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+import * as MessageTray from "resource:///org/gnome/shell/ui/messageTray.js";
+import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 import * as Area from "./ui/dragArea.js";
 import * as RichLabel from "./ui/richLabel.js";
 import * as StickyScrollView from "./ui/stickyScrollView.js";
@@ -24,11 +24,9 @@ import * as Wordbase from "./wordbase.js";
 
 /**
  * @typedef {Object} DialogBox
+ * @property {Meta.WindowActor} parent
  * @property {St.Widget} root
  * @property {St.Widget} history_container
- * 
- * @typedef {Object} LookupConfig
- * @property {number} max_request_len
  */
 
 export default class WordbaseIntegrationExtension extends Extension {
@@ -103,10 +101,12 @@ export default class WordbaseIntegrationExtension extends Extension {
     }
 
     /**
-     * @param {MessageTray.Notification} notification 
+     * @param {MessageTray.Notification} notification
      */
     _show_status_notification(notification) {
-        this._status_notification?.destroy(MessageTray.NotificationDestroyedReason.REPLACED);
+        this._status_notification?.destroy(
+            MessageTray.NotificationDestroyedReason.REPLACED,
+        );
         this._get_notification_source().addNotification(notification);
         this._status_notification = notification;
         notification.connect("destroy", (__, ___) => {
@@ -116,33 +116,40 @@ export default class WordbaseIntegrationExtension extends Extension {
 
     _connect_wordbase() {
         const url = this._settings.get_string("wordbase-url");
+        log(`Connecting to Wordbase at ${url}`);
         Wordbase.Client.connect(
             this._soup,
             url,
-            (_err) => { },
+            (_err) => {},
             (client) => {
                 this._wordbase = client;
-                this._show_status_notification(new MessageTray.Notification({
-                    source: this._get_notification_source(),
-                    title: _("Wordbase connected"),
-                    urgency: MessageTray.Urgency.NORMAL,
-                }));
+                this._show_status_notification(
+                    new MessageTray.Notification({
+                        source: this._get_notification_source(),
+                        title: _("Wordbase connected"),
+                        urgency: MessageTray.Urgency.NORMAL,
+                    }),
+                );
 
                 client.connection.connect("closed", (_source) => {
-                    this._show_status_notification(new MessageTray.Notification({
-                        source: this._get_notification_source(),
-                        title: _("Wordbase connection closed"),
-                        urgency: MessageTray.Urgency.NORMAL,
-                    }));
+                    this._show_status_notification(
+                        new MessageTray.Notification({
+                            source: this._get_notification_source(),
+                            title: _("Wordbase connection closed"),
+                            urgency: MessageTray.Urgency.NORMAL,
+                        }),
+                    );
                     this._wordbase = null;
                 });
 
                 client.connection.connect("error", (_source) => {
-                    this._show_status_notification(new MessageTray.Notification({
-                        source: this._get_notification_source(),
-                        title: _("Wordbase connection lost"),
-                        urgency: MessageTray.Urgency.NORMAL,
-                    }));
+                    this._show_status_notification(
+                        new MessageTray.Notification({
+                            source: this._get_notification_source(),
+                            title: _("Wordbase connection lost"),
+                            urgency: MessageTray.Urgency.NORMAL,
+                        }),
+                    );
                     this._wordbase = null;
                 });
 
@@ -161,12 +168,12 @@ export default class WordbaseIntegrationExtension extends Extension {
                 //     const new_sentence = JSON.parse(decoder.decode(message.toArray()));
                 //     this._on_new_sentence(new_sentence);
                 // });
-            }
+            },
         );
     }
 
     /**
-     * @param {Wordbase.HookSentence} message 
+     * @param {Wordbase.HookSentence} message
      */
     _on_hook_sentence(message) {
         const sentence = message.sentence.trim();
@@ -174,25 +181,23 @@ export default class WordbaseIntegrationExtension extends Extension {
         let dialog_box = this._dialog_boxes.get(message.process_path);
         if (!dialog_box) {
             const target_window = global.display.get_focus_window();
-            if (target_window) {
-                /** @type {Meta.WindowActor} */
-                const window_actor = target_window.get_compositor_private();
-                dialog_box = this._new_dialog_box(window_actor);
-            } else {
-                // TODO
-                dialog_box = this._new_dialog_box(global.window_group);
-                // END TODO
+            if (!target_window) {
+                return;
             }
+            /** @type {Meta.WindowActor} */
+            const window_actor = target_window.get_compositor_private();
+            dialog_box = this._new_dialog_box(window_actor);
+            // dialog_box = this._new_dialog_box(global.window_group);
 
             this._dialog_boxes.set(message.process_path, dialog_box);
         }
 
-        const sentence_label = this._new_sentence_label(sentence);
+        const sentence_label = this._new_sentence_label(dialog_box, sentence);
         dialog_box.history_container.add_child(sentence_label);
     }
 
     /**
-     * @param {Clutter.Actor} parent 
+     * @param {Meta.WindowActor} parent
      * @returns {DialogBox}
      */
     _new_dialog_box(parent) {
@@ -238,7 +243,7 @@ export default class WordbaseIntegrationExtension extends Extension {
         });
         history_scroll_view.set_child(history_container);
 
-        return { root, history_container };
+        return { parent, root, history_container };
     }
 
     _setup_hover_opacity(widget) {
@@ -250,7 +255,9 @@ export default class WordbaseIntegrationExtension extends Extension {
 
         const update_hover_animation = () => {
             to_hover_opacity.start();
-            if (to_hover_opacity.direction == Clutter.TimelineDirection.FORWARD) {
+            if (
+                to_hover_opacity.direction == Clutter.TimelineDirection.FORWARD
+            ) {
                 to_hover_opacity.advance(Number.MAX_SAFE_INTEGER);
             } else {
                 to_hover_opacity.advance(0);
@@ -265,7 +272,9 @@ export default class WordbaseIntegrationExtension extends Extension {
             to_hover_opacity.set_to(this._settings.get_int(key));
             update_hover_animation();
         });
-        to_hover_opacity.set_from(this._settings.get_int("dialog-opacity-idle"));
+        to_hover_opacity.set_from(
+            this._settings.get_int("dialog-opacity-idle"),
+        );
         to_hover_opacity.set_to(this._settings.get_int("dialog-opacity-hover"));
 
         widget.add_transition("to-hover-opacity", to_hover_opacity);
@@ -280,10 +289,11 @@ export default class WordbaseIntegrationExtension extends Extension {
     }
 
     /**
-     * @param {string} sentence 
+     * @param {DialogBox} dialog_box
+     * @param {string} sentence
      * @returns {RichLabel.RichLabel}
      */
-    _new_sentence_label(sentence) {
+    _new_sentence_label(dialog_box, sentence) {
         const label = new RichLabel.RichLabel({
             text: sentence,
             x_expand: true,
@@ -293,30 +303,46 @@ export default class WordbaseIntegrationExtension extends Extension {
             "motion-event",
             /**
              * @param {Clutter.Text} text
-             * @param {Clutter.Event} event 
+             * @param {Clutter.Event} event
              * @returns {boolean}
              */
             (text, event) => {
-                const wordbase = this._wordbase;
-                if (!wordbase) {
-                    return;
-                }
-
-                const [pointer_abs_x, pointer_abs_y] = event.get_coords();
-                const [text_abs_x, text_abs_y] = text.get_transformed_position();
-                const [pointer_rel_x, pointer_rel_y] = [pointer_abs_x - text_abs_x, pointer_abs_y - text_abs_y];
-                const char_pos = text.coords_to_position(pointer_rel_x, pointer_rel_y);
-
-                const lookup_text = text.text.slice(
-                    char_pos,
-                    char_pos + this._wordbase.lookup_config.max_request_len,
-                );
-
-                this._wordbase.lookup(lookup_text, (resp) => {
-                    // TODO
-                });
+                this._on_sentence_motion(dialog_box, text, event);
+                return Clutter.EVENT_PROPAGATE;
             },
         );
         return label;
+    }
+
+    /**
+     * @param {DialogBox} dialog_box
+     * @param {Clutter.Text} text
+     * @param {Clutter.Event} event
+     */
+    _on_sentence_motion(dialog_box, text, event) {
+        const wordbase = this._wordbase;
+        if (!wordbase) {
+            return;
+        }
+
+        const [pointer_abs_x, pointer_abs_y] = event.get_coords();
+        const [text_abs_x, text_abs_y] = text.get_transformed_position();
+        const [pointer_rel_x, pointer_rel_y] = [
+            pointer_abs_x - text_abs_x,
+            pointer_abs_y - text_abs_y,
+        ];
+        const char_pos = text.coords_to_position(pointer_rel_x, pointer_rel_y);
+
+        const lookup_text = text.text.slice(
+            char_pos,
+            char_pos + wordbase.lookup_config.max_request_len,
+        );
+
+        wordbase.show_popup({
+            pid: dialog_box.parent.meta_window.get_pid(),
+            origin: [pointer_rel_x, pointer_rel_y],
+            anchor: "BottomLeft",
+            text: lookup_text,
+        });
     }
 }

@@ -5,7 +5,7 @@ use {
     std::sync::Arc,
     tokio::{net::TcpStream, sync::broadcast},
     tokio_tungstenite::{MaybeTlsStream, WebSocketStream},
-    tracing::{info, trace},
+    tracing::{debug, info, trace},
     wordbase::hook::HookSentence,
 };
 
@@ -14,12 +14,12 @@ pub async fn run(
     send_event: broadcast::Sender<Event>,
 ) -> Result<Never> {
     loop {
-        tokio::time::sleep(config.connect_interval).await;
-
+        trace!("Attempting connection");
         let (stream, _) = match tokio_tungstenite::connect_async(&config.url).await {
             Ok(stream) => stream,
             Err(err) => {
                 trace!("Failed to connect: {err:?}");
+                tokio::time::sleep(config.connect_interval).await;
                 continue;
             }
         };
@@ -44,6 +44,7 @@ async fn handle_stream(
             .context("received message which is not UTF-8 text")?;
         let sentence = serde_json::from_str::<HookSentence>(&message)
             .context("received message which is not a texthooker sentence")?;
+        debug!("{sentence:#?}");
         _ = send_event.send(Event::HookSentence(sentence));
     }
 }

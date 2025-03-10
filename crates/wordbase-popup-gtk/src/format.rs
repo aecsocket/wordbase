@@ -208,10 +208,7 @@ fn pitch_label(reading: &str, pitch: &Pitch) -> gtk::Widget {
 }
 
 static GLOSSARY_HTML: LazyLock<String> = LazyLock::new(|| {
-    // TODO: is there a way to fetch this?
-    const ADWAITA_DARK_FG_COLOR: &str = "#ffffff";
-
-    let css = include_str!("glossary.css").replace("var(--t-dark-fg)", ADWAITA_DARK_FG_COLOR);
+    let css = include_str!("glossary.css");
     format!("<style>{css}</style>")
 });
 

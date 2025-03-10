@@ -8,29 +8,40 @@
 
 import Soup from "gi://Soup";
 import GLib from "gi://GLib";
+import { lookingGlass } from "resource:///org/gnome/shell/ui/main.js";
 
 /**
+ * @typedef {Object} LookupConfig
+ * @property {number} max_request_len
+ *
  * @typedef {Object} HookSentence
  * @property {string} process_path
  * @property {string} sentence
- * 
- * @typedef {Object} LookupResponse
- * @property {Object} json
+ *
+ * @typedef {Object} PopupRequest
+ * @property {number} pid
+ * @property {number[]} origin
+ * @property {PopupAnchor} anchor
+ * @property {string} text
+
+ * @typedef {"TopLeft" | "TopRight" | "TopCenter" | "MiddleLeft" | "MiddleRight" | "BottomLeft" | "BottomCenter" | "BottomRight"} PopupAnchor
  */
 
 export class Client {
     /** @private @type {Soup.WebsocketConnection} */
     _connection;
+    /** @private @type {LookupConfig} */
+    _lookup_config;
     /** @type {(function(HookSentence): void)?} */
     on_hook_sentence;
-    /** @private @type {(function(LookupResponse): void)?} */
-    _on_lookup_response;
 
     /**
-     * @param {Soup.WebsocketConnection} connection 
+     * @param {Soup.WebsocketConnection} connection
+     * @param {LookupConfig} lookup_config
      */
-    constructor(connection) {
+    constructor(connection, lookup_config) {
         this._connection = connection;
+        this._lookup_config = lookup_config;
         this.on_hook_sentence = null;
     }
 
@@ -58,32 +69,33 @@ export class Client {
                     on_error(err);
                     return;
                 }
-                const client = new Client(connection);
 
                 const decoder = new TextDecoder();
-                connection.connect("message", (__, message_type, data) => {
-                    if (message_type != Soup.WebsocketDataType.TEXT) {
-                        return;
-                    }
+                handshake(connection, decoder, on_error, (lookup_config) => {
+                    const client = new Client(connection, lookup_config);
 
-                    const message = JSON.parse(decoder.decode(data.toArray()));
-                    switch (message.type) {
-                        case "HookSentence":
-                            // TODO parse and error handling
-                            /** @type {HookSentence} */
-                            const hook_sentence = message;
-                            client.on_hook_sentence?.(hook_sentence);
-                            break;
-                        case "Lookup":
-                            // TODO parse and error handling
-                            /** @type {LookupResponse} */
-                            const lookup_response = message;
-                            client._on_lookup_response?.(lookup_response);
-                            break;
-                    }
+                    connection.connect("message", (__, message_type, data) => {
+                        if (message_type != Soup.WebsocketDataType.TEXT) {
+                            return;
+                        }
+
+                        const message = JSON.parse(
+                            decoder.decode(data.toArray()),
+                        );
+                        switch (message.type) {
+                            case "HookSentence":
+                                const hook_sentence = message;
+                                client.on_hook_sentence?.(hook_sentence);
+                                break;
+                            case "Lookup":
+                                const lookup_response = message;
+                                client._on_lookup_response?.(lookup_response);
+                                break;
+                        }
+                    });
+
+                    on_connect(client);
                 });
-
-                on_connect(client);
             },
         );
     }
@@ -92,15 +104,46 @@ export class Client {
         return this._connection;
     }
 
-    /**
-     * @param {string} text
-     * @param {function(LookupResponse): void} on_response
-     */
-    lookup(text, on_response) {
-        this._on_lookup_response = on_response;
-        this._connection.send_text(JSON.stringify({
-            type: "Lookup",
-            text,
-        }));
+    get lookup_config() {
+        return this._lookup_config;
     }
+
+    /**
+     * @param {PopupRequest} request
+     */
+    show_popup(request) {
+        this._connection.send_text(
+            JSON.stringify({
+                type: "ShowPopup",
+                ...request,
+            }),
+        );
+    }
+}
+
+/**
+ * @param {Soup.WebsocketConnection} connection
+ * @param {TextDecoder} decoder
+ * @param {function(any): void} on_error
+ * @param {function(LookupConfig): void} on_handshake
+ */
+function handshake(connection, decoder, on_error, on_handshake) {
+    let signal_id;
+    signal_id = connection.connect("message", (__, message_type, data) => {
+        connection.disconnect(signal_id);
+
+        if (message_type != Soup.WebsocketDataType.TEXT) {
+            on_error("received non-text message");
+            return;
+        }
+
+        const message = JSON.parse(decoder.decode(data.toArray()));
+        if (message.type === "SyncLookupConfig") {
+            log(
+                `Received lookup config ${JSON.stringify(message.lookup_config)}`,
+            );
+
+            on_handshake(message.lookup_config);
+        }
+    });
 }
