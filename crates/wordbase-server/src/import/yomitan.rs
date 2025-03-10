@@ -12,11 +12,14 @@ use {
         io::Cursor,
         iter,
         path::Path,
-        sync::atomic::{self, AtomicUsize},
+        sync::{
+            Arc,
+            atomic::{self, AtomicUsize},
+        },
     },
     tokio::{
         fs,
-        sync::{Mutex, mpsc, oneshot},
+        sync::{Mutex, Semaphore, mpsc, oneshot},
     },
     tracing::debug,
     wordbase::{
@@ -32,6 +35,7 @@ use {
 
 pub async fn yomitan(
     db: Pool<Sqlite>,
+    import_semaphore: Arc<Semaphore>,
     path: impl AsRef<Path>,
     send_read_to_memory: oneshot::Sender<ReadToMemory>,
 ) -> Result<Result<(), AlreadyExists>> {
@@ -129,7 +133,14 @@ pub async fn yomitan(
         recv_inserted,
     });
 
+    debug!("Waiting for permit to start transaction");
+    let _import_permit = import_semaphore
+        .acquire()
+        .await
+        .context("import permit closed")?;
+    debug!("Permit acquired, starting transaction");
     let mut tx = db.begin().await.context("failed to begin transaction")?;
+    debug!("Started transaction");
 
     let dictionary_id = dictionary::insert(&mut *tx, &meta)
         .await

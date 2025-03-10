@@ -73,8 +73,8 @@ async fn handle_request(
         .context("fetch record task dropped")?
         .context("failed to fetch records")?;
 
-    // let content = ui::Dictionary::from(&records);
-    let content = gtk::Label::new(Some("hello world"));
+    info!("TODO: records = {records:#?}");
+    let content = ui::Dictionary::from(&records);
 
     let window = adw::ApplicationWindow::builder()
         .application(app)

@@ -70,7 +70,7 @@ the pop-up window to the desired coordinates. Note that this makes the pop-up di
 desktop-specific; however, we support the two most commonly used desktops, and it's not particularly
 hard to make an extension for other compositors which handle this functionality.
 
-#### [`wordbase-integration`](./wordbase-integration@aecsocket.github.com)
+#### [`wordbase-integration`](./integrations/wordbase-integration@aecsocket.github.com)
 
 A GNOME shell extension which handles this window movement functionality. In addition, it also
 integrates the texthooker functionality into your desktop - when you receive a new sentence from

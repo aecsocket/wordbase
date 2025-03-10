@@ -79,8 +79,7 @@ async fn main() -> Result<()> {
     let config = Arc::new(Config::default());
 
     let db = SqlitePoolOptions::new()
-        .max_connections(1)
-        .acquire_timeout(Duration::from_secs(99999))
+        .max_connections(8)
         .connect_with(
             SqliteConnectOptions::from_str("sqlite://wordbase.db")?
                 .create_if_missing(true)

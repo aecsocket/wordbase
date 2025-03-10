@@ -4,11 +4,7 @@
         "dockerfile": "Dockerfile"
     },
     "forwardPorts": [9518],
-    "runArgs": [
-        "--add-host=host.docker.internal:host-gateway",
-        // required to create unprivileged namespaces in bwrap for WebKitGTK
-        "--privileged"
-    ],
+    "runArgs": ["--add-host=host.docker.internal:host-gateway", "--privileged"],
     "postCreateCommand": [
         ".devcontainer/install-unidic.sh",
         ".devcontainer/setup-schema-db.sh"
@@ -52,19 +48,14 @@
     "customizations": {
         "vscode": {
             "extensions": [
-                // generic
                 "ms-azuretools.vscode-docker",
                 "GitHub.vscode-pull-request-github",
-                // Rust
                 "rust-lang.rust-analyzer",
                 "vadimcn.vscode-lldb",
                 "tamasfe.even-better-toml",
                 "fill-labs.dependi",
-                // GTK
                 "bodil.blueprint-gtk",
-                // SQLite
                 "qwtel.sqlite-viewer",
-                // GNOME extension
                 "esbenp.prettier-vscode",
                 "dbaeumer.vscode-eslint",
                 "redhat.vscode-xml"

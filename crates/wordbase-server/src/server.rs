@@ -12,7 +12,7 @@ use {
     std::{num::Wrapping, sync::Arc},
     tokio::{
         net::{TcpListener, TcpStream},
-        sync::{broadcast, mpsc, oneshot},
+        sync::{Semaphore, broadcast, mpsc, oneshot},
         task::JoinSet,
     },
     tokio_tungstenite::{WebSocketStream, tungstenite::Message},
@@ -30,7 +30,7 @@ pub async fn run(
     // TODO
     const IMPORTS: &[&str] = &[
         // "1. jitendex-yomitan.zip",
-        "2. JMnedict.zip",
+        // "2. JMnedict.zip",
         "11. [Pitch] NHK 2016.zip",
         "12. JPDB_v2.2_Frequency_Kana_2024-10-13.zip",
     ];
@@ -59,14 +59,17 @@ pub async fn run(
     // ];
 
     let mut joins = JoinSet::<Result<()>>::new();
+    let import_semaphore = Arc::new(Semaphore::new(1));
     for path in IMPORTS {
         let span = info_span!("import", %path);
-        let (send_read_to_memory, recv_read_to_memory) = oneshot::channel();
         let db = db.clone();
+        let import_semaphore = import_semaphore.clone();
+        let (send_read_to_memory, recv_read_to_memory) = oneshot::channel();
         joins.spawn(
             async move {
                 match import::yomitan(
                     db,
+                    import_semaphore,
                     format!("/home/dev/all-dictionaries/{path}"),
                     send_read_to_memory,
                 )

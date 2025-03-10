@@ -1,6 +1,6 @@
 use {
     adw::subclass::prelude::*,
-    gtk::glib,
+    gtk::{glib, prelude::GridExt},
     wordbase::{RecordKind, protocol::LookupResponse},
 };
 
@@ -52,6 +52,8 @@ impl Dictionary {
 
     pub fn from<'a>(records: impl IntoIterator<Item = &'a LookupResponse>) -> Self {
         let this = Self::new();
+        let label = gtk::Label::new(Some("hello world"));
+        this.attach(&label, 0, 0, 1, 1);
         this
     }
 }

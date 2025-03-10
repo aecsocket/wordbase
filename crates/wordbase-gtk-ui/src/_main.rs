@@ -58,8 +58,6 @@ async fn main() {
         .init();
     glib::log_set_default_handler(glib::rust_log_handler);
 
-    if let Some(popup_daemon_pipe_fd) = args.popup_daemon_pipe_fd {}
-
     let (send_lookup_request, recv_lookup_request) =
         mpsc::channel::<BackendRequest>(CHANNEL_BUF_CAP);
     let (send_backend_event, recv_backend_event) =
