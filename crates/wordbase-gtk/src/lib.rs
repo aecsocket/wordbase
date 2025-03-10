@@ -116,11 +116,18 @@ fn ui_for_term<'a>(
 
     let glossary_page = ui::GlossaryPage::new();
     for (source, glossaries) in info.glossary_page {
+        if glossaries.is_empty() {
+            continue;
+        }
+
         let glossary_group = ui::GlossaryGroup::new();
+        glossary_page.append(&glossary_group);
         glossary_group.source().set_text(source_name(source));
 
         for glossary_info in glossaries {
             let glossary_row = ui::GlossaryRow::new();
+            glossary_group.append(&glossary_row);
+
             for tag in glossary_info.tags {
                 glossary_row.tags().append(&tag);
             }
