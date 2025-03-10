@@ -74,7 +74,9 @@ pub enum FromServer {
     /// Server sends a response to [`FromClient::Lookup`] containing a single record.
     #[from]
     Lookup(LookupResponse),
+    /// Server sends a response to [`FromClient::ShowPopup`].
     ShowPopup {
+        /// Whether showing the popup was successful.
         result: Result<ShowPopupResponse, NoRecords>,
     },
     /// Server sends a response to [`FromClient::Lookup`] marking that all
@@ -194,11 +196,17 @@ pub enum PopupAnchor {
     BottomRight,
 }
 
+/// Popup was shown.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShowPopupResponse {
+    /// Number of **characters** (not bytes) along the text that were scanned,
+    /// in order to look up records for them.
+    ///
+    /// You can use this to e.g. highlight the text that is being looked up.
     pub chars_scanned: u64,
 }
 
+/// No records to show, therefore the popup was not shown.
 #[derive(Debug, Clone, Copy, Display, Error, Serialize, Deserialize)]
 #[display("no records to show")]
 pub struct NoRecords;

@@ -67,6 +67,7 @@ async fn backend(
     _hold_guard: ApplicationHoldGuard,
 ) -> Result<Never> {
     let mut dictionaries = HashMap::<DictionaryId, DictionaryState>::new();
+    let mut current_window = None::<gtk::Window>;
     loop {
         let request = tokio::select! {
             request = recv_request.recv() => request,
@@ -87,7 +88,18 @@ async fn backend(
             }
         };
 
-        let result = handle_request(&lookups, &app, &dictionaries, request.request).await;
+        if let Some(window) = current_window.take() {
+            window.close();
+        }
+
+        let result = handle_request(
+            &lookups,
+            &app,
+            &dictionaries,
+            request.request,
+            &mut current_window,
+        )
+        .await;
         _ = request.send_response.send(result).await;
     }
 }
@@ -97,6 +109,7 @@ async fn handle_request(
     app: &adw::Application,
     dictionaries: &HashMap<DictionaryId, DictionaryState>,
     request: ShowPopupRequest,
+    current_window: &mut Option<gtk::Window>,
 ) -> Result<Result<ShowPopupResponse, NoRecords>> {
     const MARGIN: i32 = 16;
 
@@ -148,12 +161,16 @@ async fn handle_request(
 
     let controller = gtk::EventControllerMotion::new();
     window.add_controller(controller.clone());
-    window.present();
-    window.grab_focus();
 
-    controller.connect_leave(move |_| {
-        window.close();
+    controller.connect_leave({
+        let window = window.clone();
+        move |_| {
+            window.close();
+        }
     });
+
+    window.present();
+    *current_window = Some(window.upcast());
 
     Ok(Ok(ShowPopupResponse { chars_scanned }))
 }

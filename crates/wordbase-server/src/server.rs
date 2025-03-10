@@ -257,6 +257,7 @@ async fn handle_message(
     }
     let message =
         serde_json::from_slice::<FromClient>(&data).context("received invalid message")?;
+    debug!("{message:#?}");
 
     match message {
         FromClient::HookSentence(sentence) => {

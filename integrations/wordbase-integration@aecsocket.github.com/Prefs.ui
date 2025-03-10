@@ -47,7 +47,7 @@
                 </child>
                 <child>
                   <object class="GtkLabel" id="dialog_font_label">
-                    <property name="label" translatable="yes">FOOBAR</property>
+                    <property name="label" translatable="yes">TODO</property>
                     <property name="halign">end</property>
                   </object>
                 </child>

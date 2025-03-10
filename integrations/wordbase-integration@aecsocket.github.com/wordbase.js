@@ -8,7 +8,6 @@
 
 import Soup from "gi://Soup";
 import GLib from "gi://GLib";
-import { lookingGlass } from "resource:///org/gnome/shell/ui/main.js";
 
 /**
  * @typedef {Object} LookupConfig
@@ -18,13 +17,16 @@ import { lookingGlass } from "resource:///org/gnome/shell/ui/main.js";
  * @property {string} process_path
  * @property {string} sentence
  *
- * @typedef {Object} PopupRequest
+ * @typedef {Object} ShowPopupRequest
  * @property {number} pid
  * @property {number[]} origin
  * @property {PopupAnchor} anchor
  * @property {string} text
-
+ *
  * @typedef {"TopLeft" | "TopRight" | "TopCenter" | "MiddleLeft" | "MiddleRight" | "BottomLeft" | "BottomCenter" | "BottomRight"} PopupAnchor
+ *
+ * @typedef {Object} ShowPopupResponse
+ * @property {number} chars_scanned
  */
 
 export class Client {
@@ -34,6 +36,8 @@ export class Client {
     _lookup_config;
     /** @type {(function(HookSentence): void)?} */
     on_hook_sentence;
+    /** @type {(function(ShowPopupResponse): void)?} */
+    _on_popup_response;
 
     /**
      * @param {Soup.WebsocketConnection} connection
@@ -43,6 +47,7 @@ export class Client {
         this._connection = connection;
         this._lookup_config = lookup_config;
         this.on_hook_sentence = null;
+        this._on_popup_response = null;
     }
 
     /**
@@ -87,9 +92,9 @@ export class Client {
                                 const hook_sentence = message;
                                 client.on_hook_sentence?.(hook_sentence);
                                 break;
-                            case "Lookup":
-                                const lookup_response = message;
-                                client._on_lookup_response?.(lookup_response);
+                            case "ShowPopup":
+                                const response = message;
+                                client._on_popup_response?.(response);
                                 break;
                         }
                     });
@@ -109,9 +114,11 @@ export class Client {
     }
 
     /**
-     * @param {PopupRequest} request
+     * @param {ShowPopupRequest} request
+     * @param {function(ShowPopupResponse): void} on_response
      */
-    show_popup(request) {
+    show_popup(request, on_response) {
+        this._on_popup_response = on_response;
         this._connection.send_text(
             JSON.stringify({
                 type: "ShowPopup",

@@ -299,48 +299,82 @@ export default class WordbaseIntegrationExtension extends Extension {
             x_expand: true,
             style_class: "sentence",
         });
+
+        const encoder = new TextEncoder();
+        const decoder = new TextDecoder();
+        const sentence_bytes = encoder.encode(sentence);
+
         let last_char_pos = -1;
         label.clutter_text.connect(
             "motion-event",
             /**
-             * @param {Clutter.Text} text
+             * @param {Clutter.Text} clutter_text
              * @param {Clutter.Event} event
              * @returns {boolean}
              */
-            (text, event) => {
+            (clutter_text, event) => {
                 const wordbase = this._wordbase;
                 if (!wordbase) {
+                    return Clutter.EVENT_PROPAGATE;
+                }
+                const primary_button = Clutter.ModifierType.BUTTON1_MASK;
+                if ((event.get_state() & primary_button) !== 0) {
+                    // user is dragging, don't interrupt
                     return Clutter.EVENT_PROPAGATE;
                 }
 
                 const [pointer_abs_x, pointer_abs_y] = event.get_coords();
                 const [text_abs_x, text_abs_y] =
-                    text.get_transformed_position();
+                    clutter_text.get_transformed_position();
                 const [pointer_rel_x, pointer_rel_y] = [
                     pointer_abs_x - text_abs_x,
                     pointer_abs_y - text_abs_y,
                 ];
-                const char_pos = text.coords_to_position(
+
+                // THEY LIE! this is in BYTES, not CHARACTERS!
+                // it sure is good that people will only ever use this extension
+                // on ASCII text, and not something weird and foreign like
+                // Japanese text! 😀😀😀😀😀😀😀
+                const char_pos_bytes = clutter_text.coords_to_position(
                     pointer_rel_x,
                     pointer_rel_y,
                 );
-                if (char_pos == last_char_pos) {
-                    return Clutter.EVENT_PROPAGATE;
-                }
-                last_char_pos = char_pos;
+                const bytes_until_pos = sentence_bytes.slice(0, char_pos_bytes);
+                const char_pos = decoder.decode(bytes_until_pos).length;
 
-                const lookup_text = text.text.slice(
+                const lookup_text = clutter_text.text.slice(
                     char_pos,
                     char_pos + wordbase.lookup_config.max_request_len,
                 );
+                log(
+                    `pos = ${char_pos_bytes} | ${char_pos} / lookup = ${lookup_text}`,
+                );
 
-                wordbase.show_popup({
-                    pid: 0, // TODO dialog_box.parent.meta_window.get_pid(),
-                    origin: [pointer_rel_x, pointer_rel_y],
-                    anchor: "BottomLeft",
-                    text: lookup_text,
-                });
+                clutter_text.grab_key_focus();
+                clutter_text.set_selection(char_pos, char_pos + 3);
+
                 return Clutter.EVENT_PROPAGATE;
+
+                // if (char_pos == last_char_pos) {
+                //     return Clutter.EVENT_PROPAGATE;
+                // }
+                // last_char_pos = char_pos;
+
+                // wordbase.show_popup(
+                //     {
+                //         pid: 0, // TODO dialog_box.parent.meta_window.get_pid(),
+                //         origin: [pointer_rel_x, pointer_rel_y],
+                //         anchor: "BottomLeft",
+                //         text: lookup_text,
+                //     },
+                //     (response) => {
+                //         label.clutter_text.set_selection(
+                //             char_pos,
+                //             char_pos + response.chars_scanned,
+                //         );
+                //     },
+                // );
+                // return Clutter.EVENT_PROPAGATE;
             },
         );
         return label;
