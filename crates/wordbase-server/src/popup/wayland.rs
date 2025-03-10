@@ -170,6 +170,13 @@ async fn handle_request(
     });
 
     window.present();
+
+    let w = window.clone();
+    glib::timeout_add_local(std::time::Duration::from_secs(1), move || {
+        w.set_visible(!w.is_visible());
+        glib::ControlFlow::Continue
+    });
+
     *current_window = Some(window.upcast());
 
     Ok(Ok(ShowPopupResponse { chars_scanned }))

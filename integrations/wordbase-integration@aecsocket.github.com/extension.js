@@ -304,7 +304,7 @@ export default class WordbaseIntegrationExtension extends Extension {
         const decoder = new TextDecoder();
         const sentence_bytes = encoder.encode(sentence);
 
-        let last_char_pos = -1;
+        let last_char_pos_bytes = -1;
         label.clutter_text.connect(
             "motion-event",
             /**
@@ -339,42 +339,34 @@ export default class WordbaseIntegrationExtension extends Extension {
                     pointer_rel_x,
                     pointer_rel_y,
                 );
+                if (char_pos_bytes == last_char_pos_bytes) {
+                    return Clutter.EVENT_PROPAGATE;
+                }
+                last_char_pos_bytes = char_pos_bytes;
+
                 const bytes_until_pos = sentence_bytes.slice(0, char_pos_bytes);
                 const char_pos = decoder.decode(bytes_until_pos).length;
-
                 const lookup_text = clutter_text.text.slice(
                     char_pos,
                     char_pos + wordbase.lookup_config.max_request_len,
                 );
-                log(
-                    `pos = ${char_pos_bytes} | ${char_pos} / lookup = ${lookup_text}`,
+
+                wordbase.show_popup(
+                    {
+                        pid: 0, // TODO dialog_box.parent.meta_window.get_pid(),
+                        origin: [pointer_rel_x, pointer_rel_y],
+                        anchor: "BottomLeft",
+                        text: lookup_text,
+                    },
+                    (response) => {
+                        clutter_text.grab_key_focus();
+                        clutter_text.set_selection(
+                            char_pos,
+                            char_pos + response.chars_scanned,
+                        );
+                    },
                 );
-
-                clutter_text.grab_key_focus();
-                clutter_text.set_selection(char_pos, char_pos + 3);
-
                 return Clutter.EVENT_PROPAGATE;
-
-                // if (char_pos == last_char_pos) {
-                //     return Clutter.EVENT_PROPAGATE;
-                // }
-                // last_char_pos = char_pos;
-
-                // wordbase.show_popup(
-                //     {
-                //         pid: 0, // TODO dialog_box.parent.meta_window.get_pid(),
-                //         origin: [pointer_rel_x, pointer_rel_y],
-                //         anchor: "BottomLeft",
-                //         text: lookup_text,
-                //     },
-                //     (response) => {
-                //         label.clutter_text.set_selection(
-                //             char_pos,
-                //             char_pos + response.chars_scanned,
-                //         );
-                //     },
-                // );
-                // return Clutter.EVENT_PROPAGATE;
             },
         );
         return label;
