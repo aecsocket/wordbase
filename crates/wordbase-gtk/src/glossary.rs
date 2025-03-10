@@ -89,6 +89,9 @@ pub fn html(write_html: impl FnOnce(&mut String)) -> gtk::Widget {
     write_html(&mut html);
     view.load_html(&html, None);
 
+    // don't allow opening the context menu
+    view.connect_context_menu(|_, _, _| true);
+
     // when attempting to navigate to a URL, open in the user's browser instead
     view.connect_decide_policy(|_, decision, decision_type| {
         if decision_type != webkit::PolicyDecisionType::NavigationAction {
