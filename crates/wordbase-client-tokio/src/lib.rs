@@ -19,7 +19,7 @@ use {
         hook::HookSentence,
         protocol::{
             DictionaryNotFound, FromClient, FromServer, LookupConfig, LookupRequest,
-            LookupResponse, ShowPopupRequest,
+            LookupResponse, NoRecords, ShowPopupRequest, ShowPopupResponse,
         },
     },
 };
@@ -240,11 +240,14 @@ where
         )))
     }
 
-    pub async fn show_popup(&mut self, request: ShowPopupRequest) -> Result<(), ConnectionError> {
+    pub async fn show_popup(
+        &mut self,
+        request: ShowPopupRequest,
+    ) -> Result<Result<ShowPopupResponse, NoRecords>, ConnectionError> {
         self.connection.send(&FromClient::from(request)).await?;
         loop {
             match self.connection.recv().await? {
-                FromServer::ShowPopup => return Ok(()),
+                FromServer::ShowPopup { result } => return Ok(result),
                 message => self.fallback_handle(message)?,
             }
         }

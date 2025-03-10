@@ -1,7 +1,7 @@
 extern crate gtk4 as gtk;
 extern crate libadwaita as adw;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use foldhash::{HashMap, HashMapExt};
 use futures::never::Never;
 use gtk4::{
@@ -13,16 +13,19 @@ use libadwaita::prelude::BinExt;
 use sqlx::{Pool, Sqlite};
 use tokio::sync::broadcast;
 use tracing::{error, info, warn};
-use wordbase::{DictionaryId, DictionaryState, protocol::ShowPopupRequest};
+use wordbase::{
+    DictionaryId, DictionaryState,
+    protocol::{NoRecords, ShowPopupRequest, ShowPopupResponse},
+};
 
-use crate::{ServerEvent, term};
+use crate::{BackendPopupRequest, ServerEvent, term};
 
 const APP_ID: &str = "com.github.aecsocket.Wordbase";
 
 pub fn run(
     db: Pool<Sqlite>,
     rt: tokio::runtime::Handle,
-    recv_popup_request: broadcast::Receiver<ShowPopupRequest>,
+    recv_popup_request: broadcast::Receiver<BackendPopupRequest>,
     recv_server_event: broadcast::Receiver<ServerEvent>,
 ) -> Result<()> {
     info!("Using Wayland popup backend via GTK/Adwaita");
@@ -69,7 +72,7 @@ pub fn run(
 async fn backend(
     db: Pool<Sqlite>,
     rt: tokio::runtime::Handle,
-    mut recv_popup_request: broadcast::Receiver<ShowPopupRequest>,
+    mut recv_popup_request: broadcast::Receiver<BackendPopupRequest>,
     mut recv_server_event: broadcast::Receiver<ServerEvent>,
     app: adw::Application,
     _hold_guard: ApplicationHoldGuard,
@@ -77,7 +80,7 @@ async fn backend(
     let mut dictionaries = HashMap::<DictionaryId, DictionaryState>::new();
     loop {
         let request = tokio::select! {
-            r = recv_popup_request.recv() => r,
+            request = recv_popup_request.recv() => request,
             Ok(ServerEvent::SyncDictionaries(new_dictionaries)) = recv_server_event.recv() => {
                 dictionaries = new_dictionaries
                     .into_iter()
@@ -86,10 +89,22 @@ async fn backend(
                 continue;
             }
         };
-        let request = request.context("popup request channel closed")?;
+        let request = match request {
+            Ok(request) => request,
+            Err(broadcast::error::RecvError::Closed) => bail!("popup request channel closed"),
+            Err(broadcast::error::RecvError::Lagged(n)) => {
+                warn!("Popup show thread lagged by {n} requests");
+                continue;
+            }
+        };
 
-        if let Err(err) = handle_request(db.clone(), &rt, &app, &dictionaries, request).await {
-            warn!("Failed to handle popup request: {err:?}");
+        match handle_request(db.clone(), &rt, &app, &dictionaries, request.request).await {
+            Ok(result) => {
+                _ = request.send_response.send(result).await;
+            }
+            Err(err) => {
+                warn!("Failed to handle popup request: {err:?}");
+            }
         }
     }
 }
@@ -100,9 +115,10 @@ async fn handle_request(
     app: &adw::Application,
     dictionaries: &HashMap<DictionaryId, DictionaryState>,
     request: ShowPopupRequest,
-) -> Result<()> {
+) -> Result<Result<ShowPopupResponse, NoRecords>> {
     const MARGIN: i32 = 16;
 
+    let chars_scanned = request.text.chars().count() as u64;
     let records = rt
         .spawn(async move {
             term::lookup(&db, &request.text, wordbase_gtk::SUPPORTED_RECORD_KINDS).await
@@ -110,6 +126,9 @@ async fn handle_request(
         .await
         .context("fetch record task dropped")?
         .context("failed to fetch records")?;
+    if records.is_empty() {
+        return Ok(Err(NoRecords));
+    }
 
     let content = gtk::ScrolledWindow::new();
 
@@ -138,7 +157,15 @@ async fn handle_request(
         .default_height(300)
         .content(&content)
         .build();
-    window.present();
 
-    Ok(())
+    let controller = gtk::EventControllerMotion::new();
+    window.add_controller(controller.clone());
+    window.present();
+    window.grab_focus();
+
+    controller.connect_leave(move |_| {
+        window.close();
+    });
+
+    Ok(Ok(ShowPopupResponse { chars_scanned }))
 }

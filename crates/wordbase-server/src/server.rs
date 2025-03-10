@@ -1,6 +1,6 @@
 use {
     crate::{
-        Config, ServerEvent, dictionary,
+        BackendPopupRequest, CHANNEL_BUF_CAP, Config, ServerEvent, dictionary,
         import::{self, ImportError},
         mecab::{MecabInfo, MecabRequest},
         term,
@@ -17,7 +17,7 @@ use {
     },
     tokio_tungstenite::{WebSocketStream, tungstenite::Message},
     tracing::{Instrument, debug, info, info_span, warn},
-    wordbase::protocol::{FromClient, FromServer, LookupRequest, ShowPopupRequest},
+    wordbase::protocol::{FromClient, FromServer, LookupRequest, NoRecords, ShowPopupResponse},
 };
 
 pub async fn run(
@@ -25,7 +25,7 @@ pub async fn run(
     config: Arc<Config>,
     send_mecab_request: mpsc::Sender<MecabRequest>,
     send_event: broadcast::Sender<ServerEvent>,
-    send_popup_request: broadcast::Sender<ShowPopupRequest>,
+    send_popup_request: broadcast::Sender<BackendPopupRequest>,
 ) -> Result<Never> {
     // TODO
     // const IMPORTS: &[&str] = &[
@@ -189,7 +189,7 @@ async fn handle_stream(
     db: Pool<Sqlite>,
     send_mecab_request: mpsc::Sender<MecabRequest>,
     send_event: broadcast::Sender<ServerEvent>,
-    send_popup_request: broadcast::Sender<ShowPopupRequest>,
+    send_popup_request: broadcast::Sender<BackendPopupRequest>,
     stream: TcpStream,
 ) -> Result<Never> {
     let stream = tokio_tungstenite::accept_async(stream)
@@ -258,7 +258,7 @@ async fn handle_message(
     db: &Pool<Sqlite>,
     send_mecab_request: &mpsc::Sender<MecabRequest>,
     send_event: &broadcast::Sender<ServerEvent>,
-    send_popup_request: &broadcast::Sender<ShowPopupRequest>,
+    send_popup_request: &broadcast::Sender<BackendPopupRequest>,
     connection: &mut Connection,
     data: Message,
 ) -> Result<()> {
@@ -286,11 +286,20 @@ async fn handle_message(
             Ok(())
         }
         FromClient::ShowPopup(request) => {
+            let (send_response, mut recv_response) =
+                mpsc::channel::<Result<ShowPopupResponse, NoRecords>>(CHANNEL_BUF_CAP);
             send_popup_request
-                .send(request)
+                .send(BackendPopupRequest {
+                    request,
+                    send_response,
+                })
                 .context("failed to send popup request")?;
+            let result = recv_response
+                .recv()
+                .await
+                .context("failed to receive popup response from backend")?;
             connection
-                .write(&FromServer::ShowPopup)
+                .write(&FromServer::ShowPopup { result })
                 .await
                 .context("failed to send show popup response")?;
             Ok(())

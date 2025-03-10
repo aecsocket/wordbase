@@ -168,7 +168,7 @@ async fn show_popup(client: &mut SocketClient, text: String) -> Result<()> {
             origin: (0, 0),
             anchor: PopupAnchor::TopLeft,
         })
-        .await?;
+        .await??;
     Ok(())
 }
 

@@ -74,7 +74,9 @@ pub enum FromServer {
     /// Server sends a response to [`FromClient::Lookup`] containing a single record.
     #[from]
     Lookup(LookupResponse),
-    ShowPopup,
+    ShowPopup {
+        result: Result<ShowPopupResponse, NoRecords>,
+    },
     /// Server sends a response to [`FromClient::Lookup`] marking that all
     /// records have been sent.
     LookupDone,
@@ -189,6 +191,15 @@ pub enum PopupAnchor {
     BottomCenter,
     BottomRight,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShowPopupResponse {
+    pub chars_scanned: u64,
+}
+
+#[derive(Debug, Clone, Copy, Display, Error, Serialize, Deserialize)]
+#[display("no records to show")]
+pub struct NoRecords;
 
 /// Attempted to perform an operation on a [`DictionaryId`] which does not
 /// exist.

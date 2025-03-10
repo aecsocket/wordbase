@@ -181,13 +181,13 @@ export default class WordbaseIntegrationExtension extends Extension {
         let dialog_box = this._dialog_boxes.get(message.process_path);
         if (!dialog_box) {
             const target_window = global.display.get_focus_window();
-            if (!target_window) {
-                return;
+            if (target_window) {
+                /** @type {Meta.WindowActor} */
+                const window_actor = target_window.get_compositor_private();
+                dialog_box = this._new_dialog_box(window_actor);
+            } else {
+                dialog_box = this._new_dialog_box(global.window_group);
             }
-            /** @type {Meta.WindowActor} */
-            const window_actor = target_window.get_compositor_private();
-            dialog_box = this._new_dialog_box(window_actor);
-            // dialog_box = this._new_dialog_box(global.window_group);
 
             this._dialog_boxes.set(message.process_path, dialog_box);
         }
@@ -299,6 +299,7 @@ export default class WordbaseIntegrationExtension extends Extension {
             x_expand: true,
             style_class: "sentence",
         });
+        let last_char_pos = -1;
         label.clutter_text.connect(
             "motion-event",
             /**
@@ -307,42 +308,41 @@ export default class WordbaseIntegrationExtension extends Extension {
              * @returns {boolean}
              */
             (text, event) => {
-                this._on_sentence_motion(dialog_box, text, event);
+                const wordbase = this._wordbase;
+                if (!wordbase) {
+                    return Clutter.EVENT_PROPAGATE;
+                }
+
+                const [pointer_abs_x, pointer_abs_y] = event.get_coords();
+                const [text_abs_x, text_abs_y] =
+                    text.get_transformed_position();
+                const [pointer_rel_x, pointer_rel_y] = [
+                    pointer_abs_x - text_abs_x,
+                    pointer_abs_y - text_abs_y,
+                ];
+                const char_pos = text.coords_to_position(
+                    pointer_rel_x,
+                    pointer_rel_y,
+                );
+                if (char_pos == last_char_pos) {
+                    return Clutter.EVENT_PROPAGATE;
+                }
+                last_char_pos = char_pos;
+
+                const lookup_text = text.text.slice(
+                    char_pos,
+                    char_pos + wordbase.lookup_config.max_request_len,
+                );
+
+                wordbase.show_popup({
+                    pid: 0, // TODO dialog_box.parent.meta_window.get_pid(),
+                    origin: [pointer_rel_x, pointer_rel_y],
+                    anchor: "BottomLeft",
+                    text: lookup_text,
+                });
                 return Clutter.EVENT_PROPAGATE;
             },
         );
         return label;
-    }
-
-    /**
-     * @param {DialogBox} dialog_box
-     * @param {Clutter.Text} text
-     * @param {Clutter.Event} event
-     */
-    _on_sentence_motion(dialog_box, text, event) {
-        const wordbase = this._wordbase;
-        if (!wordbase) {
-            return;
-        }
-
-        const [pointer_abs_x, pointer_abs_y] = event.get_coords();
-        const [text_abs_x, text_abs_y] = text.get_transformed_position();
-        const [pointer_rel_x, pointer_rel_y] = [
-            pointer_abs_x - text_abs_x,
-            pointer_abs_y - text_abs_y,
-        ];
-        const char_pos = text.coords_to_position(pointer_rel_x, pointer_rel_y);
-
-        const lookup_text = text.text.slice(
-            char_pos,
-            char_pos + wordbase.lookup_config.max_request_len,
-        );
-
-        wordbase.show_popup({
-            pid: dialog_box.parent.meta_window.get_pid(),
-            origin: [pointer_rel_x, pointer_rel_y],
-            anchor: "BottomLeft",
-            text: lookup_text,
-        });
     }
 }

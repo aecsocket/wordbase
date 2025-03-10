@@ -21,7 +21,7 @@ use {
         time::Duration,
     },
     tokio::{
-        sync::{broadcast, mpsc},
+        sync::{broadcast, mpsc, oneshot},
         task::JoinSet,
     },
     tracing::{Instrument, info, info_span, level_filters::LevelFilter},
@@ -29,7 +29,7 @@ use {
     wordbase::{
         DictionaryState,
         hook::HookSentence,
-        protocol::{DEFAULT_PORT, LookupConfig, ShowPopupRequest},
+        protocol::{DEFAULT_PORT, LookupConfig, NoRecords, ShowPopupRequest, ShowPopupResponse},
     },
 };
 
@@ -68,6 +68,12 @@ enum ServerEvent {
     SyncDictionaries(Vec<DictionaryState>),
 }
 
+#[derive(Debug, Clone)]
+struct BackendPopupRequest {
+    request: ShowPopupRequest,
+    send_response: mpsc::Sender<Result<ShowPopupResponse, NoRecords>>,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
@@ -97,7 +103,7 @@ async fn main() -> Result<()> {
     let (send_mecab_request, recv_mecab_request) = mpsc::channel::<MecabRequest>(CHANNEL_BUF_CAP);
     let (send_server_event, recv_server_event) = broadcast::channel::<ServerEvent>(CHANNEL_BUF_CAP);
     let (send_popup_request, recv_popup_request) =
-        broadcast::channel::<ShowPopupRequest>(CHANNEL_BUF_CAP);
+        broadcast::channel::<BackendPopupRequest>(CHANNEL_BUF_CAP);
 
     let rt = tokio::runtime::Handle::current();
     let mut tasks = JoinSet::new();
