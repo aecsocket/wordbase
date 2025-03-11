@@ -47,7 +47,7 @@ pub async fn run(state: State) -> Result<Never> {
         "7. [Monolingual] デジタル大辞泉.zip",
         "8. [Monolingual] PixivLight.zip",
         "9. [Monolingual] 実用日本語表現辞典 Extended (Recommended).zip",
-        "10. kanjiten.zip",
+        // "10. kanjiten.zip",
         "11. [Pitch] NHK 2016.zip",
         "12. JPDB_v2.2_Frequency_Kana_2024-10-13.zip",
         "13. [Freq] VN Freq v2.zip",

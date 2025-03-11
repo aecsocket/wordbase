@@ -7,7 +7,6 @@
  */
 
 import Soup from "gi://Soup";
-import GLib from "gi://GLib";
 import Gio from "gi://Gio";
 import St from "gi://St";
 import Clutter from "gi://Clutter";
@@ -21,6 +20,8 @@ import * as Area from "./ui/dragArea.js";
 import * as RichLabel from "./ui/richLabel.js";
 import * as StickyScrollView from "./ui/stickyScrollView.js";
 import * as Wordbase from "./wordbase.js";
+import * as Texthooker from "./texthooker.js";
+import * as IntegrationService from "./integrationService.js";
 
 /**
  * @typedef {Object} DialogBox
@@ -53,8 +54,9 @@ export default class WordbaseIntegrationExtension extends Extension {
         });
         this._connect_wordbase();
 
+        IntegrationService.enable();
+
         // GLib.timeout_add(0, 1000, () => {
-        //     log(`should connect? ${!this._wordbase}`);
         //     if (!this._wordbase) {
         //         this._connect_wordbase();
         //     }
@@ -77,6 +79,8 @@ export default class WordbaseIntegrationExtension extends Extension {
         this._dialog_boxes = undefined;
 
         this._wordbase = undefined;
+
+        IntegrationService.disable();
     }
 
     /**
@@ -156,18 +160,6 @@ export default class WordbaseIntegrationExtension extends Extension {
                 client.on_hook_sentence = (message) => {
                     this._on_hook_sentence(message);
                 };
-
-                // const decoder = new TextDecoder();
-                // connection.connect("message", (__, message_type, message) => {
-                //     if (message_type != Soup.WebsocketDataType.TEXT) {
-                //         return;
-                //     }
-
-                //     // TODO error handling
-                //     /** @type {NewSentence} */
-                //     const new_sentence = JSON.parse(decoder.decode(message.toArray()));
-                //     this._on_new_sentence(new_sentence);
-                // });
             },
         );
     }
@@ -354,7 +346,10 @@ export default class WordbaseIntegrationExtension extends Extension {
                 wordbase.show_popup(
                     {
                         pid: 0, // TODO dialog_box.parent.meta_window.get_pid(),
-                        origin: [pointer_rel_x, pointer_rel_y],
+                        origin: [
+                            Math.round(pointer_rel_x),
+                            Math.round(pointer_rel_y),
+                        ],
                         anchor: "BottomLeft",
                         text: lookup_text,
                     },

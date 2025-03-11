@@ -20,7 +20,7 @@ use crate::{ServerEvent, lookup};
 
 use super::Request;
 
-const APP_ID: &str = "com.github.aecsocket.Wordbase";
+const APP_ID: &str = "com.github.aecsocket.WordbasePopup";
 
 pub fn run(
     lookups: lookup::Client,
@@ -270,15 +270,6 @@ body {
     border-radius: 8px;
     padding: 20px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.header {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    background-color: #ffffff;
-    padding: 20px;
-    transition: padding 0.3s ease, box-shadow 0.3s ease;
 }
 "##;
 
