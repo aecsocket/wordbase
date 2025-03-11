@@ -17,11 +17,12 @@ const INTERFACE = `
 <node>
     <interface name="com.github.aecsocket.WordbaseIntegration">
         <method name="SetPopupPosition">
+            <arg type="t" direction="in" name="target_id"/>
             <arg type="u" direction="in" name="target_pid"/>
             <arg type="s" direction="in" name="target_title"/>
             <arg type="s" direction="in" name="target_wm_class"/>
-            <arg type="u" direction="in" name="x"/>
-            <arg type="u" direction="in" name="y"/>
+            <arg type="i" direction="in" name="x"/>
+            <arg type="i" direction="in" name="y"/>
         </method>
     </interface>
 </node>`;
@@ -73,18 +74,26 @@ function on_bus_acquired(connection, name) {
 
 class IntegrationService {
     /**
-     * @param {string} target_pid
+     * @param {number} target_id
+     * @param {number} target_pid
      * @param {string} target_title
      * @param {string} target_wm_class
      * @param {number} x
      * @param {number} y
      */
-    SetPopupPosition(target_pid, target_title, target_wm_class, x, y) {
+    SetPopupPosition(
+        target_id,
+        target_pid,
+        target_title,
+        target_wm_class,
+        x,
+        y,
+    ) {
         const popup_window = global
             .get_window_actors()
             .find((actor) => actor.meta_window.wm_class === APP_ID);
         if (!popup_window) {
-            log(`Failed to find popup window with app ID "${APP_ID}"`);
+            logError(`Failed to find popup window with app ID "${APP_ID}"`);
             return;
         }
 
@@ -92,6 +101,7 @@ class IntegrationService {
          * @param {Meta.Window} window
          */
         const is_valid_window = (window) =>
+            (target_id === 0 || target_id === window.get_id()) &&
             (target_pid === 0 || target_pid === window.get_pid()) &&
             (target_title === "" || target_title === window.title) &&
             (target_wm_class === "" || target_wm_class === window.wm_class);
@@ -100,16 +110,14 @@ class IntegrationService {
             .get_window_actors()
             .filter((actor) => is_valid_window(actor.meta_window));
         if (target_windows.length < 1) {
-            Main.notifyError(
-                "Set Popup Position",
-                `Failed to find target window matching pid ${target_pid} title "${target_title}" wm_class "${target_wm_class}"`,
+            logError(
+                `Failed to find target window matching id ${target_id} pid ${target_pid} title "${target_title}" wm_class "${target_wm_class}"`,
             );
             return;
         }
         if (target_windows.length > 1) {
-            Main.notifyError(
-                "Set Popup Position",
-                `Found ${target_windows.length} target windows matching pid ${target_pid} title "${target_title}" wm_class "${target_wm_class}"`,
+            logError(
+                `Found ${target_windows.length} target windows matching id ${target_id} pid ${target_pid} title "${target_title}" wm_class "${target_wm_class}"`,
             );
             return;
         }
@@ -120,6 +128,5 @@ class IntegrationService {
 
         popup_window.meta_window.raise();
         popup_window.meta_window.move_frame(false, popup_x, popup_y);
-        Main.notify("Success", "Moved window");
     }
 }

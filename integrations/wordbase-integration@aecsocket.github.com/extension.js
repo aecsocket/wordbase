@@ -343,13 +343,32 @@ export default class WordbaseIntegrationExtension extends Extension {
                     char_pos + wordbase.lookup_config.max_request_len,
                 );
 
+                const [ok, text_pos_x, text_pos_y, text_line_height] =
+                    clutter_text.position_to_coords(char_pos);
+                if (!ok) {
+                    return Clutter.EVENT_PROPAGATE;
+                }
+
+                const [window_abs_x, window_abs_y] =
+                    dialog_box.parent.get_transformed_position();
+                const [user_offset_x, user_offset_y] = [
+                    this._settings.get_int("dialog-popup-x-offset"),
+                    this._settings.get_int("dialog-popup-y-offset"),
+                ];
+                const origin = [
+                    text_abs_x - window_abs_x + text_pos_x + user_offset_x,
+                    text_abs_y - window_abs_y + text_pos_y + user_offset_y,
+                ];
+
+                dialog_box.parent.meta_window.get_id();
+
                 wordbase.show_popup(
                     {
-                        pid: 0, // TODO dialog_box.parent.meta_window.get_pid(),
-                        origin: [
-                            Math.round(pointer_rel_x),
-                            Math.round(pointer_rel_y),
-                        ],
+                        target_id: dialog_box.parent.meta_window.get_id(),
+                        target_pid: null,
+                        target_title: null,
+                        target_wm_class: null,
+                        origin,
                         anchor: "BottomLeft",
                         text: lookup_text,
                     },

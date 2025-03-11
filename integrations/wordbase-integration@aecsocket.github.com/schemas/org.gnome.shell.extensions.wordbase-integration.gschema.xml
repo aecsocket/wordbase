@@ -14,5 +14,13 @@
       <default>255</default>
       <summary>Opacity of the dialog box when the pointer hovers over it</summary>
     </key>
+    <key name="dialog-popup-x-offset" type="i">
+      <default>0</default>
+      <summary>X offset of the popup when looking up a word in the dialog box</summary>
+    </key>
+    <key name="dialog-popup-y-offset" type="i">
+      <default>-10</default>
+      <summary>Y offset of the popup when looking up a word in the dialog box</summary>
+    </key>
   </schema>
 </schemalist>

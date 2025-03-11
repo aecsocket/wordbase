@@ -38,6 +38,7 @@ tightly with your desktop to provide a seamless experience for language learning
     - [ ] Control popup dictionary position and overlay visibility
     - [x] Do lookups from your [texthooker] in your visual novel
     - [ ] Add Anki notes with VN screenshots
+    - [ ] Font selection
   - Linux/KDE
     - (not supported yet)
   - Linux/X11

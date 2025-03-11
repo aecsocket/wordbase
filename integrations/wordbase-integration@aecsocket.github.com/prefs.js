@@ -39,6 +39,8 @@ export default class WordbaseIntegrationPreferences extends ExtensionPreferences
         bind("wordbase_url", "wordbase-url", "text");
         bind("dialog_opacity_idle", "dialog-opacity-idle", "value");
         bind("dialog_opacity_hover", "dialog-opacity-hover", "value");
+        bind("dialog_popup_x_offset", "dialog-popup-x-offset", "value");
+        bind("dialog_popup_y_offset", "dialog-popup-y-offset", "value");
 
         /** @type {Adw.PreferencesRow} */
         const dialog_font_row = ui.get_object("dialog_font_row");

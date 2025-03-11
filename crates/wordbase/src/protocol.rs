@@ -194,10 +194,20 @@ pub struct LookupResponse {
 /// fields as possible.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShowPopupRequest {
+    /// Internal ID of the window.
+    ///
+    /// This is an opaque identifier which is entirely platform-specific.
+    /// This is the most reliable identifier to use to identify a window, but
+    /// is usually internal to the window manager. If you are working in an
+    /// environment where you have access to this ID (i.e. a window manager
+    /// extension), prioritise using this filter.
+    pub target_id: Option<u64>,
     /// Process ID which owns the target window.
     pub target_pid: Option<u32>,
     /// Title of the target window.
     pub target_title: Option<String>,
+    /// Linux `WM_CLASS` (or whatever is reported as the `WM_CLASS`) of the
+    /// target window.
     pub target_wm_class: Option<String>,
     /// X and Y position of the pop-up [origin], in surface-local coordinates.
     ///
@@ -205,7 +215,7 @@ pub struct ShowPopupRequest {
     /// frame (what the user would consider the "window", minus any decoration).
     ///
     /// [origin]: ShowPopupRequest::anchor
-    pub origin: (u32, u32),
+    pub origin: (i32, i32),
     /// What corner the popup will expand out from.
     pub anchor: PopupAnchor,
     /// Text to look up in the dictionary.
@@ -219,12 +229,12 @@ pub struct ShowPopupRequest {
 #[expect(missing_docs, reason = "self-explanatory")]
 pub enum PopupAnchor {
     TopLeft,
-    TopCenter,
+    TopMiddle,
     TopRight,
     MiddleLeft,
     MiddleRight,
     BottomLeft,
-    BottomCenter,
+    BottomMiddle,
     BottomRight,
 }
 

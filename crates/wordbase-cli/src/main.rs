@@ -38,9 +38,9 @@ enum Command {
         #[arg(long)]
         target_wm_class: Option<String>,
         #[arg(long, default_value_t = 0)]
-        origin_x: u32,
+        origin_x: i32,
         #[arg(long, default_value_t = 0)]
-        origin_y: u32,
+        origin_y: i32,
         text: String,
     },
     Hook {
@@ -220,12 +220,13 @@ async fn show_popup(
     target_pid: Option<u32>,
     target_title: Option<String>,
     target_wm_class: Option<String>,
-    origin_x: u32,
-    origin_y: u32,
+    origin_x: i32,
+    origin_y: i32,
     text: String,
 ) -> Result<()> {
     let response = client
         .show_popup(ShowPopupRequest {
+            target_id: None,
             target_pid,
             target_title,
             target_wm_class,

@@ -17,7 +17,7 @@ use tracing::{error, info, warn};
 use webkit6::prelude::{PolicyDecisionExt, WebViewExt};
 use wordbase::{
     DictionaryId,
-    protocol::{LookupRequest, NoRecords, ShowPopupRequest, ShowPopupResponse},
+    protocol::{LookupRequest, NoRecords, PopupAnchor, ShowPopupRequest, ShowPopupResponse},
 };
 
 use crate::{ServerEvent, lookup};
@@ -80,18 +80,6 @@ struct State {
 }
 
 async fn backend(mut state: State) -> Result<Never> {
-    let dbus = state.app.dbus_connection().context("no dbus connection")?;
-    let integration = gio::DBusProxy::new_future(
-        &dbus,
-        gio::DBusProxyFlags::NONE,
-        None,
-        Some(BUS_NAME),
-        OBJECT_PATH,
-        INTERFACE_NAME,
-    )
-    .await
-    .context("failed to create dbus proxy")?;
-
     let mut popup = None::<PopupInfo>;
     let mut dictionary_names = HashMap::<DictionaryId, Arc<str>>::new();
     loop {
@@ -114,21 +102,13 @@ async fn backend(mut state: State) -> Result<Never> {
             }
         };
 
-        let result = handle_request(
-            &state,
-            &integration,
-            &mut popup,
-            &dictionary_names,
-            request.request,
-        )
-        .await;
+        let result = handle_request(&state, &mut popup, &dictionary_names, request.request).await;
         _ = request.send_response.send(result).await;
     }
 }
 
 async fn handle_request(
     state: &State,
-    integration: &gio::DBusProxy,
     popup: &mut Option<PopupInfo>,
     dictionary_names: &HashMap<DictionaryId, Arc<str>>,
     request: ShowPopupRequest,
@@ -167,18 +147,39 @@ async fn handle_request(
     popup.web_view.load_html(&html, None);
     popup.window.set_visible(true);
 
+    let (request_x, request_y) = request.origin;
+    let origin_x = match request.anchor {
+        PopupAnchor::TopLeft | PopupAnchor::MiddleLeft | PopupAnchor::BottomLeft => request_x,
+        PopupAnchor::TopMiddle | PopupAnchor::BottomMiddle => {
+            request_x.saturating_sub(popup.window.width() / 2)
+        }
+        PopupAnchor::TopRight | PopupAnchor::MiddleRight | PopupAnchor::BottomRight => {
+            request_x.saturating_sub(popup.window.width())
+        }
+    };
+    let origin_y = match request.anchor {
+        PopupAnchor::TopLeft | PopupAnchor::TopMiddle | PopupAnchor::TopRight => request_y,
+        PopupAnchor::MiddleLeft | PopupAnchor::MiddleRight => {
+            request_y.saturating_sub(popup.window.height() / 2)
+        }
+        PopupAnchor::BottomLeft | PopupAnchor::BottomMiddle | PopupAnchor::BottomRight => {
+            request_y.saturating_sub(popup.window.height())
+        }
+    };
+
     let params = glib::Variant::tuple_from_iter([
+        request.target_id.unwrap_or_default().into(),
         request.target_pid.unwrap_or_default().into(),
         request.target_title.unwrap_or_default().into(),
         request.target_wm_class.unwrap_or_default().into(),
-        glib::Variant::from(request.origin.0),
-        glib::Variant::from(request.origin.1),
+        glib::Variant::from(origin_x),
+        glib::Variant::from(origin_y),
     ]);
 
     state
         .app
         .dbus_connection()
-        .unwrap()
+        .context("no dbus connection")?
         .call_future(
             Some(BUS_NAME),
             OBJECT_PATH,
@@ -258,7 +259,7 @@ fn create_popup(app: &gtk::Application) -> PopupInfo {
     controller.connect_leave({
         let window = window.clone();
         move |_| {
-            // window.set_visible(false);
+            window.set_visible(false);
         }
     });
 
