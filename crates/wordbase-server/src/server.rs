@@ -232,6 +232,18 @@ async fn forward_event(connection: &mut Connection, event: ServerEvent) {
     _ = connection.write(&message).await;
 }
 
+async fn send_dictionary_sync(
+    db: &Pool<Sqlite>,
+    send_event: &broadcast::Sender<ServerEvent>,
+) -> Result<()> {
+    let dictionaries = db::dictionary::all(db)
+        .await
+        .context("failed to fetch dictionaries")?;
+
+    _ = send_event.send(ServerEvent::SyncDictionaries(dictionaries));
+    Ok(())
+}
+
 async fn handle_message(state: &State, connection: &mut Connection, data: Message) -> Result<()> {
     let data = data.into_data();
     if data.is_empty() {
@@ -323,16 +335,4 @@ async fn handle_message(state: &State, connection: &mut Connection, data: Messag
             Ok(())
         }
     }
-}
-
-async fn send_dictionary_sync(
-    db: &Pool<Sqlite>,
-    send_event: &broadcast::Sender<ServerEvent>,
-) -> Result<()> {
-    let dictionaries = db::dictionary::all(db)
-        .await
-        .context("failed to fetch dictionaries")?;
-
-    _ = send_event.send(ServerEvent::SyncDictionaries(dictionaries));
-    Ok(())
 }

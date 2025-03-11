@@ -3,6 +3,52 @@
 Wordbase is a set of tools and services for using dictionaries, looking up words, and integrating
 tightly with your desktop to provide a seamless experience for language learning.
 
+# Features
+
+- Dictionary management
+  - [x] Import [Yomitan] dictionaries
+  - [x] Enable, disable, reorder, delete dictionaries
+  - [ ] Import dictionaries via app or command-line
+- Lookups
+  - [x] Japanese deconjugation via MeCab
+    - TODO: needs to be improved
+  - [x] Query by specific record kinds (i.e. frequency, glossary)
+- Popup dictionary
+  - [x] Full HTML support via [WebKit]
+  - [ ] Custom CSS theming
+  - [ ] Add Anki note
+  - [ ] Play pronunciation
+- Anki integration
+  - [ ] Create notes
+  - [ ] Add screenshot and sentence audio to notes
+- API for external apps
+  - WebSocket
+    - [x] Manage dictionaries
+    - [x] Perform lookups
+    - [x] Request to show the popup dictionary
+    - [ ] Add Anki note
+  - HTTP
+    - [ ] Import dictionaries
+- Desktop integration
+  - Windows
+    - (not supported yet)
+  - MacOS
+    - (not supported yet)
+  - Linux/GNOME
+    - [ ] Control popup dictionary position and overlay visibility
+    - [x] Do lookups from your [texthooker] in your visual novel
+    - [ ] Add Anki notes with VN screenshots
+  - Linux/KDE
+    - (not supported yet)
+  - Linux/X11
+    - (not supported yet)
+  - Linux/any other Wayland compositor
+    - (not supported; see [Architecture](#architecture))
+
+[Yomitan]: https://github.com/yomidevs/yomitan/
+[WebKit]: https://webkitgtk.org/
+[texthooker]: https://github.com/Artikash/Textractor/
+
 # Installation
 
 TODO
