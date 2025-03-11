@@ -1,5 +1,5 @@
 use {
-    super::structured::{Content, ContentStyle, Element},
+    crate::format::yomitan::structured::{Content, ContentStyle, Element},
     maud::{Markup, Render, html},
     std::fmt,
 };
@@ -55,6 +55,10 @@ macro_rules! styled {
 }
 
 impl Render for Element {
+    #[expect(
+        clippy::cognitive_complexity,
+        reason = "macros generate fake cognitive complexity"
+    )]
     fn render(&self) -> Markup {
         match self {
             Self::Br(_elem) => html! { br; },

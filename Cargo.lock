@@ -3151,6 +3151,7 @@ dependencies = [
  "derive_more",
  "foldhash",
  "html-escape",
+ "indexmap",
  "maud",
  "rayon",
  "regex",
@@ -3188,18 +3189,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wordbase-html"
-version = "0.1.0"
-dependencies = [
- "derive_more",
- "foldhash",
- "form_urlencoded",
- "indexmap",
- "maud",
- "wordbase",
-]
-
-[[package]]
 name = "wordbase-server"
 version = "0.1.0"
 dependencies = [
@@ -3225,7 +3214,6 @@ dependencies = [
  "tracing-subscriber",
  "webkit6",
  "wordbase",
- "wordbase-html",
 ]
 
 [[package]]

@@ -112,6 +112,60 @@ pub const fn is_high(downstep: usize, position: usize) -> bool {
     }
 }
 
+/// Used for rendering a [`Pitch`] with a reading to another format.
+#[derive(Debug, Clone)]
+pub struct PitchRender<'a> {
+    /// Reading of this pitch.
+    pub reading: &'a str,
+    /// Pitch information.
+    pub pitch: &'a Pitch,
+}
+
+#[cfg(feature = "render-html")]
+impl maud::Render for PitchRender<'_> {
+    fn render(&self) -> maud::Markup {
+        let downstep = usize::try_from(self.pitch.position).unwrap_or(usize::MAX);
+        let morae = morae(self.reading).collect::<Vec<_>>();
+
+        let pitch_css_class = match downstep {
+            0 => "heiban",
+            1 => "atamadaka",
+            n if n == morae.len() => "odaka",
+            _ => "nakadaka",
+        };
+
+        let morae = morae.into_iter().enumerate().map(|(position, mora)| {
+            let this_css_class = if is_high(downstep, position) {
+                "high"
+            } else {
+                "low"
+            };
+
+            let next_css_class = if is_high(downstep, position + 1) {
+                "next-high"
+            } else {
+                "next-low"
+            };
+
+            maud::html! {
+                span .mora .(this_css_class) .(next_css_class) {
+                    @for ch in mora.chars() {
+                        span .char { (ch) }
+                    }
+                }
+            }
+        });
+
+        maud::html! {
+            .pitch .(pitch_css_class) {
+                @for mora in morae {
+                    (mora)
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

@@ -23,18 +23,11 @@ pedantic = { level = "warn", priority = -1 }
 unwrap_used = "warn"
 
 module_name_repetitions = "allow"
-needless_pass_by_value = "allow"
-similar_names = "allow"
 type_complexity = "allow"
 
 [workspace.dependencies]
 wordbase = { path = "crates/wordbase" }
 wordbase-client-tokio = { path = "crates/wordbase-client-tokio" }
-wordbase-html = { path = "crates/wordbase-html" }
-
-proc-macro2 = "1.0"
-quote = "1.0"
-syn = "2.0"
 
 anyhow = "1.0"
 ascii_table = "4.0"
@@ -49,13 +42,10 @@ glib = "0.20"
 gtk4 = "0.9"
 html-escape = "0.2"
 indexmap = "2.7"
-interprocess = "2.2.3"
 libadwaita = "0.7"
-log = "0.4"
 maud = "0.27"
 mecab = "0.1.6"
 open = "5.3"
-pretty_env_logger = "0.5"
 rayon = "1.10"
 regex = "1.11"
 rmp-serde = "1.3"

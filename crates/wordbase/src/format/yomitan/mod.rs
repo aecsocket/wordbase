@@ -2,7 +2,7 @@
 //!
 //! [Yomitan]: https://github.com/yomidevs/yomitan/
 
-mod html;
+mod render;
 pub mod schema;
 pub mod structured;
 

@@ -243,6 +243,10 @@ where
     /// with another task, or waits for the server to send us one.
     ///
     /// See [`try_poll`] for a sync, non-blocking version.
+    ///
+    /// # Errors
+    ///
+    /// See [`ConnectionError`].
     pub async fn poll(&mut self) -> Result<Event, ConnectionError> {
         if let Some(event) = self.events.pop() {
             return Ok(event);

@@ -146,6 +146,11 @@ Unsupported due to platform limitations. Apps can't spawn arbitrary windows on t
 
 ## Libraries
 
+### [`wordbase`](./crates/wordbase)
+
+Core library defining the types used by Wordbase clients and servers, and defines the communication
+protocol between the client and server.
+
 ### [`wordbase-client-tokio`](./crates/wordbase-client-tokio)
 
 Client library written in Rust used to interface with a Wordbase server via WebSockets. This is a
@@ -158,22 +163,24 @@ WebKit. This is used internally by the manager app and the pop-up dictionary.
 
 # Bugs
 
-- No Windows, KDE, MacOS support
-- GNOME extension doesn't work if VN is fullscreen
-- After unfullscreening VN, extension breaks rendering
-- On initial popup, the popup is not located in the right place
-- Deconjugator sucks ass
-- Popup dictionary stylesheet sucks ass
-- No dictionary theming
-- Need options for click-to-lookup
-- Popup dictionary doesn't render pitch info
-- No Add to Anki button
-- No local audio server
-- No "play pronunciation" button
-- Popup should remember its set size
-- Popup disappears if you start click resizing it
-- Server does not generate fallback record kinds via api
-- No GUI app for managing dictionaries
-- No GUI app for lookups
-- No config persistence
-- Extension doesn't autoconnect to server
+- [ ] No Windows, KDE, MacOS support
+- [ ] GNOME extension doesn't work if VN is fullscreen
+- [ ] After unfullscreening VN, extension breaks rendering
+- [ ] On initial popup, the popup is not located in the right place
+- [ ] Deconjugator sucks ass
+- [ ] Popup dictionary stylesheet sucks ass
+- [ ] No dictionary theming
+- [ ] Need options for click-to-lookup
+- [ ] Popup dictionary doesn't render pitch info
+- [ ] No Add to Anki button
+- [ ] No local audio server
+- [ ] No "play pronunciation" button
+- [ ] Popup should remember its set size
+- [ ] Popup disappears if you start click resizing it
+- [ ] No config persistence
+- [ ] Extension doesn't autoconnect to server
+- [ ] Change font setting
+- [ ] Add auto-updating dictionaries
+- [ ] HTTP API for importing dictionaries
+- [ ] Admin web panel
+- [ ] `data-*` attributes in yomitan glossaries

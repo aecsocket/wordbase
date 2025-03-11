@@ -129,7 +129,7 @@ async fn show(
         .lookups
         .lookup(LookupRequest {
             text: request.text,
-            record_kinds: wordbase_html::SUPPORTED_RECORD_KINDS.to_vec(),
+            record_kinds: wordbase::render::SUPPORTED_RECORD_KINDS.to_vec(),
         })
         .await
         .context("failed to perform lookup")?;
@@ -146,7 +146,7 @@ async fn show(
 
     let popup = popup.get_or_insert_with(|| create_popup(&state.app));
     let unknown_source = Arc::<str>::from("?");
-    let dictionary_html = wordbase_html::to_html(
+    let dictionary_html = wordbase::render::to_html(
         |source| {
             dictionary_names
                 .get(&source)

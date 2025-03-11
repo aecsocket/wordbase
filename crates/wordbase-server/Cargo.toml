@@ -26,11 +26,10 @@ popup = [
     "dep:libadwaita",
     "dep:open",
     "dep:webkit6",
-    "dep:wordbase-html",
 ]
 
 [dependencies]
-wordbase = { workspace = true, features = ["parse-yomitan"] }
+wordbase = { workspace = true, features = ["render-html", "parse-yomitan"] }
 
 anyhow = { workspace = true }
 cfg-if = { workspace = true }
@@ -61,7 +60,6 @@ gtk4 = { workspace = true, optional = true, features = [
 libadwaita = { workspace = true, optional = true, features = ["v1_6"] }
 open = { workspace = true, optional = true }
 webkit6 = { workspace = true, optional = true }
-wordbase-html = { workspace = true, optional = true }
 
 # enable features in transitive dependency crates
 

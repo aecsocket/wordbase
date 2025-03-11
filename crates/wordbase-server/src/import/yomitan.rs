@@ -331,11 +331,11 @@ fn to_frequencies(
     frequency.map(|new| (reading, new)).into_iter()
 }
 
-fn to_pitch(raw: schema::TermMetaPitch) -> impl Iterator<Item = (String, lang::jp::Pitch)> {
+fn to_pitch(raw: schema::TermMetaPitch) -> impl Iterator<Item = (String, lang::jpn::Pitch)> {
     raw.pitches.into_iter().map(move |pitch| {
         (
             raw.reading.clone(),
-            lang::jp::Pitch {
+            lang::jpn::Pitch {
                 position: pitch.position,
                 nasal: to_pitch_positions(pitch.nasal),
                 devoice: to_pitch_positions(pitch.devoice),

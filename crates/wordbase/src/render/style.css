@@ -5,19 +5,19 @@
 /* <https://arbyste.github.io/jp-mining-note/autopa/#pitch-accent-groups> */
 
 .mora.heiban {
-    color: var(--accent-blue);
+    color: #59b2ff;
 }
 
 .mora.atamadaka {
-    color: var(--accent-red);
+    color: #ff6666;
 }
 
 .mora.nakadaka {
-    color: var(--accent-yellow);
+    color: #ff9b54;
 }
 
 .mora.odaka {
-    color: var(--accent-green);
+    color: #67e47d;
 }
 
 /* add spacing between the downstep mora and the pitch line */

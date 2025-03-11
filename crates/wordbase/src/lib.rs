@@ -9,9 +9,9 @@ pub mod hook;
 pub mod lang;
 pub mod protocol;
 pub mod record;
+pub mod render;
 pub(crate) mod util;
 
-pub use maud;
 use {
     derive_more::From,
     serde::{Deserialize, Serialize},
@@ -116,7 +116,7 @@ macro_rules! for_record_kinds {
             GlossaryPlainText(glossary::PlainText),
             GlossaryHtml(glossary::Html),
             Frequency(record::Frequency),
-            JpPitch(lang::jp::Pitch),
+            JpnPitch(lang::jpn::Pitch),
             YomitanGlossary(format::yomitan::Glossary),
         );
     };

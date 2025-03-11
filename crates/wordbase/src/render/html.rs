@@ -1,27 +1,20 @@
-#![doc = include_str!("../README.md")]
-#![expect(missing_docs)]
-#![expect(clippy::missing_errors_doc)]
-
 use {
     derive_more::{Deref, DerefMut},
     maud::{Markup, PreEscaped, Render, html},
     std::sync::Arc,
     wordbase::{
-        DictionaryId, Record, RecordKind, Term, for_record_kinds, format, glossary, lang,
+        DictionaryId, Record, Term, for_record_kinds, format, glossary, lang,
         protocol::LookupResponse, record,
     },
 };
 
-pub const SUPPORTED_RECORD_KINDS: &[RecordKind] = &[
-    // meta
-    RecordKind::JpPitch,
-    RecordKind::Frequency,
-    // glossaries
-    RecordKind::GlossaryPlainText,
-    RecordKind::GlossaryHtml,
-    RecordKind::YomitanGlossary,
-];
-
+/// Renders [`LookupResponse`]s to HTML [`Markup`].
+///
+/// - `name_of_source`: a function which maps a dictionary ID to a
+///   [`DictionaryMeta::name`].
+/// - `records`: the records to render HTML for.
+///
+/// [`DictionaryMeta::name`]: wordbase::DictionaryMeta::name
 pub fn to_html(
     name_of_source: impl Fn(DictionaryId) -> Arc<str>,
     records: impl IntoIterator<Item = LookupResponse>,
@@ -38,7 +31,7 @@ pub fn to_html(
                 ..Default::default()
             });
         let source_name = name_of_source(record.source);
-        let cx = RecordContext {
+        let cx = RenderContext {
             source: record.source,
             source_name: source_name.clone(),
             meta: &mut term_info.meta,
@@ -53,8 +46,7 @@ pub fn to_html(
 
         macro_rules! display_record { ($($kind:ident($data_ty:path)),* $(,)?) => {{
             match record.record {
-                $(Record::$kind(data) => data.insert(cx),)*
-                _ => {}
+                $(Record::$kind(data) => data.render(cx),)*
             }
         }}}
 
@@ -66,9 +58,9 @@ pub fn to_html(
 type IndexMap<K, V> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
 
 #[derive(Debug, Default, Deref, DerefMut)]
-struct Terms(IndexMap<Term, TermInfo>);
+struct Terms<'a>(IndexMap<Term, TermInfo<'a>>);
 
-impl Render for Terms {
+impl Render for Terms<'_> {
     fn render(&self) -> Markup {
         html! {
             .terms {
@@ -81,12 +73,12 @@ impl Render for Terms {
 }
 
 #[derive(Debug, Default)]
-struct TermInfo {
-    meta: TermMeta,
+struct TermInfo<'a> {
+    meta: TermMeta<'a>,
     glossaries: IndexMap<DictionaryId, GlossaryGroup>,
 }
 
-impl Render for TermInfo {
+impl Render for TermInfo<'_> {
     fn render(&self) -> Markup {
         html! {
             .header {
@@ -105,13 +97,13 @@ impl Render for TermInfo {
 }
 
 #[derive(Debug, Default)]
-struct TermMeta {
+struct TermMeta<'a> {
     term: Term,
-    jp_pitches: Pitches,
+    jpn_pitches: Pitches<'a>,
     frequencies: Frequencies,
 }
 
-impl Render for TermMeta {
+impl Render for TermMeta<'_> {
     fn render(&self) -> Markup {
         html! {
             .term {
@@ -125,7 +117,7 @@ impl Render for TermMeta {
                     }
                 }
 
-                (&self.jp_pitches)
+                (&self.jpn_pitches)
             }
 
             .meta {
@@ -136,16 +128,14 @@ impl Render for TermMeta {
 }
 
 #[derive(Debug, Default, Deref, DerefMut)]
-struct Pitches(Vec<lang::jp::Pitch>);
+struct Pitches<'a>(Vec<lang::jpn::PitchRender<'a>>);
 
-impl Render for Pitches {
+impl Render for Pitches<'_> {
     fn render(&self) -> Markup {
         html! {
             .pitches {
                 @for pitch in &self.0 {
-                    .pitch {
-                        "TODO PITCH"
-                    }
+                    (pitch)
                 }
             }
         }
@@ -262,19 +252,19 @@ impl Render for GlossaryTag {
     }
 }
 
-struct RecordContext<'c> {
+struct RenderContext<'c> {
     source: DictionaryId,
     source_name: Arc<str>,
     meta: &'c mut TermMeta,
     glossaries: &'c mut GlossaryGroup,
 }
 
-trait RecordInsert {
-    fn insert(self, cx: RecordContext);
+trait RenderRecord {
+    fn render(self, cx: RenderContext);
 }
 
-impl RecordInsert for record::Frequency {
-    fn insert(self, cx: RecordContext) {
+impl RenderRecord for record::Frequency {
+    fn render(self, cx: RenderContext) {
         cx.meta
             .frequencies
             .entry(cx.source)
@@ -287,8 +277,8 @@ impl RecordInsert for record::Frequency {
     }
 }
 
-impl RecordInsert for glossary::PlainText {
-    fn insert(self, cx: RecordContext) {
+impl RenderRecord for glossary::PlainText {
+    fn render(self, cx: RenderContext) {
         cx.glossaries.rows.push(GlossaryRow {
             tags: Vec::new(),
             content: vec![html! { (self.0) }],
@@ -296,8 +286,8 @@ impl RecordInsert for glossary::PlainText {
     }
 }
 
-impl RecordInsert for glossary::Html {
-    fn insert(self, cx: RecordContext) {
+impl RenderRecord for glossary::Html {
+    fn render(self, cx: RenderContext) {
         cx.glossaries.rows.push(GlossaryRow {
             tags: Vec::new(),
             content: vec![PreEscaped(self.0)],
@@ -305,14 +295,14 @@ impl RecordInsert for glossary::Html {
     }
 }
 
-impl RecordInsert for lang::jp::Pitch {
-    fn insert(self, cx: RecordContext) {
-        cx.meta.jp_pitches.push(self);
+impl RenderRecord for lang::jpn::Pitch {
+    fn render(self, cx: RenderContext) {
+        cx.meta.jpn_pitches.push(self);
     }
 }
 
-impl RecordInsert for format::yomitan::Glossary {
-    fn insert(self, cx: RecordContext) {
+impl RenderRecord for format::yomitan::Glossary {
+    fn render(self, cx: RenderContext) {
         cx.glossaries.rows.push(GlossaryRow {
             tags: self
                 .tags
