@@ -1,159 +1,237 @@
 use {
-    super::structured::{
-        Content, ContentStyle, Data, Element, ImageElement, LinkElement, StyledElement,
-        TableElement, UnstyledElement,
-    },
-    core::fmt,
+    super::structured::{Content, ContentStyle, Element, UnstyledElement},
+    maud::{Markup, Render, html},
+    std::fmt,
 };
 
-/// Renders [`Content`] to an HTML string.
-///
-/// # Errors
-///
-/// See [`fmt::Error`].
-pub fn render_to_html(mut w: impl fmt::Write, content: &Content) -> fmt::Result {
-    write!(w, r#"<span class="gloss-content">"#)?;
-    any(&mut w, content)?;
-    write!(w, "</span>")
-}
-
-fn any(w: &mut impl fmt::Write, content: &Content) -> fmt::Result {
-    match content {
-        Content::String(s) => {
-            let s = html_escape::encode_safe(s).replace('\n', "<br>");
-            write!(w, "{s}")
-        }
-        Content::Content(children) => {
-            for content in children {
-                any(w, content)?;
+impl Render for Content {
+    fn render(&self) -> Markup {
+        html! {
+            @match self {
+                Self::String(text) => (text),
+                Self::Content(children) => {
+                    @for child in children {
+                        (child)
+                    }
+                }
+                Self::Element(elem) => (elem),
             }
-            Ok(())
         }
-        Content::Element(elem) => element(w, elem),
     }
 }
 
-#[rustfmt::skip]
-fn element(w: &mut impl fmt::Write, elem: &Element) -> fmt::Result {
-    match elem {
-        Element::Br { data } => line_break(w, data.as_ref()),
-        //
-        Element::Ruby(e)  => unstyled(w, e, "ruby"),
-        Element::Rt(e)    => unstyled(w, e, "rt"),
-        Element::Rp(e)    => unstyled(w, e, "rp"),
-        Element::Table(e) => unstyled(w, e, "table"),
-        Element::Thead(e) => unstyled(w, e, "thead"),
-        Element::Tbody(e) => unstyled(w, e, "tbody"),
-        Element::Tfoot(e) => unstyled(w, e, "tfoot"),
-        Element::Tr(e)    => unstyled(w, e, "tr"),
-        //
-        Element::Td(e) => table(w, e, "td"),
-        Element::Th(e) => table(w, e, "th"),
-        //
-        Element::Span(e)    => styled(w, e, "span"),
-        Element::Div(e)     => styled(w, e, "div"),
-        Element::Ol(e)      => styled(w, e, "ol"),
-        Element::Ul(e)      => styled(w, e, "ul"),
-        Element::Li(e)      => styled(w, e, "li"),
-        Element::Details(e) => styled(w, e, "details"),
-        Element::Summary(e) => styled(w, e, "summary"),
-        //
-        Element::Img(e) => img(w, e),
-        //
-        Element::A(e) => link(w, e),
-    }
-}
-
-macro_rules! forward_to_tag {
-    ($w:expr, $field:expr, $prop:expr) => {
-        if let Some(value) = &($field) {
-            write!($w, " ")?;
-            write!($w, $prop)?;
-            let value = format!("{value}");
-            write!($w, "=\"{}\"", html_escape::encode_safe(&value))?;
+macro_rules! unstyled {
+    ($elem:expr, $tag:ident) => {
+        html! {
+            $tag lang=[&($elem.lang)] {
+                @if let Some(c) = &($elem.content) { (c) }
+            }
         }
     };
 }
 
-macro_rules! forward_to_tag_fn {
-    ($w:expr, $field:expr, $prop:expr, $f:ident) => {
-        if let Some(value) = &($field) {
-            write!($w, " ")?;
-            write!($w, $prop)?;
-            write!($w, "=\"")?;
-            $f($w, value)?;
-            write!($w, "\"")?;
+macro_rules! table {
+    ($elem:expr, $tag:ident) => {{
+        let style = ($elem.style).as_ref().map(style_css);
+        html! {
+            $tag style=[style] col-span=[$elem.col_span] row_span=[$elem.row_span] lang=[&($elem.lang)] {
+                @if let Some(c) = &($elem.content) { (c) }
+            }
         }
-    };
+    }};
 }
 
-fn forward_data(w: &mut impl fmt::Write, data: Option<&Data>) -> fmt::Result {
-    let Some(data) = data else {
-        return Ok(());
-    };
-    for (key, value) in data.iter() {
-        let value = html_escape::encode_safe(value);
-        write!(w, " data-{key}=\"{value}\"")?;
+macro_rules! styled {
+    ($elem:expr, $tag:ident) => {{
+        let style = ($elem.style).as_ref().map(style_css);
+        html! {
+            $tag style=[style] title=[&($elem.title)] open=[$elem.open] lang=[&($elem.lang)] {
+                @if let Some(c) = &($elem.content) { (c) }
+            }
+        }
+    }};
+}
+
+impl Render for Element {
+    fn render(&self) -> Markup {
+        match self {
+            Self::Br(elem) => html! { br; },
+            Self::Ruby(elem) => unstyled!(elem, ruby),
+            Self::Rt(elem) => unstyled!(elem, rt),
+            Self::Rp(elem) => unstyled!(elem, rp),
+            Self::Table(elem) => unstyled!(elem, table),
+            Self::Thead(elem) => unstyled!(elem, thead),
+            Self::Tbody(elem) => unstyled!(elem, tbody),
+            Self::Tfoot(elem) => unstyled!(elem, tfoot),
+            Self::Tr(elem) => unstyled!(elem, tr),
+            Self::Td(elem) => table!(elem, td),
+            Self::Th(elem) => table!(elem, th),
+            Self::Span(elem) => styled!(elem, span),
+            Self::Div(elem) => styled!(elem, div),
+            Self::Ol(elem) => styled!(elem, ol),
+            Self::Ul(elem) => styled!(elem, ul),
+            Self::Li(elem) => styled!(elem, li),
+            Self::Details(elem) => styled!(elem, details),
+            Self::Summary(elem) => styled!(elem, summary),
+            Self::Img(elem) => html! {
+                img
+                    path=(elem.base.path)
+                    width=[elem.base.width]
+                    height=[elem.base.height]
+                    preferred-width=[elem.base.preferred_width]
+                    preferred-height=[elem.base.preferred_height]
+                    title=[&elem.base.title]
+                    alt=[&elem.base.alt]
+                    description=[&elem.base.description]
+                    pixelated=[elem.base.pixelated]
+                    image-rendering=[elem.base.image_rendering]
+                    image-appearance=[elem.base.image_appearance]
+                    background=[elem.base.background]
+                    collapsed=[elem.base.collapsed]
+                    collapsible=[elem.base.collapsible];
+            },
+            Self::A(elem) => html! {
+                a href=(elem.href) lang=[&elem.lang] {
+                    @if let Some(c) = &elem.content { (c) }
+                }
+            },
+        }
     }
-    Ok(())
 }
 
-fn line_break(w: &mut impl fmt::Write, data: Option<&Data>) -> fmt::Result {
-    write!(w, "<br")?;
-    forward_data(w, data)?;
-    write!(w, ">")
-}
-
-fn unstyled(w: &mut impl fmt::Write, elem: &UnstyledElement, tag: &str) -> fmt::Result {
-    write!(w, "<{tag}")?;
-    forward_data(w, elem.data.as_ref())?;
-    forward_to_tag!(w, elem.lang, "lang");
-    write!(w, ">")?;
-
-    if let Some(content) = &elem.content {
-        any(w, content)?;
+impl Render for UnstyledElement {
+    fn render(&self) -> Markup {
+        html! {}
     }
-
-    write!(w, "</{tag}>")
 }
 
-fn table(w: &mut impl fmt::Write, elem: &TableElement, tag: &str) -> fmt::Result {
-    write!(w, "<{tag}")?;
-    forward_data(w, elem.data.as_ref())?;
-    forward_to_tag!(w, elem.col_span, "col-span");
-    forward_to_tag!(w, elem.row_span, "row-span");
-    forward_to_tag_fn!(w, elem.style, "style", style_css);
-    forward_to_tag!(w, elem.lang, "lang");
-    write!(w, ">")?;
+// #[rustfmt::skip]
+// fn element(w: &mut impl fmt::Write, elem: &Element) -> fmt::Result {
+//     match elem {
+//         Element::Br { data } => line_break(w, data.as_ref()),
+//         //
+//         Element::Ruby(e)  => unstyled(w, e, "ruby"),
+//         Element::Rt(e)    => unstyled(w, e, "rt"),
+//         Element::Rp(e)    => unstyled(w, e, "rp"),
+//         Element::Table(e) => unstyled(w, e, "table"),
+//         Element::Thead(e) => unstyled(w, e, "thead"),
+//         Element::Tbody(e) => unstyled(w, e, "tbody"),
+//         Element::Tfoot(e) => unstyled(w, e, "tfoot"),
+//         Element::Tr(e)    => unstyled(w, e, "tr"),
+//         //
+//         Element::Td(e) => table(w, e, "td"),
+//         Element::Th(e) => table(w, e, "th"),
+//         //
+//         Element::Span(e)    => styled(w, e, "span"),
+//         Element::Div(e)     => styled(w, e, "div"),
+//         Element::Ol(e)      => styled(w, e, "ol"),
+//         Element::Ul(e)      => styled(w, e, "ul"),
+//         Element::Li(e)      => styled(w, e, "li"),
+//         Element::Details(e) => styled(w, e, "details"),
+//         Element::Summary(e) => styled(w, e, "summary"),
+//         //
+//         Element::Img(e) => img(w, e),
+//         //
+//         Element::A(e) => link(w, e),
+//     }
+// }
 
-    if let Some(content) = &elem.content {
-        any(w, content)?;
-    }
+// macro_rules! forward_to_tag {
+//     ($w:expr, $field:expr, $prop:expr) => {
+//         if let Some(value) = &($field) {
+//             write!($w, " ")?;
+//             write!($w, $prop)?;
+//             let value = format!("{value}");
+//             write!($w, "=\"{}\"", html_escape::encode_safe(&value))?;
+//         }
+//     };
+// }
 
-    write!(w, "</{tag}>")
-}
+// macro_rules! forward_to_tag_fn {
+//     ($w:expr, $field:expr, $prop:expr, $f:ident) => {
+//         if let Some(value) = &($field) {
+//             write!($w, " ")?;
+//             write!($w, $prop)?;
+//             write!($w, "=\"")?;
+//             $f($w, value)?;
+//             write!($w, "\"")?;
+//         }
+//     };
+// }
 
-fn styled(w: &mut impl fmt::Write, elem: &StyledElement, tag: &str) -> fmt::Result {
-    write!(w, "<{tag}")?;
-    forward_data(w, elem.data.as_ref())?;
-    forward_to_tag_fn!(w, elem.style, "style", style_css);
-    forward_to_tag!(w, elem.title, "title");
-    forward_to_tag!(w, elem.open, "open");
-    forward_to_tag!(w, elem.lang, "lang");
-    write!(w, ">")?;
+// fn forward_data(w: &mut impl fmt::Write, data: Option<&Data>) -> fmt::Result {
+//     let Some(data) = data else {
+//         return Ok(());
+//     };
+//     for (key, value) in data.iter() {
+//         let value = html_escape::encode_safe(value);
+//         write!(w, " data-{key}=\"{value}\"")?;
+//     }
+//     Ok(())
+// }
 
-    if let Some(content) = &elem.content {
-        any(w, content)?;
-    }
+// fn line_break(w: &mut impl fmt::Write, data: Option<&Data>) -> fmt::Result {
+//     write!(w, "<br")?;
+//     forward_data(w, data)?;
+//     write!(w, ">")
+// }
 
-    write!(w, "</{tag}>")
+// fn unstyled(w: &mut impl fmt::Write, elem: &UnstyledElement, tag: &str) -> fmt::Result {
+//     write!(w, "<{tag}")?;
+//     forward_data(w, elem.data.as_ref())?;
+//     forward_to_tag!(w, elem.lang, "lang");
+//     write!(w, ">")?;
+
+//     if let Some(content) = &elem.content {
+//         any(w, content)?;
+//     }
+
+//     write!(w, "</{tag}>")
+// }
+
+// fn table(w: &mut impl fmt::Write, elem: &TableElement, tag: &str) -> fmt::Result {
+//     write!(w, "<{tag}")?;
+//     forward_data(w, elem.data.as_ref())?;
+//     forward_to_tag!(w, elem.col_span, "col-span");
+//     forward_to_tag!(w, elem.row_span, "row-span");
+//     forward_to_tag_fn!(w, elem.style, "style", style_css);
+//     forward_to_tag!(w, elem.lang, "lang");
+//     write!(w, ">")?;
+
+//     if let Some(content) = &elem.content {
+//         any(w, content)?;
+//     }
+
+//     write!(w, "</{tag}>")
+// }
+
+// fn styled(w: &mut impl fmt::Write, elem: &StyledElement, tag: &str) -> fmt::Result {
+//     write!(w, "<{tag}")?;
+//     forward_data(w, elem.data.as_ref())?;
+//     forward_to_tag_fn!(w, elem.style, "style", style_css);
+//     forward_to_tag!(w, elem.title, "title");
+//     forward_to_tag!(w, elem.open, "open");
+//     forward_to_tag!(w, elem.lang, "lang");
+//     write!(w, ">")?;
+
+//     if let Some(content) = &elem.content {
+//         any(w, content)?;
+//     }
+
+//     write!(w, "</{tag}>")
+// }
+
+fn style_css(s: &ContentStyle) -> String {
+    let mut css = String::new();
+    _ = write_style_css(&mut css, s);
+    css
 }
 
 #[expect(
     clippy::cognitive_complexity,
     reason = "macro invocations lead to internal cognitive complexity"
 )]
-fn style_css(w: &mut impl fmt::Write, s: &ContentStyle) -> fmt::Result {
+fn write_style_css(w: &mut impl fmt::Write, s: &ContentStyle) -> fmt::Result {
     macro_rules! forward_to_css {
         ($field:expr, $prop:expr) => {
             if let Some(value) = &($field) {
@@ -202,18 +280,18 @@ fn style_css(w: &mut impl fmt::Write, s: &ContentStyle) -> fmt::Result {
     Ok(())
 }
 
-fn img(w: &mut impl fmt::Write, elem: &ImageElement) -> fmt::Result {
-    write!(w, "<img src={}", elem.base.path)?;
-    // TODO
-    write!(w, ">")
-}
+// fn img(w: &mut impl fmt::Write, elem: &ImageElement) -> fmt::Result {
+//     write!(w, "<img src={}", elem.base.path)?;
+//     // TODO
+//     write!(w, ">")
+// }
 
-fn link(w: &mut impl fmt::Write, elem: &LinkElement) -> fmt::Result {
-    write!(w, "<a href={}>", elem.href)?;
+// fn link(w: &mut impl fmt::Write, elem: &LinkElement) -> fmt::Result {
+//     write!(w, "<a href={}>", elem.href)?;
 
-    if let Some(content) = &elem.content {
-        any(w, content)?;
-    }
+//     if let Some(content) = &elem.content {
+//         any(w, content)?;
+//     }
 
-    write!(w, "</a>")
-}
+//     write!(w, "</a>")
+// }

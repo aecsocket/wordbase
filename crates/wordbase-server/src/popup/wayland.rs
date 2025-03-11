@@ -1,15 +1,18 @@
 extern crate gtk4 as gtk;
 extern crate libadwaita as adw;
+extern crate webkit6 as webkit;
+
+use std::{cell::LazyCell, sync::Arc};
 
 use anyhow::{Context, Result, bail};
 use foldhash::{HashMap, HashMapExt};
 use futures::never::Never;
 use gtk4::{gdk, gio::prelude::*, prelude::*};
-use libadwaita::prelude::BinExt;
 use tokio::sync::broadcast;
 use tracing::{error, info, warn};
+use webkit6::prelude::WebViewExt;
 use wordbase::{
-    DictionaryId, DictionaryState,
+    DictionaryId,
     protocol::{LookupRequest, NoRecords, ShowPopupRequest, ShowPopupResponse},
 };
 
@@ -33,7 +36,7 @@ pub fn run(
 
     app.connect_startup(|_| {
         let provider = gtk::CssProvider::new();
-        provider.load_from_string(wordbase_gtk::STYLESHEET);
+        // provider.load_from_string(wordbase_gtk::STYLESHEET);
 
         gtk::style_context_add_provider_for_display(
             &gdk::Display::default().expect("failed to get display"),
@@ -63,14 +66,14 @@ async fn backend(
     app: adw::Application,
 ) -> Result<Never> {
     let mut popup = None::<PopupInfo>;
-    let mut dictionaries = HashMap::<DictionaryId, DictionaryState>::new();
+    let mut dictionary_names = HashMap::<DictionaryId, Arc<str>>::new();
     loop {
         let request = tokio::select! {
             request = recv_request.recv() => request,
             Ok(ServerEvent::SyncDictionaries(new_dictionaries)) = recv_server_event.recv() => {
-                dictionaries = new_dictionaries
+                dictionary_names = new_dictionaries
                     .into_iter()
-                    .map(|state| (state.id, state))
+                    .map(|state| (state.id, Arc::from(state.meta.name)))
                     .collect();
                 continue;
             }
@@ -84,17 +87,160 @@ async fn backend(
             }
         };
 
-        let result =
-            handle_request(&lookups, &app, &mut popup, &dictionaries, request.request).await;
+        let result = handle_request(
+            &lookups,
+            &app,
+            &mut popup,
+            &dictionary_names,
+            request.request,
+        )
+        .await;
         _ = request.send_response.send(result).await;
     }
 }
+
+const STYLE: &str = r##"
+/* Adwaita-like styling */
+body {
+    font-family: "Inter", sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #fafafa;
+    color: #2e3436;
+}
+
+.terms {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #ffffff;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.term {
+    font-size: 2rem;
+    color: #1c71d8; /* Adwaita accent blue */
+}
+
+.term ruby {
+    font-size: 1.5rem;
+    color: #2e3436;
+}
+
+.pitches {
+    font-size: 0.9rem;
+    color: #777777;
+    margin-top: 5px;
+}
+
+.meta {
+    display: flex;
+    align-items: center;
+}
+
+.frequencies {
+    display: flex;
+    flex-wrap: wrap; /* Allow frequency groups to wrap */
+    gap: 10px;
+}
+
+.frequencies .group {
+    display: flex;
+    align-items: center;
+    background-color: #e0e0e0;
+    border-radius: 20px;
+    padding: 5px 10px;
+    font-size: 0.9rem;
+    color: #2e3436;
+}
+
+.frequencies .source {
+    margin-right: 5px;
+    font-weight: bold;
+    color: #1c71d8; /* Adwaita accent blue */
+}
+
+.frequencies .values {
+    display: flex;
+    gap: 5px;
+}
+
+.frequencies .value {
+    font-weight: bold;
+    color: #2e3436;
+}
+
+.glossary-page {
+    background-color: #ffffff;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-top: 10px;
+}
+
+.glossary-page .group {
+    margin-bottom: 20px;
+}
+
+.glossary-page .source {
+    font-size: 0.9rem;
+    color: #777777;
+    margin-bottom: 10px;
+    display: block;
+}
+
+.glossary-page .rows {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.glossary-page .row {
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    padding: 10px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.glossary-page .tags {
+    display: flex;
+    flex-wrap: wrap; /* Allow tags to wrap */
+    gap: 5px;
+    margin-bottom: 10px;
+}
+
+.glossary-page .tags div {
+    background-color: #e0e0e0;
+    border-radius: 20px;
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    color: #2e3436;
+}
+
+.glossary-page ul {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 0.9rem;
+    color: #2e3436;
+}
+
+.glossary-page ul li {
+    margin-bottom: 5px;
+}"##;
 
 async fn handle_request(
     lookups: &lookup::Client,
     app: &adw::Application,
     popup: &mut Option<PopupInfo>,
-    dictionaries: &HashMap<DictionaryId, DictionaryState>,
+    dictionary_names: &HashMap<DictionaryId, Arc<str>>,
     request: ShowPopupRequest,
 ) -> Result<Result<ShowPopupResponse, NoRecords>> {
     let records = lookups
@@ -115,19 +261,19 @@ async fn handle_request(
         .and_then(|c| u64::try_from(c).ok())
         .unwrap_or_default();
 
-    let dictionary = wordbase_gtk::ui_for(
+    let popup = popup.get_or_insert_with(|| create_popup(app));
+    let unknown_source = Arc::<str>::from("?");
+    let dictionary_html = wordbase_gtk::to_html(
         |source| {
-            dictionaries
+            dictionary_names
                 .get(&source)
-                .map(|state| state.meta.name.as_str())
-                .unwrap_or("?")
+                .unwrap_or(&unknown_source)
+                .clone()
         },
         records,
     );
-
-    let popup = popup.get_or_insert_with(|| create_popup(app));
-
-    popup.dictionary_container.set_child(Some(&dictionary));
+    let html = format!("<style>{STYLE}</style>{}", dictionary_html.0);
+    popup.web_view.load_html(&html, None);
     popup.window.set_visible(true);
 
     Ok(Ok(ShowPopupResponse { chars_scanned }))
@@ -135,44 +281,47 @@ async fn handle_request(
 
 struct PopupInfo {
     window: gtk::Window,
-    dictionary_container: adw::Bin,
+    web_view: webkit::WebView,
 }
 
 fn create_popup(app: &adw::Application) -> PopupInfo {
-    const MARGIN: i32 = 16;
+    thread_local! {
+        static SETTINGS: LazyCell<webkit::Settings> = LazyCell::new(|| {
+            webkit::Settings::builder()
+                .enable_page_cache(false)
+                .build()
+        });
+    }
 
-    let content = gtk::ScrolledWindow::new();
+    let web_view = SETTINGS.with(|settings| webkit::WebView::builder().settings(settings).build());
+    web_view
+        .context()
+        .expect("should have web context")
+        .set_cache_model(webkit::CacheModel::DocumentViewer);
 
-    let dictionary_container = adw::Bin::builder()
-        .margin_top(MARGIN)
-        .margin_bottom(MARGIN)
-        .margin_start(MARGIN)
-        .margin_end(MARGIN)
-        .build();
-    content.set_child(Some(&dictionary_container));
+    // don't allow opening the context menu
+    web_view.connect_context_menu(|_, _, _| true);
 
     let window = adw::ApplicationWindow::builder()
         .application(app)
         .default_width(600)
         .default_height(300)
         .hide_on_close(true)
-        .content(&content)
+        .content(&web_view)
         .build();
+    window.present();
 
     let controller = gtk::EventControllerMotion::new();
     window.add_controller(controller.clone());
-
     controller.connect_leave({
         let window = window.clone();
         move |_| {
-            window.set_visible(false);
+            // window.set_visible(false);
         }
     });
 
-    window.present();
-
     PopupInfo {
         window: window.upcast(),
-        dictionary_container,
+        web_view,
     }
 }

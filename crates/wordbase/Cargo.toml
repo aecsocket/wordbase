@@ -30,6 +30,7 @@ derive_more = { workspace = true, features = [
 ] }
 foldhash = { workspace = true }
 html-escape = { workspace = true }
+maud = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_repr = { workspace = true }

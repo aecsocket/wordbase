@@ -165,7 +165,7 @@ pub struct ContentStyle {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct LineBreak {
+pub struct LineBreakElement {
     pub data: Option<Data>,
 }
 
@@ -242,7 +242,7 @@ pub struct LinkElement {
 #[serde(tag = "tag", rename_all = "kebab-case", deny_unknown_fields)]
 #[expect(clippy::large_enum_variant, reason = "most variants will be large")]
 pub enum Element {
-    Br { data: Option<Data> },
+    Br(LineBreakElement),
     Ruby(UnstyledElement),
     Rt(UnstyledElement),
     Rp(UnstyledElement),
