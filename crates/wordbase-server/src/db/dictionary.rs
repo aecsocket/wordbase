@@ -17,6 +17,7 @@ where
     )
     .execute(executor)
     .await?;
+
     Ok(DictionaryId(result.last_insert_rowid()))
 }
 
@@ -30,6 +31,7 @@ where
     )
     .fetch_one(executor)
     .await?;
+
     Ok(result > 0)
 }
 
@@ -73,6 +75,7 @@ where
     )
     .execute(executor)
     .await?;
+
     Ok(if result.rows_affected() > 0 {
         Ok(())
     } else {
@@ -97,6 +100,32 @@ where
     )
     .execute(executor)
     .await?;
+
+    Ok(if result.rows_affected() > 0 {
+        Ok(())
+    } else {
+        Err(DictionaryNotFound)
+    })
+}
+
+pub async fn set_position<'e, 'c: 'e, E>(
+    executor: E,
+    dictionary_id: DictionaryId,
+    position: i64,
+) -> Result<Result<(), DictionaryNotFound>>
+where
+    E: 'e + Executor<'c, Database = Sqlite>,
+{
+    let result = sqlx::query!(
+        "UPDATE dictionary
+       SET position = $1
+       WHERE id = $2",
+        position,
+        dictionary_id.0
+    )
+    .execute(executor)
+    .await?;
+
     Ok(if result.rows_affected() > 0 {
         Ok(())
     } else {

@@ -10,7 +10,7 @@ use futures::never::Never;
 use gtk4::{gdk, gio::prelude::*, prelude::*};
 use tokio::sync::broadcast;
 use tracing::{error, info, warn};
-use webkit6::prelude::WebViewExt;
+use webkit6::prelude::{PolicyDecisionExt, WebViewExt};
 use wordbase::{
     DictionaryId,
     protocol::{LookupRequest, NoRecords, ShowPopupRequest, ShowPopupResponse},
@@ -179,15 +179,17 @@ body {
 }
 
 .glossary-page {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Card styling for each dictionary's glossary set */
+.glossary-page .group {
     background-color: #ffffff;
     border-radius: 8px;
     padding: 20px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    margin-top: 10px;
-}
-
-.glossary-page .group {
-    margin-bottom: 20px;
 }
 
 .glossary-page .source {
@@ -208,6 +210,11 @@ body {
     border-radius: 8px;
     padding: 10px;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.content[data-count="1"] {
+    padding-left: 0;
+    list-style-type: none;
 }
 
 .glossary-page .tags {
@@ -234,7 +241,46 @@ body {
 
 .glossary-page ul li {
     margin-bottom: 5px;
-}"##;
+}
+
+/* Add middle dot between frequency values */
+.frequencies .values .value:not(:last-child)::after {
+    content: "·";
+    margin: 0 5px;
+    color: #2e3436;
+}
+
+/* Remove card styling from the term meta */
+.header {
+    background-color: transparent;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 20px 0; /* Adjust padding as needed */
+}
+
+.meta {
+    background-color: transparent;
+    box-shadow: none;
+    border-radius: 0;
+}
+
+/* Ensure only glossary cards have card styling */
+.glossary-page .group {
+    background-color: #ffffff;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background-color: #ffffff;
+    padding: 20px;
+    transition: padding 0.3s ease, box-shadow 0.3s ease;
+}
+"##;
 
 async fn handle_request(
     lookups: &lookup::Client,
@@ -246,7 +292,7 @@ async fn handle_request(
     let records = lookups
         .lookup(LookupRequest {
             text: request.text,
-            record_kinds: wordbase_gtk::SUPPORTED_RECORD_KINDS.to_vec(),
+            record_kinds: wordbase_html::SUPPORTED_RECORD_KINDS.to_vec(),
         })
         .await
         .context("failed to perform lookup")?;
@@ -263,7 +309,7 @@ async fn handle_request(
 
     let popup = popup.get_or_insert_with(|| create_popup(app));
     let unknown_source = Arc::<str>::from("?");
-    let dictionary_html = wordbase_gtk::to_html(
+    let dictionary_html = wordbase_html::to_html(
         |source| {
             dictionary_names
                 .get(&source)
@@ -289,6 +335,7 @@ fn create_popup(app: &adw::Application) -> PopupInfo {
         static SETTINGS: LazyCell<webkit::Settings> = LazyCell::new(|| {
             webkit::Settings::builder()
                 .enable_page_cache(false)
+                .enable_smooth_scrolling(false)
                 .build()
         });
     }
@@ -301,6 +348,31 @@ fn create_popup(app: &adw::Application) -> PopupInfo {
 
     // don't allow opening the context menu
     web_view.connect_context_menu(|_, _, _| true);
+
+    // when attempting to navigate to a URL, open in the user's browser instead
+    web_view.connect_decide_policy(|_, decision, decision_type| {
+        if decision_type != webkit::PolicyDecisionType::NavigationAction {
+            return false;
+        }
+        let Some(decision) = decision.downcast_ref::<webkit::NavigationPolicyDecision>() else {
+            return false;
+        };
+        let Some(mut nav_action) = decision.navigation_action() else {
+            return false;
+        };
+        if !nav_action.is_user_gesture() {
+            return false;
+        }
+
+        if let Some(request) = nav_action.request() {
+            if let Some(uri) = request.uri() {
+                open_uri(&uri);
+            }
+        }
+
+        decision.ignore();
+        true // inhibit request
+    });
 
     let window = adw::ApplicationWindow::builder()
         .application(app)
@@ -323,5 +395,23 @@ fn create_popup(app: &adw::Application) -> PopupInfo {
     PopupInfo {
         window: window.upcast(),
         web_view,
+    }
+}
+
+fn open_uri(uri: &str) {
+    if let Some(uri) = uri.strip_prefix('?') {
+        if let Some((_, query)) =
+            form_urlencoded::parse(uri.as_bytes()).find(|(key, _)| key == "query")
+        {
+            info!("Looking up {query:?}");
+            warn!("TODO: unimplemented");
+        } else {
+            warn!("Attempted to open {uri:?} which does not contain `query`");
+        }
+    } else {
+        info!("Opening {uri:?}");
+        if let Err(err) = open::that_detached(uri) {
+            warn!("Failed to open link to {uri:?}: {err:?}");
+        }
     }
 }

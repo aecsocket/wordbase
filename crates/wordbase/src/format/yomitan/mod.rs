@@ -2,16 +2,15 @@
 //!
 //! [Yomitan]: https://github.com/yomidevs/yomitan/
 
+mod html;
 pub mod schema;
 pub mod structured;
-
-mod html;
-pub use html::*;
 
 #[cfg(feature = "parse-yomitan")]
 mod parse;
 #[cfg(feature = "parse-yomitan")]
 pub use parse::*;
+
 use serde::{Deserialize, Serialize};
 
 /// Yomitan-specific glossary format.
@@ -22,7 +21,7 @@ pub struct Glossary {
     pub tags: Vec<GlossaryTag>,
     /// Structured contents of this record.
     ///
-    /// You can render this to HTML using [`render_to_html`].
+    /// You can render this to HTML using [`maud::Render`].
     pub content: Vec<structured::Content>,
 }
 

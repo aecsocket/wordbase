@@ -17,7 +17,10 @@ use {
         sync::Arc,
         time::Duration,
     },
-    tokio::{sync::broadcast, task::JoinSet},
+    tokio::{
+        sync::{Semaphore, broadcast},
+        task::JoinSet,
+    },
     tracing::{Instrument, info, info_span, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
     wordbase::{
@@ -33,7 +36,8 @@ const CHANNEL_BUF_CAP: usize = 4;
 struct Config {
     listen_addr: SocketAddr,
     lookup: LookupConfig,
-    db_max_connections: u32,
+    max_db_connections: u32,
+    max_concurrent_imports: usize,
     texthooker_sources: Vec<Arc<TexthookerSource>>,
 }
 
@@ -42,7 +46,8 @@ impl Default for Config {
         Self {
             listen_addr: SocketAddr::new(Ipv4Addr::LOCALHOST.into(), DEFAULT_PORT),
             lookup: LookupConfig::default(),
-            db_max_connections: 8,
+            max_db_connections: 8,
+            max_concurrent_imports: 4,
             texthooker_sources: vec![Arc::new(TexthookerSource {
                 url: "ws://host.docker.internal:9001".into(),
                 // url: "ws://127.0.0.1:9001".into(),
@@ -75,8 +80,9 @@ async fn main() -> Result<()> {
         .init();
     let config = Arc::new(Config::default());
 
+    info!("Setting up database");
     let db = SqlitePoolOptions::new()
-        .max_connections(config.db_max_connections)
+        .max_connections(config.max_db_connections)
         .connect_with(
             SqliteConnectOptions::from_str("sqlite://wordbase.db")?
                 .create_if_missing(true)
@@ -105,8 +111,15 @@ async fn main() -> Result<()> {
         );
     }
     tasks.spawn(
-        server::run(config, db, lookups, popups, send_server_event)
-            .map_err(|err| err.context("server error")),
+        server::run(server::State {
+            db,
+            lookups,
+            popups,
+            send_event: send_server_event,
+            concurrent_imports: Arc::new(Semaphore::new(config.max_concurrent_imports)),
+            config,
+        })
+        .map_err(|err| err.context("server error")),
     );
 
     while let Some(result) = tasks.join_next().await {

@@ -2,10 +2,6 @@
 #![expect(missing_docs)]
 #![expect(clippy::missing_errors_doc)]
 
-extern crate gtk4 as gtk;
-extern crate libadwaita as adw;
-extern crate webkit6 as webkit;
-
 use std::sync::Arc;
 
 use derive_more::{Deref, DerefMut};
@@ -31,7 +27,15 @@ pub fn to_html(
 ) -> Markup {
     let mut terms = Terms::default();
     for record in records {
-        let term_info = terms.entry(record.term.clone()).or_default();
+        let term_info = terms
+            .entry(record.term.clone())
+            .or_insert_with(|| TermInfo {
+                meta: TermMeta {
+                    term: record.term.clone(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
         let source_name = name_of_source(record.source);
         let cx = RecordContext {
             source: record.source,
@@ -90,7 +94,9 @@ impl Render for TermInfo {
 
             .glossary-page {
                 @for (_, group) in &self.glossaries {
-                    (group)
+                    @if !group.rows.is_empty() {
+                        (group)
+                    }
                 }
             }
         }
@@ -226,7 +232,7 @@ impl Render for GlossaryRow {
                     }
                 }
 
-                ul {
+                ul .content data-count=(self.content.len()) {
                     @for content in &self.content {
                         li {
                             (content)
@@ -242,13 +248,13 @@ impl Render for GlossaryRow {
 struct GlossaryTag {
     name: String,
     description: String,
-    css_class: String,
+    css_class: Option<String>,
 }
 
 impl Render for GlossaryTag {
     fn render(&self) -> Markup {
         html! {
-            .tag title=(self.description) class=(self.css_class) {
+            .tag title=(self.description) class=[&(self.css_class)] {
                 (self.name)
             }
         }
@@ -331,7 +337,7 @@ impl RecordInsert for format::yomitan::Glossary {
                 .map(|tag| GlossaryTag {
                     name: tag.name,
                     description: tag.description,
-                    css_class: "TODO".into(),
+                    css_class: css_class_of_category(&tag.category).map(ToOwned::to_owned),
                 })
                 .collect(),
             content: self
@@ -343,102 +349,18 @@ impl RecordInsert for format::yomitan::Glossary {
     }
 }
 
-// pub const STYLESHEET: &str = include_str!("style.css");
-
-// #[derive(Debug, Default)]
-// struct GlossaryInfo {
-//     tags: Vec<gtk::Widget>,
-//     content: Vec<gtk::Widget>,
-// }
-
-// struct RecordContext<'a> {
-//     term: &'a Term,
-//     source_name: &'a str,
-//     meta_info: &'a mut MetaInfo,
-//     glossary_group: &'a mut Vec<GlossaryInfo>,
-// }
-
-// trait AddToTermInfo {
-//     fn add_to_term_info(self, cx: RecordContext);
-// }
-
-// pub fn ui_for<'a>(
-//     source_name: impl Fn(DictionaryId) -> &'a str,
-//     records: impl IntoIterator<Item = LookupResponse>,
-// ) -> ui::Dictionary {
-//     let mut terms = IndexMap::<Term, TermInfo>::default();
-//     for record in records {
-//         let term_info = terms.entry(record.term.clone()).or_default();
-//         let record_context = RecordContext {
-//             term: &record.term,
-//             source_name: source_name(record.source),
-//             meta_info: &mut term_info.meta,
-//             glossary_group: term_info.glossaries.entry(record.source).or_default(),
-//         };
-
-//         macro_rules! add_to_term_info { ($($kind:ident($data_ty:path)),* $(,)?) => {{
-//             match record.record {
-//                 $(Record::$kind(value) => value.add_to_term_info(record_context),)*
-//                 _ => {}
-//             }
-//         }}}
-
-//         for_record_kinds!(add_to_term_info);
-//     }
-
-//     let ui = ui::Dictionary::new();
-//     for (row, (term, info)) in terms.into_iter().enumerate() {
-//         let Ok(row) = i32::try_from(row) else {
-//             continue;
-//         };
-
-//         let (meta_ui, glossary_page) = ui_for_term(&source_name, term, info);
-//         ui.attach(&meta_ui, 0, row, 1, 1);
-//         ui.attach(&glossary_page, 1, row, 1, 1);
-//     }
-//     ui
-// }
-
-// fn ui_for_term<'a>(
-//     source_name: &impl Fn(DictionaryId) -> &'a str,
-//     term: Term,
-//     info: TermInfo,
-// ) -> (ui::TermMeta, ui::GlossaryPage) {
-//     let meta_ui = ui::TermMeta::new();
-//     meta_ui
-//         .reading()
-//         .set_text(term.reading.as_deref().unwrap_or_default());
-//     meta_ui.headword().set_text(&term.headword);
-//     for pitch in info.meta.pitches {
-//         meta_ui.pitches().append(&pitch);
-//     }
-//     for frequency in info.meta.frequencies {
-//         meta_ui.frequencies().append(&frequency);
-//     }
-
-//     let glossary_page = ui::GlossaryPage::new();
-//     for (source, glossaries) in info.glossaries {
-//         if glossaries.is_empty() {
-//             continue;
-//         }
-
-//         let glossary_group = ui::GlossaryGroup::new();
-//         glossary_page.append(&glossary_group);
-//         glossary_group.source().set_text(source_name(source));
-
-//         for glossary_info in glossaries {
-//             let glossary_row = ui::GlossaryRow::new();
-//             glossary_group.append(&glossary_row);
-
-//             for tag in glossary_info.tags {
-//                 glossary_row.tags().append(&tag);
-//             }
-
-//             for content in glossary_info.content {
-//                 glossary_row.content().append(&content);
-//             }
-//         }
-//     }
-
-//     (meta_ui, glossary_page)
-// }
+fn css_class_of_category(category: &str) -> Option<&'static str> {
+    match category {
+        "name" => Some("name"),
+        "expression" => Some("expression"),
+        "popular" => Some("popular"),
+        "frequent" => Some("frequent"),
+        "archaism" => Some("archaism"),
+        "dictionary" => Some("dictionary"),
+        "frequency" => Some("frequency"),
+        "partOfSpeech" => Some("part-of-speech"),
+        "search" => Some("search"),
+        "pronunciation-dictionary" => Some("pronunciation-dictionary"),
+        _ => None,
+    }
+}

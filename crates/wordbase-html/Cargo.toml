@@ -1,6 +1,6 @@
 [package]
 description = "TODO"
-name = "wordbase-gtk"
+name = "wordbase-html"
 version = "0.1.0"
 
 authors.workspace = true
@@ -25,10 +25,5 @@ wordbase = { workspace = true }
 derive_more = { workspace = true, features = ["deref", "deref_mut"] }
 foldhash = { workspace = true }
 form_urlencoded = { workspace = true }
-gtk4 = { workspace = true, features = ["gnome_47", "blueprint"] }
 indexmap = { workspace = true }
-libadwaita = { workspace = true, features = ["v1_6"] }
 maud = { workspace = true }
-open = { workspace = true }
-tracing = { workspace = true }
-webkit6 = { workspace = true }

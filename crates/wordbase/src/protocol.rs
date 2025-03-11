@@ -45,6 +45,23 @@ pub enum FromClient {
         /// What [`Dictionary::enabled`] should be set to.
         enabled: bool,
     },
+    /// Requests to set the [position] of a [dictionary] used for sorting lookup
+    /// records.
+    ///
+    /// If a dictionary already exists at the given position, both dictionaries
+    /// will share the same position, and record lookup order will be
+    /// non-deterministic between the two dictionaries.
+    ///
+    /// Server responds with [`FromServer::SetDictionaryPosition`].
+    ///
+    /// [position]: Dictionary::position
+    /// [dictionary]: Dictionary
+    SetDictionaryPosition {
+        /// ID of the dictionary.
+        dictionary_id: DictionaryId,
+        /// New position of the dictionary.
+        position: i64,
+    },
 }
 
 /// Server-to-client WebSocket message, encoded as JSON.
@@ -89,6 +106,11 @@ pub enum FromServer {
     },
     /// Response to [`FromClient::SetDictionaryEnabled`].
     SetDictionaryEnabled {
+        /// Result of the operation.
+        result: Result<(), DictionaryNotFound>,
+    },
+    /// Response to [`FromClient::SetDictionaryPosition`].
+    SetDictionaryPosition {
         /// Result of the operation.
         result: Result<(), DictionaryNotFound>,
     },

@@ -74,8 +74,9 @@ pub async fn lookup(
         for record_kind in record_kinds {
             query.push_bind(*record_kind as u16);
         }
-        query.push_unseparated(")");
+        query.push_unseparated(") ");
     }
+    query.push("ORDER BY dictionary.position");
 
     query
         .build()

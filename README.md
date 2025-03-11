@@ -47,7 +47,8 @@ performing a lookup or rendering contents; they just request the server to handl
 
 This pop-up is shown as a window which is placed above all other windows on the desktop, and is
 integrated into the server itself. It is not a standalone binary which can be launched outside of
-the server.
+the server. It uses a single WebView which covers the entire surface, and renders all dictionary
+content into there.
 
 However, this is a fairly platform-specific feature, and comes with some challenges to solve.
 
@@ -103,7 +104,7 @@ Unsupported due to platform limitations. Apps can't spawn arbitrary windows on t
 Client library written in Rust used to interface with a Wordbase server via WebSockets. This is a
 reference implementation of a client library.
 
-### [`wordbase-gtk`](./crates/wordbase-gtk)
+### [`wordbase-html`](./crates/wordbase-html)
 
-Provides GTK widgets for rendering dictionary elements. This is used internally by the manager app
-and the pop-up dictionary.
+Allows rendering dictionary elements to HTML, which can be further rendered by a browser engine like
+WebKit. This is used internally by the manager app and the pop-up dictionary.

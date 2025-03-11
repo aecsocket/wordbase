@@ -2,6 +2,7 @@
 
 use {
     anyhow::{Context, Result},
+    ascii_table::{Align, AsciiTable},
     futures::StreamExt,
     wordbase::{
         DictionaryId, RecordKind,
@@ -44,18 +45,26 @@ enum DictionaryCommand {
     Ls,
     /// Remove a dictionary with a specific ID
     Rm {
-        /// ID of the dictionary, as seen in `dictionary list`
+        /// ID of the dictionary, as seen in `dictionary ls`
         id: i64,
     },
     /// Enable a dictionary for lookups
     Enable {
-        /// ID of the dictionary, as seen in `dictionary list`
+        /// ID of the dictionary, as seen in `dictionary ls`
         id: i64,
     },
     /// Disable a dictionary for lookups
     Disable {
-        /// ID of the dictionary, as seen in `dictionary list`
+        /// ID of the dictionary, as seen in `dictionary ls`
         id: i64,
+    },
+    /// Move a dictionary to a new sorting position
+    #[clap(alias = "pos")]
+    Position {
+        /// ID of the dictionary, as seen in `dictionary ls`
+        id: i64,
+        /// New position of the dictionary
+        position: i64,
     },
 }
 
@@ -93,6 +102,9 @@ async fn main() -> Result<()> {
             Command::Dictionary {
                 command: DictionaryCommand::Disable { id },
             } => disable_dictionary(&mut client, id).await,
+            Command::Dictionary {
+                command: DictionaryCommand::Position { id, position },
+            } => position_dictionary(&mut client, id, position).await,
             Command::Lookup { text } => lookup(&mut client, text).await,
             Command::Popup { text } => show_popup(&mut client, text).await,
             Command::Hook {
@@ -111,15 +123,23 @@ async fn main() -> Result<()> {
 
 fn list_dictionaries(client: &SocketClient) {
     let dictionaries = client.dictionaries();
-    println!("Dictionaries ({}):", dictionaries.len());
-    for dictionary in dictionaries.values() {
-        let position = dictionary.position;
-        let enabled = if dictionary.enabled { "[on]" } else { "[  ]" };
-        let id = dictionary.id.0;
-        let name = &dictionary.meta.name;
-        let version = &dictionary.meta.version;
-        println!("  {position}. {enabled} [ID {id}] {name} ver {version}");
-    }
+
+    let mut table = AsciiTable::default();
+    table.column(0).set_header("#").set_align(Align::Right);
+    table.column(1).set_header("ID").set_align(Align::Right);
+    table.column(2).set_header("On").set_align(Align::Left);
+    table.column(3).set_header("Name").set_align(Align::Left);
+    table.column(4).set_header("Version").set_align(Align::Left);
+
+    table.print(dictionaries.values().map(|dictionary| {
+        [
+            format!("{}", dictionary.position),
+            format!("{}", dictionary.id.0),
+            format!("{}", if dictionary.enabled { "✔" } else { "" }),
+            format!("{}", dictionary.meta.name),
+            format!("{}", dictionary.meta.version),
+        ]
+    }));
 }
 
 async fn remove_dictionary(client: &mut SocketClient, id: i64) -> Result<()> {
@@ -134,6 +154,13 @@ async fn enable_dictionary(client: &mut SocketClient, id: i64) -> Result<()> {
 
 async fn disable_dictionary(client: &mut SocketClient, id: i64) -> Result<()> {
     client.disable_dictionary(DictionaryId(id)).await??;
+    Ok(())
+}
+
+async fn position_dictionary(client: &mut SocketClient, id: i64, position: i64) -> Result<()> {
+    client
+        .set_dictionary_position(DictionaryId(id), position)
+        .await??;
     Ok(())
 }
 

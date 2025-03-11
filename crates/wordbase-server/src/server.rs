@@ -1,7 +1,7 @@
 use {
     crate::{
         Config, ServerEvent, db,
-        import::{self, ImportError},
+        import::{self, ImportError, ReadToMemory},
         lookup, popup,
     },
     anyhow::{Context as _, Result},
@@ -19,13 +19,17 @@ use {
     wordbase::protocol::{FromClient, FromServer},
 };
 
-pub async fn run(
-    config: Arc<Config>,
-    db: Pool<Sqlite>,
-    lookups: lookup::Client,
-    popups: popup::Client,
-    send_event: broadcast::Sender<ServerEvent>,
-) -> Result<Never> {
+#[derive(Debug, Clone)]
+pub struct State {
+    pub config: Arc<Config>,
+    pub db: Pool<Sqlite>,
+    pub lookups: lookup::Client,
+    pub popups: popup::Client,
+    pub send_event: broadcast::Sender<ServerEvent>,
+    pub concurrent_imports: Arc<Semaphore>,
+}
+
+pub async fn run(state: State) -> Result<Never> {
     // TODO
     // const IMPORTS: &[&str] = &[
     //     // "1. jitendex-yomitan.zip",
@@ -61,34 +65,10 @@ pub async fn run(
     let import_semaphore = Arc::new(Semaphore::new(1));
     for path in IMPORTS {
         let span = info_span!("import", %path);
-        let db = db.clone();
+        let span2 = span.clone();
+        let db = state.db.clone();
         let import_semaphore = import_semaphore.clone();
-        let (send_read_to_memory, recv_read_to_memory) = oneshot::channel();
-        joins.spawn(
-            async move {
-                match import::yomitan(
-                    db,
-                    import_semaphore,
-                    format!("/home/dev/all-dictionaries/{path}"),
-                    send_read_to_memory,
-                )
-                .await
-                .with_context(|| format!("while importing {path:?}"))?
-                {
-                    Ok(()) => {
-                        info!("Import complete");
-                    }
-                    Err(ImportError::AlreadyExists) => {
-                        info!("Dictionary already exists, skipping");
-                    }
-                    Err(ImportError::NoRecords) => {
-                        info!("Dictionary has no records, skipping");
-                    }
-                }
-                Ok(())
-            }
-            .instrument(span.clone()),
-        );
+        let (send_read_to_memory, recv_read_to_memory) = oneshot::channel::<ReadToMemory>();
         joins.spawn(
             async move {
                 let Ok(next) = recv_read_to_memory.await else {
@@ -123,6 +103,30 @@ pub async fn run(
             }
             .instrument(span),
         );
+        async move {
+            match import::yomitan(
+                db,
+                import_semaphore,
+                format!("/home/dev/all-dictionaries/{path}"),
+                send_read_to_memory,
+            )
+            .await
+            .with_context(|| format!("while importing {path:?}"))?
+            {
+                Ok(()) => {
+                    info!("Import complete");
+                }
+                Err(ImportError::AlreadyExists) => {
+                    info!("Dictionary already exists, skipping");
+                }
+                Err(ImportError::NoRecords) => {
+                    info!("Dictionary has no records, skipping");
+                }
+            }
+            anyhow::Ok(())
+        }
+        .instrument(span2)
+        .await?;
     }
     while let Some(result) = joins.join_next().await {
         result
@@ -130,14 +134,14 @@ pub async fn run(
             .context("failed to import")?;
     }
 
-    send_dictionary_sync(&db, &send_event)
+    send_dictionary_sync(&state.db, &state.send_event)
         .await
         .context("failed to sync initial dictionaries")?;
 
-    let listener = TcpListener::bind(&config.listen_addr)
+    let listener = TcpListener::bind(&state.config.listen_addr)
         .await
         .context("failed to bind TCP listener")?;
-    info!("Listening on {:?}", config.listen_addr);
+    info!("Listening on {:?}", state.config.listen_addr);
 
     let mut connection_id = Wrapping(0usize);
     loop {
@@ -146,15 +150,11 @@ pub async fn run(
             .await
             .context("failed to accept TCP stream")?;
 
-        let config = config.clone();
-        let db = db.clone();
-        let lookups = lookups.clone();
-        let popups = popups.clone();
-        let send_event = send_event.clone();
+        let state = state.clone();
         tokio::spawn(
             async move {
                 info!("Incoming connection from {peer_addr:?}");
-                let Err(err) = handle_stream(config, db, lookups, popups, send_event, stream).await;
+                let Err(err) = handle_stream(state, stream).await;
                 info!("Connection lost: {err:?}");
             }
             .instrument(info_span!("connection", id = %connection_id)),
@@ -174,27 +174,20 @@ impl Connection {
     }
 }
 
-async fn handle_stream(
-    config: Arc<Config>,
-    db: Pool<Sqlite>,
-    lookups: lookup::Client,
-    popups: popup::Client,
-    send_event: broadcast::Sender<ServerEvent>,
-    stream: TcpStream,
-) -> Result<Never> {
+async fn handle_stream(state: State, stream: TcpStream) -> Result<Never> {
     let stream = tokio_tungstenite::accept_async(stream)
         .await
         .context("failed to accept WebSocket stream")?;
     let mut connection = Connection(stream);
-    let mut recv_event = send_event.subscribe();
+    let mut recv_event = state.send_event.subscribe();
 
-    let dictionaries = db::dictionary::all(&db)
+    let dictionaries = db::dictionary::all(&state.db)
         .await
         .context("failed to fetch dictionaries")?;
 
     connection
         .write(&FromServer::SyncLookupConfig {
-            lookup_config: config.lookup.clone(),
+            lookup_config: state.config.lookup.clone(),
         })
         .await
         .context("failed to sync lookup config")?;
@@ -213,10 +206,7 @@ async fn handle_stream(
                     .context("stream closed")?
                     .context("stream error")?;
                 if let Err(err) = handle_message(
-                    &db,
-                    &lookups,
-                    &popups,
-                    &send_event,
+                    &state,
                     &mut connection,
                     data,
                 )
@@ -242,14 +232,7 @@ async fn forward_event(connection: &mut Connection, event: ServerEvent) {
     _ = connection.write(&message).await;
 }
 
-async fn handle_message(
-    db: &Pool<Sqlite>,
-    lookups: &lookup::Client,
-    popups: &popup::Client,
-    send_event: &broadcast::Sender<ServerEvent>,
-    connection: &mut Connection,
-    data: Message,
-) -> Result<()> {
+async fn handle_message(state: &State, connection: &mut Connection, data: Message) -> Result<()> {
     let data = data.into_data();
     if data.is_empty() {
         return Ok(());
@@ -261,11 +244,12 @@ async fn handle_message(
     match message {
         FromClient::HookSentence(sentence) => {
             debug!("{sentence:#?}");
-            _ = send_event.send(ServerEvent::HookSentence(sentence));
+            _ = state.send_event.send(ServerEvent::HookSentence(sentence));
             Ok(())
         }
         FromClient::Lookup(request) => {
-            let records = lookups
+            let records = state
+                .lookups
                 .lookup(request)
                 .await
                 .context("failed to perform lookup")?;
@@ -282,7 +266,11 @@ async fn handle_message(
             Ok(())
         }
         FromClient::ShowPopup(request) => {
-            let result = popups.show(request).await.context("failed to show popup")?;
+            let result = state
+                .popups
+                .show(request)
+                .await
+                .context("failed to show popup")?;
             connection
                 .write(&FromServer::ShowPopup { result })
                 .await
@@ -290,14 +278,14 @@ async fn handle_message(
             Ok(())
         }
         FromClient::RemoveDictionary { dictionary_id } => {
-            let result = db::dictionary::remove(db, dictionary_id)
+            let result = db::dictionary::remove(&state.db, dictionary_id)
                 .await
                 .context("failed to remove dictionary")?;
             connection
                 .write(&FromServer::RemoveDictionary { result })
                 .await
                 .context("failed to send response")?;
-            send_dictionary_sync(db, send_event)
+            send_dictionary_sync(&state.db, &state.send_event)
                 .await
                 .context("failed to send dictionary sync")?;
             Ok(())
@@ -306,14 +294,30 @@ async fn handle_message(
             dictionary_id,
             enabled,
         } => {
-            let result = db::dictionary::set_enabled(db, dictionary_id, enabled)
+            let result = db::dictionary::set_enabled(&state.db, dictionary_id, enabled)
                 .await
                 .context("failed to set dictionary enabled state")?;
             connection
                 .write(&FromServer::SetDictionaryEnabled { result })
                 .await
                 .context("failed to send response")?;
-            send_dictionary_sync(db, send_event)
+            send_dictionary_sync(&state.db, &state.send_event)
+                .await
+                .context("failed to send dictionary sync")?;
+            Ok(())
+        }
+        FromClient::SetDictionaryPosition {
+            dictionary_id,
+            position,
+        } => {
+            let result = db::dictionary::set_position(&state.db, dictionary_id, position)
+                .await
+                .context("failed to set dictionary position")?;
+            connection
+                .write(&FromServer::SetDictionaryPosition { result })
+                .await
+                .context("failed to send response")?;
+            send_dictionary_sync(&state.db, &state.send_event)
                 .await
                 .context("failed to send dictionary sync")?;
             Ok(())

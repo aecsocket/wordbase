@@ -24,6 +24,7 @@ wordbase = { workspace = true }
 wordbase-client-tokio = { workspace = true }
 
 anyhow = { workspace = true }
+ascii_table = { workspace = true, features = ["wide_characters"] }
 clap = { workspace = true, features = ["derive"] }
 futures = { workspace = true }
 tokio = { workspace = true, features = ["full"] }

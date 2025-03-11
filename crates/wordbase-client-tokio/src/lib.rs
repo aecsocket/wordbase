@@ -300,6 +300,25 @@ where
     ) -> Result<Result<(), DictionaryNotFound>, ConnectionError> {
         self.set_dictionary_enabled(dictionary_id, false).await
     }
+
+    pub async fn set_dictionary_position(
+        &mut self,
+        dictionary_id: DictionaryId,
+        position: i64,
+    ) -> Result<Result<(), DictionaryNotFound>, ConnectionError> {
+        self.connection
+            .send(&FromClient::SetDictionaryPosition {
+                dictionary_id,
+                position,
+            })
+            .await?;
+        loop {
+            match self.connection.recv().await? {
+                FromServer::SetDictionaryPosition { result } => return Ok(result),
+                message => self.fallback_handle(message)?,
+            }
+        }
+    }
 }
 
 impl<S> Client<WebSocketStream<S>>

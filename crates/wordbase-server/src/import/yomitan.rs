@@ -183,7 +183,7 @@ pub async fn yomitan(
     Ok(Ok(()))
 }
 
-fn none_if_empty(s: String) -> Option<String> {
+fn sanitize(s: String) -> Option<String> {
     if s.trim().is_empty() { None } else { Some(s) }
 }
 
@@ -194,8 +194,10 @@ async fn import_term(
     all_tags: &[GlossaryTag],
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
-    let headword = term.expression.clone();
-    let reading = none_if_empty(term.reading.clone());
+    let reading = sanitize(term.reading.clone());
+    let headword = sanitize(term.expression.clone())
+        .or(reading.clone()) // if there's no headword, use the reading as the headword
+        .context("term has no headword or reading")?;
 
     let tags = match_tags(
         all_tags,

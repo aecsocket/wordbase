@@ -1,5 +1,5 @@
 use {
-    super::structured::{Content, ContentStyle, Element, UnstyledElement},
+    super::structured::{Content, ContentStyle, Element},
     maud::{Markup, Render, html},
     std::fmt,
 };
@@ -19,6 +19,8 @@ impl Render for Content {
         }
     }
 }
+
+// TODO: `data` support
 
 macro_rules! unstyled {
     ($elem:expr, $tag:ident) => {
@@ -55,7 +57,7 @@ macro_rules! styled {
 impl Render for Element {
     fn render(&self) -> Markup {
         match self {
-            Self::Br(elem) => html! { br; },
+            Self::Br(_elem) => html! { br; },
             Self::Ruby(elem) => unstyled!(elem, ruby),
             Self::Rt(elem) => unstyled!(elem, rt),
             Self::Rp(elem) => unstyled!(elem, rp),
@@ -74,8 +76,7 @@ impl Render for Element {
             Self::Details(elem) => styled!(elem, details),
             Self::Summary(elem) => styled!(elem, summary),
             Self::Img(elem) => html! {
-                img
-                    path=(elem.base.path)
+                img path=(elem.base.path)
                     width=[elem.base.width]
                     height=[elem.base.height]
                     preferred-width=[elem.base.preferred_width]
@@ -88,7 +89,11 @@ impl Render for Element {
                     image-appearance=[elem.base.image_appearance]
                     background=[elem.base.background]
                     collapsed=[elem.base.collapsed]
-                    collapsible=[elem.base.collapsible];
+                    collapsible=[elem.base.collapsible]
+                    vertical-align=[elem.vertical_align]
+                    border=[&(elem.border)]
+                    border-radius=[&(elem.border_radius)]
+                    size-units=[elem.size_units];
             },
             Self::A(elem) => html! {
                 a href=(elem.href) lang=[&elem.lang] {
@@ -98,128 +103,6 @@ impl Render for Element {
         }
     }
 }
-
-impl Render for UnstyledElement {
-    fn render(&self) -> Markup {
-        html! {}
-    }
-}
-
-// #[rustfmt::skip]
-// fn element(w: &mut impl fmt::Write, elem: &Element) -> fmt::Result {
-//     match elem {
-//         Element::Br { data } => line_break(w, data.as_ref()),
-//         //
-//         Element::Ruby(e)  => unstyled(w, e, "ruby"),
-//         Element::Rt(e)    => unstyled(w, e, "rt"),
-//         Element::Rp(e)    => unstyled(w, e, "rp"),
-//         Element::Table(e) => unstyled(w, e, "table"),
-//         Element::Thead(e) => unstyled(w, e, "thead"),
-//         Element::Tbody(e) => unstyled(w, e, "tbody"),
-//         Element::Tfoot(e) => unstyled(w, e, "tfoot"),
-//         Element::Tr(e)    => unstyled(w, e, "tr"),
-//         //
-//         Element::Td(e) => table(w, e, "td"),
-//         Element::Th(e) => table(w, e, "th"),
-//         //
-//         Element::Span(e)    => styled(w, e, "span"),
-//         Element::Div(e)     => styled(w, e, "div"),
-//         Element::Ol(e)      => styled(w, e, "ol"),
-//         Element::Ul(e)      => styled(w, e, "ul"),
-//         Element::Li(e)      => styled(w, e, "li"),
-//         Element::Details(e) => styled(w, e, "details"),
-//         Element::Summary(e) => styled(w, e, "summary"),
-//         //
-//         Element::Img(e) => img(w, e),
-//         //
-//         Element::A(e) => link(w, e),
-//     }
-// }
-
-// macro_rules! forward_to_tag {
-//     ($w:expr, $field:expr, $prop:expr) => {
-//         if let Some(value) = &($field) {
-//             write!($w, " ")?;
-//             write!($w, $prop)?;
-//             let value = format!("{value}");
-//             write!($w, "=\"{}\"", html_escape::encode_safe(&value))?;
-//         }
-//     };
-// }
-
-// macro_rules! forward_to_tag_fn {
-//     ($w:expr, $field:expr, $prop:expr, $f:ident) => {
-//         if let Some(value) = &($field) {
-//             write!($w, " ")?;
-//             write!($w, $prop)?;
-//             write!($w, "=\"")?;
-//             $f($w, value)?;
-//             write!($w, "\"")?;
-//         }
-//     };
-// }
-
-// fn forward_data(w: &mut impl fmt::Write, data: Option<&Data>) -> fmt::Result {
-//     let Some(data) = data else {
-//         return Ok(());
-//     };
-//     for (key, value) in data.iter() {
-//         let value = html_escape::encode_safe(value);
-//         write!(w, " data-{key}=\"{value}\"")?;
-//     }
-//     Ok(())
-// }
-
-// fn line_break(w: &mut impl fmt::Write, data: Option<&Data>) -> fmt::Result {
-//     write!(w, "<br")?;
-//     forward_data(w, data)?;
-//     write!(w, ">")
-// }
-
-// fn unstyled(w: &mut impl fmt::Write, elem: &UnstyledElement, tag: &str) -> fmt::Result {
-//     write!(w, "<{tag}")?;
-//     forward_data(w, elem.data.as_ref())?;
-//     forward_to_tag!(w, elem.lang, "lang");
-//     write!(w, ">")?;
-
-//     if let Some(content) = &elem.content {
-//         any(w, content)?;
-//     }
-
-//     write!(w, "</{tag}>")
-// }
-
-// fn table(w: &mut impl fmt::Write, elem: &TableElement, tag: &str) -> fmt::Result {
-//     write!(w, "<{tag}")?;
-//     forward_data(w, elem.data.as_ref())?;
-//     forward_to_tag!(w, elem.col_span, "col-span");
-//     forward_to_tag!(w, elem.row_span, "row-span");
-//     forward_to_tag_fn!(w, elem.style, "style", style_css);
-//     forward_to_tag!(w, elem.lang, "lang");
-//     write!(w, ">")?;
-
-//     if let Some(content) = &elem.content {
-//         any(w, content)?;
-//     }
-
-//     write!(w, "</{tag}>")
-// }
-
-// fn styled(w: &mut impl fmt::Write, elem: &StyledElement, tag: &str) -> fmt::Result {
-//     write!(w, "<{tag}")?;
-//     forward_data(w, elem.data.as_ref())?;
-//     forward_to_tag_fn!(w, elem.style, "style", style_css);
-//     forward_to_tag!(w, elem.title, "title");
-//     forward_to_tag!(w, elem.open, "open");
-//     forward_to_tag!(w, elem.lang, "lang");
-//     write!(w, ">")?;
-
-//     if let Some(content) = &elem.content {
-//         any(w, content)?;
-//     }
-
-//     write!(w, "</{tag}>")
-// }
 
 fn style_css(s: &ContentStyle) -> String {
     let mut css = String::new();
@@ -279,19 +162,3 @@ fn write_style_css(w: &mut impl fmt::Write, s: &ContentStyle) -> fmt::Result {
 
     Ok(())
 }
-
-// fn img(w: &mut impl fmt::Write, elem: &ImageElement) -> fmt::Result {
-//     write!(w, "<img src={}", elem.base.path)?;
-//     // TODO
-//     write!(w, ">")
-// }
-
-// fn link(w: &mut impl fmt::Write, elem: &LinkElement) -> fmt::Result {
-//     write!(w, "<a href={}>", elem.href)?;
-
-//     if let Some(content) = &elem.content {
-//         any(w, content)?;
-//     }
-
-//     write!(w, "</a>")
-// }

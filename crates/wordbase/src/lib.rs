@@ -16,6 +16,8 @@ use {
     serde::{Deserialize, Serialize},
 };
 
+pub use maud;
+
 /// Invokes your own macro, passing in all existing [record] kinds as arguments.
 ///
 /// [`Record`] and [`RecordKind`] are marked as `#[non_exhaustive]`, so adding
