@@ -22,13 +22,10 @@ tightly with your desktop to provide a seamless experience for language learning
   - [ ] Create notes
   - [ ] Add screenshot and sentence audio to notes
 - API for external apps
-  - WebSocket
-    - [x] Manage dictionaries
-    - [x] Perform lookups
-    - [x] Request to show the popup dictionary
-    - [ ] Add Anki note
-  - HTTP
-    - [ ] Import dictionaries
+  - [x] Manage dictionaries
+  - [x] Perform lookups
+  - [x] Request to show the popup dictionary
+  - [ ] Add Anki note
 - Desktop integration
   - Windows
     - (not supported yet)
@@ -69,7 +66,7 @@ listening for incoming WebSocket connections (on `localhost` by default), and al
 interface with the server. The server is responsible for:
 - dictionary management - importing, removing, enabling, etc.
 - text lookup logic
-- [lemmatisation](https://en.wikipedia.org/wiki/Lemmatization)
+- [lemmatization](https://en.wikipedia.org/wiki/Lemmatization)
 - connecting to [texthooker servers](https://github.com/KamWithK/TextractorSender)
 - spawning dictionary popups
 
@@ -144,6 +141,10 @@ TODO: so what do we do? I don't use X11 so...
 
 Unsupported due to platform limitations. Apps can't spawn arbitrary windows on top of other apps.
 
+## Texthooker support
+
+TODO
+
 ## Libraries
 
 ### [`wordbase`](./crates/wordbase)
@@ -156,13 +157,17 @@ protocol between the client and server.
 Client library written in Rust used to interface with a Wordbase server via WebSockets. This is a
 reference implementation of a client library.
 
-### [`wordbase-html`](./crates/wordbase-html)
+# Roadmap
 
-Allows rendering dictionary elements to HTML, which can be further rendered by a browser engine like
-WebKit. This is used internally by the manager app and the pop-up dictionary.
+Bugs and missing features.
 
-# Bugs
+Sorted by priority:
+- [ ] Popup dictionary doesn't render pitch info
+- [ ] Change font setting
+- [ ] No config persistence
+- [ ] Extension doesn't autoconnect to server
 
+Unsorted:
 - [ ] No Windows, KDE, MacOS support
 - [ ] GNOME extension doesn't work if VN is fullscreen
 - [ ] After unfullscreening VN, extension breaks rendering
@@ -171,16 +176,14 @@ WebKit. This is used internally by the manager app and the pop-up dictionary.
 - [ ] Popup dictionary stylesheet sucks ass
 - [ ] No dictionary theming
 - [ ] Need options for click-to-lookup
-- [ ] Popup dictionary doesn't render pitch info
 - [ ] No Add to Anki button
 - [ ] No local audio server
 - [ ] No "play pronunciation" button
 - [ ] Popup should remember its set size
 - [ ] Popup disappears if you start click resizing it
-- [ ] No config persistence
-- [ ] Extension doesn't autoconnect to server
-- [ ] Change font setting
 - [ ] Add auto-updating dictionaries
 - [ ] HTTP API for importing dictionaries
 - [ ] Admin web panel
 - [ ] `data-*` attributes in yomitan glossaries
+- [ ] Language-agnostic deconjugation
+- [ ] Platform-agnostic app for VN lookups from the window itself
