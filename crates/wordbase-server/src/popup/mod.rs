@@ -13,12 +13,13 @@ cfg_if! {
     }
 }
 
-use anyhow::{Context, Result};
-use cfg_if::cfg_if;
-use tokio::sync::{broadcast, mpsc};
-use wordbase::protocol::{NoRecords, ShowPopupRequest, ShowPopupResponse};
-
-use crate::{CHANNEL_BUF_CAP, ServerEvent, lookup};
+use {
+    crate::{CHANNEL_BUF_CAP, ServerEvent, lookup},
+    anyhow::{Context, Result},
+    cfg_if::cfg_if,
+    tokio::sync::{broadcast, mpsc},
+    wordbase::protocol::{NoRecords, ShowPopupRequest, ShowPopupResponse},
+};
 
 #[derive(Debug, Clone)]
 pub struct Client {
@@ -40,7 +41,7 @@ impl Client {
         request: ShowPopupRequest,
     ) -> Result<Result<ShowPopupResponse, NoRecords>> {
         let (send_response, mut recv_response) = mpsc::channel(CHANNEL_BUF_CAP);
-        self.send_request.send(Request {
+        self.send_request.send(Request::Show {
             request,
             send_response,
         })?;
@@ -50,10 +51,25 @@ impl Client {
             .context("no popup backend running")?;
         response
     }
+
+    pub async fn hide(&self) -> Result<()> {
+        let (send_response, mut recv_response) = mpsc::channel(CHANNEL_BUF_CAP);
+        self.send_request.send(Request::Hide { send_response })?;
+        recv_response
+            .recv()
+            .await
+            .context("no popup backend running")?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
-struct Request {
-    request: ShowPopupRequest,
-    send_response: mpsc::Sender<Result<Result<ShowPopupResponse, NoRecords>>>,
+enum Request {
+    Show {
+        request: ShowPopupRequest,
+        send_response: mpsc::Sender<Result<Result<ShowPopupResponse, NoRecords>>>,
+    },
+    Hide {
+        send_response: mpsc::Sender<()>,
+    },
 }

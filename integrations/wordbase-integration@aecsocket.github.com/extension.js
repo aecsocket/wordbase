@@ -349,15 +349,21 @@ export default class WordbaseIntegrationExtension extends Extension {
                     return Clutter.EVENT_PROPAGATE;
                 }
 
-                const [window_abs_x, window_abs_y] =
-                    dialog_box.parent.get_transformed_position();
+                const window_frame_rect =
+                    dialog_box.parent.meta_window.get_frame_rect();
                 const [user_offset_x, user_offset_y] = [
                     this._settings.get_int("dialog-popup-x-offset"),
                     this._settings.get_int("dialog-popup-y-offset"),
                 ];
                 const origin = [
-                    text_abs_x - window_abs_x + text_pos_x + user_offset_x,
-                    text_abs_y - window_abs_y + text_pos_y + user_offset_y,
+                    text_abs_x -
+                        window_frame_rect.x +
+                        text_pos_x +
+                        user_offset_x,
+                    text_abs_y -
+                        window_frame_rect.y +
+                        text_pos_y +
+                        user_offset_y,
                 ];
 
                 dialog_box.parent.meta_window.get_id();

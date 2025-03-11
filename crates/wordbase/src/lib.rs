@@ -11,12 +11,11 @@ pub mod protocol;
 pub mod record;
 pub(crate) mod util;
 
+pub use maud;
 use {
     derive_more::From,
     serde::{Deserialize, Serialize},
 };
-
-pub use maud;
 
 /// Invokes your own macro, passing in all existing [record] kinds as arguments.
 ///
@@ -43,9 +42,9 @@ pub use maud;
 ///
 /// ```
 /// macro_rules! my_macro {
-///     ( $($kind:ident($data_ty:path)),* $(,)? ) => {
+///     ($($kind:ident($data_ty:path)),* $(,)?) => {
 ///         // your code here
-///     }
+///     };
 /// }
 /// ```
 ///
@@ -115,9 +114,7 @@ macro_rules! for_record_kinds {
     ($macro:ident) => {
         $macro!(
             GlossaryPlainText(glossary::PlainText),
-            GlossaryPlainTextFallback(glossary::PlainTextFallback),
             GlossaryHtml(glossary::Html),
-            GlossaryHtmlFallback(glossary::HtmlFallback),
             Frequency(record::Frequency),
             JpPitch(lang::jp::Pitch),
             YomitanGlossary(format::yomitan::Glossary),

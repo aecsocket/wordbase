@@ -23,6 +23,10 @@ pub enum FromClient {
     /// See [`ShowPopupRequest`].
     #[from]
     ShowPopup(ShowPopupRequest),
+    /// Requests to hide the currently shown popup dictionary.
+    ///
+    /// Server responds with [`FromServer::HidePopup`].
+    HidePopup,
     /// Requests to remove a [dictionary] from the server's database.
     ///
     /// Server responds with [`FromServer::RemoveDictionary`].
@@ -88,7 +92,8 @@ pub enum FromServer {
     /// See [`HookSentence`].
     #[from]
     HookSentence(HookSentence),
-    /// Server sends a response to [`FromClient::Lookup`] containing a single record.
+    /// Server sends a response to [`FromClient::Lookup`] containing a single
+    /// record.
     #[from]
     Lookup(LookupResponse),
     /// Server sends a response to [`FromClient::ShowPopup`].
@@ -96,6 +101,8 @@ pub enum FromServer {
         /// Whether showing the popup was successful.
         result: Result<ShowPopupResponse, NoRecords>,
     },
+    /// Server sends a response to [`FromClient::HidePopup`] marking success.
+    HidePopup,
     /// Server sends a response to [`FromClient::Lookup`] marking that all
     /// records have been sent.
     LookupDone,

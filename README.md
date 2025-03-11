@@ -155,3 +155,25 @@ reference implementation of a client library.
 
 Allows rendering dictionary elements to HTML, which can be further rendered by a browser engine like
 WebKit. This is used internally by the manager app and the pop-up dictionary.
+
+# Bugs
+
+- No Windows, KDE, MacOS support
+- GNOME extension doesn't work if VN is fullscreen
+- After unfullscreening VN, extension breaks rendering
+- On initial popup, the popup is not located in the right place
+- Deconjugator sucks ass
+- Popup dictionary stylesheet sucks ass
+- No dictionary theming
+- Need options for click-to-lookup
+- Popup dictionary doesn't render pitch info
+- No Add to Anki button
+- No local audio server
+- No "play pronunciation" button
+- Popup should remember its set size
+- Popup disappears if you start click resizing it
+- Server does not generate fallback record kinds via api
+- No GUI app for managing dictionaries
+- No GUI app for lookups
+- No config persistence
+- Extension doesn't autoconnect to server

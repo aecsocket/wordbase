@@ -1,14 +1,14 @@
 mod mecab;
 
-use std::sync::Arc;
-
-use anyhow::{Context, Result, bail};
-use futures::never::Never;
-use sqlx::{Pool, Sqlite};
-use tokio::sync::{mpsc, oneshot};
-use wordbase::protocol::{LookupRequest, LookupResponse};
-
-use crate::{CHANNEL_BUF_CAP, Config, db};
+use {
+    crate::{CHANNEL_BUF_CAP, Config, db},
+    anyhow::{Context, Result, bail},
+    futures::never::Never,
+    sqlx::{Pool, Sqlite},
+    std::sync::Arc,
+    tokio::sync::{mpsc, oneshot},
+    wordbase::protocol::{LookupRequest, LookupResponse},
+};
 
 #[derive(Debug, Clone)]
 pub struct Client {

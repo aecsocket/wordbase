@@ -2,13 +2,14 @@
 #![expect(missing_docs)]
 #![expect(clippy::missing_errors_doc)]
 
-use std::sync::Arc;
-
-use derive_more::{Deref, DerefMut};
-use maud::{Markup, PreEscaped, Render, html};
-use wordbase::{
-    DictionaryId, Record, RecordKind, Term, for_record_kinds, format, glossary, lang,
-    protocol::LookupResponse, record,
+use {
+    derive_more::{Deref, DerefMut},
+    maud::{Markup, PreEscaped, Render, html},
+    std::sync::Arc,
+    wordbase::{
+        DictionaryId, Record, RecordKind, Term, for_record_kinds, format, glossary, lang,
+        protocol::LookupResponse, record,
+    },
 };
 
 pub const SUPPORTED_RECORD_KINDS: &[RecordKind] = &[
@@ -295,25 +296,7 @@ impl RecordInsert for glossary::PlainText {
     }
 }
 
-impl RecordInsert for glossary::PlainTextFallback {
-    fn insert(self, cx: RecordContext) {
-        cx.glossaries.rows.push(GlossaryRow {
-            tags: Vec::new(),
-            content: vec![html! { (self.0) }],
-        });
-    }
-}
-
 impl RecordInsert for glossary::Html {
-    fn insert(self, cx: RecordContext) {
-        cx.glossaries.rows.push(GlossaryRow {
-            tags: Vec::new(),
-            content: vec![PreEscaped(self.0)],
-        });
-    }
-}
-
-impl RecordInsert for glossary::HtmlFallback {
     fn insert(self, cx: RecordContext) {
         cx.glossaries.rows.push(GlossaryRow {
             tags: Vec::new(),

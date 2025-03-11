@@ -1,10 +1,11 @@
 mod yomitan;
 
-use tokio::sync::{mpsc, oneshot};
 pub use yomitan::yomitan;
-
-use derive_more::{Display, Error};
-use wordbase::DictionaryMeta;
+use {
+    derive_more::{Display, Error},
+    tokio::sync::{mpsc, oneshot},
+    wordbase::DictionaryMeta,
+};
 
 #[derive(Debug, Clone, Display, Error)]
 pub enum ImportError {

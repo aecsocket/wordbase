@@ -1,6 +1,4 @@
-use tokio::sync::mpsc;
-use tracing::info;
-use wordbase::protocol::ShowPopupRequest;
+use {tokio::sync::mpsc, tracing::info, wordbase::protocol::ShowPopupRequest};
 
 pub fn run(
     _lookups: lookup::Client,

@@ -2,27 +2,26 @@ extern crate gtk4 as gtk;
 extern crate libadwaita as adw;
 extern crate webkit6 as webkit;
 
-use std::{cell::LazyCell, sync::Arc};
-
-use anyhow::{Context, Result, bail};
-use foldhash::{HashMap, HashMapExt};
-use futures::never::Never;
-use gtk4::{
-    gdk,
-    gio::{self, prelude::*},
-    prelude::*,
+use {
+    super::Request,
+    crate::{ServerEvent, lookup},
+    anyhow::{Context, Result, bail},
+    foldhash::{HashMap, HashMapExt},
+    futures::never::Never,
+    gtk4::{
+        gdk,
+        gio::{self, prelude::*},
+        prelude::*,
+    },
+    std::{cell::LazyCell, sync::Arc},
+    tokio::sync::broadcast,
+    tracing::{error, info, warn},
+    webkit6::prelude::{PolicyDecisionExt, WebViewExt},
+    wordbase::{
+        DictionaryId,
+        protocol::{LookupRequest, NoRecords, PopupAnchor, ShowPopupRequest, ShowPopupResponse},
+    },
 };
-use tokio::sync::broadcast;
-use tracing::{error, info, warn};
-use webkit6::prelude::{PolicyDecisionExt, WebViewExt};
-use wordbase::{
-    DictionaryId,
-    protocol::{LookupRequest, NoRecords, PopupAnchor, ShowPopupRequest, ShowPopupResponse},
-};
-
-use crate::{ServerEvent, lookup};
-
-use super::Request;
 
 const POPUP_APP_ID: &str = "com.github.aecsocket.WordbasePopup";
 const BUS_NAME: &str = "com.github.aecsocket.WordbaseIntegration";
@@ -102,12 +101,25 @@ async fn backend(mut state: State) -> Result<Never> {
             }
         };
 
-        let result = handle_request(&state, &mut popup, &dictionary_names, request.request).await;
-        _ = request.send_response.send(result).await;
+        match request {
+            Request::Show {
+                request,
+                send_response,
+            } => {
+                let result = show(&state, &mut popup, &dictionary_names, request).await;
+                _ = send_response.send(result).await;
+            }
+            Request::Hide { send_response } => {
+                if let Some(popup) = &popup {
+                    popup.window.set_visible(false);
+                }
+                _ = send_response.send(()).await;
+            }
+        }
     }
 }
 
-async fn handle_request(
+async fn show(
     state: &State,
     popup: &mut Option<PopupInfo>,
     dictionary_names: &HashMap<DictionaryId, Arc<str>>,

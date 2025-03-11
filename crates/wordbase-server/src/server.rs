@@ -289,6 +289,14 @@ async fn handle_message(state: &State, connection: &mut Connection, data: Messag
                 .context("failed to send show popup response")?;
             Ok(())
         }
+        FromClient::HidePopup => {
+            state.popups.hide().await.context("failed to hide popup")?;
+            connection
+                .write(&FromServer::HidePopup)
+                .await
+                .context("failed to send hide popup response")?;
+            Ok(())
+        }
         FromClient::RemoveDictionary { dictionary_id } => {
             let result = db::dictionary::remove(&state.db, dictionary_id)
                 .await
