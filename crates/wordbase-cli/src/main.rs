@@ -31,6 +31,16 @@ enum Command {
         text: String,
     },
     Popup {
+        #[arg(long)]
+        target_pid: Option<u32>,
+        #[arg(long)]
+        target_title: Option<String>,
+        #[arg(long)]
+        target_wm_class: Option<String>,
+        #[arg(long, default_value_t = 0)]
+        origin_x: u32,
+        #[arg(long, default_value_t = 0)]
+        origin_y: u32,
         text: String,
     },
     Hook {
@@ -106,7 +116,25 @@ async fn main() -> Result<()> {
                 command: DictionaryCommand::Position { id, position },
             } => position_dictionary(&mut client, id, position).await,
             Command::Lookup { text } => lookup(&mut client, text).await,
-            Command::Popup { text } => show_popup(&mut client, text).await,
+            Command::Popup {
+                target_pid,
+                target_title,
+                target_wm_class,
+                origin_x,
+                origin_y,
+                text,
+            } => {
+                show_popup(
+                    &mut client,
+                    target_pid,
+                    target_title,
+                    target_wm_class,
+                    origin_x,
+                    origin_y,
+                    text,
+                )
+                .await
+            }
             Command::Hook {
                 command: HookCommand::Send { text },
             } => send_hook_sentence(&mut client, text).await,
@@ -187,13 +215,23 @@ async fn lookup(client: &mut SocketClient, text: String) -> Result<()> {
     Ok(())
 }
 
-async fn show_popup(client: &mut SocketClient, text: String) -> Result<()> {
+async fn show_popup(
+    client: &mut SocketClient,
+    target_pid: Option<u32>,
+    target_title: Option<String>,
+    target_wm_class: Option<String>,
+    origin_x: u32,
+    origin_y: u32,
+    text: String,
+) -> Result<()> {
     let response = client
         .show_popup(ShowPopupRequest {
-            text,
-            pid: 0,
-            origin: (0, 0),
+            target_pid,
+            target_title,
+            target_wm_class,
+            origin: (origin_x, origin_y),
             anchor: PopupAnchor::TopLeft,
+            text,
         })
         .await?;
     println!("{response:?}");

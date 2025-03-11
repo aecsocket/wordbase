@@ -6,6 +6,9 @@
  */
 
 import Gio from "gi://Gio";
+import Meta from "gi://Meta";
+
+import * as Main from "resource:///org/gnome/shell/ui/main.js";
 
 const APP_ID = "com.github.aecsocket.WordbasePopup";
 const BUS_NAME = "com.github.aecsocket.WordbaseIntegration";
@@ -14,7 +17,9 @@ const INTERFACE = `
 <node>
     <interface name="com.github.aecsocket.WordbaseIntegration">
         <method name="SetPopupPosition">
-            <arg type="s" direction="in" name="target"/>
+            <arg type="u" direction="in" name="target_pid"/>
+            <arg type="s" direction="in" name="target_title"/>
+            <arg type="s" direction="in" name="target_wm_class"/>
             <arg type="u" direction="in" name="x"/>
             <arg type="u" direction="in" name="y"/>
         </method>
@@ -67,41 +72,54 @@ function on_bus_acquired(connection, name) {
 }
 
 class IntegrationService {
-    /*
-    gdbus call --session \
-        -d com.github.aecsocket.WordbaseIntegration \
-        -o /com/github/aecsocket/WordbaseIntegration \
-        -m com.github.aecsocket.WordbaseIntegration.SetPopupPosition \
-        test 4 4 */
-
     /**
-     * @param {string} target
+     * @param {string} target_pid
+     * @param {string} target_title
+     * @param {string} target_wm_class
      * @param {number} x
      * @param {number} y
      */
-    SetPopupPosition(target, x, y) {
-        log(`set popup position ${target} / ${x} / ${y}`);
-
+    SetPopupPosition(target_pid, target_title, target_wm_class, x, y) {
         const popup_window = global
             .get_window_actors()
             .find((actor) => actor.meta_window.wm_class === APP_ID);
         if (!popup_window) {
-            log(`Failed to find popup window "${APP_ID}"`);
+            log(`Failed to find popup window with app ID "${APP_ID}"`);
             return;
         }
 
-        const target_window = global
+        /**
+         * @param {Meta.Window} window
+         */
+        const is_valid_window = (window) =>
+            (target_pid === 0 || target_pid === window.get_pid()) &&
+            (target_title === "" || target_title === window.title) &&
+            (target_wm_class === "" || target_wm_class === window.wm_class);
+
+        const target_windows = global
             .get_window_actors()
-            .find((actor) => actor.meta_window.wm_class === target);
-        if (!target_window) {
-            log(`Failed to find target window "${target}"`);
+            .filter((actor) => is_valid_window(actor.meta_window));
+        if (target_windows.length < 1) {
+            Main.notifyError(
+                "Set Popup Position",
+                `Failed to find target window matching pid ${target_pid} title "${target_title}" wm_class "${target_wm_class}"`,
+            );
             return;
         }
+        if (target_windows.length > 1) {
+            Main.notifyError(
+                "Set Popup Position",
+                `Found ${target_windows.length} target windows matching pid ${target_pid} title "${target_title}" wm_class "${target_wm_class}"`,
+            );
+            return;
+        }
+        const target_window = target_windows[0];
 
         const target_rect = target_window.meta_window.get_frame_rect();
         const [popup_x, popup_y] = [target_rect.x + x, target_rect.y + y];
 
         popup_window.meta_window.raise();
         popup_window.meta_window.move_frame(false, popup_x, popup_y);
+        Main.notify("Success", "Moved window");
     }
 }

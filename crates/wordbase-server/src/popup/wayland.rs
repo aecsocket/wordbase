@@ -7,7 +7,11 @@ use std::{cell::LazyCell, sync::Arc};
 use anyhow::{Context, Result, bail};
 use foldhash::{HashMap, HashMapExt};
 use futures::never::Never;
-use gtk4::{gdk, gio::prelude::*, prelude::*};
+use gtk4::{
+    gdk,
+    gio::{self, prelude::*},
+    prelude::*,
+};
 use tokio::sync::broadcast;
 use tracing::{error, info, warn};
 use webkit6::prelude::{PolicyDecisionExt, WebViewExt};
@@ -20,7 +24,11 @@ use crate::{ServerEvent, lookup};
 
 use super::Request;
 
-const APP_ID: &str = "com.github.aecsocket.WordbasePopup";
+const POPUP_APP_ID: &str = "com.github.aecsocket.WordbasePopup";
+const BUS_NAME: &str = "com.github.aecsocket.WordbaseIntegration";
+const OBJECT_PATH: &str = "/com/github/aecsocket/WordbaseIntegration";
+const INTERFACE_NAME: &str = "com.github.aecsocket.WordbaseIntegration";
+const SET_POPUP_POSITION: &str = "SetPopupPosition";
 
 pub fn run(
     lookups: lookup::Client,
@@ -30,7 +38,9 @@ pub fn run(
     info!("Using Wayland popup backend via GTK/Adwaita");
     glib::log_set_default_handler(glib::rust_log_handler);
 
-    let app = adw::Application::builder().application_id(APP_ID).build();
+    let app = adw::Application::builder()
+        .application_id(POPUP_APP_ID)
+        .build();
     // make the app not close when all its windows are closed
     let _hold_guard = app.hold();
 
@@ -45,12 +55,14 @@ pub fn run(
         );
     });
     app.connect_activate(move |app| {
-        let lookups = lookups.clone();
-        let recv_request = recv_request.resubscribe();
-        let recv_server_event = recv_server_event.resubscribe();
-        let app = app.clone();
+        let state = State {
+            lookups: lookups.clone(),
+            recv_server_event: recv_server_event.resubscribe(),
+            recv_request: recv_request.resubscribe(),
+            app: app.clone().upcast(),
+        };
         glib::spawn_future_local(async move {
-            let Err(err) = backend(lookups, recv_request, recv_server_event, app).await;
+            let Err(err) = backend(state).await;
             error!("GTK app backend closed: {err:?}");
         });
     });
@@ -59,18 +71,33 @@ pub fn run(
     bail!("GTK application closed")
 }
 
-async fn backend(
+#[derive(Debug)]
+struct State {
     lookups: lookup::Client,
-    mut recv_request: broadcast::Receiver<Request>,
-    mut recv_server_event: broadcast::Receiver<ServerEvent>,
-    app: adw::Application,
-) -> Result<Never> {
+    recv_server_event: broadcast::Receiver<ServerEvent>,
+    recv_request: broadcast::Receiver<Request>,
+    app: gtk::Application,
+}
+
+async fn backend(mut state: State) -> Result<Never> {
+    let dbus = state.app.dbus_connection().context("no dbus connection")?;
+    let integration = gio::DBusProxy::new_future(
+        &dbus,
+        gio::DBusProxyFlags::NONE,
+        None,
+        Some(BUS_NAME),
+        OBJECT_PATH,
+        INTERFACE_NAME,
+    )
+    .await
+    .context("failed to create dbus proxy")?;
+
     let mut popup = None::<PopupInfo>;
     let mut dictionary_names = HashMap::<DictionaryId, Arc<str>>::new();
     loop {
         let request = tokio::select! {
-            request = recv_request.recv() => request,
-            Ok(ServerEvent::SyncDictionaries(new_dictionaries)) = recv_server_event.recv() => {
+            request = state.recv_request.recv() => request,
+            Ok(ServerEvent::SyncDictionaries(new_dictionaries)) = state.recv_server_event.recv() => {
                 dictionary_names = new_dictionaries
                     .into_iter()
                     .map(|state| (state.id, Arc::from(state.meta.name)))
@@ -88,14 +115,174 @@ async fn backend(
         };
 
         let result = handle_request(
-            &lookups,
-            &app,
+            &state,
+            &integration,
             &mut popup,
             &dictionary_names,
             request.request,
         )
         .await;
         _ = request.send_response.send(result).await;
+    }
+}
+
+async fn handle_request(
+    state: &State,
+    integration: &gio::DBusProxy,
+    popup: &mut Option<PopupInfo>,
+    dictionary_names: &HashMap<DictionaryId, Arc<str>>,
+    request: ShowPopupRequest,
+) -> Result<Result<ShowPopupResponse, NoRecords>> {
+    let records = state
+        .lookups
+        .lookup(LookupRequest {
+            text: request.text,
+            record_kinds: wordbase_html::SUPPORTED_RECORD_KINDS.to_vec(),
+        })
+        .await
+        .context("failed to perform lookup")?;
+    if records.is_empty() {
+        return Ok(Err(NoRecords));
+    }
+
+    let chars_scanned = records
+        .iter()
+        .map(|record| record.lemma.chars().count())
+        .max()
+        .and_then(|c| u64::try_from(c).ok())
+        .unwrap_or_default();
+
+    let popup = popup.get_or_insert_with(|| create_popup(&state.app));
+    let unknown_source = Arc::<str>::from("?");
+    let dictionary_html = wordbase_html::to_html(
+        |source| {
+            dictionary_names
+                .get(&source)
+                .unwrap_or(&unknown_source)
+                .clone()
+        },
+        records,
+    );
+    let html = format!("<style>{STYLE}</style>{}", dictionary_html.0);
+    popup.web_view.load_html(&html, None);
+    popup.window.set_visible(true);
+
+    let params = glib::Variant::tuple_from_iter([
+        request.target_pid.unwrap_or_default().into(),
+        request.target_title.unwrap_or_default().into(),
+        request.target_wm_class.unwrap_or_default().into(),
+        glib::Variant::from(request.origin.0),
+        glib::Variant::from(request.origin.1),
+    ]);
+
+    state
+        .app
+        .dbus_connection()
+        .unwrap()
+        .call_future(
+            Some(BUS_NAME),
+            OBJECT_PATH,
+            INTERFACE_NAME,
+            SET_POPUP_POSITION,
+            Some(&params),
+            None,
+            gio::DBusCallFlags::NONE,
+            -1,
+        )
+        .await
+        .context("failed to send popup position request")?;
+
+    Ok(Ok(ShowPopupResponse { chars_scanned }))
+}
+
+struct PopupInfo {
+    window: gtk::Window,
+    web_view: webkit::WebView,
+}
+
+fn create_popup(app: &gtk::Application) -> PopupInfo {
+    thread_local! {
+        static SETTINGS: LazyCell<webkit::Settings> = LazyCell::new(|| {
+            webkit::Settings::builder()
+                .enable_page_cache(false)
+                .enable_smooth_scrolling(false)
+                .build()
+        });
+    }
+
+    let web_view = SETTINGS.with(|settings| webkit::WebView::builder().settings(settings).build());
+    web_view
+        .context()
+        .expect("should have web context")
+        .set_cache_model(webkit::CacheModel::DocumentViewer);
+
+    // don't allow opening the context menu
+    web_view.connect_context_menu(|_, _, _| true);
+
+    // when attempting to navigate to a URL, open in the user's browser instead
+    web_view.connect_decide_policy(|_, decision, decision_type| {
+        if decision_type != webkit::PolicyDecisionType::NavigationAction {
+            return false;
+        }
+        let Some(decision) = decision.downcast_ref::<webkit::NavigationPolicyDecision>() else {
+            return false;
+        };
+        let Some(mut nav_action) = decision.navigation_action() else {
+            return false;
+        };
+        if !nav_action.is_user_gesture() {
+            return false;
+        }
+
+        if let Some(request) = nav_action.request() {
+            if let Some(uri) = request.uri() {
+                open_uri(&uri);
+            }
+        }
+
+        decision.ignore();
+        true // inhibit request
+    });
+
+    let window = adw::ApplicationWindow::builder()
+        .application(app)
+        .default_width(600)
+        .default_height(300)
+        .hide_on_close(true)
+        .content(&web_view)
+        .build();
+    window.present();
+
+    let controller = gtk::EventControllerMotion::new();
+    window.add_controller(controller.clone());
+    controller.connect_leave({
+        let window = window.clone();
+        move |_| {
+            // window.set_visible(false);
+        }
+    });
+
+    PopupInfo {
+        window: window.upcast(),
+        web_view,
+    }
+}
+
+fn open_uri(uri: &str) {
+    if let Some(uri) = uri.strip_prefix('?') {
+        if let Some((_, query)) =
+            form_urlencoded::parse(uri.as_bytes()).find(|(key, _)| key == "query")
+        {
+            info!("Looking up {query:?}");
+            warn!("TODO: unimplemented");
+        } else {
+            warn!("Attempted to open {uri:?} which does not contain `query`");
+        }
+    } else {
+        info!("Opening {uri:?}");
+        if let Err(err) = open::that_detached(uri) {
+            warn!("Failed to open link to {uri:?}: {err:?}");
+        }
     }
 }
 
@@ -272,137 +459,3 @@ body {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 "##;
-
-async fn handle_request(
-    lookups: &lookup::Client,
-    app: &adw::Application,
-    popup: &mut Option<PopupInfo>,
-    dictionary_names: &HashMap<DictionaryId, Arc<str>>,
-    request: ShowPopupRequest,
-) -> Result<Result<ShowPopupResponse, NoRecords>> {
-    let records = lookups
-        .lookup(LookupRequest {
-            text: request.text,
-            record_kinds: wordbase_html::SUPPORTED_RECORD_KINDS.to_vec(),
-        })
-        .await
-        .context("failed to perform lookup")?;
-    if records.is_empty() {
-        return Ok(Err(NoRecords));
-    }
-
-    let chars_scanned = records
-        .iter()
-        .map(|record| record.lemma.chars().count())
-        .max()
-        .and_then(|c| u64::try_from(c).ok())
-        .unwrap_or_default();
-
-    let popup = popup.get_or_insert_with(|| create_popup(app));
-    let unknown_source = Arc::<str>::from("?");
-    let dictionary_html = wordbase_html::to_html(
-        |source| {
-            dictionary_names
-                .get(&source)
-                .unwrap_or(&unknown_source)
-                .clone()
-        },
-        records,
-    );
-    let html = format!("<style>{STYLE}</style>{}", dictionary_html.0);
-    popup.web_view.load_html(&html, None);
-    popup.window.set_visible(true);
-
-    Ok(Ok(ShowPopupResponse { chars_scanned }))
-}
-
-struct PopupInfo {
-    window: gtk::Window,
-    web_view: webkit::WebView,
-}
-
-fn create_popup(app: &adw::Application) -> PopupInfo {
-    thread_local! {
-        static SETTINGS: LazyCell<webkit::Settings> = LazyCell::new(|| {
-            webkit::Settings::builder()
-                .enable_page_cache(false)
-                .enable_smooth_scrolling(false)
-                .build()
-        });
-    }
-
-    let web_view = SETTINGS.with(|settings| webkit::WebView::builder().settings(settings).build());
-    web_view
-        .context()
-        .expect("should have web context")
-        .set_cache_model(webkit::CacheModel::DocumentViewer);
-
-    // don't allow opening the context menu
-    web_view.connect_context_menu(|_, _, _| true);
-
-    // when attempting to navigate to a URL, open in the user's browser instead
-    web_view.connect_decide_policy(|_, decision, decision_type| {
-        if decision_type != webkit::PolicyDecisionType::NavigationAction {
-            return false;
-        }
-        let Some(decision) = decision.downcast_ref::<webkit::NavigationPolicyDecision>() else {
-            return false;
-        };
-        let Some(mut nav_action) = decision.navigation_action() else {
-            return false;
-        };
-        if !nav_action.is_user_gesture() {
-            return false;
-        }
-
-        if let Some(request) = nav_action.request() {
-            if let Some(uri) = request.uri() {
-                open_uri(&uri);
-            }
-        }
-
-        decision.ignore();
-        true // inhibit request
-    });
-
-    let window = adw::ApplicationWindow::builder()
-        .application(app)
-        .default_width(600)
-        .default_height(300)
-        .hide_on_close(true)
-        .content(&web_view)
-        .build();
-    window.present();
-
-    let controller = gtk::EventControllerMotion::new();
-    window.add_controller(controller.clone());
-    controller.connect_leave({
-        let window = window.clone();
-        move |_| {
-            // window.set_visible(false);
-        }
-    });
-
-    PopupInfo {
-        window: window.upcast(),
-        web_view,
-    }
-}
-
-fn open_uri(uri: &str) {
-    if let Some(uri) = uri.strip_prefix('?') {
-        if let Some((_, query)) =
-            form_urlencoded::parse(uri.as_bytes()).find(|(key, _)| key == "query")
-        {
-            info!("Looking up {query:?}");
-            warn!("TODO: unimplemented");
-        } else {
-            warn!("Attempted to open {uri:?} which does not contain `query`");
-        }
-    } else {
-        info!("Opening {uri:?}");
-        if let Err(err) = open::that_detached(uri) {
-            warn!("Failed to open link to {uri:?}: {err:?}");
-        }
-    }
-}

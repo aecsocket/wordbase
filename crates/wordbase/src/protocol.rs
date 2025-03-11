@@ -184,15 +184,25 @@ pub struct LookupResponse {
     pub record: Record,
 }
 
-/// Requests the server to create a dictionary popup window and show it on the
-/// user's window manager.
+/// Requests the server to create a dictionary popup window on top of a
+/// target window, and show it on the user's window manager.
+///
+/// The popup will be positioned relative to a target window; however, you must
+/// manually fill out the details of this target window. If no windows match,
+/// or more than 1 window matches your filters, then the request will fail.
+/// Therefore, for the best chance of success, try to fill out as many target
+/// fields as possible.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShowPopupRequest {
-    /// [Process ID][pid] of the window to draw the popup on top of.
-    ///
-    /// [pid]: std::process::pid
-    pub pid: u32,
+    /// Process ID which owns the target window.
+    pub target_pid: Option<u32>,
+    /// Title of the target window.
+    pub target_title: Option<String>,
+    pub target_wm_class: Option<String>,
     /// X and Y position of the pop-up [origin], in surface-local coordinates.
+    ///
+    /// These coordinates are relative to the top-left of the target window's
+    /// frame (what the user would consider the "window", minus any decoration).
     ///
     /// [origin]: ShowPopupRequest::anchor
     pub origin: (u32, u32),
