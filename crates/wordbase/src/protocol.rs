@@ -27,45 +27,6 @@ pub enum FromClient {
     ///
     /// Server responds with [`FromServer::HidePopup`].
     HidePopup,
-    /// Requests to remove a [dictionary] from the server's database.
-    ///
-    /// Server responds with [`FromServer::RemoveDictionary`].
-    ///
-    /// [dictionary]: Dictionary
-    RemoveDictionary {
-        /// ID of the dictionary.
-        dictionary_id: DictionaryId,
-    },
-    /// Requests to [enable or disable][enabled] a [dictionary] in the server's
-    /// database.
-    ///
-    /// Server responds with [`FromServer::SetDictionaryEnabled`].
-    ///
-    /// [enabled]: Dictionary::enabled
-    /// [dictionary]: Dictionary
-    SetDictionaryEnabled {
-        /// ID of the dictionary.
-        dictionary_id: DictionaryId,
-        /// What [`Dictionary::enabled`] should be set to.
-        enabled: bool,
-    },
-    /// Requests to set the [position] of a [dictionary] used for sorting lookup
-    /// records.
-    ///
-    /// If a dictionary already exists at the given position, both dictionaries
-    /// will share the same position, and record lookup order will be
-    /// non-deterministic between the two dictionaries.
-    ///
-    /// Server responds with [`FromServer::SetDictionaryPosition`].
-    ///
-    /// [position]: Dictionary::position
-    /// [dictionary]: Dictionary
-    SetDictionaryPosition {
-        /// ID of the dictionary.
-        dictionary_id: DictionaryId,
-        /// New position of the dictionary.
-        position: i64,
-    },
 }
 
 /// Server-to-client WebSocket message, encoded as JSON.
@@ -96,6 +57,9 @@ pub enum FromServer {
     /// record.
     #[from]
     Lookup(LookupResponse),
+    /// Server sends a response to [`FromClient::Lookup`] marking that all
+    /// records have been sent.
+    LookupDone,
     /// Server sends a response to [`FromClient::ShowPopup`].
     ShowPopup {
         /// Whether showing the popup was successful.
@@ -103,24 +67,6 @@ pub enum FromServer {
     },
     /// Server sends a response to [`FromClient::HidePopup`] marking success.
     HidePopup,
-    /// Server sends a response to [`FromClient::Lookup`] marking that all
-    /// records have been sent.
-    LookupDone,
-    /// Response to [`FromClient::RemoveDictionary`].
-    RemoveDictionary {
-        /// Result of the operation.
-        result: Result<(), DictionaryNotFound>,
-    },
-    /// Response to [`FromClient::SetDictionaryEnabled`].
-    SetDictionaryEnabled {
-        /// Result of the operation.
-        result: Result<(), DictionaryNotFound>,
-    },
-    /// Response to [`FromClient::SetDictionaryPosition`].
-    SetDictionaryPosition {
-        /// Result of the operation.
-        result: Result<(), DictionaryNotFound>,
-    },
 }
 
 /// Configuration for [lookup operations] shared between a Wordbase client and
@@ -287,13 +233,6 @@ mod tests {
             text: default(),
             record_kinds: vec![RecordKind::GlossaryHtml],
         }));
-        round_trip(FromClient::RemoveDictionary {
-            dictionary_id: default(),
-        });
-        round_trip(FromClient::SetDictionaryEnabled {
-            dictionary_id: default(),
-            enabled: default(),
-        });
 
         round_trip(FromServer::Error { message: default() });
         round_trip(FromServer::SyncLookupConfig {
@@ -310,12 +249,5 @@ mod tests {
             record: Record::GlossaryHtml(default()),
         }));
         round_trip(FromServer::LookupDone);
-        round_trip(FromServer::RemoveDictionary {
-            result: Err(DictionaryNotFound),
-        });
-        round_trip(FromServer::SetDictionaryEnabled { result: Ok(()) });
-        round_trip(FromServer::SetDictionaryEnabled {
-            result: Err(DictionaryNotFound),
-        });
     }
 }

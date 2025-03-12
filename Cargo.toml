@@ -28,6 +28,7 @@ type_complexity = "allow"
 [workspace.dependencies]
 wordbase = { path = "crates/wordbase" }
 wordbase-client-tokio = { path = "crates/wordbase-client-tokio" }
+wordbase-server = { path = "crates/wordbase-server" }
 
 anyhow = "1.0"
 ascii_table = "4.0"

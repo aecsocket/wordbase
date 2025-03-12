@@ -9,7 +9,7 @@ pub mod hook;
 pub mod lang;
 pub mod protocol;
 pub mod record;
-pub mod render;
+// pub mod render;
 pub(crate) mod util;
 
 use {

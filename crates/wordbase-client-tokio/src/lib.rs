@@ -16,8 +16,8 @@ use {
         DictionaryId, DictionaryState,
         hook::HookSentence,
         protocol::{
-            DictionaryNotFound, FromClient, FromServer, LookupConfig, LookupRequest,
-            LookupResponse, NoRecords, ShowPopupRequest, ShowPopupResponse,
+            FromClient, FromServer, LookupConfig, LookupRequest, LookupResponse, NoRecords,
+            ShowPopupRequest, ShowPopupResponse,
         },
     },
 };
@@ -333,98 +333,6 @@ where
         loop {
             match self.connection.recv().await? {
                 FromServer::HidePopup => return Ok(()),
-                message => self.fallback_handle(message)?,
-            }
-        }
-    }
-
-    /// Sends a [`FromClient::RemoveDictionary`].
-    ///
-    /// # Errors
-    ///
-    /// See [`ConnectionError`].
-    pub async fn remove_dictionary(
-        &mut self,
-        dictionary_id: DictionaryId,
-    ) -> Result<Result<(), DictionaryNotFound>, ConnectionError> {
-        self.connection
-            .send(&FromClient::RemoveDictionary { dictionary_id })
-            .await?;
-        loop {
-            match self.connection.recv().await? {
-                FromServer::RemoveDictionary { result } => return Ok(result),
-                message => self.fallback_handle(message)?,
-            }
-        }
-    }
-
-    /// Sends a [`FromClient::SetDictionaryEnabled`].
-    ///
-    /// # Errors
-    ///
-    /// See [`ConnectionError`].
-    pub async fn set_dictionary_enabled(
-        &mut self,
-        dictionary_id: DictionaryId,
-        enabled: bool,
-    ) -> Result<Result<(), DictionaryNotFound>, ConnectionError> {
-        self.connection
-            .send(&FromClient::SetDictionaryEnabled {
-                dictionary_id,
-                enabled,
-            })
-            .await?;
-        loop {
-            match self.connection.recv().await? {
-                FromServer::SetDictionaryEnabled { result } => return Ok(result),
-                message => self.fallback_handle(message)?,
-            }
-        }
-    }
-
-    /// Sends a [`FromClient::SetDictionaryEnabled`] enabling a dictionary.
-    ///
-    /// # Errors
-    ///
-    /// See [`ConnectionError`].
-    pub async fn enable_dictionary(
-        &mut self,
-        dictionary_id: DictionaryId,
-    ) -> Result<Result<(), DictionaryNotFound>, ConnectionError> {
-        self.set_dictionary_enabled(dictionary_id, true).await
-    }
-
-    /// Sends a [`FromClient::SetDictionaryEnabled`] disabling a dictionary.
-    ///
-    /// # Errors
-    ///
-    /// See [`ConnectionError`].
-    pub async fn disable_dictionary(
-        &mut self,
-        dictionary_id: DictionaryId,
-    ) -> Result<Result<(), DictionaryNotFound>, ConnectionError> {
-        self.set_dictionary_enabled(dictionary_id, false).await
-    }
-
-    /// Sends a [`FromClient::SetDictionaryPosition`].
-    ///
-    /// # Errors
-    ///
-    /// See [`ConnectionError`].
-    pub async fn set_dictionary_position(
-        &mut self,
-        dictionary_id: DictionaryId,
-        position: i64,
-    ) -> Result<Result<(), DictionaryNotFound>, ConnectionError> {
-        self.connection
-            .send(&FromClient::SetDictionaryPosition {
-                dictionary_id,
-                position,
-            })
-            .await?;
-        loop {
-            match self.connection.recv().await? {
-                FromServer::SetDictionaryPosition { result } => return Ok(result),
                 message => self.fallback_handle(message)?,
             }
         }

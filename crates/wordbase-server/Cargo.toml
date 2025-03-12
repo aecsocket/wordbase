@@ -1,7 +1,5 @@
 [package]
-description = "Wordbase server implementation"
 name = "wordbase-server"
-version = "0.1.0"
 
 authors.workspace = true
 categories.workspace = true
@@ -17,19 +15,8 @@ workspace = true
 [package.metadata.docs.rs]
 all-features = true
 
-[features]
-default = ["popup"]
-popup = [
-    "dep:form_urlencoded",
-    "dep:glib",
-    "dep:gtk4",
-    "dep:libadwaita",
-    "dep:open",
-    "dep:webkit6",
-]
-
 [dependencies]
-wordbase = { workspace = true, features = ["render-html", "parse-yomitan"] }
+wordbase = { workspace = true, features = ["parse-yomitan"] }
 
 anyhow = { workspace = true }
 cfg-if = { workspace = true }
@@ -50,16 +37,6 @@ tokio = { workspace = true, features = ["full"] }
 tokio-tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-
-form_urlencoded = { workspace = true, optional = true }
-glib = { workspace = true, optional = true, features = ["log"] }
-gtk4 = { workspace = true, optional = true, features = [
-    "gnome_47",
-    "blueprint",
-] }
-libadwaita = { workspace = true, optional = true, features = ["v1_6"] }
-open = { workspace = true, optional = true }
-webkit6 = { workspace = true, optional = true }
 
 # enable features in transitive dependency crates
 

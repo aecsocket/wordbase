@@ -1,0 +1,153 @@
+using Gtk 4.0;
+using Adw 1;
+
+Adw.Window {
+  default-width: 800;
+  default-height: 600;
+
+  Adw.ToastOverlay toasts {
+    Adw.ToolbarView {
+      [top]
+      Adw.HeaderBar {
+        title-widget: Entry {
+          hexpand: true;
+        };
+
+        ToggleButton sidebar_toggle {
+          icon-name: "sidebar-show-symbolic";
+        }
+      }
+
+      top-bar-style: raised;
+
+      Adw.OverlaySplitView split_view {
+        show-sidebar: bind sidebar_toggle.active bidirectional;
+        collapsed: true;
+
+        sidebar: Adw.ToolbarView {
+          [bottom]
+          Adw.ViewSwitcherBar {
+            stack: sidebar_stack;
+            reveal: true;
+          }
+
+          Adw.ViewStack sidebar_stack {
+            Adw.ViewStackPage {
+              name: "dictionaries";
+              title: _("Dictionaries");
+              icon-name: "library-symbolic";
+
+              child: Box {
+                orientation: vertical;
+
+                ScrolledWindow {
+                  vexpand: true;
+
+                  Adw.PreferencesPage {
+                    Adw.PreferencesGroup {
+                      Adw.ActionRow {
+                        title: "Jitendex";
+                        subtitle: "2025.04.01.11";
+
+                        CheckButton {}
+                      }
+
+                      Adw.ActionRow {
+                        title: "Jitendex";
+                        subtitle: "2025.04.01.11";
+
+                        CheckButton {}
+                      }
+
+                      Adw.ActionRow {
+                        title: "Jitendex";
+                        subtitle: "2025.04.01.11";
+
+                        CheckButton {}
+                      }
+
+                      Adw.ActionRow {
+                        title: "Jitendex";
+                        subtitle: "2025.04.01.11";
+
+                        CheckButton {}
+                      }
+
+                      Adw.ActionRow {
+                        title: "Jitendex";
+                        subtitle: "2025.04.01.11";
+
+                        CheckButton {}
+                      }
+
+                      Adw.ActionRow {
+                        title: "Jitendex";
+                        subtitle: "2025.04.01.11";
+
+                        CheckButton {}
+                      }
+
+                      Adw.ActionRow {
+                        title: "Jitendex";
+                        subtitle: "2025.04.01.11";
+
+                        CheckButton {}
+                      }
+
+                      Adw.ActionRow {
+                        title: "Jitendex";
+                        subtitle: "2025.04.01.11";
+
+                        CheckButton {}
+                      }
+
+                      Adw.ActionRow {
+                        title: "Jitendex";
+                        subtitle: "2025.04.01.11";
+
+                        CheckButton {}
+                      }
+
+                      Adw.ActionRow {
+                        title: "Jitendex";
+                        subtitle: "2025.04.01.11";
+
+                        CheckButton {}
+                      }
+                    }
+                  }
+                }
+
+                Button {
+                  margin-start: 8;
+                  margin-end: 8;
+                  margin-bottom: 8;
+                  margin-top: 8;
+                  label: _("Import");
+
+                  styles [
+                    "suggested-action",
+                  ]
+                }
+              };
+            }
+
+            Adw.ViewStackPage {
+              name: "themes";
+              title: _("Themes");
+              icon-name: "preferences-desktop-appearance-symbolic";
+
+              child: Label {
+                label: _("themes");
+              };
+            }
+          }
+        };
+
+        content: Label {
+          label: _("webview");
+        };
+      }
+    }
+  }
+}

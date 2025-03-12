@@ -3162,6 +3162,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "wordbase-app"
+version = "0.0.0"
+dependencies = [
+ "form_urlencoded",
+ "glib",
+ "gtk4",
+ "libadwaita",
+ "open",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "webkit6",
+ "wordbase",
+ "wordbase-server",
+]
+
+[[package]]
 name = "wordbase-cli"
 version = "0.1.0"
 dependencies = [
@@ -3190,20 +3207,15 @@ dependencies = [
 
 [[package]]
 name = "wordbase-server"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "bzip2",
  "cfg-if",
  "derive_more",
  "foldhash",
- "form_urlencoded",
  "futures",
- "glib",
- "gtk4",
- "libadwaita",
  "mecab",
- "open",
  "rmp-serde",
  "serde",
  "serde_json",
@@ -3212,7 +3224,6 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
- "webkit6",
  "wordbase",
 ]
 
