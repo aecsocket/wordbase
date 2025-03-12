@@ -148,6 +148,12 @@ pub struct DictionaryMeta {
     /// This does not guarantee to conform to any format, e.g. semantic
     /// versioning.
     pub version: String,
+    /// Who made this dictionary.
+    pub authors: Vec<String>,
+    /// Describes the content of this dictionary.
+    pub description: Option<String>,
+    /// Homepage URL where users can learn more about this dictionary.
+    pub url: Option<String>,
 }
 
 /// Imported collection of [records] in a Wordbase server.

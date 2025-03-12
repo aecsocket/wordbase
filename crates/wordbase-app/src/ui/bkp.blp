@@ -1,7 +1,7 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $Settings: Adw.Bin {
+template $Overview: Adw.Bin {
   Adw.ToolbarView {
     [top]
     Adw.HeaderBar {
@@ -22,177 +22,7 @@ template $Settings: Adw.Bin {
         icon-name: "library-symbolic";
 
         child: Adw.PreferencesPage {
-          Adw.PreferencesGroup {
-            Adw.ExpanderRow {
-              title: "Jitendex.org [2025-02-11]";
-              subtitle: "2025.02.11.0";
-
-              [prefix]
-              Image {
-                styles [
-                  "drag-handle",
-                ]
-
-                icon-name: "list-drag-handle-symbolic";
-              }
-
-              [suffix]
-              Switch {
-                valign: center;
-              }
-
-              Grid {
-                row-spacing: 16;
-                column-spacing: 16;
-                margin-top: 8;
-                margin-bottom: 8;
-                margin-start: 8;
-                margin-end: 8;
-
-                Label {
-                  label: _("Author");
-                  valign: start;
-                  halign: end;
-
-                  layout {
-                    row: "0";
-                    column: "0";
-                  }
-
-                  styles [
-                    "dim-label",
-                  ]
-                }
-
-                Label {
-                  label: "Stephen Kraus";
-                  halign: start;
-                  wrap: true;
-                  selectable: true;
-
-                  layout {
-                    row: "0";
-                    column: "1";
-                  }
-                }
-
-                Label {
-                  label: _("Description");
-                  valign: start;
-                  halign: end;
-
-                  layout {
-                    row: "1";
-                    column: "0";
-                  }
-
-                  styles [
-                    "dim-label",
-                  ]
-                }
-
-                Label {
-                  label: "Jitendex is updated with new content every week. Click the 'Check for Updates' button in the Yomitan 'Dictionaries' menu to upgrade to the latest version.\n\nIf Jitendex is useful for you, please consider giving the project a star on GitHub. You can also leave a tip on Ko-fi.\nVisit https://ko-fi.com/jitendex\n\nMany thanks to everyone who has helped to fund Jitendex.\n\n• epistularum\n• 昭玄大统\n• Maciej Jur\n• Ian Strandberg\n• Kip\n• Lanwara\n• Sky\n• Adam\n• Emanuel";
-                  halign: start;
-                  wrap: true;
-                  selectable: true;
-
-                  layout {
-                    row: "1";
-                    column: "1";
-                  }
-                }
-
-                Label {
-                  label: _("Records");
-                  valign: start;
-                  halign: end;
-
-                  layout {
-                    row: "2";
-                    column: "0";
-                  }
-
-                  styles [
-                    "dim-label",
-                  ]
-                }
-
-                Label {
-                  label: "314800";
-                  halign: start;
-                  wrap: true;
-                  selectable: true;
-
-                  layout {
-                    row: "2";
-                    column: "1";
-                  }
-                }
-
-                Box {
-                  layout {
-                    row: "3";
-                    column: "0";
-                    column-span: "2";
-                  }
-
-                  orientation: horizontal;
-                  spacing: 16;
-                  halign: end;
-
-                  Button {
-                    label: _("Check for Updates");
-                  }
-
-                  Button {
-                    label: _("Visit Website");
-                  }
-
-                  Button {
-                    label: _("Delete");
-
-                    styles [
-                      "destructive-action",
-                    ]
-                  }
-                }
-              }
-            }
-
-            Adw.ActionRow {
-              title: "JMnedict";
-              subtitle: "JMnedict.2025-02-18";
-
-              [prefix]
-              Adw.Spinner {}
-
-              [suffix]
-              LevelBar {
-                min-value: 0;
-                max-value: 1;
-                value: 0.25;
-                valign: center;
-                hexpand: true;
-              }
-
-              [suffix]
-              Button {
-                styles [
-                  "destructive-action",
-                  "flat",
-                ]
-
-                valign: center;
-                icon-name: "user-trash-symbolic";
-              }
-            }
-
-            Adw.ButtonRow {
-              title: _("Import");
-              start-icon-name: "list-add-symbolic";
-            }
-          }
+          Adw.PreferencesGroup dictionaries {}
         };
       }
 
@@ -202,7 +32,7 @@ template $Settings: Adw.Bin {
         icon-name: "preferences-desktop-appearance-symbolic";
 
         child: Adw.PreferencesPage {
-          Adw.PreferencesGroup {
+          Adw.PreferencesGroup themes {
             Adw.ExpanderRow {
               [prefix]
               CheckButton theme_1 {

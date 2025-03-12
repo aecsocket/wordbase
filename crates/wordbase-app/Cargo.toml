@@ -19,6 +19,7 @@ all-features = true
 wordbase = { workspace = true }
 wordbase-server = { workspace = true }
 
+derive_more = { workspace = true, features = ["deref", "deref_mut"] }
 form_urlencoded = { workspace = true }
 glib = { workspace = true, features = ["log"] }
 gtk4 = { workspace = true, features = ["gnome_47", "blueprint"] }

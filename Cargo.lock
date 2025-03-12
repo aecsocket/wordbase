@@ -3165,6 +3165,7 @@ dependencies = [
 name = "wordbase-app"
 version = "0.0.0"
 dependencies = [
+ "derive_more",
  "form_urlencoded",
  "glib",
  "gtk4",
