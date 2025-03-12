@@ -3,6 +3,8 @@
 extern crate libadwaita as adw;
 extern crate webkit6 as webkit;
 
+mod ui;
+
 use adw::{gio, glib, prelude::*};
 use tracing::{info, level_filters::LevelFilter};
 use tracing_subscriber::EnvFilter;
@@ -25,8 +27,8 @@ async fn main() -> glib::ExitCode {
 
     app.connect_activate(|app| {
         let window = adw::ApplicationWindow::builder()
-            .hide_on_close(true)
             .application(app)
+            .content(&ui::Settings::new())
             .build();
         window.present();
     });

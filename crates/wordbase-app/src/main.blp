@@ -1,152 +1,127 @@
 using Gtk 4.0;
 using Adw 1;
 
-Adw.Window {
-  default-width: 800;
-  default-height: 600;
+Adw.Bin {
+  Adw.Breakpoint {
+    condition ("max-width: 400px")
+
+    setters {
+      split_view.collapsed: True;
+    }
+  }
 
   Adw.ToastOverlay toasts {
-    Adw.ToolbarView {
-      [top]
-      Adw.HeaderBar {
-        title-widget: Entry {
-          hexpand: true;
-        };
+    Adw.NavigationView {
 
-        ToggleButton sidebar_toggle {
-          icon-name: "sidebar-show-symbolic";
-        }
-      }
+      Adw.NavigationPage {
+        title: _("Search");
 
-      top-bar-style: raised;
+        Adw.ToolbarView {
+          [top]
+          Adw.HeaderBar {
+            title-widget: Entry {
+              hexpand: true;
+            };
 
-      Adw.OverlaySplitView split_view {
-        show-sidebar: bind sidebar_toggle.active bidirectional;
-        collapsed: true;
-
-        sidebar: Adw.ToolbarView {
-          [bottom]
-          Adw.ViewSwitcherBar {
-            stack: sidebar_stack;
-            reveal: true;
+            ToggleButton sidebar_toggle {
+              icon-name: "sidebar-show-symbolic";
+              active: true;
+            }
           }
 
-          Adw.ViewStack sidebar_stack {
-            Adw.ViewStackPage {
-              name: "dictionaries";
-              title: _("Dictionaries");
-              icon-name: "library-symbolic";
+          top-bar-style: raised;
 
-              child: Box {
-                orientation: vertical;
+          Adw.OverlaySplitView split_view {
+            show-sidebar: bind sidebar_toggle.active bidirectional;
 
-                ScrolledWindow {
-                  vexpand: true;
+            sidebar: Adw.ToolbarView {
+              [bottom]
+              Adw.ViewSwitcherBar {
+                stack: sidebar_stack;
+                reveal: true;
+              }
 
-                  Adw.PreferencesPage {
-                    Adw.PreferencesGroup {
-                      Adw.ActionRow {
-                        title: "Jitendex";
-                        subtitle: "2025.04.01.11";
+              Adw.ViewStack sidebar_stack {
+                Adw.ViewStackPage {
+                  name: "dictionaries";
+                  title: _("Dictionaries");
+                  icon-name: "library-symbolic";
 
-                        CheckButton {}
-                      }
+                  child: Box {
+                    orientation: vertical;
 
-                      Adw.ActionRow {
-                        title: "Jitendex";
-                        subtitle: "2025.04.01.11";
+                    ScrolledWindow {
+                      vexpand: true;
 
-                        CheckButton {}
-                      }
+                      Adw.PreferencesPage {
+                        Adw.PreferencesGroup {
+                          Adw.SwitchRow {
+                            [prefix]
+                            Image {
+                              styles [
+                                "drag-handle",
+                              ]
 
-                      Adw.ActionRow {
-                        title: "Jitendex";
-                        subtitle: "2025.04.01.11";
+                              icon-name: "list-drag-handle-symbolic";
+                            }
 
-                        CheckButton {}
-                      }
+                            title: "Jitendex";
+                          }
 
-                      Adw.ActionRow {
-                        title: "Jitendex";
-                        subtitle: "2025.04.01.11";
+                          Adw.SwitchRow {
+                            [prefix]
+                            Image {
+                              styles [
+                                "drag-handle",
+                              ]
 
-                        CheckButton {}
-                      }
+                              icon-name: "list-drag-handle-symbolic";
+                            }
 
-                      Adw.ActionRow {
-                        title: "Jitendex";
-                        subtitle: "2025.04.01.11";
-
-                        CheckButton {}
-                      }
-
-                      Adw.ActionRow {
-                        title: "Jitendex";
-                        subtitle: "2025.04.01.11";
-
-                        CheckButton {}
-                      }
-
-                      Adw.ActionRow {
-                        title: "Jitendex";
-                        subtitle: "2025.04.01.11";
-
-                        CheckButton {}
-                      }
-
-                      Adw.ActionRow {
-                        title: "Jitendex";
-                        subtitle: "2025.04.01.11";
-
-                        CheckButton {}
-                      }
-
-                      Adw.ActionRow {
-                        title: "Jitendex";
-                        subtitle: "2025.04.01.11";
-
-                        CheckButton {}
-                      }
-
-                      Adw.ActionRow {
-                        title: "Jitendex";
-                        subtitle: "2025.04.01.11";
-
-                        CheckButton {}
+                            title: "JMnedict";
+                          }
+                        }
                       }
                     }
-                  }
+
+                    Adw.Bin {
+                      margin-top: 16;
+                      margin-bottom: 16;
+                      margin-start: 16;
+                      margin-end: 16;
+
+                      styles [
+                        "raised",
+                      ]
+
+                      Button {
+                        label: _("Manage");
+
+                        styles [
+                          "suggested-action",
+                        ]
+                      }
+                    }
+                  };
                 }
 
-                Button {
-                  margin-start: 8;
-                  margin-end: 8;
-                  margin-bottom: 8;
-                  margin-top: 8;
-                  label: _("Import");
+                Adw.ViewStackPage {
+                  name: "themes";
+                  title: _("Themes");
+                  icon-name: "preferences-desktop-appearance-symbolic";
 
-                  styles [
-                    "suggested-action",
-                  ]
+                  child: Label {
+                    label: _("themes");
+                  };
                 }
-              };
-            }
+              }
+            };
 
-            Adw.ViewStackPage {
-              name: "themes";
-              title: _("Themes");
-              icon-name: "preferences-desktop-appearance-symbolic";
-
-              child: Label {
-                label: _("themes");
-              };
-            }
+            content: Label {
+              label: _("webview");
+            };
           }
-        };
-
-        content: Label {
-          label: _("webview");
-        };
+        }
       }
     }
   }
