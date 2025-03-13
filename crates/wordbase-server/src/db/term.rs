@@ -35,13 +35,15 @@ where
     scratch.clear();
     serialize(record, &mut *scratch).context("failed to serialize record")?;
 
+    let headword = term.headword();
+    let reading = term.reading();
     let data = &scratch[..];
     sqlx::query!(
         "INSERT INTO term (source, headword, reading, kind, data)
         VALUES ($1, $2, $3, $4, $5)",
         source.0,
-        term.headword,
-        term.reading,
+        headword,
+        reading,
         R::KIND as u16,
         data
     )
@@ -84,7 +86,7 @@ pub async fn lookup(
         .map(|record| {
             struct QueryRecord {
                 source: i64,
-                headword: String,
+                headword: Option<String>,
                 reading: Option<String>,
                 kind: i64,
                 data: Vec<u8>,
@@ -100,10 +102,8 @@ pub async fn lookup(
             };
 
             let source = DictionaryId(record.source);
-            let term = Term {
-                headword: record.headword,
-                reading: record.reading,
-            };
+            let term = Term::from_pair(record.headword, record.reading)
+                .context("both headword and reading are null")?;
 
             macro_rules! deserialize_record { ($($kind:ident($data_ty:path)),* $(,)?) => {{
                 #[allow(

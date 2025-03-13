@@ -8,14 +8,15 @@ mod overlay;
 mod platform;
 mod popup;
 
+use std::sync::Arc;
+
 use adw::{gio, glib, gtk, prelude::*};
 use futures::TryFutureExt;
+use platform::Platform;
 use tokio::sync::broadcast;
-use tracing::{error, info, level_filters::LevelFilter};
+use tracing::{error, level_filters::LevelFilter};
 use tracing_subscriber::EnvFilter;
-use webkit::prelude::WebViewExt;
-use wordbase::{DictionaryId, DictionaryMeta, DictionaryState, hook::HookSentence};
-use wordbase_server::Event;
+use wordbase_server::CHANNEL_BUF_CAP;
 
 const APP_ID: &str = "com.github.aecsocket.Wordbase";
 
@@ -26,6 +27,14 @@ fn gettext(s: &str) -> &str {
 #[derive(Debug)]
 struct Config {
     overlay_text_size: overlay::TextSize,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            overlay_text_size: overlay::TextSize::Title2,
+        }
+    }
 }
 
 #[tokio::main]
@@ -39,23 +48,18 @@ async fn main() -> glib::ExitCode {
         .init();
     glib::log_set_default_handler(glib::rust_log_handler);
 
+    let config = Arc::<Config>::default();
+    let platform = Arc::<dyn Platform>::from(platform::default());
     let app = adw::Application::builder().application_id(APP_ID).build();
+    let (send_event, _) = broadcast::channel::<wordbase_server::Event>(CHANNEL_BUF_CAP);
+    let (overlays, overlay_task) = overlay::Client::new(overlay::State {
+        config: config.clone(),
+        platform: platform.clone(),
+        app: app.clone(),
+        recv_event: send_event.subscribe(),
+    });
 
-    let (send_event, _) = broadcast::channel::<wordbase_server::Event>(4);
-
-    glib::spawn_future_local(
-        overlay::run(app.clone(), send_event.subscribe())
-            .inspect_err(|err| error!("Overlay task error: {err:?}")),
-    );
-
-    send_event.send(Event::HookSentence(HookSentence {
-        process_path: "foo".into(),
-        sentence: "hello".into(),
-    }));
-    send_event.send(Event::HookSentence(HookSentence {
-        process_path: "foo".into(),
-        sentence: "awesome".into(),
-    }));
+    glib::spawn_future_local(overlay_task.inspect_err(|err| error!("Overlay task error: {err:?}")));
 
     app.connect_activate(|app| {
         let window = adw::ApplicationWindow::builder()

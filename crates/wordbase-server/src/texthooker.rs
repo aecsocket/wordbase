@@ -9,8 +9,6 @@ use {
     wordbase::hook::HookSentence,
 };
 
-/// Connects to the texthooker server at `source` and forwards its sentences to
-/// the global server event channel.
 pub async fn run(
     source: &str,
     connect_interval: Duration,

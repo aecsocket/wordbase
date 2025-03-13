@@ -12,16 +12,18 @@ mod parse;
 pub use parse::*;
 use serde::{Deserialize, Serialize};
 
-/// Yomitan-specific glossary format.
+/// Yomitan-specific record for a word.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Glossary {
-    /// Tags applied to this glossary record.
+pub struct Record {
+    /// How frequently this word appears, as a relative ranking.
+    pub popularity: i64,
+    /// Tags applied to this record's glossary content.
     pub tags: Vec<GlossaryTag>,
-    /// Structured contents of this record.
+    /// Structured contents of this record's glossary.
     ///
     /// You can render this to HTML using [`maud::Render`].
-    pub content: Vec<structured::Content>,
+    pub glossary: Vec<structured::Content>,
 }
 
 /// Categorises a glossary for a given [term].

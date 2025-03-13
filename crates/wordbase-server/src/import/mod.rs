@@ -1,11 +1,32 @@
 mod yomitan;
 
-pub use yomitan::yomitan;
 use {
+    crate::Config,
     derive_more::{Display, Error},
-    tokio::sync::{mpsc, oneshot},
+    sqlx::{Pool, Sqlite},
+    std::sync::Arc,
+    tokio::sync::{Mutex, Semaphore, mpsc},
     wordbase::DictionaryMeta,
 };
+
+#[derive(Debug, Clone)]
+pub struct Imports {
+    db: Pool<Sqlite>,
+    concurrency: Arc<Semaphore>,
+    insert_lock: Arc<Mutex<()>>,
+}
+
+impl Imports {
+    pub fn new(db: Pool<Sqlite>, config: &Config) -> Self {
+        Self {
+            db,
+            concurrency: Arc::new(Semaphore::new(
+                usize::try_from(config.max_concurrent_imports.get()).unwrap_or(usize::MAX),
+            )),
+            insert_lock: Arc::default(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Display, Error)]
 pub enum ImportError {
@@ -17,20 +38,6 @@ pub enum ImportError {
 
 #[derive(Debug)]
 pub struct Tracker {
-    pub recv_read_meta: oneshot::Receiver<ReadMeta>,
-}
-
-#[derive(Debug)]
-pub struct ReadMeta {
     pub meta: DictionaryMeta,
-    pub banks_len: usize,
-    pub recv_banks_left: mpsc::Receiver<usize>,
-    pub recv_parsed: oneshot::Receiver<Parsed>,
-}
-
-#[derive(Debug)]
-pub struct Parsed {
-    pub records_len: usize,
-    pub recv_records_left: mpsc::Receiver<usize>,
-    pub recv_inserted: oneshot::Receiver<()>,
+    pub recv_frac_done: mpsc::Receiver<f64>,
 }

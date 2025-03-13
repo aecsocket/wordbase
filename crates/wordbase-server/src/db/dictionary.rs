@@ -45,7 +45,7 @@ where
     E: 'e + Executor<'c, Database = Sqlite>,
 {
     sqlx::query!(
-        r#"SELECT id as "id!", enabled, position, name, version, description, url
+        r#"SELECT id as "id!", position, name, version, description, url
         FROM dictionary
         ORDER BY position"#
     )
@@ -55,7 +55,6 @@ where
         anyhow::Ok(DictionaryState {
             id: DictionaryId(record.id),
             position: record.position,
-            enabled: record.enabled,
             meta: DictionaryMeta {
                 name: record.name,
                 version: record.version,
@@ -90,31 +89,6 @@ where
     })
 }
 
-pub async fn set_enabled<'e, 'c: 'e, E>(
-    executor: E,
-    dictionary_id: DictionaryId,
-    enabled: bool,
-) -> Result<Result<(), DictionaryNotFound>>
-where
-    E: 'e + Executor<'c, Database = Sqlite>,
-{
-    let result = sqlx::query!(
-        "UPDATE dictionary
-        SET enabled = $1
-        WHERE id = $2",
-        enabled,
-        dictionary_id.0
-    )
-    .execute(executor)
-    .await?;
-
-    Ok(if result.rows_affected() > 0 {
-        Ok(())
-    } else {
-        Err(DictionaryNotFound)
-    })
-}
-
 pub async fn set_position<'e, 'c: 'e, E>(
     executor: E,
     dictionary_id: DictionaryId,
@@ -125,8 +99,8 @@ where
 {
     let result = sqlx::query!(
         "UPDATE dictionary
-       SET position = $1
-       WHERE id = $2",
+        SET position = $1
+        WHERE id = $2",
         position,
         dictionary_id.0
     )

@@ -63,7 +63,7 @@ pub enum FromServer {
     /// Server sends a response to [`FromClient::ShowPopup`].
     ShowPopup {
         /// Whether showing the popup was successful.
-        result: Result<ShowPopupResponse, NoRecords>,
+        result: Result<ShowPopupResponse, ShowPopupError>,
     },
     /// Server sends a response to [`FromClient::HidePopup`] marking success.
     HidePopup,
@@ -147,21 +147,7 @@ pub struct LookupResponse {
 /// fields as possible.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShowPopupRequest {
-    /// Internal ID of the window.
-    ///
-    /// This is an opaque identifier which is entirely platform-specific.
-    /// This is the most reliable identifier to use to identify a window, but
-    /// is usually internal to the window manager. If you are working in an
-    /// environment where you have access to this ID (i.e. a window manager
-    /// extension), prioritise using this filter.
-    pub target_id: Option<u64>,
-    /// Process ID which owns the target window.
-    pub target_pid: Option<u32>,
-    /// Title of the target window.
-    pub target_title: Option<String>,
-    /// Linux `WM_CLASS` (or whatever is reported as the `WM_CLASS`) of the
-    /// target window.
-    pub target_wm_class: Option<String>,
+    pub target_window: WindowFilter,
     /// X and Y position of the pop-up [origin], in surface-local coordinates.
     ///
     /// These coordinates are relative to the top-left of the target window's
@@ -178,6 +164,25 @@ pub struct ShowPopupRequest {
     pub text: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WindowFilter {
+    /// Internal ID of the window.
+    ///
+    /// This is an opaque identifier which is entirely platform-specific.
+    /// This is the most reliable identifier to use to identify a window, but
+    /// is usually internal to the window manager. If you are working in an
+    /// environment where you have access to this ID (i.e. a window manager
+    /// extension), prioritise using this filter.
+    pub id: Option<u64>,
+    /// Process ID which owns the target window.
+    pub pid: Option<u32>,
+    /// Title of the target window.
+    pub title: Option<String>,
+    /// Linux `WM_CLASS` (or whatever is reported as the `WM_CLASS`) of the
+    /// target window.
+    pub wm_class: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[expect(missing_docs, reason = "self-explanatory")]
 pub enum PopupAnchor {
@@ -191,7 +196,7 @@ pub enum PopupAnchor {
     BottomRight,
 }
 
-/// Popup was shown.
+/// Popup was shown after a [`ShowPopupRequest`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShowPopupResponse {
     /// Number of **characters** (not bytes) along the text that were scanned,
@@ -201,10 +206,14 @@ pub struct ShowPopupResponse {
     pub chars_scanned: u64,
 }
 
-/// No records to show, therefore the popup was not shown.
+/// Failed to show a popup using [`ShowPopupRequest`].
 #[derive(Debug, Clone, Copy, Display, Error, Serialize, Deserialize)]
-#[display("no records to show")]
-pub struct NoRecords;
+#[non_exhaustive]
+pub enum ShowPopupError {
+    /// There were no records to show in the popup.
+    #[display("no records to show")]
+    NoRecords,
+}
 
 /// Attempted to perform an operation on a [`DictionaryId`] which does not
 /// exist.
@@ -245,7 +254,7 @@ mod tests {
         round_trip(FromServer::from(LookupResponse {
             lemma: default(),
             source: default(),
-            term: default(),
+            term: Term::new(""),
             record: Record::GlossaryHtml(default()),
         }));
         round_trip(FromServer::LookupDone);

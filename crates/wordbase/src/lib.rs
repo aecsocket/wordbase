@@ -117,7 +117,7 @@ macro_rules! for_record_kinds {
             GlossaryHtml(glossary::Html),
             Frequency(record::Frequency),
             JpnPitch(lang::jpn::Pitch),
-            YomitanGlossary(format::yomitan::Glossary),
+            YomitanRecord(format::yomitan::Record),
         );
     };
 }
@@ -166,11 +166,6 @@ pub struct DictionaryMeta {
 pub struct DictionaryState {
     /// Unique identifier for this dictionary in the database.
     pub id: DictionaryId,
-    /// Whether this dictionary is used for returning records in lookup
-    /// operations.
-    ///
-    /// This may be used to temporarily hide a specific dictionary.
-    pub enabled: bool,
     /// What position [records] from this dictionary will be returned relative
     /// to other dictionaries.
     ///
@@ -190,73 +185,120 @@ pub struct DictionaryId(pub i64);
 /// Key for a [record] in a [dictionary], representing a single interpretation
 /// of some text.
 ///
+/// A term contains at least one of a headword or a reading:
+/// - the headword is the [canonical form] of the term, as seen in a dictionary
+/// - the reading is how the term is represented in an alternate form, e.g.
+///   hiragana reading in Japanese.
+///
 /// # Examples
 ///
 /// ```
 /// # use wordbase::Term;
 /// // English word "rust"
 /// assert_eq!(
-///     Term::without_reading("rust"),
-///     Term {
-///         headword: "rust".into(),
-///         reading: None
-///     }
+///     Term::new("rust"),
+///     Term::Headword("rust".into()),
 /// );
 ///
 /// // Greek word "σκουριά"
 /// assert_eq!(
-///     Term::without_reading("σκουριά"),
-///     Term {
-///         headword: "σκουριά".into(),
-///         reading: None
-///     }
+///     Term::new("σκουριά"),
+///     Term::Headword("σκουριά".into()),
 /// );
 ///
 /// // Japanese word "錆" ("さび")
 /// assert_eq!(
 ///     Term::with_reading("錆", "さび"),
-///     Term {
+///     Term::Full {
 ///         headword: "錆".into(),
 ///         reading: Some("さび".into())
 ///     }
+/// );
+///
+/// // Japanese word with only a reading
+/// assert_eq!(
+///     Term::only_reading("さび"),
+///     Term::Reading("さび".into()),
 /// );
 /// ```
 ///
 /// [record]: Record
 /// [dictionary]: Dictionary
-/// [glossaries]: Glossary
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Term {
-    /// [Canonical form][headword] of the term.
-    ///
-    /// [headword]: https://en.wikipedia.org/wiki/Lemma_(morphology)#Headword
-    pub headword: String,
-    /// How the term is represented in an alternate form, e.g. hiragana reading
-    /// in Japanese.
-    ///
-    /// If this is [`None`], the reading is the same as the [headword].
-    ///
-    /// [headword]: Term::headword
-    pub reading: Option<String>,
+/// [canonical form]: https://en.wikipedia.org/wiki/Lemma_(morphology)#Headword
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(untagged, deny_unknown_fields)]
+pub enum Term {
+    /// Only a headword.
+    Headword(String),
+    /// Only a reading.
+    Reading(String),
+    /// Both a headword and reading.
+    Full {
+        /// Canonical form of the word.
+        headword: String,
+        /// Alternate form of the word.
+        reading: String,
+    },
 }
 
 impl Term {
+    /// Creates a term with only a headword.
+    #[must_use]
+    pub fn new(headword: impl Into<String>) -> Self {
+        Self::Headword(headword.into())
+    }
+
     /// Creates a term with a headword and reading.
     #[must_use]
     pub fn with_reading(headword: impl Into<String>, reading: impl Into<String>) -> Self {
-        Self {
+        Self::Full {
             headword: headword.into(),
-            reading: Some(reading.into()),
+            reading: reading.into(),
         }
     }
 
-    /// Creates a term with only a headword.
+    /// Creates a term with only a reading.
     #[must_use]
-    pub fn without_reading(headword: impl Into<String>) -> Self {
-        Self {
-            headword: headword.into(),
-            reading: None,
+    pub fn only_reading(reading: impl Into<String>) -> Self {
+        Self::Reading(reading.into())
+    }
+
+    /// Creates a term from a headword and reading pair.
+    ///
+    /// If both are [`None`], returns [`None`].
+    #[must_use]
+    pub fn from_pair(headword: Option<String>, reading: Option<String>) -> Option<Self> {
+        match (headword, reading) {
+            (Some(headword), Some(reading)) => Some(Self::Full { headword, reading }),
+            (Some(headword), None) => Some(Self::Headword(headword)),
+            (None, Some(reading)) => Some(Self::Reading(reading)),
+            (None, None) => None,
+        }
+    }
+
+    /// Gets the headword if it is present.
+    #[must_use]
+    pub fn headword(&self) -> Option<&str> {
+        match self {
+            Self::Headword(headword) => Some(headword),
+            Self::Reading(_) => None,
+            Self::Full {
+                headword,
+                reading: _,
+            } => Some(headword),
+        }
+    }
+
+    /// Gets the reading if it is present.
+    #[must_use]
+    pub fn reading(&self) -> Option<&str> {
+        match self {
+            Self::Headword(_) => None,
+            Self::Reading(reading) => Some(reading),
+            Self::Full {
+                headword: _,
+                reading,
+            } => Some(reading),
         }
     }
 }
@@ -342,3 +384,6 @@ impl RecordType for $data_ty {
 }}
 
 for_record_kinds!(define_record_types);
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ProfileId(pub i64);

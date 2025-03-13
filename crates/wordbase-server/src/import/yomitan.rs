@@ -1,25 +1,15 @@
 use {
-    super::{ImportError, Tracker},
-    crate::{
-        CHANNEL_BUF_CAP, db,
-        import::{Parsed, ReadMeta},
-    },
+    super::{ImportError, Imports, Tracker},
+    crate::{CHANNEL_BUF_CAP, db},
     anyhow::{Context as _, Result},
-    sqlx::{Pool, Sqlite, Transaction},
+    sqlx::{Sqlite, Transaction},
     std::{
         convert::Infallible,
-        io::Cursor,
+        io::{Read, Seek},
         iter,
-        path::Path,
-        sync::{
-            Arc,
-            atomic::{self, AtomicUsize},
-        },
+        sync::atomic::{self, AtomicUsize},
     },
-    tokio::{
-        fs,
-        sync::{Mutex, Semaphore, mpsc, oneshot},
-    },
+    tokio::sync::{Mutex, mpsc, oneshot},
     tracing::debug,
     wordbase::{
         DictionaryId, DictionaryMeta, Term,
@@ -32,22 +22,19 @@ use {
     },
 };
 
-pub async fn yomitan(
-    db: Pool<Sqlite>,
-    import_semaphore: Arc<Semaphore>,
-    path: impl AsRef<Path>,
-    send_read_to_memory: oneshot::Sender<Tracker>,
+pub async fn yomitan<R: Read + Seek>(
+    imports: &Imports,
+    new_reader: impl Fn() -> R + Send + Sync,
+    send_tracker: oneshot::Sender<Tracker>,
 ) -> Result<Result<(), ImportError>> {
-    let path = path.as_ref();
-    let archive = fs::read(path)
+    let _import_permit = imports
+        .concurrency
+        .acquire()
         .await
-        .context("failed to read file into memory")?;
+        .context("failed to acquire import permit")?;
 
-    let (send_read_meta, recv_read_meta) = oneshot::channel();
-    _ = send_read_to_memory.send(Tracker { recv_read_meta });
-
-    let (parser, index) = yomitan::Parse::new(|| Ok::<_, Infallible>(Cursor::new(&archive)))
-        .context("failed to parse")?;
+    let (parser, index) = yomitan::Parse::new(|| Ok::<_, Infallible>(new_reader()))
+        .context("failed to parse index")?;
     let meta = DictionaryMeta {
         name: index.title,
         version: index.revision,
@@ -59,22 +46,19 @@ pub async fn yomitan(
         + parser.term_meta_banks().len()
         + parser.kanji_banks().len()
         + parser.kanji_meta_banks().len();
-    let banks_left = AtomicUsize::new(banks_len);
+    let banks_done = AtomicUsize::new(0);
 
     debug!(
         "{:?} version {:?} - {banks_len} items",
         meta.name, meta.version
     );
-    let (send_banks_left, recv_banks_left) = mpsc::channel(CHANNEL_BUF_CAP);
-    let (send_parsed, recv_parsed) = oneshot::channel();
-    _ = send_read_meta.send(ReadMeta {
+    let (send_frac_done, recv_frac_done) = mpsc::channel(CHANNEL_BUF_CAP);
+    _ = send_tracker.send(Tracker {
         meta: meta.clone(),
-        banks_len,
-        recv_banks_left,
-        recv_parsed,
+        recv_frac_done,
     });
 
-    let already_exists = db::dictionary::exists_by_name(&db, &meta.name)
+    let already_exists = db::dictionary::exists_by_name(&imports.db, &meta.name)
         .await
         .context("failed to check if dictionary exists")?;
     if already_exists {
@@ -89,8 +73,9 @@ pub async fn yomitan(
     let kanji_meta_bank = Mutex::new(schema::KanjiMetaBank::default());
 
     let notify_parsed = || {
-        let items_left = banks_left.fetch_sub(1, atomic::Ordering::SeqCst) - 1;
-        _ = send_banks_left.try_send(items_left);
+        let banks_done = banks_done.fetch_add(1, atomic::Ordering::SeqCst) + 1;
+        let frac_done = 0.5 * ((banks_done as f64) / (banks_len as f64));
+        _ = send_frac_done.try_send(frac_done);
     };
     parser
         .run(
@@ -114,7 +99,6 @@ pub async fn yomitan(
             },
         )
         .context("failed to parse banks")?;
-    drop(send_banks_left);
     let tag_bank = tag_bank.into_inner();
     let term_bank = term_bank.into_inner();
     let term_meta_bank = term_meta_bank.into_inner();
@@ -123,28 +107,21 @@ pub async fn yomitan(
 
     let records_len =
         term_bank.len() + term_meta_bank.len() + kanji_bank.len() + kanji_meta_bank.len();
-    let records_left = AtomicUsize::new(records_len);
+    let records_done = AtomicUsize::new(0);
     if records_len == 0 {
         debug!("Parse complete, no records to insert");
         return Ok(Err(ImportError::NoRecords));
     }
-
     debug!("Parse complete, inserting {records_len} records");
-    let (send_records_left, recv_records_left) = mpsc::channel(CHANNEL_BUF_CAP);
-    let (send_inserted, recv_inserted) = oneshot::channel();
-    _ = send_parsed.send(Parsed {
-        records_len,
-        recv_records_left,
-        recv_inserted,
-    });
 
-    debug!("Waiting for permit to start transaction");
-    let _import_permit = import_semaphore
-        .acquire()
+    debug!("Waiting for insert lock");
+    let _tx_lock = imports.insert_lock.lock().await;
+    debug!("Lock acquired, starting transaction");
+    let mut tx = imports
+        .db
+        .begin()
         .await
-        .context("import permit closed")?;
-    debug!("Permit acquired, starting transaction");
-    let mut tx = db.begin().await.context("failed to begin transaction")?;
+        .context("failed to begin transaction")?;
     debug!("Started transaction");
 
     let dictionary_id = db::dictionary::insert(&mut *tx, &meta)
@@ -157,9 +134,10 @@ pub async fn yomitan(
 
     debug!("Importing records");
     let notify_inserted = || {
-        let records_left = records_left.fetch_sub(1, atomic::Ordering::SeqCst) - 1;
-        if records_left % 1000 == 0 {
-            _ = send_records_left.try_send(records_left);
+        let records_done = records_done.fetch_add(1, atomic::Ordering::SeqCst) + 1;
+        if records_done % 1000 == 0 {
+            let frac_done = 0.5 + 0.5 * ((records_done as f64) / (records_len as f64));
+            _ = send_frac_done.try_send(frac_done);
         }
     };
     let mut scratch = Vec::<u8>::new();
@@ -178,9 +156,8 @@ pub async fn yomitan(
             .with_context(|| format!("failed to import term meta {headword:?}"))?;
         notify_inserted();
     }
-    drop(send_records_left);
+    drop(send_frac_done);
 
-    _ = send_inserted.send(());
     tx.commit().await.context("failed to commit transaction")?;
     Ok(Ok(()))
 }
@@ -192,32 +169,34 @@ fn sanitize(s: String) -> Option<String> {
 async fn import_term(
     source: DictionaryId,
     tx: &mut Transaction<'_, Sqlite>,
-    term: schema::Term,
+    term_data: schema::Term,
     all_tags: &[GlossaryTag],
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
-    let reading = sanitize(term.reading.clone());
-    let headword = sanitize(term.expression.clone())
-        .or(reading.clone()) // if there's no headword, use the reading as the headword
-        .context("term has no headword or reading")?;
+    let term = Term::from_pair(
+        sanitize(term_data.reading.clone()),
+        sanitize(term_data.expression.clone()),
+    )
+    .context("term has no headword or reading")?;
 
     let tags = match_tags(
         all_tags,
-        term.definition_tags.as_deref().unwrap_or_default(),
+        term_data.definition_tags.as_deref().unwrap_or_default(),
     )
     .cloned()
     .collect::<Vec<_>>();
-    let content = term.glossary.into_iter().filter_map(to_content).collect();
-    let glossary = format::yomitan::Glossary { tags, content };
+    let glossary = term_data
+        .glossary
+        .into_iter()
+        .filter_map(to_content)
+        .collect();
+    let glossary = format::yomitan::Record {
+        popularity: term_data.score,
+        tags,
+        glossary,
+    };
 
-    db::term::insert(
-        &mut **tx,
-        source,
-        &Term { headword, reading },
-        &glossary,
-        scratch,
-    )
-    .await?;
+    db::term::insert(&mut **tx, source, &term, &glossary, scratch).await?;
     Ok(())
 }
 
@@ -248,18 +227,14 @@ async fn import_term_meta(
     match term_meta.data {
         schema::TermMetaData::Frequency(frequency) => {
             for (reading, record) in to_frequencies(frequency) {
-                db::term::insert(
-                    &mut **tx,
-                    source,
-                    &Term {
-                        headword: headword.clone(),
-                        reading,
-                    },
-                    &record,
-                    scratch,
-                )
-                .await
-                .context("failed to insert frequency record")?;
+                let term = match reading {
+                    Some(reading) => Term::with_reading(headword.clone(), reading),
+                    None => Term::new(headword.clone()),
+                };
+
+                db::term::insert(&mut **tx, source, &term, &record, scratch)
+                    .await
+                    .context("failed to insert frequency record")?;
             }
         }
         schema::TermMetaData::Pitch(pitch) => {

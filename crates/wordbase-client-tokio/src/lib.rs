@@ -16,7 +16,7 @@ use {
         DictionaryId, DictionaryState,
         hook::HookSentence,
         protocol::{
-            FromClient, FromServer, LookupConfig, LookupRequest, LookupResponse, NoRecords,
+            FromClient, FromServer, LookupConfig, LookupRequest, LookupResponse, ShowPopupError,
             ShowPopupRequest, ShowPopupResponse,
         },
     },
@@ -313,7 +313,7 @@ where
     pub async fn show_popup(
         &mut self,
         request: ShowPopupRequest,
-    ) -> Result<Result<ShowPopupResponse, NoRecords>, ConnectionError> {
+    ) -> Result<Result<ShowPopupResponse, ShowPopupError>, ConnectionError> {
         self.connection.send(&FromClient::from(request)).await?;
         loop {
             match self.connection.recv().await? {

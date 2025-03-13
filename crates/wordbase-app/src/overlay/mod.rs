@@ -1,6 +1,6 @@
 mod ui;
 
-use std::sync::Arc;
+use std::{collections::hash_map::Entry, sync::Arc};
 
 use adw::{gtk, prelude::*};
 use anyhow::{Context, Result};
@@ -8,7 +8,7 @@ use derive_more::Display;
 use foldhash::{HashMap, HashMapExt};
 use futures::{FutureExt, StreamExt, never::Never, stream::FuturesUnordered};
 use tokio::sync::{Notify, broadcast, mpsc};
-use tracing::info;
+use tracing::{info, warn};
 use wordbase::hook::HookSentence;
 use wordbase_server::{CHANNEL_BUF_CAP, Event};
 
@@ -19,21 +19,23 @@ pub struct Client {
     send_request: mpsc::Sender<Request>,
 }
 
+pub struct State {
+    pub config: Arc<Config>,
+    pub platform: Arc<dyn platform::Platform>,
+    pub app: adw::Application,
+    pub recv_event: broadcast::Receiver<Event>,
+}
+
 impl Client {
-    pub fn new(
-        config: Arc<Config>,
-        app: adw::Application,
-        platform: Arc<dyn platform::Client>,
-        recv_event: broadcast::Receiver<Event>,
-    ) -> (Self, impl Future<Output = Result<Never>>) {
+    pub fn new(state: State) -> (Self, impl Future<Output = Result<Never>>) {
         let (send_request, recv_request) = mpsc::channel(CHANNEL_BUF_CAP);
-        let task = run(config, app, platform, recv_event, recv_request);
+        let task = run(state, recv_request);
         (Self { send_request }, task)
     }
 
     pub async fn set_text_size(&self, text_size: TextSize) -> Result<()> {
         self.send_request
-            .send(Request::SetTextSize(text_size))
+            .send(Request::SetTextSize { text_size })
             .await?;
         Ok(())
     }
@@ -55,46 +57,51 @@ pub enum TextSize {
 
 #[derive(Debug)]
 enum Request {
-    SetTextSize(TextSize),
+    SetTextSize { text_size: TextSize },
 }
 
-pub async fn run(
-    config: Arc<Config>,
-    app: adw::Application,
-    platform: Arc<dyn platform::Client>,
-    mut recv_event: broadcast::Receiver<Event>,
-    mut recv_request: mpsc::Receiver<Request>,
-) -> Result<Never> {
-    let mut processes = ProcessMap::new();
+#[derive(Debug)]
+struct OverlayState {
+    window: adw::ApplicationWindow,
+    sentence: gtk::Label,
+    destroyed: Arc<Notify>,
+}
+
+type OverlayMap = HashMap<String, OverlayState>;
+
+pub async fn run(mut state: State, mut recv_request: mpsc::Receiver<Request>) -> Result<Never> {
+    let mut overlays = OverlayMap::new();
 
     loop {
-        let mut destroyed = processes
+        let mut destroyed = overlays
             .iter()
             .map(|(process_path, process)| process.destroyed.notified().map(move |_| process_path))
             .collect::<FuturesUnordered<_>>();
 
         tokio::select! {
-            event = recv_event.recv() => {
+            event = state.recv_event.recv() => {
                 drop(destroyed);
-                let event = event.context("event channel closed")?;
-                match event {
-                    Event::HookSentence(hook_sentence) => {
-                        on_hook_sentence(&config, &app, &*platform, &mut processes, hook_sentence);
-                    }
-                    Event::SyncDictionaries(_) => {}
+                let Event::HookSentence(hook_sentence) = event.context("event channel closed")? else {
+                    continue;
+                };
+
+                let process_path = hook_sentence.process_path.clone();
+                if let Err(err) = on_hook_sentence(&state, &mut overlays, hook_sentence).await {
+                    warn!("Failed to update overlay for {process_path:?}: {err:?}");
                 }
             }
             Some(process_path) = destroyed.next() => {
                 info!("Removing overlay for {process_path:?}");
                 let process_path = process_path.clone();
                 drop(destroyed);
-                processes.remove(&process_path);
+                overlays.remove(&process_path);
             }
-            Some(request) = recv_request.recv() => {
+            request = recv_request.recv() => {
+                let request = request.context("overlay request channel closed")?;
                 drop(destroyed);
                 match request {
-                    Request::SetTextSize(text_size) => {
-                        set_text_size(&processes, text_size);
+                    Request::SetTextSize { text_size } => {
+                        set_text_size(&overlays, text_size);
                     }
                 }
             }
@@ -102,31 +109,26 @@ pub async fn run(
     }
 }
 
-#[derive(Debug)]
-struct ProcessOverlay {
-    window: adw::ApplicationWindow,
-    sentence: gtk::Label,
-    destroyed: Arc<Notify>,
-}
-
-type ProcessMap = HashMap<String, ProcessOverlay>;
-
-fn on_hook_sentence(
-    config: &Config,
-    app: &adw::Application,
-    platform: &dyn platform::Client,
-    processes: &mut ProcessMap,
+async fn on_hook_sentence(
+    state: &State,
+    overlays: &mut OverlayMap,
     hook_sentence: HookSentence,
-) {
-    let overlay = processes
-        .entry(hook_sentence.process_path)
-        .or_insert_with_key(|process_path| {
+) -> Result<()> {
+    let overlay = match overlays.entry(hook_sentence.process_path) {
+        Entry::Occupied(entry) => entry.into_mut(),
+        Entry::Vacant(entry) => {
+            let process_path = entry.key();
             info!("Creating overlay for {process_path:?}");
 
             let window = adw::ApplicationWindow::builder()
-                .application(app)
+                .application(&state.app)
                 .title(format!("{} - {process_path}", gettext("Wordbase Overlay")))
                 .build();
+            state
+                .platform
+                .affix_to_focused_window(&window)
+                .await
+                .context("failed to affix overlay to focused window")?;
             window.present();
 
             let destroyed = Arc::new(Notify::new());
@@ -148,21 +150,21 @@ fn on_hook_sentence(
             window.set_content(Some(&content));
             content
                 .sentence()
-                .set_css_classes(&[&config.overlay_text_size.to_string()]);
+                .set_css_classes(&[&state.config.overlay_text_size.to_string()]);
 
-            platform.stick_to_focused_window(&window);
-
-            ProcessOverlay {
+            entry.insert(OverlayState {
                 window,
                 sentence: content.sentence(),
                 destroyed,
-            }
-        });
+            })
+        }
+    };
 
     overlay.sentence.set_text(&hook_sentence.sentence);
+    Ok(())
 }
 
-fn set_text_size(processes: &ProcessMap, text_size: TextSize) {
+fn set_text_size(processes: &OverlayMap, text_size: TextSize) {
     for (_, overlay) in processes {
         overlay.sentence.set_css_classes(&[&text_size.to_string()]);
     }
