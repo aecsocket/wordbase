@@ -1,12 +1,5 @@
 #![doc = include_str!("../README.md")]
 
-mod db;
-mod import;
-mod lookup;
-mod popup;
-mod server;
-mod texthooker;
-
 use {
     anyhow::{Context, Result},
     futures::TryFutureExt,
@@ -37,8 +30,8 @@ struct Config {
     listen_addr: SocketAddr,
     lookup: LookupConfig,
     max_db_connections: u32,
-    max_concurrent_imports: usize,
-    texthooker_sources: Vec<Arc<TexthookerSource>>,
+    max_concurrent_imports: u32,
+    texthooker_sources: Vec<TexthookerSource>,
 }
 
 impl Default for Config {
@@ -48,11 +41,11 @@ impl Default for Config {
             lookup: LookupConfig::default(),
             max_db_connections: 8,
             max_concurrent_imports: 4,
-            texthooker_sources: vec![Arc::new(TexthookerSource {
+            texthooker_sources: vec![TexthookerSource {
                 url: "ws://host.docker.internal:9001".into(),
                 // url: "ws://127.0.0.1:9001".into(),
                 connect_interval: Duration::from_secs(1),
-            })],
+            }],
         }
     }
 }
@@ -61,12 +54,6 @@ impl Default for Config {
 struct TexthookerSource {
     url: String,
     connect_interval: Duration,
-}
-
-#[derive(Debug, Clone)]
-enum ServerEvent {
-    HookSentence(HookSentence),
-    SyncDictionaries(Vec<DictionaryState>),
 }
 
 #[tokio::main]
@@ -96,7 +83,7 @@ async fn main() -> Result<()> {
         .context("failed to set up database")?;
     info!("Connected to database");
 
-    let (send_server_event, recv_server_event) = broadcast::channel::<ServerEvent>(CHANNEL_BUF_CAP);
+    let (send_server_event, recv_server_event) = broadcast::channel::<Event>(CHANNEL_BUF_CAP);
     let mut tasks = JoinSet::new();
 
     let (lookups, lookup_task) = lookup::Client::new(config.clone(), db.clone());

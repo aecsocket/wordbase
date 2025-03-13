@@ -10,10 +10,15 @@ where
     E: 'e + Executor<'c, Database = Sqlite>,
 {
     let result = sqlx::query!(
-        "INSERT INTO dictionary (name, version, position)
-        VALUES ($1, $2, (SELECT COALESCE(MAX(position), 0) + 1 FROM dictionary))",
+        "INSERT INTO dictionary (position, name, version, description, url)
+        VALUES (
+            (SELECT COALESCE(MAX(position), 0) + 1 FROM dictionary),
+            $1, $2, $3, $4
+        )",
         dictionary.name,
-        dictionary.version
+        dictionary.version,
+        dictionary.description,
+        dictionary.url,
     )
     .execute(executor)
     .await?;
@@ -40,7 +45,7 @@ where
     E: 'e + Executor<'c, Database = Sqlite>,
 {
     sqlx::query!(
-        r#"SELECT id as "id!", name, version, position, enabled
+        r#"SELECT id as "id!", enabled, position, name, version, description, url
         FROM dictionary
         ORDER BY position"#
     )
@@ -48,13 +53,15 @@ where
     .map(|record| {
         let record = record.context("failed to fetch record")?;
         anyhow::Ok(DictionaryState {
-            meta: DictionaryMeta {
-                name: record.name,
-                version: record.version,
-            },
             id: DictionaryId(record.id),
             position: record.position,
             enabled: record.enabled,
+            meta: DictionaryMeta {
+                name: record.name,
+                version: record.version,
+                description: record.description,
+                url: record.url,
+            },
         })
     })
     .try_collect::<Vec<_>>()

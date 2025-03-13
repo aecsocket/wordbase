@@ -16,7 +16,7 @@ pub enum ImportError {
 }
 
 #[derive(Debug)]
-pub struct ReadToMemory {
+pub struct Tracker {
     pub recv_read_meta: oneshot::Receiver<ReadMeta>,
 }
 

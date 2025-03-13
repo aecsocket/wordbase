@@ -1,7 +1,7 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $Overview: Adw.BreakpointBin {
+template $Manager: Adw.BreakpointBin {
   width-request: 360;
   height-request: 200;
 
@@ -135,7 +135,7 @@ template $Overview: Adw.BreakpointBin {
 
         [top]
         Adw.HeaderBar {
-          title-widget: SearchEntry {
+          title-widget: SearchEntry search_entry {
             hexpand: true;
           };
 
@@ -171,9 +171,7 @@ template $Overview: Adw.BreakpointBin {
             }
           };
 
-          content: Label {
-            label: "(webview)";
-          };
+          content: Adw.Bin search_content {};
         }
       }
     }

@@ -148,8 +148,6 @@ pub struct DictionaryMeta {
     /// This does not guarantee to conform to any format, e.g. semantic
     /// versioning.
     pub version: String,
-    /// Who made this dictionary.
-    pub authors: Vec<String>,
     /// Describes the content of this dictionary.
     pub description: Option<String>,
     /// Homepage URL where users can learn more about this dictionary.
@@ -166,10 +164,13 @@ pub struct DictionaryMeta {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DictionaryState {
-    /// Dictionary metadata.
-    pub meta: DictionaryMeta,
     /// Unique identifier for this dictionary in the database.
     pub id: DictionaryId,
+    /// Whether this dictionary is used for returning records in lookup
+    /// operations.
+    ///
+    /// This may be used to temporarily hide a specific dictionary.
+    pub enabled: bool,
     /// What position [records] from this dictionary will be returned relative
     /// to other dictionaries.
     ///
@@ -178,11 +179,8 @@ pub struct DictionaryState {
     ///
     /// [records]: Record
     pub position: i64,
-    /// Whether this dictionary is used for returning records in lookup
-    /// operations.
-    ///
-    /// This may be used to temporarily hide a specific dictionary.
-    pub enabled: bool,
+    /// Dictionary metadata.
+    pub meta: DictionaryMeta,
 }
 
 /// Opaque and unique identifier for a single [`Dictionary`] in a database.

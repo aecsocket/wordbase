@@ -1,9 +1,11 @@
 CREATE TABLE IF NOT EXISTS dictionary (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    enabled     BOOLEAN NOT NULL DEFAULT TRUE,
+    position    INTEGER NOT NULL,
     name        TEXT    NOT NULL,
     version     TEXT    NOT NULL,
-    position    INTEGER NOT NULL,
-    enabled     BOOLEAN NOT NULL DEFAULT TRUE
+    description TEXT,
+    url         TEXT
 );
 CREATE INDEX IF NOT EXISTS dictionary_enabled ON dictionary(enabled);
 

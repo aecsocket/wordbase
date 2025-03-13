@@ -1,5 +1,5 @@
 use {
-    super::{ImportError, ReadToMemory},
+    super::{ImportError, Tracker},
     crate::{
         CHANNEL_BUF_CAP, db,
         import::{Parsed, ReadMeta},
@@ -36,7 +36,7 @@ pub async fn yomitan(
     db: Pool<Sqlite>,
     import_semaphore: Arc<Semaphore>,
     path: impl AsRef<Path>,
-    send_read_to_memory: oneshot::Sender<ReadToMemory>,
+    send_read_to_memory: oneshot::Sender<Tracker>,
 ) -> Result<Result<(), ImportError>> {
     let path = path.as_ref();
     let archive = fs::read(path)
@@ -44,13 +44,15 @@ pub async fn yomitan(
         .context("failed to read file into memory")?;
 
     let (send_read_meta, recv_read_meta) = oneshot::channel();
-    _ = send_read_to_memory.send(ReadToMemory { recv_read_meta });
+    _ = send_read_to_memory.send(Tracker { recv_read_meta });
 
     let (parser, index) = yomitan::Parse::new(|| Ok::<_, Infallible>(Cursor::new(&archive)))
         .context("failed to parse")?;
     let meta = DictionaryMeta {
         name: index.title,
         version: index.revision,
+        description: index.description,
+        url: index.url,
     };
     let banks_len = parser.tag_banks().len()
         + parser.term_banks().len()

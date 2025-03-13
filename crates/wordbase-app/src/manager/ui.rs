@@ -1,5 +1,4 @@
 use adw::{glib, gtk, prelude::*, subclass::prelude::*};
-use derive_more::{Deref, DerefMut};
 use wordbase::DictionaryState;
 
 use crate::{DictionaryImportState, ThemeMeta};
@@ -8,18 +7,22 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, gtk::CompositeTemplate)]
-    #[template(file = "src/ui/overview.blp")]
-    pub struct Overview {
+    #[template(file = "src/manager/ui.blp")]
+    pub struct Manager {
         #[template_child]
         pub dictionaries: TemplateChild<adw::PreferencesGroup>,
         #[template_child]
         pub themes: TemplateChild<adw::PreferencesGroup>,
+        #[template_child]
+        pub search_entry: TemplateChild<gtk::SearchEntry>,
+        #[template_child]
+        pub search_content: TemplateChild<adw::Bin>,
     }
 
     #[glib::object_subclass]
-    impl ObjectSubclass for Overview {
-        const NAME: &str = "Overview";
-        type Type = super::Overview;
+    impl ObjectSubclass for Manager {
+        const NAME: &str = "Manager";
+        type Type = super::Manager;
         type ParentType = adw::BreakpointBin;
 
         fn class_init(klass: &mut Self::Class) {
@@ -31,16 +34,16 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for Overview {}
-    impl WidgetImpl for Overview {}
-    impl BreakpointBinImpl for Overview {}
+    impl ObjectImpl for Manager {}
+    impl WidgetImpl for Manager {}
+    impl BreakpointBinImpl for Manager {}
 }
 
 glib::wrapper! {
-    pub struct Overview(ObjectSubclass<imp::Overview>) @extends gtk::Widget, adw::BreakpointBin;
+    pub struct Manager(ObjectSubclass<imp::Manager>) @extends gtk::Widget, adw::BreakpointBin;
 }
 
-impl Overview {
+impl Manager {
     #[must_use]
     pub fn new() -> Self {
         glib::Object::new()
@@ -54,6 +57,16 @@ impl Overview {
     #[must_use]
     pub fn themes(&self) -> adw::PreferencesGroup {
         self.imp().themes.get()
+    }
+
+    #[must_use]
+    pub fn search_entry(&self) -> gtk::SearchEntry {
+        self.imp().search_entry.get()
+    }
+
+    #[must_use]
+    pub fn search_content(&self) -> adw::Bin {
+        self.imp().search_content.get()
     }
 }
 
@@ -138,8 +151,6 @@ pub fn dictionary_row(dictionary: &DictionaryState) -> adw::ExpanderRow {
 
     let mut meta_grid = MetaGrid::new();
 
-    meta_grid.add_many("Author", "Authors", &dictionary.meta.authors);
-
     if let Some(description) = &dictionary.meta.description {
         meta_grid.add("Description", description);
     }
@@ -174,7 +185,7 @@ pub fn dictionary_import_row(dictionary: &DictionaryImportState) -> adw::ActionR
 
     ui.add_prefix(&adw::Spinner::new());
 
-    let progress_bar = gtk::LevelBar::builder()
+    let progress_bar = gtk::ProgressBar::builder()
         .hexpand(true)
         .valign(gtk::Align::Center)
         .build();
@@ -189,14 +200,14 @@ pub fn dictionary_import_row(dictionary: &DictionaryImportState) -> adw::ActionR
             ui.set_subtitle(&meta.version);
 
             let done_frac = (*done as f64) / (*total as f64);
-            progress_bar.set_value(done_frac * 0.5);
+            progress_bar.set_fraction(done_frac * 0.5);
         }
         DictionaryImportState::Inserting { meta, total, done } => {
             ui.set_title(&meta.name);
             ui.set_subtitle(&meta.version);
 
             let done_frac = (*done as f64) / (*total as f64);
-            progress_bar.set_value(0.5 + done_frac * 0.5);
+            progress_bar.set_fraction(0.5 + done_frac * 0.5);
         }
     }
 

@@ -1,38 +1,41 @@
 use {
-    crate::{ServerEvent, TexthookerSource},
+    crate::Event,
     anyhow::{Context, Result},
     futures::{StreamExt, never::Never},
-    std::sync::Arc,
+    std::time::Duration,
     tokio::{net::TcpStream, sync::broadcast},
     tokio_tungstenite::{MaybeTlsStream, WebSocketStream},
     tracing::{debug, info, trace},
     wordbase::hook::HookSentence,
 };
 
+/// Connects to the texthooker server at `source` and forwards its sentences to
+/// the global server event channel.
 pub async fn run(
-    config: Arc<TexthookerSource>,
-    send_event: broadcast::Sender<ServerEvent>,
-) -> Result<Never> {
+    source: &str,
+    connect_interval: Duration,
+    send_event: &broadcast::Sender<Event>,
+) -> ! {
     loop {
         trace!("Attempting connection");
-        let (stream, _) = match tokio_tungstenite::connect_async(&config.url).await {
+        let (stream, _) = match tokio_tungstenite::connect_async(source).await {
             Ok(stream) => stream,
             Err(err) => {
                 trace!("Failed to connect: {err:?}");
-                tokio::time::sleep(config.connect_interval).await;
+                tokio::time::sleep(connect_interval).await;
                 continue;
             }
         };
 
         info!("Connected");
-        let Err(err) = handle_stream(stream, send_event.clone()).await;
+        let Err(err) = handle_stream(send_event, stream).await;
         info!("Disconnected: {err:?}");
     }
 }
 
 async fn handle_stream(
+    send_event: &broadcast::Sender<Event>,
     mut stream: WebSocketStream<MaybeTlsStream<TcpStream>>,
-    send_event: broadcast::Sender<ServerEvent>,
 ) -> Result<Never> {
     loop {
         let message = stream
@@ -45,6 +48,6 @@ async fn handle_stream(
         let sentence = serde_json::from_str::<HookSentence>(&message)
             .context("received message which is not a texthooker sentence")?;
         debug!("{sentence:#?}");
-        _ = send_event.send(ServerEvent::HookSentence(sentence));
+        _ = send_event.send(Event::HookSentence(sentence));
     }
 }

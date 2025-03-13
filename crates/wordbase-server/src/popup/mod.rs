@@ -14,7 +14,7 @@ cfg_if! {
 }
 
 use {
-    crate::{CHANNEL_BUF_CAP, ServerEvent, lookup},
+    crate::{CHANNEL_BUF_CAP, Event, lookup},
     anyhow::{Context, Result},
     cfg_if::cfg_if,
     tokio::sync::{broadcast, mpsc},
@@ -29,7 +29,7 @@ pub struct Client {
 impl Client {
     pub fn new(
         lookups: lookup::Client,
-        recv_server_event: broadcast::Receiver<ServerEvent>,
+        recv_server_event: broadcast::Receiver<Event>,
     ) -> Self {
         let (send_request, recv_request) = broadcast::channel(CHANNEL_BUF_CAP);
         std::thread::spawn(move || platform::run(lookups, recv_server_event, recv_request));
