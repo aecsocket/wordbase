@@ -385,5 +385,12 @@ impl RecordType for $data_ty {
 
 for_record_kinds!(define_record_types);
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Profile {
+    pub id: ProfileId,
+    pub name: String,
+    pub enabled_dictionaries: Vec<DictionaryId>,
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ProfileId(pub i64);

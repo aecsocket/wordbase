@@ -11,11 +11,11 @@ use {
 };
 
 #[derive(Debug, Clone)]
-pub struct Client {
+pub struct Lookups {
     send_request: mpsc::Sender<Request>,
 }
 
-impl Client {
+impl Lookups {
     pub fn new(
         config: Arc<Config>,
         db: Pool<Sqlite>,

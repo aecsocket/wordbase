@@ -1,23 +1,28 @@
 #![doc = include_str!("../README.md")]
 
-mod db;
+pub mod db;
 pub mod import;
+pub mod lookup;
 pub mod popup;
-mod texthooker;
+pub mod texthooker;
 
 use std::{num::NonZero, sync::Arc};
 
 use import::Imports;
+use lookup::Lookups;
 use popup::Popups;
 use serde::{Deserialize, Serialize};
-use wordbase::{DictionaryState, ProfileId, hook::HookSentence};
+use sqlx::{Pool, Sqlite};
+use wordbase::{DictionaryState, ProfileId, hook::HookSentence, protocol::LookupConfig};
 
+#[derive(Debug)]
 pub struct Server {
     pub imports: Imports,
+    pub lookups: Lookups,
 }
 
 impl Server {
-    pub fn new(popups: Arc<dyn Popups>) -> Self {
+    pub fn new(db: Pool<Sqlite>, popups: Arc<dyn Popups>) -> Self {
         Self {
             imports: Imports::new(db, config),
         }
@@ -38,19 +43,15 @@ pub struct TexthookerSource {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct Config {
+pub struct Config {
     #[serde(skip)]
-    current_profile: ProfileId,
-    #[serde(default = "default_max_db_connections")]
-    max_db_connections: NonZero<u32>,
+    pub current_profile: ProfileId,
     #[serde(default = "default_max_concurrent_imports")]
-    max_concurrent_imports: NonZero<u32>,
+    pub max_concurrent_imports: NonZero<u32>,
     #[serde(default = "default_texthooker_sources")]
-    texthooker_sources: Vec<TexthookerSource>,
-}
-
-fn default_max_db_connections() -> NonZero<u32> {
-    NonZero::new(8).expect("should be greater than 0")
+    pub texthooker_sources: Vec<TexthookerSource>,
+    #[serde(default)]
+    pub lookup: LookupConfig,
 }
 
 fn default_max_concurrent_imports() -> NonZero<u32> {

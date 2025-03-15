@@ -139,14 +139,13 @@ pub struct LookupResponse {
 
 /// Requests the server to create a dictionary popup window on top of a
 /// target window, and show it on the user's window manager.
-///
-/// The popup will be positioned relative to a target window; however, you must
-/// manually fill out the details of this target window. If no windows match,
-/// or more than 1 window matches your filters, then the request will fail.
-/// Therefore, for the best chance of success, try to fill out as many target
-/// fields as possible.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShowPopupRequest {
+    /// Specifies what window the popup will be positioned relative to.
+    ///
+    /// If no windows match this filter, or more than 1 window matches, then the
+    /// popup request will fail. Therefore, for the best chance of success, try
+    /// to be as specific as possible
     pub target_window: WindowFilter,
     /// X and Y position of the pop-up [origin], in surface-local coordinates.
     ///
@@ -164,15 +163,23 @@ pub struct ShowPopupRequest {
     pub text: String,
 }
 
+/// Specifies a specific window on the user's window manager.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WindowFilter {
     /// Internal ID of the window.
     ///
     /// This is an opaque identifier which is entirely platform-specific.
     /// This is the most reliable identifier to use to identify a window, but
-    /// is usually internal to the window manager. If you are working in an
-    /// environment where you have access to this ID (i.e. a window manager
-    /// extension), prioritise using this filter.
+    /// is usually internal to the window manager. If you have access to this
+    /// ID, you should specify only this.
+    ///
+    /// # Platforms
+    ///
+    /// - Linux/Wayland
+    ///   - GNOME: [`Meta / Window: get_id()`][gnome] (accessible if you are
+    ///     writing a shell extension)
+    ///
+    /// [gnome]: https://gjs-docs.gnome.org/meta16~16/meta.window#method-get_id
     pub id: Option<u64>,
     /// Process ID which owns the target window.
     pub pid: Option<u32>,
@@ -183,6 +190,9 @@ pub struct WindowFilter {
     pub wm_class: Option<String>,
 }
 
+/// What corner a [`ShowPopupRequest`] is relative to.
+///
+/// See [`ShowPopupRequest::anchor`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[expect(missing_docs, reason = "self-explanatory")]
 pub enum PopupAnchor {

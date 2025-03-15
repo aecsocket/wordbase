@@ -11,6 +11,7 @@ mod popup;
 use std::sync::Arc;
 
 use adw::{gio, glib, gtk, prelude::*};
+use anyhow::{Context, Result};
 use futures::TryFutureExt;
 use platform::Platform;
 use tokio::sync::broadcast;
@@ -24,21 +25,8 @@ fn gettext(s: &str) -> &str {
     s
 }
 
-#[derive(Debug)]
-struct Config {
-    overlay_text_size: overlay::TextSize,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            overlay_text_size: overlay::TextSize::Title2,
-        }
-    }
-}
-
 #[tokio::main]
-async fn main() -> glib::ExitCode {
+async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::builder()
@@ -47,10 +35,17 @@ async fn main() -> glib::ExitCode {
         )
         .init();
     glib::log_set_default_handler(glib::rust_log_handler);
-
-    let config = Arc::<Config>::default();
     let platform = Arc::<dyn Platform>::from(platform::default());
     let app = adw::Application::builder().application_id(APP_ID).build();
+
+    let data_dir = glib::user_data_dir();
+    let db_path = data_dir.join("wordbase.db");
+    let db_path = db_path
+        .to_str()
+        .with_context(|| format!("invalid database path {db_path:?}"))?;
+    let db = wordbase_server::db::connect(db_path).await;
+
+    let config = Arc::<Config>::default();
     let (send_event, _) = broadcast::channel::<wordbase_server::Event>(CHANNEL_BUF_CAP);
     let (overlays, overlay_task) = overlay::Client::new(overlay::State {
         config: config.clone(),

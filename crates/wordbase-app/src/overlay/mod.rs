@@ -6,13 +6,12 @@ use adw::{gtk, prelude::*};
 use anyhow::{Context, Result};
 use derive_more::Display;
 use foldhash::{HashMap, HashMapExt};
-use futures::{FutureExt, StreamExt, never::Never, stream::FuturesUnordered};
+use futures::{FutureExt, never::Never, stream::FuturesUnordered};
 use tokio::sync::{Notify, broadcast, mpsc};
 use tracing::{info, warn};
 use wordbase::hook::HookSentence;
-use wordbase_server::{CHANNEL_BUF_CAP, Event};
 
-use crate::{Config, gettext, platform};
+use crate::{gettext, platform::Platform};
 
 #[derive(Debug, Clone)]
 pub struct Client {
@@ -20,8 +19,7 @@ pub struct Client {
 }
 
 pub struct State {
-    pub config: Arc<Config>,
-    pub platform: Arc<dyn platform::Platform>,
+    pub platform: Arc<dyn Platform>,
     pub app: adw::Application,
     pub recv_event: broadcast::Receiver<Event>,
 }

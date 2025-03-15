@@ -25,10 +25,6 @@
             "target": "/home/dev"
         },
         {
-            "type": "volume",
-            "target": "/home/dev/.vscode-server"
-        },
-        {
             "type": "bind",
             "source": "${env:XDG_RUNTIME_DIR}/${env:WAYLAND_DISPLAY}",
             "target": "${localEnv:XDG_RUNTIME_DIR}/wayland-0"

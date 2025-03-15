@@ -28,16 +28,27 @@ impl Imports {
     }
 }
 
+/// Failed to import a dictionary.
 #[derive(Debug, Clone, Display, Error)]
 pub enum ImportError {
+    /// Dictionary with this name already exists.
     #[display("already exists")]
     AlreadyExists,
+    /// Dictionary was parsed, but it had no records to insert into the
+    /// database.
     #[display("no records to insert")]
     NoRecords,
 }
 
+/// Tracks the state of a dictionary import operation.
 #[derive(Debug)]
-pub struct Tracker {
+pub struct ImportTracker {
+    /// Parsed dictionary meta.
     pub meta: DictionaryMeta,
+    /// Channel receiver for the progress of the import operation.
+    ///
+    /// The progress value is between 0.0 and 1.0, and is entirely opaque to
+    /// users. Implementations are free to display import progress in whatever
+    /// way they want.
     pub recv_frac_done: mpsc::Receiver<f64>,
 }

@@ -1,10 +1,9 @@
 use {
-    super::{ImportError, Imports, Tracker},
+    super::{ImportError, ImportTracker, Imports},
     crate::{CHANNEL_BUF_CAP, db},
     anyhow::{Context as _, Result},
     sqlx::{Sqlite, Transaction},
     std::{
-        convert::Infallible,
         io::{Read, Seek},
         iter,
         sync::atomic::{self, AtomicUsize},
@@ -15,26 +14,28 @@ use {
         DictionaryId, DictionaryMeta, Term,
         format::{
             self,
-            yomitan::{self, GlossaryTag, schema, structured},
+            yomitan::{self, GlossaryTag, ParseError, schema, structured},
         },
         lang,
         record::Frequency,
     },
 };
 
-pub async fn yomitan<R: Read + Seek>(
+pub async fn yomitan<R: Read + Seek, E: Send>(
     imports: &Imports,
-    new_reader: impl Fn() -> R + Send + Sync,
-    send_tracker: oneshot::Sender<Tracker>,
-) -> Result<Result<(), ImportError>> {
+    new_reader: impl Fn() -> Result<R, E> + Send + Sync,
+    send_tracker: oneshot::Sender<ImportTracker>,
+) -> Result<Result<(), ImportError>>
+where
+    ParseError<E>: std::error::Error + Send + Sync + 'static,
+{
     let _import_permit = imports
         .concurrency
         .acquire()
         .await
         .context("failed to acquire import permit")?;
 
-    let (parser, index) = yomitan::Parse::new(|| Ok::<_, Infallible>(new_reader()))
-        .context("failed to parse index")?;
+    let (parser, index) = yomitan::Parse::new(new_reader).context("failed to parse index")?;
     let meta = DictionaryMeta {
         name: index.title,
         version: index.revision,
@@ -53,7 +54,7 @@ pub async fn yomitan<R: Read + Seek>(
         meta.name, meta.version
     );
     let (send_frac_done, recv_frac_done) = mpsc::channel(CHANNEL_BUF_CAP);
-    _ = send_tracker.send(Tracker {
+    _ = send_tracker.send(ImportTracker {
         meta: meta.clone(),
         recv_frac_done,
     });

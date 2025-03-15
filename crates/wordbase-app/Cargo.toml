@@ -17,18 +17,20 @@ all-features = true
 
 [dependencies]
 wordbase = { workspace = true }
-wordbase-server = { workspace = true }
+# wordbase-server = { workspace = true }
 
+anyhow = { workspace = true }
 derive_more = { workspace = true, features = ["display"] }
+foldhash = { workspace = true }
 form_urlencoded = { workspace = true }
+futures = { workspace = true }
 glib = { workspace = true, features = ["log"] }
 gtk4 = { workspace = true, features = ["gnome_47", "blueprint"] }
 libadwaita = { workspace = true, features = ["v1_6"] }
 open = { workspace = true }
+rand = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 webkit6 = { workspace = true }
-anyhow = { workspace = true }
-futures = { workspace = true }
-foldhash = { workspace = true }
+zbus = { workspace = true, features = ["tokio"] }
