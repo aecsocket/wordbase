@@ -11,7 +11,7 @@ use {
     tokio::sync::{Mutex, mpsc, oneshot},
     tracing::debug,
     wordbase::{
-        DictionaryId, Dictionary, Term,
+        Dictionary, DictionaryId, Term,
         format::{
             self,
             yomitan::{self, GlossaryTag, ParseError, schema, structured},
@@ -21,11 +21,24 @@ use {
     },
 };
 
-pub async fn yomitan<R: Read + Seek, E: Send>(
+impl Imports {
+    pub async fn yomitan<R: Read + Seek, E: Send>(
+        &self,
+        new_reader: impl Fn() -> Result<R, E> + Send + Sync,
+    ) -> Result<ImportTracker, ImportError>
+    where
+        ParseError<E>: std::error::Error + Send + Sync + 'static,
+    {
+        let (send_tracker, recv_tracker) = oneshot::channel();
+        import(self, new_reader, send_tracker).await?;
+    }
+}
+
+async fn import<R: Read + Seek, E: Send>(
     imports: &Imports,
     new_reader: impl Fn() -> Result<R, E> + Send + Sync,
     send_tracker: oneshot::Sender<ImportTracker>,
-) -> Result<Result<(), ImportError>>
+) -> Result<(), ImportError>
 where
     ParseError<E>: std::error::Error + Send + Sync + 'static,
 {
@@ -64,7 +77,7 @@ where
         .context("failed to check if dictionary exists")?;
     if already_exists {
         debug!("Dictionary already exists");
-        return Ok(Err(ImportError::AlreadyExists));
+        return Err(ImportError::AlreadyExists);
     }
 
     let tag_bank = Mutex::new(schema::TagBank::default());
@@ -111,7 +124,7 @@ where
     let records_done = AtomicUsize::new(0);
     if records_len == 0 {
         debug!("Parse complete, no records to insert");
-        return Ok(Err(ImportError::NoRecords));
+        return Err(ImportError::NoRecords);
     }
     debug!("Parse complete, inserting {records_len} records");
 
@@ -160,7 +173,7 @@ where
     drop(send_frac_done);
 
     tx.commit().await.context("failed to commit transaction")?;
-    Ok(Ok(()))
+    Ok(())
 }
 
 fn sanitize(s: String) -> Option<String> {

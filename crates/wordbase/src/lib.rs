@@ -133,6 +133,7 @@ macro_rules! for_record_kinds {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Dictionary {
+    pub id: DictionaryId,
     /// Human-readable display name.
     ///
     /// This value is **not guaranteed to be unique** across a single server,
@@ -168,16 +169,10 @@ pub struct DictionaryId(pub i64);
 /// ```
 /// # use wordbase::Term;
 /// // English word "rust"
-/// assert_eq!(
-///     Term::new("rust"),
-///     Term::Headword("rust".into()),
-/// );
+/// assert_eq!(Term::new("rust"), Term::Headword("rust".into()),);
 ///
 /// // Greek word "σκουριά"
-/// assert_eq!(
-///     Term::new("σκουριά"),
-///     Term::Headword("σκουριά".into()),
-/// );
+/// assert_eq!(Term::new("σκουριά"), Term::Headword("σκουριά".into()),);
 ///
 /// // Japanese word "錆" ("さび")
 /// assert_eq!(
@@ -189,10 +184,7 @@ pub struct DictionaryId(pub i64);
 /// );
 ///
 /// // Japanese word with only a reading
-/// assert_eq!(
-///     Term::only_reading("さび"),
-///     Term::Reading("さび".into()),
-/// );
+/// assert_eq!(Term::only_reading("さび"), Term::Reading("さび".into()),);
 /// ```
 ///
 /// [record]: Record
@@ -326,6 +318,8 @@ mod sealed {
 pub trait RecordType:
     sealed::RecordType
     + Sized
+    + Send
+    + Sync
     + std::fmt::Debug
     + Clone
     + Serialize
@@ -343,3 +337,13 @@ impl RecordType for $data_ty {
 }}
 
 for_record_kinds!(define_record_types);
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ProfileId(pub i64);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Profile {
+    pub id: ProfileId,
+    pub name: String,
+    pub enabled_dictionaries: Vec<DictionaryId>,
+}

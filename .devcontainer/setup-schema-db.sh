@@ -7,5 +7,5 @@ DEV_DB_PATH="$HOME/wordbase-schema.sqlite"
 if [ -f "$DEV_DB_PATH" ]; then
     rm "$DEV_DB_PATH"
 fi
-sqlite3 "$DEV_DB_PATH" < crates/wordbase-server/src/setup_db.sql
+sqlite3 "$DEV_DB_PATH" < crates/wordbase-engine/src/db/setup.sql
 echo "DATABASE_URL=sqlite:$DEV_DB_PATH" > .env

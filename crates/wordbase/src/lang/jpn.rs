@@ -33,17 +33,17 @@ pub struct Pitch {
     ///
     /// [mora]: https://en.wikipedia.org/wiki/Mora_(linguistics)
     /// [downstep]: https://en.wikipedia.org/wiki/Downstep
-    pub position: u16,
+    pub position: u64,
     /// What [morae][mora] positions have a [nasal] sound.
     ///
     /// [mora]: https://en.wikipedia.org/wiki/Mora_(linguistics)
     /// [nasal]: https://en.wikipedia.org/wiki/Nasal_consonant
-    pub nasal: Vec<u16>,
+    pub nasal: Vec<u64>,
     /// What [morae][mora] positions have a [devoiced] sound.
     ///
     /// [mora]: https://en.wikipedia.org/wiki/Mora_(linguistics)
     /// [devoiced]: https://en.wikipedia.org/wiki/Devoicing
-    pub devoice: Vec<u16>,
+    pub devoice: Vec<u64>,
 }
 
 /// Checks if the given character is one of the small kana characters, either
@@ -124,7 +124,7 @@ pub struct PitchRender<'a> {
 #[cfg(feature = "render-html")]
 impl maud::Render for PitchRender<'_> {
     fn render(&self) -> maud::Markup {
-        let downstep = usize::from(self.pitch.position);
+        let downstep = usize::try_from(self.pitch.position).unwrap_or(usize::MAX);
         let morae = morae(self.reading).collect::<Vec<_>>();
 
         let pitch_css_class = match downstep {

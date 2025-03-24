@@ -55,16 +55,17 @@ where
 pub fn lookup<'args>(lemma: &'args str, record_kinds: &'args [RecordKind]) -> Lookup<'args> {
     let mut query = QueryBuilder::new(
         "SELECT source, headword, reading, kind, data
-        FROM term t
-        LEFT JOIN dictionary
-            ON t.source = dictionary.id
+        FROM term
+        INNER JOIN dictionary ON term.source = dictionary.id
+        INNER JOIN profile_enabled_dictionary ped ON dictionary.id = ped.dictionary
+        INNER JOIN config ON ped.profile = config.current_profile
         WHERE
-            (headword = ",
+            (term.headword = ",
     );
     query.push_bind(lemma);
-    query.push(" OR reading = ");
+    query.push(" OR term.reading = ");
     query.push_bind(lemma);
-    query.push(") AND kind IN (");
+    query.push(") AND term.kind IN (");
     {
         let mut query = query.separated(", ");
         for record_kind in record_kinds {

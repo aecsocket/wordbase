@@ -185,11 +185,10 @@ pub enum ShowPopupError {
     NoRecords,
 }
 
-/// Attempted to perform an operation on a [`DictionaryId`] which does not
-/// exist.
+/// Attempted to perform an operation on an entity which does not exist.
 #[derive(Debug, Clone, Copy, Default, Display, Error, Serialize, Deserialize)]
-#[display("dictionary not found")]
-pub struct DictionaryNotFound;
+#[display("not found")]
+pub struct NotFound;
 
 #[cfg(test)]
 mod tests {
@@ -217,7 +216,6 @@ mod tests {
         round_trip(FromServer::Error { message: default() });
         round_trip(FromServer::from(HookSentence::default()));
         round_trip(FromServer::from(LookupResponse {
-            scan_len: default(),
             source: default(),
             term: Term::new(""),
             record: Record::GlossaryHtml(default()),
