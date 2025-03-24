@@ -1,65 +1,65 @@
 {
-    "name": "wordbase",
-    "build": {
-        "dockerfile": "Dockerfile"
+  "name": "wordbase",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "forwardPorts": [9518],
+  "runArgs": [
+    "--add-host=host.docker.internal:host-gateway",
+    "--security-opt=seccomp=unconfined",
+    "--device=/dev/dri"
+  ],
+  "postCreateCommand": [
+    ".devcontainer/install-unidic.sh",
+    ".devcontainer/setup-schema-db.sh"
+  ],
+  "containerEnv": {
+    "XDG_RUNTIME_DIR": "/tmp/user/1000",
+    "WAYLAND_DISPLAY": "${localEnv:XDG_RUNTIME_DIR}/wayland-0",
+    "DBUS_SESSION_BUS_ADDRESS": "unix:path=${localEnv:XDG_RUNTIME_DIR}/bus"
+  },
+  "mounts": [
+    {
+      "type": "volume",
+      "source": "wordbase-profile",
+      "target": "/home/dev"
     },
-    "forwardPorts": [9518],
-    "runArgs": [
-        "--add-host=host.docker.internal:host-gateway",
-        "--security-opt=seccomp=unconfined",
-        "--device=/dev/dri"
-    ],
-    "postCreateCommand": [
-        ".devcontainer/install-unidic.sh",
-        ".devcontainer/setup-schema-db.sh"
-    ],
-    "containerEnv": {
-        "XDG_RUNTIME_DIR": "/tmp/user/1000",
-        "WAYLAND_DISPLAY": "${localEnv:XDG_RUNTIME_DIR}/wayland-0",
-        "DBUS_SESSION_BUS_ADDRESS": "unix:path=${localEnv:XDG_RUNTIME_DIR}/bus"
+    {
+      "type": "bind",
+      "source": "${env:XDG_RUNTIME_DIR}/${env:WAYLAND_DISPLAY}",
+      "target": "${localEnv:XDG_RUNTIME_DIR}/wayland-0"
     },
-    "mounts": [
-        {
-            "type": "volume",
-            "source": "wordbase-profile",
-            "target": "/home/dev"
-        },
-        {
-            "type": "bind",
-            "source": "${env:XDG_RUNTIME_DIR}/${env:WAYLAND_DISPLAY}",
-            "target": "${localEnv:XDG_RUNTIME_DIR}/wayland-0"
-        },
-        {
-            "type": "bind",
-            "source": "${env:XDG_RUNTIME_DIR}/bus",
-            "target": "${localEnv:XDG_RUNTIME_DIR}/bus"
-        },
-        {
-            "type": "bind",
-            "source": "${env:XDG_RUNTIME_DIR}/at-spi/bus",
-            "target": "${localEnv:XDG_RUNTIME_DIR}/at-spi/bus"
-        },
-        {
-            "type": "bind",
-            "source": "${env:HOME}/.local/share/gnome-shell/extensions/",
-            "target": "/workspaces/gnome-shell-extensions"
-        }
-    ],
-    "customizations": {
-        "vscode": {
-            "extensions": [
-                "ms-azuretools.vscode-docker",
-                "GitHub.vscode-pull-request-github",
-                "rust-lang.rust-analyzer",
-                "vadimcn.vscode-lldb",
-                "tamasfe.even-better-toml",
-                "fill-labs.dependi",
-                "bodil.blueprint-gtk",
-                "qwtel.sqlite-viewer",
-                "esbenp.prettier-vscode",
-                "dbaeumer.vscode-eslint",
-                "redhat.vscode-xml"
-            ]
-        }
+    {
+      "type": "bind",
+      "source": "${env:XDG_RUNTIME_DIR}/bus",
+      "target": "${localEnv:XDG_RUNTIME_DIR}/bus"
+    },
+    {
+      "type": "bind",
+      "source": "${env:XDG_RUNTIME_DIR}/at-spi/bus",
+      "target": "${localEnv:XDG_RUNTIME_DIR}/at-spi/bus"
+    },
+    {
+      "type": "bind",
+      "source": "${env:HOME}/.local/share/gnome-shell/extensions/",
+      "target": "/workspaces/gnome-shell-extensions"
     }
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-docker",
+        "GitHub.vscode-pull-request-github",
+        "rust-lang.rust-analyzer",
+        "vadimcn.vscode-lldb",
+        "tamasfe.even-better-toml",
+        "fill-labs.dependi",
+        "bodil.blueprint-gtk",
+        "qwtel.sqlite-viewer",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "redhat.vscode-xml"
+      ]
+    }
+  }
 }

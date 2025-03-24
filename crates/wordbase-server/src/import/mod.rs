@@ -6,7 +6,7 @@ use {
     sqlx::{Pool, Sqlite},
     std::sync::Arc,
     tokio::sync::{Mutex, Semaphore, mpsc},
-    wordbase::DictionaryMeta,
+    wordbase::Dictionary,
 };
 
 #[derive(Debug, Clone)]
@@ -44,7 +44,7 @@ pub enum ImportError {
 #[derive(Debug)]
 pub struct ImportTracker {
     /// Parsed dictionary meta.
-    pub meta: DictionaryMeta,
+    pub meta: Dictionary,
     /// Channel receiver for the progress of the import operation.
     ///
     /// The progress value is between 0.0 and 1.0, and is entirely opaque to

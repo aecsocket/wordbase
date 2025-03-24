@@ -2,10 +2,10 @@ use {
     anyhow::{Context, Result},
     futures::{StreamExt, TryStreamExt},
     sqlx::{Executor, Sqlite},
-    wordbase::{DictionaryId, DictionaryMeta, DictionaryState, protocol::DictionaryNotFound},
+    wordbase::{DictionaryId, Dictionary, DictionaryState, protocol::DictionaryNotFound},
 };
 
-pub async fn insert<'e, 'c: 'e, E>(executor: E, dictionary: &DictionaryMeta) -> Result<DictionaryId>
+pub async fn insert<'e, 'c: 'e, E>(executor: E, dictionary: &Dictionary) -> Result<DictionaryId>
 where
     E: 'e + Executor<'c, Database = Sqlite>,
 {
@@ -55,7 +55,7 @@ where
         anyhow::Ok(DictionaryState {
             id: DictionaryId(record.id),
             position: record.position,
-            meta: DictionaryMeta {
+            meta: Dictionary {
                 name: record.name,
                 version: record.version,
                 description: record.description,

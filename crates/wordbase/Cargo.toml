@@ -1,5 +1,5 @@
 [package]
-description = "Dictionary and word lookup service"
+description = "Dictionary and word lookup service - API types"
 name = "wordbase"
 version = "0.1.0"
 
@@ -23,11 +23,11 @@ render-html = ["dep:maud", "dep:html-escape", "dep:indexmap"]
 
 [dependencies]
 derive_more = { workspace = true, features = [
-    "from",
-    "display",
-    "error",
-    "deref",
-    "deref_mut",
+  "from",
+  "display",
+  "error",
+  "deref",
+  "deref_mut",
 ] }
 foldhash = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

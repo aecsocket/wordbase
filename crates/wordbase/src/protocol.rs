@@ -2,13 +2,13 @@
 //! WebSocket connection.
 
 use {
-    crate::{DictionaryId, DictionaryState, Record, RecordKind, Term, hook::HookSentence},
+    crate::{DictionaryId, Record, RecordKind, Term, hook::HookSentence},
     derive_more::{Display, Error, From},
     serde::{Deserialize, Serialize},
 };
 
-/// Default port which a Wordbase server listens on.
-pub const DEFAULT_PORT: u16 = 9518;
+/// Default WebSocket port which a Wordbase server listens on.
+pub const DEFAULT_WS_PORT: u16 = 9518;
 
 /// Client-to-server WebSocket message, encoded as JSON.
 #[derive(Debug, Clone, Serialize, Deserialize, From)]
@@ -38,18 +38,6 @@ pub enum FromServer {
         /// Arbitrary error message string.
         message: String,
     },
-    /// Server sends its current [`LookupConfig`] to the client.
-    SyncLookupConfig {
-        /// Configuration.
-        lookup_config: LookupConfig,
-    },
-    /// Server sends its current [`Dictionary`] list to the client.
-    ///
-    /// This is sent when dictionaries are modified - added, removed, etc.
-    SyncDictionaries {
-        /// Dictionaries.
-        dictionaries: Vec<DictionaryState>,
-    },
     /// See [`HookSentence`].
     #[from]
     HookSentence(HookSentence),
@@ -69,32 +57,6 @@ pub enum FromServer {
     HidePopup,
 }
 
-/// Configuration for [lookup operations] shared between a Wordbase client and
-/// server.
-///
-/// [lookup operations]: protocol::FromClient::Lookup
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LookupConfig {
-    /// Maximum length, in **characters** (not bytes), that [`Lookup::text`] is
-    /// allowed to be.
-    ///
-    /// The maximum length of lookup requests is capped to avoid overloading the
-    /// server with extremely large lookup requests. Clients must respect the
-    /// server's configuration and not send any lookups longer than this,
-    /// otherwise the server will return an error.
-    ///
-    /// [`Lookup::text`]: protocol::FromClient::Lookup::text
-    pub max_request_len: u64,
-}
-
-impl Default for LookupConfig {
-    fn default() -> Self {
-        Self {
-            max_request_len: 16,
-        }
-    }
-}
-
 /// Requests the server to find the first [terms] in some text, and return
 /// [records] for those terms.
 ///
@@ -107,8 +69,8 @@ impl Default for LookupConfig {
 pub struct LookupRequest {
     /// Text to search in.
     ///
-    /// This must not be longer **in characters** than
-    /// [`LookupConfig::max_request_len`].
+    /// This may be arbitrarily large, but the server may limit how far ahead it
+    /// reads to find lookup results.
     pub text: String,
     /// What kinds of records the server should send us.
     ///
@@ -121,8 +83,6 @@ pub struct LookupRequest {
 /// Single record returned by the server in response to a [`LookupRequest`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LookupResponse {
-    /// Canonical dictionary form of the term for which this record is for.
-    pub lemma: String,
     /// ID of the [dictionary] from which the record was retrieved.
     ///
     /// [dictionary]: Dictionary
@@ -209,11 +169,11 @@ pub enum PopupAnchor {
 /// Popup was shown after a [`ShowPopupRequest`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShowPopupResponse {
-    /// Number of **characters** (not bytes) along the text that were scanned,
+    /// Number of **bytes** (not characters) along the text that were scanned,
     /// in order to look up records for them.
     ///
     /// You can use this to e.g. highlight the text that is being looked up.
-    pub chars_scanned: u64,
+    pub scan_len: u64,
 }
 
 /// Failed to show a popup using [`ShowPopupRequest`].
@@ -239,6 +199,7 @@ mod tests {
         T::default()
     }
 
+    #[expect(clippy::needless_pass_by_value, reason = "improves ergonomics")]
     fn round_trip<T: Serialize + DeserializeOwned>(original: T) {
         let json = serde_json::to_string_pretty(&original).unwrap();
         println!("{json}");
@@ -254,15 +215,9 @@ mod tests {
         }));
 
         round_trip(FromServer::Error { message: default() });
-        round_trip(FromServer::SyncLookupConfig {
-            lookup_config: default(),
-        });
-        round_trip(FromServer::SyncDictionaries {
-            dictionaries: vec![default()],
-        });
         round_trip(FromServer::from(HookSentence::default()));
         round_trip(FromServer::from(LookupResponse {
-            lemma: default(),
+            scan_len: default(),
             source: default(),
             term: Term::new(""),
             record: Record::GlossaryHtml(default()),

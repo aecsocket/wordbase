@@ -125,17 +125,14 @@ macro_rules! for_record_kinds {
 /// Metadata for a collection of [records] in a Wordbase server.
 ///
 /// This type only stores the metadata of a dictionary, such as the name and
-/// version. Related types:
-/// - [`Dictionary`]: data for a dictionary which has been imported into a
-///   server, storing stateful data such as whether the dictionary is enabled,
-///   and its user-configurable sorting position.
-/// - [`Record`]: single entry for a [term] in a dictionary.
+/// version. [`Record`] stores a single entry for a [term] in a dictionary,
+/// which is what you get when performing a lookup.
 ///
 /// [records]: Record
 /// [term]: Term
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct DictionaryMeta {
+pub struct Dictionary {
     /// Human-readable display name.
     ///
     /// This value is **not guaranteed to be unique** across a single server,
@@ -152,30 +149,6 @@ pub struct DictionaryMeta {
     pub description: Option<String>,
     /// Homepage URL where users can learn more about this dictionary.
     pub url: Option<String>,
-}
-
-/// Imported collection of [records] in a Wordbase server.
-///
-/// This stores the [`DictionaryMeta`] plus stateful data which may be
-/// configured by the user after import.
-///
-/// [records]: Record
-/// [terms]: Term
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct DictionaryState {
-    /// Unique identifier for this dictionary in the database.
-    pub id: DictionaryId,
-    /// What position [records] from this dictionary will be returned relative
-    /// to other dictionaries.
-    ///
-    /// A higher position means [records] from this dictionary will be returned
-    /// later, and should be displayed to the user with less priority.
-    ///
-    /// [records]: Record
-    pub position: i64,
-    /// Dictionary metadata.
-    pub meta: DictionaryMeta,
 }
 
 /// Opaque and unique identifier for a single [`Dictionary`] in a database.
@@ -280,12 +253,8 @@ impl Term {
     #[must_use]
     pub fn headword(&self) -> Option<&str> {
         match self {
-            Self::Headword(headword) => Some(headword),
+            Self::Headword(headword) | Self::Full { headword, .. } => Some(headword),
             Self::Reading(_) => None,
-            Self::Full {
-                headword,
-                reading: _,
-            } => Some(headword),
         }
     }
 
@@ -294,11 +263,7 @@ impl Term {
     pub fn reading(&self) -> Option<&str> {
         match self {
             Self::Headword(_) => None,
-            Self::Reading(reading) => Some(reading),
-            Self::Full {
-                headword: _,
-                reading,
-            } => Some(reading),
+            Self::Reading(reading) | Self::Full { reading, .. } => Some(reading),
         }
     }
 }
@@ -323,15 +288,9 @@ macro_rules! define_record_types { ($($kind:ident($data_ty:path)),* $(,)?) => {
 /// treated as non-exhaustive** (and are indeed marked `#[non_exhaustive]`)
 /// unless directly stated otherwise.
 ///
-/// Some kinds of records may be *dynamic records* - they may be sent by the
-/// server or not, [depending on what kinds of records the client requests][rk].
-/// Notably, fallback record kinds for [glossaries][glossary] implement this
-/// behavior - see that for more info.
-///
 /// [term]: Term
 /// [dictionary]: Dictionary
 /// [content]: format::yomitan::structured::Content
-/// [rk]: protocol::LookupRequest::record_kinds
 #[derive(Debug, Clone, From, Serialize, Deserialize)]
 #[expect(missing_docs, reason = "contained type of each variant provides docs")]
 #[non_exhaustive]
@@ -384,13 +343,3 @@ impl RecordType for $data_ty {
 }}
 
 for_record_kinds!(define_record_types);
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Profile {
-    pub id: ProfileId,
-    pub name: String,
-    pub enabled_dictionaries: Vec<DictionaryId>,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ProfileId(pub i64);

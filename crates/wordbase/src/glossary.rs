@@ -1,6 +1,6 @@
 //! [Record][record] kinds which provide a definition for a [term].
 //!
-//! This is the record kind which you are probably most interested.
+//! This is the record kind which you are probably most interested in.
 //! A glossary defines what a term actually means in human-readable terms - the
 //! natural meaning of "dictionary entry". However, the content is left
 //! deliberately undefined, and it is up to the dictionary to fill out what it

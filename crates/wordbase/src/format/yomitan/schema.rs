@@ -379,7 +379,7 @@ mod tests {
     #[test]
     fn case_2() {
         serde_json::from_str::<TermBank>(
-r##"
+r#"
 [
     [
         "される",
@@ -475,14 +475,14 @@ r##"
         26503,
         ""
     ]
-]"##
+]"#
         ).unwrap();
     }
 
     #[test]
     fn case_3() {
         serde_json::from_str::<GlossaryContent>(
-            r##"
+            r#"
 {
     "type": "structured-content",
     "content": [
@@ -510,7 +510,7 @@ r##"
         " 〘自〙《「…と━」の形で》ある意見や考えが、個人的なものではなく、一般的なものだとして提示する。一般に…と言われ（てい）る、…と考えられている。\n「一般に成功は難しいと━」\n「鶴は千年亀は万年生きると━」\n◆「する」の未然形＋助動詞「れる」から。\n",
         "謙譲の「お［ご］…する」に尊敬の「れる」を続けた「お［ご］…される」は誤り。助詞「を」を入れたり、「お［ご］…になる」「お［ご］…なさる」を使うのが適切。「課長が×ご説明された（○ご説明をされた）件ですが…」「先生が×お話しされた（○お話しになった）問題」"
     ]
-}"##,
+}"#,
         )
         .unwrap();
     }
@@ -518,7 +518,7 @@ r##"
     #[test]
     fn case_4() {
         serde_json::from_str::<structured::ImageElement>(
-            r##"
+            r#"
 {
     "tag": "img",
     "appearance": "monochrome",
@@ -529,7 +529,7 @@ r##"
     "collapsed": false,
     "background": false,
     "path": "meikyo2/B172.png"
-}"##,
+}"#,
         )
         .unwrap();
     }

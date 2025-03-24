@@ -7,7 +7,7 @@ use {
     wordbase::{
         RecordKind,
         hook::HookSentence,
-        protocol::{LookupRequest, PopupAnchor, ShowPopupRequest},
+        protocol::{LookupRequest, PopupAnchor, ShowPopupRequest, WindowFilter},
     },
     wordbase_client_tokio::SocketClient,
 };
@@ -93,14 +93,12 @@ fn list_dictionaries(client: &SocketClient) {
 
     let mut table = AsciiTable::default();
     table.column(0).set_header("ID").set_align(Align::Right);
-    table.column(1).set_header("On").set_align(Align::Left);
-    table.column(2).set_header("Name").set_align(Align::Left);
-    table.column(3).set_header("Version").set_align(Align::Left);
+    table.column(1).set_header("Name").set_align(Align::Left);
+    table.column(2).set_header("Version").set_align(Align::Left);
 
     table.print(dictionaries.values().map(|dictionary| {
         [
             format!("{}", dictionary.id.0),
-            format!("{}", if dictionary.enabled { "✔" } else { "" }),
             format!("{}", dictionary.meta.name),
             format!("{}", dictionary.meta.version),
         ]
@@ -116,7 +114,7 @@ async fn lookup(client: &mut SocketClient, text: String) -> Result<()> {
                 RecordKind::GlossaryPlainText,
                 RecordKind::GlossaryHtml,
                 RecordKind::GlossaryPlainText,
-                RecordKind::YomitanGlossary,
+                RecordKind::YomitanRecord,
             ],
         })
         .await
@@ -133,10 +131,12 @@ async fn lookup(client: &mut SocketClient, text: String) -> Result<()> {
 async fn show_popup(client: &mut SocketClient, popup: PopupCommand) -> Result<()> {
     let response = client
         .show_popup(ShowPopupRequest {
-            target_id: None,
-            target_pid: popup.target_pid,
-            target_title: popup.target_title,
-            target_wm_class: popup.target_wm_class,
+            target_window: WindowFilter {
+                id: None,
+                pid: popup.target_pid,
+                title: popup.target_title,
+                wm_class: popup.target_wm_class,
+            },
             origin: (popup.origin_x, popup.origin_y),
             anchor: PopupAnchor::TopLeft,
             text: popup.text,

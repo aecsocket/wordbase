@@ -3,30 +3,32 @@
 extern crate libadwaita as adw;
 extern crate webkit6 as webkit;
 
-// mod manager;
-mod overlay;
+mod manager;
+// mod overlay;
 mod platform;
-mod popup;
+// mod popup;
+mod db;
 
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use adw::{gio, glib, gtk, prelude::*};
 use anyhow::{Context, Result};
 use futures::TryFutureExt;
+use glib::ExitCode;
 use platform::Platform;
-use tokio::sync::broadcast;
-use tracing::{error, level_filters::LevelFilter};
+use sqlx::{
+    Pool, Sqlite,
+    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
+};
+use tokio::{fs, sync::broadcast};
+use tracing::{error, info, level_filters::LevelFilter};
 use tracing_subscriber::EnvFilter;
-use wordbase_server::CHANNEL_BUF_CAP;
 
-const APP_ID: &str = "com.github.aecsocket.Wordbase";
-
-fn gettext(s: &str) -> &str {
-    s
-}
+const APP_ID: &str = "io.github.aecsocket.Wordbase";
+const DB_PATH: &str = "wordbase.db";
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<ExitCode> {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::builder()
@@ -35,26 +37,27 @@ async fn main() -> Result<()> {
         )
         .init();
     glib::log_set_default_handler(glib::rust_log_handler);
-    let platform = Arc::<dyn Platform>::from(platform::default());
+    let platform = Arc::<dyn Platform>::from(
+        platform::default()
+            .await
+            .context("failed to set up platform-specific environment")?,
+    );
     let app = adw::Application::builder().application_id(APP_ID).build();
 
-    let data_dir = glib::user_data_dir();
-    let db_path = data_dir.join("wordbase.db");
+    let data_dir = glib::user_data_dir().join(APP_ID);
+    info!("Using {data_dir:?} as data directory");
+    fs::create_dir_all(&data_dir)
+        .await
+        .context("failed to create data directory")?;
+
+    let db_path = data_dir.join(DB_PATH);
     let db_path = db_path
         .to_str()
         .with_context(|| format!("invalid database path {db_path:?}"))?;
-    let db = wordbase_server::db::connect(db_path).await;
-
-    let config = Arc::<Config>::default();
-    let (send_event, _) = broadcast::channel::<wordbase_server::Event>(CHANNEL_BUF_CAP);
-    let (overlays, overlay_task) = overlay::Client::new(overlay::State {
-        config: config.clone(),
-        platform: platform.clone(),
-        app: app.clone(),
-        recv_event: send_event.subscribe(),
-    });
-
-    glib::spawn_future_local(overlay_task.inspect_err(|err| error!("Overlay task error: {err:?}")));
+    info!("Setting up database at {db_path:?}");
+    let db = db::setup(db_path)
+        .await
+        .context("failed to set up database")?;
 
     app.connect_activate(|app| {
         let window = adw::ApplicationWindow::builder()
@@ -63,11 +66,18 @@ async fn main() -> Result<()> {
             .default_width(360)
             .default_height(600)
             .build();
-        // window.set_content(Some(&content(window.upcast_ref())));
+
+        let content = manager::Manager::new();
+        window.set_content(Some(&content));
+
         window.present();
     });
 
-    app.run()
+    Ok(app.run())
+}
+
+fn gettext(s: &str) -> &str {
+    s
 }
 
 /*

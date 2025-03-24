@@ -11,7 +11,7 @@ use {
     tokio::sync::{Mutex, mpsc, oneshot},
     tracing::debug,
     wordbase::{
-        DictionaryId, DictionaryMeta, Term,
+        DictionaryId, Dictionary, Term,
         format::{
             self,
             yomitan::{self, GlossaryTag, ParseError, schema, structured},
@@ -36,7 +36,7 @@ where
         .context("failed to acquire import permit")?;
 
     let (parser, index) = yomitan::Parse::new(new_reader).context("failed to parse index")?;
-    let meta = DictionaryMeta {
+    let meta = Dictionary {
         name: index.title,
         version: index.revision,
         description: index.description,

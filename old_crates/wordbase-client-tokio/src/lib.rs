@@ -13,10 +13,10 @@ use {
         tungstenite::{Message, client::IntoClientRequest},
     },
     wordbase::{
-        DictionaryId, DictionaryState,
+        DictionaryId,
         hook::HookSentence,
         protocol::{
-            FromClient, FromServer, LookupConfig, LookupRequest, LookupResponse, ShowPopupError,
+            FromClient, FromServer, LookupRequest, LookupResponse, ShowPopupError,
             ShowPopupRequest, ShowPopupResponse,
         },
     },

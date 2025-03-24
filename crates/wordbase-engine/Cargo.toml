@@ -1,0 +1,28 @@
+[package]
+description = "Dictionary and word lookup service - service implementation"
+name = "wordbase-engine"
+version = "0.1.0"
+
+authors.workspace = true
+categories.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+
+[dependencies]
+wordbase = { workspace = true, features = ["parse-yomitan"] }
+
+anyhow = { workspace = true }
+futures = { workspace = true }
+rmp-serde = { workspace = true }
+serde = { workspace = true }
+sqlx = { workspace = true, features = ["runtime-tokio", "sqlite"] }
+tokio = { workspace = true, features = ["sync"] }

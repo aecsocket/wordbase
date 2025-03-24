@@ -17,7 +17,6 @@ all-features = true
 
 [dependencies]
 wordbase = { workspace = true }
-# wordbase-server = { workspace = true }
 
 anyhow = { workspace = true }
 derive_more = { workspace = true, features = ["display"] }
@@ -26,10 +25,14 @@ form_urlencoded = { workspace = true }
 futures = { workspace = true }
 glib = { workspace = true, features = ["log"] }
 gtk4 = { workspace = true, features = ["gnome_47", "blueprint"] }
-libadwaita = { workspace = true, features = ["v1_6"] }
+libadwaita = { workspace = true, features = ["v1_7"] }
 open = { workspace = true }
 rand = { workspace = true }
-tokio = { workspace = true }
+rmp-serde = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sqlx = { workspace = true, features = ["runtime-tokio", "sqlite"] }
+tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 webkit6 = { workspace = true }

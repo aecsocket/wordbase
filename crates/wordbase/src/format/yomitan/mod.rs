@@ -10,6 +10,7 @@ pub mod structured;
 mod parse;
 #[cfg(feature = "parse-yomitan")]
 pub use parse::*;
+
 use serde::{Deserialize, Serialize};
 
 /// Yomitan-specific record for a word.

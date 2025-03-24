@@ -1,8 +1,5 @@
 use anyhow::{Context, Result};
 use sqlx::{Executor, Sqlite};
-use wordbase::ProfileId;
-
-use crate::Config;
 
 pub async fn get<'e, 'c: 'e, E>(executor: E) -> Result<Config>
 where

@@ -19,7 +19,7 @@ use {
     wordbase::{
         DictionaryState,
         hook::HookSentence,
-        protocol::{DEFAULT_PORT, LookupConfig},
+        protocol::{DEFAULT_WS_PORT, LookupConfig},
     },
 };
 
@@ -37,7 +37,7 @@ struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            listen_addr: SocketAddr::new(Ipv4Addr::LOCALHOST.into(), DEFAULT_PORT),
+            listen_addr: SocketAddr::new(Ipv4Addr::LOCALHOST.into(), DEFAULT_WS_PORT),
             lookup: LookupConfig::default(),
             max_db_connections: 8,
             max_concurrent_imports: 4,
