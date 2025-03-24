@@ -1,30 +1,15 @@
 use {
     anyhow::{Context, Result},
     futures::{StreamExt, TryStreamExt},
-    serde::{Deserialize, Serialize},
     sqlx::{Executor, Sqlite},
-    wordbase::{Dictionary, DictionaryId, protocol::NotFound},
+    wordbase::{DictionaryId, DictionaryMeta, DictionaryState, protocol::NotFound},
 };
 
-#[derive(Debug, Serialize, Deserialize)]
-struct DictionaryMeta<'a> {
-    name: &'a str,
-    version: &'a str,
-    description: Option<&'a str>,
-    url: Option<&'a str>,
-}
-
-pub async fn insert<'e, 'c: 'e, E>(executor: E, dictionary: &Dictionary) -> Result<DictionaryId>
+pub async fn insert<'e, 'c: 'e, E>(executor: E, meta: &DictionaryMeta) -> Result<DictionaryId>
 where
     E: 'e + Executor<'c, Database = Sqlite>,
 {
-    let meta = serde_json::to_string(&DictionaryMeta {
-        name: &dictionary.name,
-        version: &dictionary.version,
-        description: dictionary.description.as_deref(),
-        url: dictionary.url.as_deref(),
-    })
-    .context("failed to serialize dictionary meta")?;
+    let meta = serde_json::to_string(meta).context("failed to serialize dictionary meta")?;
     let result = sqlx::query!(
         "INSERT INTO dictionary (position, meta)
         VALUES (
@@ -51,7 +36,7 @@ where
     Ok(result > 0)
 }
 
-pub async fn all<'e, 'c: 'e, E>(executor: E) -> Result<Vec<Dictionary>>
+pub async fn all<'e, 'c: 'e, E>(executor: E) -> Result<Vec<DictionaryState>>
 where
     E: 'e + Executor<'c, Database = Sqlite>,
 {
@@ -65,12 +50,10 @@ where
         let record = record.context("failed to fetch record")?;
         let meta = serde_json::from_str::<DictionaryMeta>(&record.meta)
             .context("failed to deserialize dictionary meta")?;
-        anyhow::Ok(Dictionary {
+        anyhow::Ok(DictionaryState {
             id: DictionaryId(record.id),
-            name: meta.name.to_owned(),
-            version: meta.version.to_owned(),
-            description: meta.description.map(ToOwned::to_owned),
-            url: meta.url.map(ToOwned::to_owned),
+            position: record.position,
+            meta,
         })
     })
     .try_collect::<Vec<_>>()

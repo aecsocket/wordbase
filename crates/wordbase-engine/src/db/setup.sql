@@ -1,8 +1,10 @@
 CREATE TABLE IF NOT EXISTS profile (
     id      INTEGER PRIMARY KEY AUTOINCREMENT,
-    meta    TEXT    NOT NULL CHECK (json_valid(meta)) DEFAULT '{}'
+    meta    TEXT    NOT NULL CHECK (json_valid(meta))
 );
-INSERT OR IGNORE INTO profile DEFAULT VALUES;
+INSERT INTO profile (meta)
+SELECT '{}'
+WHERE NOT EXISTS (SELECT 1 FROM profile);
 CREATE TRIGGER IF NOT EXISTS assert_at_least_one_profile
 BEFORE DELETE ON profile
 BEGIN

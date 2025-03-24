@@ -1,11 +1,8 @@
 use {
-    crate::{CHANNEL_BUF_CAP, db},
-    anyhow::{Context, Result},
-    futures::{Stream, StreamExt, never::Never},
+    crate::db,
+    anyhow::Result,
+    futures::Stream,
     sqlx::{Pool, Sqlite},
-    tokio::sync::mpsc,
-    tokio_stream::wrappers::ReceiverStream,
-    tracing::debug,
     wordbase::protocol::{LookupRequest, LookupResponse},
 };
 
@@ -15,7 +12,7 @@ pub struct Lookups {
 }
 
 impl Lookups {
-    pub(super) fn new(db: Pool<Sqlite>) -> Self {
+    pub(super) const fn new(db: Pool<Sqlite>) -> Self {
         Self { db }
     }
 
@@ -24,7 +21,6 @@ impl Lookups {
         request: LookupRequest,
     ) -> impl Stream<Item = Result<LookupResponse>> {
         let lemma = &request.text;
-        let mut responses = db::term::lookup(lemma, &request.record_kinds);
-        responses.fetch(&self.db)
+        db::term::lookup(&self.db, lemma, &request.record_kinds).await
     }
 }

@@ -11,7 +11,7 @@ use {
     tokio::sync::{Mutex, mpsc, oneshot},
     tracing::debug,
     wordbase::{
-        Dictionary, DictionaryId, Term,
+        DictionaryId, DictionaryMeta, Term,
         format::{
             self,
             yomitan::{self, GlossaryTag, ParseError, schema, structured},
@@ -29,8 +29,9 @@ impl Imports {
     where
         ParseError<E>: std::error::Error + Send + Sync + 'static,
     {
-        let (send_tracker, recv_tracker) = oneshot::channel();
-        import(self, new_reader, send_tracker).await?;
+        todo!()
+        // let (send_tracker, recv_tracker) = oneshot::channel();
+        // import(self, new_reader, send_tracker).await?;
     }
 }
 
@@ -49,7 +50,7 @@ where
         .context("failed to acquire import permit")?;
 
     let (parser, index) = yomitan::Parse::new(new_reader).context("failed to parse index")?;
-    let meta = Dictionary {
+    let meta = DictionaryMeta {
         name: index.title,
         version: index.revision,
         description: index.description,
@@ -66,10 +67,10 @@ where
         "{:?} version {:?} - {banks_len} items",
         meta.name, meta.version
     );
-    let (send_frac_done, recv_frac_done) = mpsc::channel(CHANNEL_BUF_CAP);
+    let (send_progress, recv_progress) = mpsc::channel(CHANNEL_BUF_CAP);
     _ = send_tracker.send(ImportTracker {
         meta: meta.clone(),
-        recv_frac_done,
+        recv_progress,
     });
 
     let already_exists = db::dictionary::exists_by_name(&imports.db, &meta.name)
@@ -89,7 +90,7 @@ where
     let notify_parsed = || {
         let banks_done = banks_done.fetch_add(1, atomic::Ordering::SeqCst) + 1;
         let frac_done = 0.5 * ((banks_done as f64) / (banks_len as f64));
-        _ = send_frac_done.try_send(frac_done);
+        _ = send_progress.try_send(frac_done);
     };
     parser
         .run(
@@ -151,7 +152,7 @@ where
         let records_done = records_done.fetch_add(1, atomic::Ordering::SeqCst) + 1;
         if records_done % 1000 == 0 {
             let frac_done = 0.5 + 0.5 * ((records_done as f64) / (records_len as f64));
-            _ = send_frac_done.try_send(frac_done);
+            _ = send_progress.try_send(frac_done);
         }
     };
     let mut scratch = Vec::<u8>::new();
@@ -170,7 +171,7 @@ where
             .with_context(|| format!("failed to import term meta {headword:?}"))?;
         notify_inserted();
     }
-    drop(send_frac_done);
+    drop(send_progress);
 
     tx.commit().await.context("failed to commit transaction")?;
     Ok(())

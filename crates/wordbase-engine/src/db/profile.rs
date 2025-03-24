@@ -1,20 +1,10 @@
-use std::collections::hash_map::Entry;
-
 use anyhow::{Context, Result};
-use foldhash::{HashMap, HashMapExt};
-use serde::{Deserialize, Serialize};
 use sqlx::{Executor, Pool, Sqlite};
 use tokio_stream::StreamExt;
-use wordbase::{DictionaryId, Profile, ProfileId, protocol::NotFound};
+use wordbase::{DictionaryId, ProfileId, ProfileMeta, ProfileState, protocol::NotFound};
 
-#[derive(Debug, Serialize, Deserialize)]
-struct ProfileMeta<'a> {
-    name: &'a str,
-}
-
-pub async fn new(db: &Pool<Sqlite>, name: &str) -> Result<ProfileId> {
-    let meta =
-        serde_json::to_string(&ProfileMeta { name }).context("failed to serialize profile meta")?;
+pub async fn create(db: &Pool<Sqlite>, meta: &ProfileMeta) -> Result<ProfileId> {
+    let meta = serde_json::to_string(meta).context("failed to serialize profile meta")?;
 
     let mut tx = db.begin().await.context("failed to begin transaction")?;
     let current_profile_id = current_id(&mut *tx)
@@ -42,21 +32,11 @@ pub async fn new(db: &Pool<Sqlite>, name: &str) -> Result<ProfileId> {
     Ok(ProfileId(new_profile_id))
 }
 
-pub async fn current_id<'e, 'c: 'e, E>(executor: E) -> Result<ProfileId>
+pub async fn all<'e, 'c: 'e, E>(executor: E) -> Result<Vec<ProfileState>>
 where
     E: 'e + Executor<'c, Database = Sqlite>,
 {
-    let id = sqlx::query_scalar!("SELECT current_profile FROM config")
-        .fetch_one(executor)
-        .await?;
-    Ok(ProfileId(id))
-}
-
-pub async fn all<'e, 'c: 'e, E>(executor: E) -> Result<HashMap<ProfileId, Profile>>
-where
-    E: 'e + Executor<'c, Database = Sqlite>,
-{
-    let mut profiles = HashMap::<ProfileId, Profile>::new();
+    let mut profiles = Vec::<ProfileState>::new();
 
     let mut records = sqlx::query!(
         "SELECT profile.id, profile.meta, ped.dictionary
@@ -67,21 +47,26 @@ where
     while let Some(record) = records.next().await {
         let record = record.context("failed to fetch record")?;
         let id = ProfileId(record.id);
-        let entry = match profiles.entry(id) {
-            Entry::Occupied(entry) => entry.into_mut(),
-            Entry::Vacant(entry) => {
+
+        let profile_index =
+            if let Some(index) = profiles.iter_mut().position(|profile| profile.id == id) {
+                index
+            } else {
+                let index = profiles.len();
                 let meta = serde_json::from_str::<ProfileMeta>(&record.meta)
                     .context("failed to deserialize profile meta")?;
-                entry.insert(Profile {
+                profiles.push(ProfileState {
                     id,
-                    name: meta.name.into(),
+                    meta,
                     enabled_dictionaries: Vec::new(),
-                })
-            }
-        };
+                });
+                index
+            };
 
         if let Some(dictionary) = record.dictionary {
-            entry.enabled_dictionaries.push(DictionaryId(dictionary));
+            profiles[profile_index]
+                .enabled_dictionaries
+                .push(DictionaryId(dictionary));
         }
     }
 
@@ -107,4 +92,28 @@ where
     } else {
         Err(NotFound)
     })
+}
+
+pub async fn current_id<'e, 'c: 'e, E>(executor: E) -> Result<ProfileId>
+where
+    E: 'e + Executor<'c, Database = Sqlite>,
+{
+    let id = sqlx::query_scalar!("SELECT current_profile FROM config")
+        .fetch_one(executor)
+        .await?;
+    Ok(ProfileId(id))
+}
+
+pub async fn set_current_id<'e, 'c: 'e, E>(
+    executor: E,
+    profile_id: ProfileId,
+) -> Result<Result<(), NotFound>>
+where
+    E: 'e + Executor<'c, Database = Sqlite>,
+{
+    todo!()
+    // let id = sqlx::query_scalar!("SELECT current_profile FROM config")
+    //     .fetch_one(executor)
+    //     .await?;
+    // Ok(ProfileId(id))
 }

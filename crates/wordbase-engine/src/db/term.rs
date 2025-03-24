@@ -52,7 +52,14 @@ where
     Ok(())
 }
 
-pub fn lookup<'args>(lemma: &'args str, record_kinds: &'args [RecordKind]) -> Lookup<'args> {
+pub async fn lookup<'c, 'e: 'c, E>(
+    executor: E,
+    lemma: &str,
+    record_kinds: &[RecordKind],
+) -> impl Stream<Item = Result<LookupResponse>> + use<E>
+where
+    E: 'e + Executor<'c, Database = Sqlite>,
+{
     let mut query = QueryBuilder::new(
         "SELECT source, headword, reading, kind, data
         FROM term
@@ -75,71 +82,59 @@ pub fn lookup<'args>(lemma: &'args str, record_kinds: &'args [RecordKind]) -> Lo
     }
     query.push("ORDER BY dictionary.position");
 
-    Lookup { query }
-}
+    let results = query.build().fetch(executor).map(|record| {
+        struct QueryRecord {
+            source: i64,
+            headword: Option<String>,
+            reading: Option<String>,
+            kind: i64,
+            data: Vec<u8>,
+        }
 
-pub struct Lookup<'args> {
-    query: QueryBuilder<'args, Sqlite>,
-}
+        let row = record.context("failed to fetch record")?;
+        let record = QueryRecord {
+            source: row.get(0),
+            headword: row.get(1),
+            reading: row.get(2),
+            kind: row.get(3),
+            data: row.get(4),
+        };
 
-impl Lookup<'_> {
-    pub fn fetch<'l, 'c: 'l, E>(
-        &'l mut self,
-        executor: E,
-    ) -> impl Stream<Item = Result<LookupResponse>> + 'l
-    where
-        E: Executor<'c, Database = Sqlite>,
-    {
-        self.query.build().fetch(executor).map(|record| {
-            struct QueryRecord {
-                source: i64,
-                headword: Option<String>,
-                reading: Option<String>,
-                kind: i64,
-                data: Vec<u8>,
+        let source = DictionaryId(record.source);
+        let term = Term::from_pair(record.headword, record.reading)
+            .context("found record where both headword and reading are null")?;
+
+        macro_rules! deserialize_record { ($($kind:ident($data_ty:path)),* $(,)?) => {{
+            #[allow(
+                non_upper_case_globals,
+                reason = "cannot capitalize ident in macro invocation"
+            )]
+            mod discrim {
+                use super::RecordKind;
+
+                $(pub const $kind: u16 = RecordKind::$kind as u16;)*
             }
 
-            let row = record.context("failed to fetch record")?;
-            let record = QueryRecord {
-                source: row.get(0),
-                headword: row.get(1),
-                reading: row.get(2),
-                kind: row.get(3),
-                data: row.get(4),
-            };
+            match u16::try_from(record.kind) {
+                $(Ok(discrim::$kind) => {
+                    let record = deserialize(&record.data)
+                        .with_context(|| format!("failed to deserialize {} record", stringify!($kind)))?;
+                    Record::$kind(record)
+                })*
+                _ => bail!("invalid record kind {}", record.kind),
+            }
+        }}}
 
-            let source = DictionaryId(record.source);
-            let term = Term::from_pair(record.headword, record.reading)
-                .context("found record where both headword and reading are null")?;
+        let record = for_record_kinds!(deserialize_record);
 
-            macro_rules! deserialize_record { ($($kind:ident($data_ty:path)),* $(,)?) => {{
-                #[allow(
-                    non_upper_case_globals,
-                    reason = "cannot capitalize ident in macro invocation"
-                )]
-                mod discrim {
-                    use super::RecordKind;
-
-                    $(pub const $kind: u16 = RecordKind::$kind as u16;)*
-                }
-
-                match u16::try_from(record.kind) {
-                    $(Ok(discrim::$kind) => {
-                        let record = deserialize(&record.data)
-                            .with_context(|| format!("failed to deserialize {} record", stringify!($kind)))?;
-                        Record::$kind(record)
-                    })*
-                    _ => bail!("invalid record kind {}", record.kind),
-                }
-            }}}
-
-            let record = for_record_kinds!(deserialize_record);
-
-            Ok(LookupResponse {
-                source,
-                term,
-                record,
-            })
+        Ok(LookupResponse {
+            source,
+            term,
+            record,
         })
-    }
+    });
+
+    // TODO: we need async iterator generators!
+    let results = results.collect::<Vec<_>>().await;
+    futures::stream::iter(results)
 }

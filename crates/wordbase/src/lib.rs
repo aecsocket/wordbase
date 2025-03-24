@@ -128,12 +128,14 @@ macro_rules! for_record_kinds {
 /// version. [`Record`] stores a single entry for a [term] in a dictionary,
 /// which is what you get when performing a lookup.
 ///
+/// This does not necessarily represent an imported dictionary - for that, see
+/// [`DictionaryState`].
+///
 /// [records]: Record
 /// [term]: Term
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Dictionary {
-    pub id: DictionaryId,
+pub struct DictionaryMeta {
     /// Human-readable display name.
     ///
     /// This value is **not guaranteed to be unique** across a single server,
@@ -150,6 +152,24 @@ pub struct Dictionary {
     pub description: Option<String>,
     /// Homepage URL where users can learn more about this dictionary.
     pub url: Option<String>,
+}
+
+/// State of an imported dictionary in a Wordbase server.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DictionaryState {
+    /// Unique identifier for this dictionary in the database.
+    pub id: DictionaryId,
+    /// What position [records] from this dictionary will be returned relative
+    /// to other dictionaries.
+    ///
+    /// A higher position means [records] from this dictionary will be returned
+    /// later, and should be displayed to the user with less priority.
+    ///
+    /// [records]: Record
+    pub position: i64,
+    /// Metadata.
+    pub meta: DictionaryMeta,
 }
 
 /// Opaque and unique identifier for a single [`Dictionary`] in a database.
@@ -342,8 +362,15 @@ for_record_kinds!(define_record_types);
 pub struct ProfileId(pub i64);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Profile {
+#[serde(deny_unknown_fields)]
+pub struct ProfileMeta {
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProfileState {
     pub id: ProfileId,
-    pub name: String,
+    pub meta: ProfileMeta,
     pub enabled_dictionaries: Vec<DictionaryId>,
 }

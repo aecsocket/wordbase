@@ -11,14 +11,15 @@ use {
     std::path::Path,
 };
 
-pub async fn setup(path: &Path) -> Result<Pool<Sqlite>> {
+pub async fn setup(path: &Path, max_db_connections: u32) -> Result<Pool<Sqlite>> {
     let db = SqlitePoolOptions::new()
-        .max_connections(8)
+        .max_connections(max_db_connections)
         .connect_with(
             SqliteConnectOptions::new()
                 .filename(path)
                 .create_if_missing(true)
-                .journal_mode(SqliteJournalMode::Wal),
+                .journal_mode(SqliteJournalMode::Wal)
+                .pragma("foreign_keys", "ON"),
         )
         .await
         .context("failed to connect to database")?;
