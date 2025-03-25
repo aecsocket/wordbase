@@ -8,7 +8,7 @@ use {
     tokio::{fs, sync::oneshot},
     tracing::{info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
-    wordbase::DictionaryId,
+    wordbase::{DictionaryId, RecordKind},
     wordbase_engine::{Config, Engine, import::ImportTracker},
 };
 
@@ -28,9 +28,15 @@ enum Command {
         command: ProfileCommand,
     },
     /// View and manage dictionaries
+    #[command(alias = "dic")]
     Dictionary {
         #[command(subcommand)]
         command: DictionaryCommand,
+    },
+    /// Perform a text lookup
+    Lookup {
+        /// Text to lookup
+        text: String,
     },
 }
 
@@ -53,6 +59,16 @@ enum DictionaryCommand {
     Import {
         /// Path to the dictionary file
         path: PathBuf,
+    },
+    /// Enable a dictionary for the current profile
+    Enable {
+        /// Dictionary ID
+        id: i64,
+    },
+    /// Disable a dictionary for the current profile
+    Disable {
+        /// Dictionary ID
+        id: i64,
     },
     /// Set the position of a dictionary in the ordering
     Position {
@@ -118,11 +134,18 @@ async fn main() -> Result<()> {
             command: DictionaryCommand::Import { path },
         } => dictionary_import(engine, path).await?,
         Command::Dictionary {
+            command: DictionaryCommand::Enable { id },
+        } => dictionary_enable(engine, id).await?,
+        Command::Dictionary {
+            command: DictionaryCommand::Disable { id },
+        } => dictionary_disable(engine, id).await?,
+        Command::Dictionary {
             command: DictionaryCommand::Position { id, position },
         } => dictionary_position(engine, id, position).await?,
         Command::Dictionary {
             command: DictionaryCommand::Rm { id },
         } => dictionary_rm(engine, id).await?,
+        Command::Lookup { text } => lookup(engine, text).await?,
     }
 
     Ok(())
@@ -140,7 +163,7 @@ async fn profile_ls(engine: Engine) -> Result<()> {
         .map(|profile| {
             vec![
                 format!("{}", profile.id.0),
-                profile.meta.name.unwrap_or_default(),
+                profile.meta.name.unwrap_or_else(|| "(default)".into()),
             ]
         })
         .collect::<Vec<_>>();
@@ -150,10 +173,11 @@ async fn profile_ls(engine: Engine) -> Result<()> {
 
 async fn dictionary_ls(engine: Engine) -> Result<()> {
     let mut table = AsciiTable::default();
-    table.column(0).set_header("Pos");
-    table.column(1).set_header("ID");
-    table.column(2).set_header("Name");
-    table.column(3).set_header("Version");
+    table.column(0).set_header("On");
+    table.column(1).set_header("Pos");
+    table.column(2).set_header("ID");
+    table.column(3).set_header("Name");
+    table.column(4).set_header("Version");
 
     let data = engine
         .dictionaries()
@@ -161,6 +185,7 @@ async fn dictionary_ls(engine: Engine) -> Result<()> {
         .into_iter()
         .map(|dictionary| {
             vec![
+                (if dictionary.enabled { "✔" } else { " " }).to_string(),
                 format!("{}", dictionary.position),
                 format!("{}", dictionary.id.0),
                 dictionary.meta.name,
@@ -180,8 +205,14 @@ async fn dictionary_info(engine: Engine, id: i64) -> Result<()> {
         dictionary.meta.name, dictionary.meta.version
     );
     println!(
-        "  ID {} | Position {}",
-        dictionary.id.0, dictionary.position
+        "  {} | ID {} | Position {}",
+        if dictionary.enabled {
+            "Enabled"
+        } else {
+            "Disabled "
+        },
+        dictionary.id.0,
+        dictionary.position
     );
 
     if let Some(url) = dictionary.meta.url {
@@ -230,6 +261,18 @@ async fn dictionary_import(engine: Engine, path: PathBuf) -> Result<()> {
     Ok(())
 }
 
+async fn dictionary_enable(engine: Engine, id: i64) -> Result<()> {
+    let id = DictionaryId(id);
+    engine.enable_dictionary(id).await?;
+    Ok(())
+}
+
+async fn dictionary_disable(engine: Engine, id: i64) -> Result<()> {
+    let id = DictionaryId(id);
+    engine.disable_dictionary(id).await?;
+    Ok(())
+}
+
 async fn dictionary_position(engine: Engine, id: i64, position: i64) -> Result<()> {
     let id = DictionaryId(id);
     engine.set_dictionary_position(id, position).await??;
@@ -239,5 +282,11 @@ async fn dictionary_position(engine: Engine, id: i64, position: i64) -> Result<(
 async fn dictionary_rm(engine: Engine, id: i64) -> Result<()> {
     let id = DictionaryId(id);
     engine.delete_dictionary(id).await??;
+    Ok(())
+}
+
+async fn lookup(engine: Engine, text: String) -> Result<()> {
+    let records = engine.lookup(text, RecordKind::ALL).await?;
+    println!("{records:#?}");
     Ok(())
 }

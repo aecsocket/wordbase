@@ -1,19 +1,18 @@
 use {
     crate::{Engine, db},
     anyhow::{Context, Result, bail},
-    futures::{Stream, StreamExt},
+    futures::{StreamExt, TryStreamExt},
     sqlx::{QueryBuilder, Row},
-    wordbase::{
-        DictionaryId, Record, RecordKind, Term, for_record_kinds, protocol::LookupResponse,
-    },
+    std::borrow::Borrow,
+    wordbase::{DictionaryId, Record, RecordKind, Term, for_record_kinds, protocol::RecordLookup},
 };
 
 impl Engine {
     pub async fn lookup(
         &self,
         text: impl Into<String>,
-        record_kinds: impl IntoIterator<Item = RecordKind>,
-    ) -> impl Stream<Item = Result<LookupResponse>> {
+        record_kinds: impl IntoIterator<Item = impl Borrow<RecordKind>>,
+    ) -> Result<Vec<RecordLookup>> {
         let text = text.into();
         // TODO: lemmatization
         let lemma = &text;
@@ -34,13 +33,13 @@ impl Engine {
         {
             let mut query = query.separated(", ");
             for record_kind in record_kinds {
-                query.push_bind(record_kind as u16);
+                query.push_bind(*record_kind.borrow() as u16);
             }
             query.push_unseparated(") ");
         }
         query.push("ORDER BY dictionary.position");
 
-        let results = query.build().fetch(&self.db).map(|record| {
+        query.build().fetch(&self.db).map(|record| {
             struct QueryRecord {
                 source: i64,
                 headword: Option<String>,
@@ -85,15 +84,13 @@ impl Engine {
 
             let record = for_record_kinds!(deserialize_record);
 
-            Ok(LookupResponse {
+            Ok(RecordLookup {
                 source,
                 term,
                 record,
             })
-        });
-
-        // TODO: we need async iterator generators!
-        let results = results.collect::<Vec<_>>().await;
-        futures::stream::iter(results)
+        })
+        .try_collect()
+        .await
     }
 }

@@ -168,6 +168,9 @@ pub struct DictionaryState {
     ///
     /// [records]: Record
     pub position: i64,
+    /// Whether this dictionary is enabled for record lookups under the current
+    /// profile.
+    pub enabled: bool,
     /// Metadata.
     pub meta: DictionaryMeta,
 }
@@ -326,6 +329,11 @@ impl Record {
 #[repr(u16)]
 #[non_exhaustive]
 pub enum RecordKind { $($kind,)* }
+
+impl RecordKind {
+    /// Slice of all known record kinds.
+    pub const ALL: &[Self] = &[ $(Self::$kind,)* ];
+}
 
 mod sealed {
     pub trait RecordType {}

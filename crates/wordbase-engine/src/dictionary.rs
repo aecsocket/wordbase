@@ -8,9 +8,16 @@ use crate::{Engine, Event};
 impl Engine {
     pub async fn dictionaries(&self) -> Result<Vec<DictionaryState>> {
         sqlx::query!(
-            "SELECT id, position, meta
+            r#"SELECT
+                dictionary.id,
+                dictionary.position,
+                dictionary.meta,
+                ped.dictionary IS NOT NULL AS "enabled!: bool"
             FROM dictionary
-            ORDER BY position"
+            LEFT JOIN profile_enabled_dictionary ped
+                ON dictionary.id = ped.dictionary
+                AND ped.profile = (SELECT current_profile FROM config)
+            ORDER BY position"#
         )
         .fetch(&self.db)
         .map(|record| {
@@ -20,6 +27,7 @@ impl Engine {
             anyhow::Ok(DictionaryState {
                 id: DictionaryId(record.id),
                 position: record.position,
+                enabled: record.enabled,
                 meta,
             })
         })
@@ -29,7 +37,17 @@ impl Engine {
 
     pub async fn dictionary(&self, id: DictionaryId) -> Result<Result<DictionaryState, NotFound>> {
         let record = sqlx::query!(
-            "SELECT id, position, meta FROM dictionary WHERE id = $1 LIMIT 1",
+            r#"SELECT
+                dictionary.id,
+                dictionary.position,
+                dictionary.meta,
+                ped.dictionary IS NOT NULL AS "enabled!: bool"
+            FROM dictionary
+            LEFT JOIN profile_enabled_dictionary ped
+                ON dictionary.id = ped.dictionary
+                AND ped.profile = (SELECT current_profile FROM config)
+            WHERE id = $1
+            LIMIT 1"#,
             id.0
         )
         .fetch_one(&self.db)
@@ -41,12 +59,37 @@ impl Engine {
                 Ok(Ok(DictionaryState {
                     id: DictionaryId(record.id),
                     position: record.position,
+                    enabled: record.enabled,
                     meta,
                 }))
             }
             Err(sqlx::Error::RowNotFound) => Ok(Err(NotFound)),
             Err(err) => Err(anyhow::Error::new(err)),
         }
+    }
+
+    pub async fn enable_dictionary(&self, id: DictionaryId) -> Result<()> {
+        sqlx::query!(
+            "INSERT OR IGNORE INTO profile_enabled_dictionary (profile, dictionary)
+            VALUES ((SELECT current_profile FROM config), $1)",
+            id.0,
+        )
+        .execute(&self.db)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn disable_dictionary(&self, id: DictionaryId) -> Result<()> {
+        sqlx::query!(
+            "DELETE FROM profile_enabled_dictionary
+            WHERE
+                profile = (SELECT current_profile FROM config)
+                AND dictionary = $1",
+            id.0
+        )
+        .execute(&self.db)
+        .await?;
+        Ok(())
     }
 
     pub async fn set_dictionary_position(

@@ -44,7 +44,7 @@ pub enum FromServer {
     /// Server sends a response to [`FromClient::Lookup`] containing a single
     /// record.
     #[from]
-    Lookup(LookupResponse),
+    Lookup(RecordLookup),
     /// Server sends a response to [`FromClient::Lookup`] marking that all
     /// records have been sent.
     LookupDone,
@@ -82,7 +82,7 @@ pub struct LookupRequest {
 
 /// Single record returned by the server in response to a [`LookupRequest`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LookupResponse {
+pub struct RecordLookup {
     /// ID of the [dictionary] from which the record was retrieved.
     ///
     /// [dictionary]: Dictionary
@@ -215,7 +215,7 @@ mod tests {
 
         round_trip(FromServer::Error { message: default() });
         round_trip(FromServer::from(HookSentence::default()));
-        round_trip(FromServer::from(LookupResponse {
+        round_trip(FromServer::from(RecordLookup {
             source: default(),
             term: Term::new(""),
             record: Record::GlossaryHtml(default()),

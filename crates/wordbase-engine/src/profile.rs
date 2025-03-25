@@ -18,7 +18,8 @@ impl Engine {
         let mut records = sqlx::query!(
             "SELECT profile.id, profile.meta, ped.dictionary
             FROM profile
-            LEFT JOIN profile_enabled_dictionary ped ON profile.id = ped.profile"
+            LEFT JOIN profile_enabled_dictionary ped ON profile.id = ped.profile
+            ORDER BY profile.id"
         )
         .fetch(&self.db);
         while let Some(record) = records.next().await {
