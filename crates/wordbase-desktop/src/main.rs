@@ -4,6 +4,7 @@
     clippy::new_without_default,
     reason = "`gtk` types don't follow this convention"
 )]
+#![allow(clippy::future_not_send, reason = "`gtk` types aren't `Send`")]
 
 extern crate libadwaita as adw;
 extern crate webkit6 as webkit;
@@ -11,12 +12,15 @@ extern crate webkit6 as webkit;
 mod manager;
 // mod platform;
 
-use adw::{gio, glib, gtk, prelude::*};
+use std::sync::Arc;
+
+use adw::{glib, prelude::*};
 use anyhow::{Context, Result};
 use glib::ExitCode;
-use tokio::fs;
+use tokio::{fs, sync::oneshot};
 use tracing::{error, info, level_filters::LevelFilter};
 use tracing_subscriber::EnvFilter;
+use wordbase_engine::{Engine, platform::NoopPlatform};
 
 const APP_ID: &str = "io.github.aecsocket.Wordbase";
 const DB_PATH: &str = "wordbase.db";
@@ -40,32 +44,54 @@ async fn main() -> Result<ExitCode> {
         .context("failed to create data directory")?;
 
     let db_path = data_dir.join(DB_PATH);
-    let (engine, engine_task) = wordbase_engine::run(&wordbase_engine::Config {
-        db_path,
-        max_db_connections: 8,
-        max_concurrent_imports: 4,
-    })
+    let (engine, engine_task) = wordbase_engine::run(
+        &wordbase_engine::Config {
+            db_path,
+            max_db_connections: 8,
+            max_concurrent_imports: 4,
+        },
+        Arc::new(NoopPlatform),
+    )
     .await
     .context("failed to create engine")?;
-    tokio::spawn(async move {
-        info!("Started engine");
-        let Err(err) = engine_task.await;
-        error!("Engine error: {err:?}");
+    // tokio::spawn(async move {
+    //     info!("Started engine");
+    //     let Err(err) = engine_task.await;
+    //     error!("Engine error: {err:?}");
+    // });
+
+    let data = fs::read("/home/dev/dictionaries/jmnedict.zip").await?;
+    let (send_tracker, recv_tracker) = oneshot::channel();
+
+    info!("Importing dict");
+    let (result, _) = tokio::join!(engine.import_dictionary(&data, send_tracker), async move {
+        let mut tracker = recv_tracker.await.unwrap();
+        while let Some(progress) = tracker.recv_progress.recv().await {
+            info!("Progress: {:.02}%", progress * 100.0);
+        }
     });
+    info!("Result: {result:?}");
 
-    app.connect_activate(move |app| {
-        let window = adw::ApplicationWindow::builder()
-            .application(app)
-            .title(gettext("Wordbase"))
-            .default_width(360)
-            .default_height(600)
-            .build();
+    {
+        let engine = engine.clone();
+        app.connect_activate(move |app| {
+            let window = adw::ApplicationWindow::builder()
+                .application(app)
+                .title(gettext("Wordbase"))
+                .default_width(360)
+                .default_height(600)
+                .build();
 
-        let content = manager::ui(engine.shared.clone(), window.clone().upcast());
-        window.set_content(Some(&content));
-
-        window.present();
-    });
+            let engine = engine.clone();
+            glib::spawn_future_local(async move {
+                let content = manager::ui(engine.clone(), window.clone().upcast())
+                    .await
+                    .unwrap();
+                window.set_content(Some(&content));
+                window.present();
+            });
+        });
+    }
 
     Ok(app.run())
 }

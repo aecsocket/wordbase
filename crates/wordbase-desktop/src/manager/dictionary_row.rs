@@ -7,9 +7,11 @@ mod imp {
     #[template(file = "src/manager/dictionary_row.blp")]
     pub struct DictionaryRow {
         #[template_child]
-        pub enabled: TemplateChild<gtk::Switch>,
+        pub enabled_bin: TemplateChild<adw::Bin>,
         #[template_child]
-        pub importing: TemplateChild<adw::Bin>,
+        pub enabled: TemplateChild<gtk::CheckButton>,
+        #[template_child]
+        pub importing_bin: TemplateChild<adw::Bin>,
         #[template_child]
         pub import_error: TemplateChild<gtk::Button>,
         #[template_child]
@@ -53,13 +55,18 @@ impl DictionaryRow {
     }
 
     #[must_use]
-    pub fn enabled(&self) -> gtk::Switch {
+    pub fn enabled_bin(&self) -> adw::Bin {
+        self.imp().enabled_bin.get()
+    }
+
+    #[must_use]
+    pub fn enabled(&self) -> gtk::CheckButton {
         self.imp().enabled.get()
     }
 
     #[must_use]
-    pub fn importing(&self) -> adw::Bin {
-        self.imp().importing.get()
+    pub fn importing_bin(&self) -> adw::Bin {
+        self.imp().importing_bin.get()
     }
 
     #[must_use]

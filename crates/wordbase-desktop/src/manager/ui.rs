@@ -9,6 +9,10 @@ mod imp {
         #[template_child]
         pub toast_overlay: TemplateChild<adw::ToastOverlay>,
         #[template_child]
+        pub current_profile: TemplateChild<gtk::DropDown>,
+        #[template_child]
+        pub profiles: TemplateChild<gtk::StringList>,
+        #[template_child]
         pub dictionaries: TemplateChild<gtk::ListBox>,
         #[template_child]
         pub import_dictionary: TemplateChild<adw::ButtonRow>,
@@ -55,6 +59,16 @@ impl Manager {
     #[must_use]
     pub fn toast_overlay(&self) -> adw::ToastOverlay {
         self.imp().toast_overlay.get()
+    }
+
+    #[must_use]
+    pub fn current_profile(&self) -> gtk::DropDown {
+        self.imp().current_profile.get()
+    }
+
+    #[must_use]
+    pub fn profiles(&self) -> gtk::StringList {
+        self.imp().profiles.get()
     }
 
     #[must_use]

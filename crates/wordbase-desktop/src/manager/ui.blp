@@ -28,14 +28,9 @@ template $Manager: Adw.BreakpointBin {
               action-target: "\"search\"";
             }
 
-            title-widget: DropDown {
-              model: StringList {
-                strings [
-                  _("Default Profile"),
-                  _("Japanese"),
-                  _("Mandarin"),
-                ]
-              };
+            title-widget: DropDown current_profile {
+              model: profiles;
+              enable-search: true;
             };
           }
 
@@ -182,3 +177,5 @@ template $Manager: Adw.BreakpointBin {
     }
   }
 }
+
+StringList profiles {}

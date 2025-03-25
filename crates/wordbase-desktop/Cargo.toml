@@ -20,6 +20,7 @@ wordbase = { workspace = true }
 wordbase-engine = { workspace = true }
 
 anyhow = { workspace = true }
+bimap = { workspace = true }
 derive_more = { workspace = true, features = ["display"] }
 foldhash = { workspace = true }
 form_urlencoded = { workspace = true }

@@ -5,57 +5,112 @@ mod ui;
 use crate::gettext;
 use anyhow::{Context, Result};
 use dictionary_row::DictionaryRow;
-use error_dialog::ErrorDialog;
 use ui::Manager;
-use wordbase_engine::Engine;
+use wordbase::{DictionaryId, DictionaryState, ProfileId, ProfileMeta};
+use wordbase_engine::{Engine, Event};
 
 use adw::{gio, gtk, prelude::*};
 
-pub fn ui(engine: Engine, window: gtk::Window) -> gtk::Widget {
+type BiHashMap<L, R> =
+    bimap::BiHashMap<L, R, foldhash::fast::RandomState, foldhash::fast::RandomState>;
+
+pub async fn ui(engine: Engine, window: gtk::Window) -> Result<gtk::Widget> {
     let ui = Manager::new();
+    let mut profiles = BiHashMap::<ProfileId, u32>::default();
 
-    let row = DictionaryRow::new();
-    ui.dictionaries()
-        .insert(&row, ui.import_dictionary().index());
-    row.set_title("Jitendex");
-    row.set_subtitle("2025.02.01");
-    row.enabled().set_visible(true);
+    for profile in engine
+        .profiles()
+        .await
+        .context("failed to fetch initial profiles")?
+    {
+        profiles.insert(profile.id, ui.profiles().n_items());
+        ui.profiles().append(profile_name(&profile.meta));
+    }
 
-    let row = DictionaryRow::new();
-    ui.dictionaries()
-        .insert(&row, ui.import_dictionary().index());
-    row.set_title("JMnedict");
-    row.set_subtitle("version");
-    row.importing().set_visible(true);
-    row.progress().set_visible(true);
-    row.progress().set_fraction(0.5);
-
-    let row = DictionaryRow::new();
-    ui.dictionaries()
-        .insert(&row, ui.import_dictionary().index());
-    row.set_title("NHK");
-    row.set_subtitle("version");
-    row.importing().set_visible(true);
-    row.progress().set_visible(true);
-    row.progress().set_fraction(0.25);
-
-    let row = DictionaryRow::new();
-    ui.dictionaries()
-        .insert(&row, ui.import_dictionary().index());
-    row.set_title("foo.zip");
-    row.import_error().set_visible(true);
+    {
+        let mut engine = engine.clone();
+        let ui = ui.clone();
+        glib::spawn_future_local(async move {
+            loop {
+                match engine.recv_event.recv().await {
+                    Ok(Event::SyncDictionaries(dictionaries)) => {
+                        present_dictionaries(&engine, &ui, dictionaries);
+                    }
+                    Ok(Event::ProfileAdded { profile }) => {
+                        profiles.insert(profile.id, ui.profiles().n_items());
+                        ui.profiles().append(profile_name(&profile.meta));
+                    }
+                    Ok(Event::ProfileRemoved { profile_id }) => {
+                        if let Some((_, position)) = profiles.remove_by_left(&profile_id) {
+                            ui.profiles().remove(position);
+                        }
+                    }
+                    Err(_) => {}
+                }
+            }
+        });
+    }
 
     {
         let ui = ui.clone();
         ui.import_dictionary().connect_activated(move |_| {
-            glib::spawn_future_local(import_dictionaries(ui.clone(), window.clone()));
+            glib::spawn_future_local(import_dictionaries(
+                engine.clone(),
+                ui.clone(),
+                window.clone(),
+            ));
         });
     }
-    ui.upcast()
+
+    Ok(ui.upcast())
 }
 
-#[expect(clippy::future_not_send, reason = "`gtk` types aren't `Send`")]
-async fn import_dictionaries(ui: Manager, window: gtk::Window) {
+fn profile_name(meta: &ProfileMeta) -> &str {
+    meta.name
+        .as_deref()
+        .unwrap_or_else(|| gettext("Default Profile"))
+}
+
+fn present_dictionaries(engine: &Engine, ui: &Manager, dictionaries: Vec<DictionaryState>) {
+    ui.dictionaries().remove_all();
+    for dictionary in dictionaries {
+        let row = DictionaryRow::new();
+        ui.dictionaries()
+            .insert(&row, ui.import_dictionary().index());
+        row.set_title(&dictionary.meta.name);
+        row.set_subtitle(&dictionary.meta.version);
+        row.enabled_bin().set_visible(true);
+
+        let engine = engine.clone();
+        row.delete().connect_clicked(move |_| {
+            let engine = engine.clone();
+            let row = row.clone();
+            glib::spawn_future_local(async move {
+                delete_dictionary(&engine, dictionary.id, &row).await;
+            });
+        });
+    }
+}
+
+async fn delete_dictionary(engine: &Engine, dictionary_id: DictionaryId, row: &DictionaryRow) {
+    const CANCEL: &str = "cancel";
+    const DELETE: &str = "delete";
+
+    let dialog = adw::AlertDialog::new(
+        Some(gettext("Delete Dictionary?")),
+        Some(gettext("Are you sure you want to delete this dictionary?")),
+    );
+    dialog.add_response(CANCEL, gettext("Cancel"));
+    dialog.add_response(DELETE, gettext("Delete"));
+    dialog.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
+
+    let response = dialog.choose_future(row).await;
+    if response.as_str() == DELETE {
+        _ = engine.delete_dictionary(dictionary_id).await;
+    }
+}
+
+async fn import_dictionaries(engine: Engine, ui: Manager, window: gtk::Window) {
     let Ok(files) = gtk::FileDialog::builder()
         .title(gettext("Pick Dictionaries"))
         .accept_label(gettext("Import"))
@@ -67,44 +122,27 @@ async fn import_dictionaries(ui: Manager, window: gtk::Window) {
     };
 
     for file in &files {
-        let file = file.expect("list model should not be mutated during iteration");
+        let file = file.expect("should not be mutated during iteration");
         let file = file
             .downcast::<gio::File>()
             .expect("object should be a file");
 
-        if let Err(err) = import_dictionary(&file).await {
-            let title = if let Some(basename) = file.basename() {
-                format!("Failed to import {basename:?}")
-            } else if let Some(path) = file.path() {
-                format!("Failed to import {path:?}")
-            } else {
-                format!("Failed to import dictionary")
-            };
+        let engine = engine.clone();
+        tokio::spawn(async move {
+            let _import_permit = engine
+                .import_concurrency
+                .acquire()
+                .await
+                .context("failed to acquire import permit")?;
+            // let (data, _) = file
+            //     .load_bytes_future()
+            //     .await
+            //     .context("failed to read file into memory")?;
 
-            let toast = adw::Toast::builder()
-                .title(title)
-                .button_label(gettext("Details"))
-                .build();
-            let window = window.clone();
-            toast.connect_button_clicked(move |_| {
-                let dialog = ErrorDialog::new();
-                dialog.message().set_text(&format!("{err:?}"));
-                adw::Dialog::builder()
-                    .child(&dialog)
-                    .build()
-                    .present(Some(&window));
-            });
-            ui.toast_overlay().add_toast(toast);
-        }
+            // let (send_tracker, recv_tracker) = oneshot::channel();
+            // engine.import_dictionary(&data, send_tracker).await;
+
+            anyhow::Ok(())
+        });
     }
-}
-
-#[expect(clippy::future_not_send, reason = "`gtk` types aren't `Send`")]
-async fn import_dictionary(file: &gio::File) -> Result<()> {
-    let (data, _) = file
-        .load_bytes_future()
-        .await
-        .context("failed to load file into memory")?;
-    println!("data = {}", data.len());
-    Ok(())
 }
