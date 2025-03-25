@@ -27,9 +27,31 @@ impl Engine {
         .await
     }
 
+    pub async fn dictionary(&self, id: DictionaryId) -> Result<Result<DictionaryState, NotFound>> {
+        let record = sqlx::query!(
+            "SELECT id, position, meta FROM dictionary WHERE id = $1 LIMIT 1",
+            id.0
+        )
+        .fetch_one(&self.db)
+        .await;
+        match record {
+            Ok(record) => {
+                let meta = serde_json::from_str::<DictionaryMeta>(&record.meta)
+                    .context("failed to deserialize dictionary meta")?;
+                Ok(Ok(DictionaryState {
+                    id: DictionaryId(record.id),
+                    position: record.position,
+                    meta,
+                }))
+            }
+            Err(sqlx::Error::RowNotFound) => Ok(Err(NotFound)),
+            Err(err) => Err(anyhow::Error::new(err)),
+        }
+    }
+
     pub async fn set_dictionary_position(
         &self,
-        dictionary_id: DictionaryId,
+        id: DictionaryId,
         position: i64,
     ) -> Result<Result<(), NotFound>> {
         let result = sqlx::query!(
@@ -37,7 +59,7 @@ impl Engine {
             SET position = $1
             WHERE id = $2",
             position,
-            dictionary_id.0
+            id.0
         )
         .execute(&self.db)
         .await?;
@@ -51,11 +73,8 @@ impl Engine {
         Ok(Ok(()))
     }
 
-    pub async fn delete_dictionary(
-        &self,
-        dictionary_id: DictionaryId,
-    ) -> Result<Result<(), NotFound>> {
-        let result = sqlx::query!("DELETE FROM dictionary WHERE id = $1", dictionary_id.0)
+    pub async fn delete_dictionary(&self, id: DictionaryId) -> Result<Result<(), NotFound>> {
+        let result = sqlx::query!("DELETE FROM dictionary WHERE id = $1", id.0)
             .execute(&self.db)
             .await?;
         if result.rows_affected() == 0 {

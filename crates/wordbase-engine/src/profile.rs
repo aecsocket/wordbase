@@ -91,15 +91,17 @@ impl Engine {
         Ok(new_id)
     }
 
-    pub async fn remove_profile(&self, profile_id: ProfileId) -> Result<Result<(), NotFound>> {
-        let result = sqlx::query!("DELETE FROM profile WHERE id = $1", profile_id.0)
+    pub async fn remove_profile(&self, id: ProfileId) -> Result<Result<(), NotFound>> {
+        let result = sqlx::query!("DELETE FROM profile WHERE id = $1", id.0)
             .execute(&self.db)
             .await?;
         if result.rows_affected() == 0 {
             return Ok(Err(NotFound));
         }
 
-        _ = self.send_event.send(Event::ProfileRemoved { profile_id });
+        _ = self
+            .send_event
+            .send(Event::ProfileRemoved { profile_id: id });
         Ok(Ok(()))
     }
 }

@@ -3,15 +3,13 @@
 
 mod db;
 mod dictionary;
-mod import;
+pub mod import;
 mod lookup;
 pub mod platform;
 mod profile;
 
 use {
     anyhow::{Context, Result},
-    futures::never::Never,
-    platform::EnginePlatform,
     sqlx::{Pool, Sqlite},
     std::{path::PathBuf, sync::Arc},
     tokio::sync::{Mutex, Semaphore, broadcast},
@@ -40,7 +38,22 @@ impl Clone for Engine {
     }
 }
 
-const CHANNEL_BUF_CAP: usize = 4;
+impl Engine {
+    pub async fn new(config: &Config) -> Result<Self> {
+        let db = db::setup(&config.db_path, config.max_db_connections)
+            .await
+            .context("failed to set up database")?;
+
+        let (send_event, recv_event) = broadcast::channel(CHANNEL_BUF_CAP);
+        Ok(Self {
+            db,
+            send_event,
+            import_insert_lock: Arc::new(Mutex::new(())),
+            import_concurrency: Arc::new(Semaphore::new(config.max_concurrent_imports)),
+            recv_event,
+        })
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -49,28 +62,11 @@ pub struct Config {
     pub max_concurrent_imports: usize,
 }
 
-pub async fn run(
-    config: &Config,
-    platform: Arc<dyn EnginePlatform>,
-) -> Result<(Engine, impl Future<Output = Result<Never>> + use<>)> {
-    let db = db::setup(&config.db_path, config.max_db_connections)
-        .await
-        .context("failed to set up database")?;
-
-    let (send_event, recv_event) = broadcast::channel(CHANNEL_BUF_CAP);
-    let engine = Engine {
-        db,
-        send_event,
-        import_insert_lock: Arc::new(Mutex::new(())),
-        import_concurrency: Arc::new(Semaphore::new(config.max_concurrent_imports)),
-        recv_event,
-    };
-    Ok((engine, async { loop {} }))
-}
-
 #[derive(Debug, Clone)]
 pub enum Event {
     ProfileAdded { profile: ProfileState },
     ProfileRemoved { profile_id: ProfileId },
     SyncDictionaries(Vec<DictionaryState>),
 }
+
+const CHANNEL_BUF_CAP: usize = 4;
