@@ -8,15 +8,11 @@ use {
 };
 
 impl Engine {
-    pub async fn lookup(
+    pub async fn lookup_lemma(
         &self,
-        text: impl Into<String>,
+        lemma: &str,
         record_kinds: impl IntoIterator<Item = impl Borrow<RecordKind>>,
     ) -> Result<Vec<RecordLookup>> {
-        let text = text.into();
-        // TODO: lemmatization
-        let lemma = &text;
-
         let mut query = QueryBuilder::new(
             "SELECT source, headword, reading, kind, data
             FROM term
