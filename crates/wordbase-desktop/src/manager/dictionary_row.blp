@@ -1,0 +1,54 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $DictionaryRow: Adw.ExpanderRow {
+  [prefix]
+  Switch enabled {
+    visible: false;
+    valign: center;
+  }
+
+  [prefix]
+  Adw.Bin importing {
+    visible: false;
+
+    Adw.Spinner {
+      halign: center;
+    }
+  }
+
+  [prefix]
+  Button import_error {
+    styles ["error", "flat"]
+
+    visible: false;
+    icon-name: "dialog-warning-symbolic";
+    valign: center;
+  }
+
+  [suffix]
+  ProgressBar progress {
+    visible: false;
+    valign: center;
+  }
+
+  Box {
+    orientation: horizontal;
+    spacing: 8;
+    halign: end;
+
+    Button visit_website {
+      label: _("Visit Website");
+    }
+
+    Button delete {
+      styles ["destructive-action"]
+
+      label: _("Delete");
+    }
+  }
+}
+
+SizeGroup {
+  widgets [ enabled, importing, import_error ]
+}

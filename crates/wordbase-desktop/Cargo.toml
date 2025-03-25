@@ -1,5 +1,5 @@
 [package]
-name = "wordbase-app"
+name = "wordbase-desktop"
 
 authors.workspace = true
 categories.workspace = true
@@ -17,6 +17,7 @@ all-features = true
 
 [dependencies]
 wordbase = { workspace = true }
+wordbase-engine = { workspace = true }
 
 anyhow = { workspace = true }
 derive_more = { workspace = true, features = ["display"] }

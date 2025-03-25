@@ -1,0 +1,26 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ErrorDialog: Adw.Bin {
+  styles ["card"]
+
+  hexpand: true;
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    Label message {
+      styles ["monospace"]
+
+      margin-top: 8;
+      margin-bottom: 8;
+      margin-start: 8;
+      margin-end: 8;
+      halign: start;
+      valign: start;
+      hexpand: true;
+      wrap: true;
+    }
+  };
+}

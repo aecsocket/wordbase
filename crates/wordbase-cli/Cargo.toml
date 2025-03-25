@@ -1,5 +1,4 @@
 [package]
-description = "TODO"
 name = "wordbase-cli"
 
 authors.workspace = true

@@ -1,26 +1,20 @@
 #![doc = include_str!("../README.md")]
+#![allow(clippy::wildcard_imports, reason = "using `super::*` in `imp` blocks")]
+#![allow(
+    clippy::new_without_default,
+    reason = "`gtk` types don't follow this convention"
+)]
 
 extern crate libadwaita as adw;
 extern crate webkit6 as webkit;
 
 mod manager;
-// mod overlay;
-mod platform;
-// mod popup;
-mod db;
-
-use std::{str::FromStr, sync::Arc};
+// mod platform;
 
 use adw::{gio, glib, gtk, prelude::*};
 use anyhow::{Context, Result};
-use futures::TryFutureExt;
 use glib::ExitCode;
-use platform::Platform;
-use sqlx::{
-    Pool, Sqlite,
-    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
-};
-use tokio::{fs, sync::broadcast};
+use tokio::fs;
 use tracing::{error, info, level_filters::LevelFilter};
 use tracing_subscriber::EnvFilter;
 
@@ -37,11 +31,6 @@ async fn main() -> Result<ExitCode> {
         )
         .init();
     glib::log_set_default_handler(glib::rust_log_handler);
-    let platform = Arc::<dyn Platform>::from(
-        platform::default()
-            .await
-            .context("failed to set up platform-specific environment")?,
-    );
     let app = adw::Application::builder().application_id(APP_ID).build();
 
     let data_dir = glib::user_data_dir().join(APP_ID);
@@ -51,15 +40,20 @@ async fn main() -> Result<ExitCode> {
         .context("failed to create data directory")?;
 
     let db_path = data_dir.join(DB_PATH);
-    let db_path = db_path
-        .to_str()
-        .with_context(|| format!("invalid database path {db_path:?}"))?;
-    info!("Setting up database at {db_path:?}");
-    let db = db::setup(db_path)
-        .await
-        .context("failed to set up database")?;
+    let (engine, engine_task) = wordbase_engine::run(&wordbase_engine::Config {
+        db_path,
+        max_db_connections: 8,
+        max_concurrent_imports: 4,
+    })
+    .await
+    .context("failed to create engine")?;
+    tokio::spawn(async move {
+        info!("Started engine");
+        let Err(err) = engine_task.await;
+        error!("Engine error: {err:?}");
+    });
 
-    app.connect_activate(|app| {
+    app.connect_activate(move |app| {
         let window = adw::ApplicationWindow::builder()
             .application(app)
             .title(gettext("Wordbase"))
@@ -67,7 +61,7 @@ async fn main() -> Result<ExitCode> {
             .default_height(600)
             .build();
 
-        let content = manager::Manager::new();
+        let content = manager::ui(engine.shared.clone(), window.clone().upcast());
         window.set_content(Some(&content));
 
         window.present();

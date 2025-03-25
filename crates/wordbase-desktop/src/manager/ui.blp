@@ -1,0 +1,184 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $Manager: Adw.BreakpointBin {
+  width-request: 360;
+  height-request: 200;
+
+  Adw.Breakpoint {
+    condition ("max-width: 450sp")
+
+    setters {
+      search_split_view.collapsed: true;
+    }
+  }
+
+  Adw.ToastOverlay toast_overlay {
+    Adw.NavigationView {
+      Adw.NavigationPage {
+        tag: "overview";
+        title: _("Overview");
+
+        Adw.ToolbarView {
+          [top]
+          Adw.HeaderBar header_bar {
+            Button {
+              icon-name: "system-search-symbolic";
+              action-name: "navigation.push";
+              action-target: "\"search\"";
+            }
+
+            title-widget: DropDown {
+              model: StringList {
+                strings [
+                  _("Default Profile"),
+                  _("Japanese"),
+                  _("Mandarin"),
+                ]
+              };
+            };
+          }
+
+          Adw.PreferencesPage {
+            Adw.PreferencesGroup {
+              title: _("Dictionaries");
+
+              ListBox dictionaries {
+                styles ["boxed-list"]
+
+                Adw.ButtonRow import_dictionary {
+                  title: _("Import");
+                  start-icon-name: "list-add-symbolic";
+                }
+              }
+            }
+
+            Adw.PreferencesGroup themes {
+              title: _("Themes");
+
+              Adw.ButtonRow import_theme {
+                title: _("Import");
+                start-icon-name: "list-add-symbolic";
+              }
+            }
+
+            Adw.PreferencesGroup {
+              title: _("Overlay");
+              description: _("Configure the texthooker dialog box overlay");
+
+              Adw.SwitchRow {
+                title: _("Enabled");
+              }
+            }
+
+            Adw.PreferencesGroup {
+              title: _("AnkiConnect");
+
+              Adw.EntryRow {
+                title: _("Server URL");
+                text: "http://127.0.0.1:8765";
+              }
+
+              Adw.PasswordEntryRow {
+                title: _("API Key");
+              }
+            }
+
+            Adw.PreferencesGroup {
+              title: _("Advanced");
+
+              Adw.SpinRow {
+                title: _("Max Text Scan Length");
+              }
+
+              Adw.SpinRow {
+                title: _("Max Concurrent Imports");
+              }
+
+              Adw.ExpanderRow {
+                title: _("Texthooker Sources");
+
+                Adw.EntryRow {
+                  title: _("Server URL");
+                  text: "ws://127.0.0.1:9001";
+
+                  [suffix]
+                  Button {
+                    styles [
+                      "destructive-action",
+                      "flat",
+                    ]
+
+                    valign: center;
+                    icon-name: "user-trash-symbolic";
+                  }
+                }
+
+                Adw.ButtonRow {
+                  title: _("Add");
+                  start-icon-name: "list-add-symbolic";
+                }
+              }
+            }
+          }
+        }
+      }
+
+      Adw.NavigationPage {
+        tag: "search";
+        title: _("Search");
+
+        Adw.ToolbarView {
+          top-bar-style: raised;
+
+          [top]
+          Adw.HeaderBar {
+            title-widget: SearchEntry search_entry {
+              hexpand: true;
+            };
+
+            ToggleButton search_sidebar_toggle {
+              icon-name: "sidebar-show-symbolic";
+            }
+          }
+
+          Adw.OverlaySplitView search_split_view {
+            show-sidebar: bind search_sidebar_toggle.active bidirectional;
+
+            sidebar: Adw.ToolbarView {
+              [bottom]
+              Adw.ViewSwitcherBar {
+                stack: search_sidebar_stack;
+                reveal: true;
+              }
+
+              Adw.ViewStack search_sidebar_stack {
+                Adw.ViewStackPage {
+                  name: "dictionaries";
+                  title: _("Dictionaries");
+                  icon-name: "library-symbolic";
+
+                  child: Label {
+                    label: "dictionaries";
+                  };
+                }
+
+                Adw.ViewStackPage {
+                  name: "themes";
+                  title: _("Themes");
+                  icon-name: "preferences-desktop-appearance-symbolic";
+
+                  child: Label {
+                    label: "themes";
+                  };
+                }
+              }
+            };
+
+            content: Adw.Bin search_content {};
+          }
+        }
+      }
+    }
+  }
+}
