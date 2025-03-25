@@ -5,7 +5,7 @@ use wordbase::{DictionaryId, ProfileId, ProfileMeta, ProfileState, protocol::Not
 use crate::{Engine, Event};
 
 impl Engine {
-    pub async fn current_profile_id(&self) -> Result<ProfileId> {
+    pub async fn current_profile(&self) -> Result<ProfileId> {
         let id = sqlx::query_scalar!("SELECT current_profile FROM config")
             .fetch_one(&self.db)
             .await?;
@@ -53,7 +53,7 @@ impl Engine {
 
     pub async fn insert_profile(&self, meta: ProfileMeta) -> Result<ProfileId> {
         let current_id = self
-            .current_profile_id()
+            .current_profile()
             .await
             .context("failed to fetch current profile id")?;
         let meta_json = serde_json::to_string(&meta).context("failed to serialize profile meta")?;
@@ -92,7 +92,14 @@ impl Engine {
         Ok(new_id)
     }
 
-    pub async fn remove_profile(&self, id: ProfileId) -> Result<Result<(), NotFound>> {
+    pub async fn set_current_profile(&self, id: ProfileId) -> Result<()> {
+        sqlx::query!("UPDATE config SET current_profile = $1", id.0)
+            .execute(&self.db)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn delete_profile(&self, id: ProfileId) -> Result<Result<(), NotFound>> {
         let result = sqlx::query!("DELETE FROM profile WHERE id = $1", id.0)
             .execute(&self.db)
             .await?;

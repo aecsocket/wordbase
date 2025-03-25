@@ -4,11 +4,11 @@ use {
     anyhow::{Context as _, Result},
     ascii_table::AsciiTable,
     directories::ProjectDirs,
-    std::{path::PathBuf, time::Instant},
+    std::{collections::HashMap, path::PathBuf, time::Instant},
     tokio::{fs, sync::oneshot},
     tracing::{info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
-    wordbase::{DictionaryId, RecordKind},
+    wordbase::{DictionaryId, ProfileId, ProfileMeta, RecordKind},
     wordbase_engine::{Config, Engine, import::ImportTracker},
 };
 
@@ -44,6 +44,21 @@ enum Command {
 enum ProfileCommand {
     /// List all profiles
     Ls,
+    /// Create a new profile copied from the current profile
+    New {
+        /// New profile name
+        name: String,
+    },
+    /// Mark a profile as the current profile
+    Set {
+        /// Profile ID to mark as current
+        id: i64,
+    },
+    /// Delete a profile with the given ID
+    Rm {
+        /// Profile ID
+        id: i64,
+    },
 }
 
 #[derive(Debug, clap::Parser)]
@@ -124,6 +139,15 @@ async fn main() -> Result<()> {
         Command::Profile {
             command: ProfileCommand::Ls,
         } => profile_ls(engine).await?,
+        Command::Profile {
+            command: ProfileCommand::New { name },
+        } => profile_new(engine, name).await?,
+        Command::Profile {
+            command: ProfileCommand::Set { id },
+        } => profile_set(engine, id).await?,
+        Command::Profile {
+            command: ProfileCommand::Rm { id },
+        } => profile_rm(engine, id).await?,
         Command::Dictionary {
             command: DictionaryCommand::Ls,
         } => dictionary_ls(engine).await?,
@@ -153,17 +177,44 @@ async fn main() -> Result<()> {
 
 async fn profile_ls(engine: Engine) -> Result<()> {
     let mut table = AsciiTable::default();
-    table.column(0).set_header("ID");
-    table.column(1).set_header("Name");
+    table.column(1).set_header("ID");
+    table.column(2).set_header("Name");
+    table.column(3).set_header("Dictionaries");
 
+    let current_profile_id = engine.current_profile().await?;
+    let dictionaries = engine
+        .dictionaries()
+        .await?
+        .into_iter()
+        .map(|dictionary| (dictionary.id, dictionary))
+        .collect::<HashMap<_, _>>();
     let data = engine
         .profiles()
         .await?
         .into_iter()
         .map(|profile| {
+            let num_dictionaries = profile.enabled_dictionaries.len();
+            let enabled_dictionaries = profile
+                .enabled_dictionaries
+                .into_iter()
+                .filter_map(|dictionary_id| {
+                    dictionaries
+                        .get(&dictionary_id)
+                        .map(|dictionary| dictionary.meta.name.as_ref())
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+
             vec![
+                (if profile.id == current_profile_id {
+                    "✔"
+                } else {
+                    ""
+                })
+                .to_string(),
                 format!("{}", profile.id.0),
                 profile.meta.name.unwrap_or_else(|| "(default)".into()),
+                format!("({num_dictionaries}) {enabled_dictionaries}"),
             ]
         })
         .collect::<Vec<_>>();
@@ -171,9 +222,28 @@ async fn profile_ls(engine: Engine) -> Result<()> {
     Ok(())
 }
 
+async fn profile_new(engine: Engine, name: String) -> Result<()> {
+    let new_id = engine
+        .insert_profile(ProfileMeta { name: Some(name) })
+        .await?;
+    println!("Created profile with ID {}", new_id.0);
+    Ok(())
+}
+
+async fn profile_set(engine: Engine, id: i64) -> Result<()> {
+    let id = ProfileId(id);
+    engine.set_current_profile(id).await?;
+    Ok(())
+}
+
+async fn profile_rm(engine: Engine, id: i64) -> Result<()> {
+    let id = ProfileId(id);
+    engine.delete_profile(id).await??;
+    Ok(())
+}
+
 async fn dictionary_ls(engine: Engine) -> Result<()> {
     let mut table = AsciiTable::default();
-    table.column(0).set_header("On");
     table.column(1).set_header("Pos");
     table.column(2).set_header("ID");
     table.column(3).set_header("Name");
@@ -185,7 +255,7 @@ async fn dictionary_ls(engine: Engine) -> Result<()> {
         .into_iter()
         .map(|dictionary| {
             vec![
-                (if dictionary.enabled { "✔" } else { " " }).to_string(),
+                (if dictionary.enabled { "✔" } else { "" }).to_string(),
                 format!("{}", dictionary.position),
                 format!("{}", dictionary.id.0),
                 dictionary.meta.name,
