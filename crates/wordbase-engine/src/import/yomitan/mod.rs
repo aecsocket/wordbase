@@ -1,3 +1,6 @@
+mod parse;
+mod schema;
+
 use {
     super::{ImportError, ImportTracker, insert_term},
     crate::{
@@ -5,6 +8,7 @@ use {
         import::{dictionary_exists_by_name, insert_dictionary},
     },
     anyhow::{Context as _, Result},
+    parse::{Parse, ParseError},
     sqlx::{Sqlite, Transaction},
     std::{
         io::{Read, Seek},
@@ -17,7 +21,7 @@ use {
         DictionaryId, DictionaryMeta, Term,
         format::{
             self,
-            yomitan::{self, GlossaryTag, ParseError, schema, structured},
+            yomitan::{GlossaryTag, structured},
         },
         lang,
         record::Frequency,
@@ -25,7 +29,7 @@ use {
 };
 
 impl Engine {
-    pub async fn import_dictionary_yomitan<R: Read + Seek, E: Send>(
+    pub(super) async fn import_dictionary_yomitan<R: Read + Seek, E: Send>(
         &self,
         new_reader: impl Fn() -> Result<R, E> + Send + Sync,
         send_tracker: oneshot::Sender<ImportTracker>,
@@ -33,7 +37,7 @@ impl Engine {
     where
         ParseError<E>: std::error::Error + Send + Sync + 'static,
     {
-        let (parser, index) = yomitan::Parse::new(new_reader).context("failed to parse index")?;
+        let (parser, index) = Parse::new(new_reader).context("failed to parse index")?;
         let meta = DictionaryMeta {
             name: index.title,
             version: index.revision,
@@ -114,7 +118,7 @@ impl Engine {
         debug!("Parse complete, inserting {records_len} records");
 
         debug!("Waiting for insert lock");
-        let _tx_lock = self.import_insert_lock.lock().await;
+        let _tx_lock = self.importer.insert_lock.lock().await;
         debug!("Lock acquired, starting transaction");
         let mut tx = self
             .db

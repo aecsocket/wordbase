@@ -6,7 +6,7 @@ use {
     derive_more::{Display, Error, From},
     sqlx::{Pool, Sqlite, Transaction},
     std::{convert::Infallible, io::Cursor},
-    tokio::sync::{mpsc, oneshot},
+    tokio::sync::{Mutex, mpsc, oneshot},
     wordbase::{DictionaryId, DictionaryMeta, RecordType, Term},
 };
 
@@ -30,6 +30,19 @@ pub struct ImportTracker {
     /// Parsed dictionary meta.
     pub meta: DictionaryMeta,
     pub recv_progress: mpsc::Receiver<f64>,
+}
+
+#[derive(Debug)]
+pub(super) struct Importer {
+    insert_lock: Mutex<()>,
+}
+
+impl Importer {
+    pub fn new() -> Self {
+        Self {
+            insert_lock: Mutex::new(()),
+        }
+    }
 }
 
 impl Engine {

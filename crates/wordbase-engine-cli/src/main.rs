@@ -9,7 +9,7 @@ use {
     tracing::{info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
     wordbase::{DictionaryId, ProfileId, ProfileMeta, RecordKind},
-    wordbase_engine::{Config, Engine, import::ImportTracker},
+    wordbase_engine::{Config, Engine, Event, import::ImportTracker},
 };
 
 #[derive(Debug, clap::Parser)]
@@ -33,10 +33,21 @@ enum Command {
         #[command(subcommand)]
         command: DictionaryCommand,
     },
-    /// Perform a text lookup
-    Lookup {
-        /// Text to lookup
+    /// Deinflect some text and return its lemmas
+    Deinflect {
+        /// Text to deinflect
         text: String,
+    },
+    /// Deinflect some text and fetch records for its lemmas
+    Lookup {
+        /// Text to look up
+        text: String,
+    },
+    /// Manage texthooker functions
+    #[command(alias = "hook")]
+    Texthooker {
+        #[command(subcommand)]
+        command: TexthookerCommand,
     },
 }
 
@@ -99,6 +110,19 @@ enum DictionaryCommand {
     },
 }
 
+#[derive(Debug, clap::Parser)]
+enum TexthookerCommand {
+    /// Get the texthooker pull server URL
+    GetUrl,
+    /// Set the texthooker pull server URL
+    SetUrl {
+        /// Server URL, should start with `ws://`
+        url: String,
+    },
+    /// Print incoming texthooker sentences from the pull server
+    Watch,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
@@ -127,13 +151,14 @@ async fn main() -> Result<()> {
             .context("failed to create parent directories")?;
     }
 
-    let engine = Engine::new(&Config {
+    let (engine, engine_task) = Engine::new(&Config {
         db_path,
         max_db_connections: 8,
         max_concurrent_imports: 4,
     })
     .await
     .context("failed to create engine")?;
+    let engine_task = async move { engine_task.await.expect("engine error") };
 
     match args.command {
         Command::Profile {
@@ -169,7 +194,24 @@ async fn main() -> Result<()> {
         Command::Dictionary {
             command: DictionaryCommand::Rm { id },
         } => dictionary_rm(engine, id).await?,
+        Command::Deinflect { text } => deinflect(engine, text).await?,
         Command::Lookup { text } => lookup(engine, text).await?,
+        Command::Texthooker {
+            command: TexthookerCommand::GetUrl,
+        } => {
+            texthooker_get_url(engine).await?;
+        }
+        Command::Texthooker {
+            command: TexthookerCommand::SetUrl { url },
+        } => {
+            texthooker_set_url(engine, url).await?;
+        }
+        Command::Texthooker {
+            command: TexthookerCommand::Watch,
+        } => {
+            tokio::spawn(engine_task);
+            texthooker_watch(engine).await?;
+        }
     }
 
     Ok(())
@@ -224,7 +266,10 @@ async fn profile_ls(engine: Engine) -> Result<()> {
 
 async fn profile_new(engine: Engine, name: String) -> Result<()> {
     let new_id = engine
-        .insert_profile(ProfileMeta { name: Some(name) })
+        .insert_profile(ProfileMeta {
+            name: Some(name),
+            accent_color: [1.0, 1.0, 1.0],
+        })
         .await?;
     println!("Created profile with ID {}", new_id.0);
     Ok(())
@@ -355,8 +400,49 @@ async fn dictionary_rm(engine: Engine, id: i64) -> Result<()> {
     Ok(())
 }
 
-async fn lookup(engine: Engine, text: String) -> Result<()> {
-    let records = engine.lookup(text, RecordKind::ALL).await?;
-    println!("{records:#?}");
+async fn deinflect(engine: Engine, text: String) -> Result<()> {
+    let lemmas = engine.deinflect(&text).await?;
+    println!("{text:?}:");
+    for lemma in lemmas {
+        println!("  - {lemma:?}");
+    }
     Ok(())
+}
+
+async fn lookup(engine: Engine, text: String) -> Result<()> {
+    let lemmas = engine
+        .deinflect(&text)
+        .await
+        .context("failed to deinflect text")?;
+
+    for lemma in lemmas {
+        println!("{lemma:?}:");
+        let records = engine.lookup_lemma(&lemma, RecordKind::ALL).await?;
+        println!("{records:#?}");
+        println!();
+    }
+
+    Ok(())
+}
+
+async fn texthooker_get_url(engine: Engine) -> Result<()> {
+    let url = engine.texthooker_url().await?;
+    println!("{url}");
+    Ok(())
+}
+
+async fn texthooker_set_url(engine: Engine, url: String) -> Result<()> {
+    engine.set_texthooker_url(url).await?;
+    Ok(())
+}
+
+async fn texthooker_watch(engine: Engine) -> Result<()> {
+    let mut recv_event = engine.recv_event();
+    println!("Watching for texthooker sentences");
+    loop {
+        let event = recv_event.recv().await?;
+        if let Event::HookSentence(sentence) = event {
+            println!("{sentence:?}");
+        }
+    }
 }

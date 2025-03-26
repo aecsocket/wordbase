@@ -1,7 +1,7 @@
 //! General dictionary schema.
 //!
 //! See [`dictionary-data.d.ts`](https://github.com/yomidevs/yomitan/blob/master/types/ext/dictionary-data.d.ts).
-#![expect(missing_docs, reason = "these are not our types")]
+#![expect(dead_code, reason = "schema completeness")]
 
 use {
     super::structured,

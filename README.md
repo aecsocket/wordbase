@@ -1,3 +1,9 @@
+# Features
+
+TODO:
+- local audio server
+- ankiconnect
+
 # Installation
 
 TODO

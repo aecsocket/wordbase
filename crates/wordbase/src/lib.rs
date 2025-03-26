@@ -9,7 +9,6 @@ pub mod hook;
 pub mod lang;
 pub mod protocol;
 pub mod record;
-// pub mod render;
 pub(crate) mod util;
 
 use {
@@ -175,7 +174,7 @@ pub struct DictionaryState {
     pub meta: DictionaryMeta,
 }
 
-/// Opaque and unique identifier for a single [`Dictionary`] in a database.
+/// Opaque and unique identifier for a single [`DictionaryState`] in a database.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DictionaryId(pub i64);
 
@@ -366,19 +365,45 @@ impl RecordType for $data_ty {
 
 for_record_kinds!(define_record_types);
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ProfileId(pub i64);
-
+/// Metadata for a user profile.
+///
+/// Each profile stores its own set of settings, such as the set of enabled
+/// dictionaries. These can be used to set context- or language-specific
+/// settings, such as enabling English dictionaries in a English profile, and
+/// enabling French dictionaries in a French profile.
+///
+/// This type does not represent a profile that is present in the server - just
+/// a configuration for creating a new one. See also [`ProfileState`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProfileMeta {
+    /// Name of the profile.
+    ///
+    /// User-defined profiles will always have a name. If the name is missing,
+    /// then this is the default profile made on startup.
     pub name: Option<String>,
+    /// RGB accent color of the profile.
+    ///
+    /// This is purely aesthetic, but you can use this to style output for
+    /// different profiles, and allow users to quickly differentiate between
+    /// their profiles by color.
+    pub accent_color: [f32; 3],
 }
 
+/// State of a [profile][ProfileMeta] in a Wordbase server.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProfileState {
+    /// Unique identifier for this profile in the database.
     pub id: ProfileId,
+    /// Metadata.
     pub meta: ProfileMeta,
+    /// Set of dictionaries which are [enabled] under this profile.
+    ///
+    /// [enabled]: DictionaryState::enabled
     pub enabled_dictionaries: Vec<DictionaryId>,
 }
+
+/// Opaque and unique identifier for a single [`ProfileState`] in a database.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ProfileId(pub i64);

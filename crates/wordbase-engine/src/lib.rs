@@ -8,55 +8,65 @@ pub mod import;
 mod lookup;
 pub mod platform;
 mod profile;
+pub mod texthook;
 
 use {
     anyhow::{Context, Result},
-    deinflect::Deinflectors,
+    derive_more::{Deref, DerefMut},
+    futures::never::Never,
+    import::Importer,
     sqlx::{Pool, Sqlite},
     std::{path::PathBuf, sync::Arc},
-    tokio::sync::{Mutex, Semaphore, broadcast},
-    wordbase::{DictionaryState, ProfileId, ProfileState},
+    texthook::PullTexthooker,
+    tokio::sync::broadcast,
+    wordbase::{DictionaryState, ProfileId, ProfileState, hook::HookSentence},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Deref, DerefMut)]
 #[non_exhaustive]
-pub struct Engine {
-    db: Pool<Sqlite>,
-    send_event: broadcast::Sender<Event>,
-    import_insert_lock: Arc<Mutex<()>>,
-    pub import_concurrency: Arc<Semaphore>,
-    pub recv_event: broadcast::Receiver<Event>,
-    pub deinflectors: Deinflectors,
-}
+pub struct Engine(Arc<Inner>);
 
-impl Clone for Engine {
-    fn clone(&self) -> Self {
-        Self {
-            db: self.db.clone(),
-            send_event: self.send_event.clone(),
-            import_concurrency: self.import_concurrency.clone(),
-            import_insert_lock: self.import_insert_lock.clone(),
-            recv_event: self.recv_event.resubscribe(),
-            deinflectors: self.deinflectors.clone(),
-        }
-    }
+#[derive(Debug)]
+pub struct Inner {
+    db: Pool<Sqlite>,
+    importer: Importer,
+    pull_texthooker: PullTexthooker,
+    send_event: broadcast::Sender<Event>,
 }
 
 impl Engine {
-    pub async fn new(config: &Config) -> Result<Self> {
+    pub async fn new(
+        config: &Config,
+    ) -> Result<(Self, impl Future<Output = Result<Never>> + use<>)> {
         let db = db::setup(&config.db_path, config.max_db_connections)
             .await
             .context("failed to set up database")?;
+        let (send_event, _) = broadcast::channel(CHANNEL_BUF_CAP);
+        let (pull_texthooker, pull_texthooker_task) = PullTexthooker::new(send_event.clone());
 
-        let (send_event, recv_event) = broadcast::channel(CHANNEL_BUF_CAP);
-        Ok(Self {
+        let engine = Self(Arc::new(Inner {
             db,
+            importer: Importer::new(),
+            pull_texthooker,
             send_event,
-            import_insert_lock: Arc::new(Mutex::new(())),
-            import_concurrency: Arc::new(Semaphore::new(config.max_concurrent_imports)),
-            recv_event,
-            deinflectors: Deinflectors::default(),
-        })
+        }));
+        Ok((engine.clone(), async move {
+            engine
+                .set_texthooker_url(
+                    engine
+                        .texthooker_url()
+                        .await
+                        .context("failed to read initial texthooker url")?,
+                )
+                .await
+                .context("failed to set initial texthooker url")?;
+            pull_texthooker_task.await
+        }))
+    }
+
+    #[must_use]
+    pub fn recv_event(&self) -> broadcast::Receiver<Event> {
+        self.send_event.subscribe()
     }
 }
 
@@ -71,6 +81,7 @@ pub struct Config {
 pub enum Event {
     ProfileAdded { profile: ProfileState },
     ProfileRemoved { profile_id: ProfileId },
+    HookSentence(HookSentence),
     SyncDictionaries(Vec<DictionaryState>),
 }
 

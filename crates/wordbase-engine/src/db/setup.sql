@@ -16,7 +16,8 @@ END;
 
 CREATE TABLE IF NOT EXISTS config (
     id              INTEGER PRIMARY KEY CHECK (id = 1),
-    current_profile INTEGER NOT NULL DEFAULT 1 REFERENCES profile(id)
+    current_profile INTEGER NOT NULL DEFAULT 1 REFERENCES profile(id),
+    texthooker_url  TEXT    NOT NULL DEFAULT 'ws://127.0.0.1:9001'
 );
 INSERT OR IGNORE INTO config DEFAULT VALUES;
 CREATE TRIGGER IF NOT EXISTS prevent_config_delete
@@ -30,10 +31,6 @@ WHEN OLD.id = (SELECT current_profile FROM config)
 BEGIN
     UPDATE config SET current_profile = (SELECT MIN(id) FROM profile);
 END;
-
-CREATE TABLE IF NOT EXISTS texthooker_source (
-    url TEXT    PRIMARY KEY
-);
 
 CREATE TABLE IF NOT EXISTS dictionary (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -2,14 +2,10 @@
 //!
 //! [Yomitan]: https://github.com/yomidevs/yomitan/
 
-mod render;
-pub mod schema;
+#[cfg(feature = "render-html")]
+mod html;
 pub mod structured;
 
-#[cfg(feature = "parse-yomitan")]
-mod parse;
-#[cfg(feature = "parse-yomitan")]
-pub use parse::*;
 use serde::{Deserialize, Serialize};
 
 /// Yomitan-specific record for a word.
@@ -21,8 +17,6 @@ pub struct Record {
     /// Tags applied to this record's glossary content.
     pub tags: Vec<GlossaryTag>,
     /// Structured contents of this record's glossary.
-    ///
-    /// You can render this to HTML using [`maud::Render`].
     pub glossary: Vec<structured::Content>,
 }
 
