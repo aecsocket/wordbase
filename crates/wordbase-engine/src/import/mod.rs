@@ -6,53 +6,88 @@ use {
     anyhow::{Context, Result},
     bytes::Bytes,
     derive_more::{Display, Error, From},
-    futures::{FutureExt, StreamExt, future::BoxFuture, stream::FuturesUnordered},
+    futures::{StreamExt, future::BoxFuture, stream::FuturesUnordered},
     sqlx::{Pool, Sqlite, Transaction},
     std::{
-        convert::Infallible,
-        io::Cursor,
+        collections::HashMap,
         sync::{Arc, LazyLock},
     },
     tokio::sync::{Mutex, mpsc, oneshot},
     wordbase::{DictionaryFormat, DictionaryId, DictionaryMeta, RecordType, Term},
 };
 
-const IMPORT_FORMATS: LazyLock<Vec<Arc<dyn ImportFormat>>> = LazyLock::new(|| {
-    vec![
-        Arc::new(yomitan::Yomitan),
-        Arc::new(yomichan_audio::YomichanAudio),
+const FORMATS: LazyLock<HashMap<DictionaryFormat, Arc<dyn Importer>>> = LazyLock::new(|| {
+    [
+        (
+            DictionaryFormat::Yomitan,
+            Arc::new(yomitan::Yomitan) as Arc<dyn Importer>,
+        ),
+        (
+            DictionaryFormat::YomichanAudio,
+            Arc::new(yomichan_audio::YomichanAudio),
+        ),
     ]
+    .into()
 });
 
-pub trait ImportFormat {
-    fn dictionary_format(&self) -> DictionaryFormat;
+pub trait Importer: Send + Sync {
+    fn validate(&self, archive: Bytes) -> BoxFuture<'_, Result<()>>;
 
-    fn validate(&self, archive: Bytes) -> BoxFuture<Result<()>>;
-
-    fn import(
-        &self,
-        engine: &Engine,
+    fn import<'a>(
+        &'a self,
+        engine: &'a Engine,
         archive: Bytes,
         send_tracker: oneshot::Sender<ImportTracker>,
-    ) -> BoxFuture<Result<(), ImportError>>;
+    ) -> BoxFuture<'a, Result<(), ImportError>>;
 }
 
-pub async fn format_of(archive: Bytes) -> Option<DictionaryFormat> {
-    let formats = IMPORT_FORMATS;
-    let mut tasks = formats
+#[derive(Debug, Display, Error)]
+pub enum GetFormatError {
+    #[display(
+        "archive does not represent a valid dictionary format\n{}",
+        format_errors(_0)
+    )]
+    NoFormat(#[error(ignore)] HashMap<DictionaryFormat, anyhow::Error>),
+    #[display("archive represents multiple dictionary formats: {_0:?}")]
+    MultipleFormats(#[error(ignore)] Vec<DictionaryFormat>),
+}
+
+fn format_errors(errors: &HashMap<DictionaryFormat, anyhow::Error>) -> String {
+    errors
         .iter()
-        .map(|format| {
-            format
-                .validate(archive.clone())
-                .map(move |result| (format, result))
+        .map(|(format, err)| format!("does not represent a `{format:?}` dictionary: {err:?}\n"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+pub async fn format_of(archive: &Bytes) -> Result<DictionaryFormat, GetFormatError> {
+    let mut valid_formats = Vec::<DictionaryFormat>::new();
+    let mut format_errors = HashMap::<DictionaryFormat, anyhow::Error>::new();
+
+    let formats = FORMATS;
+    let format_results = formats
+        .iter()
+        .map(|(format, importer)| async move {
+            let result = importer.validate(archive.clone()).await;
+            (*format, result)
         })
-        .collect::<FuturesUnordered<_>>();
-    while let Some((format, result)) = tasks.next().await {
-        if result.is_ok() {
-            return Some(format.dictionary_format());
+        .collect::<FuturesUnordered<_>>()
+        .collect::<HashMap<_, _>>()
+        .await;
+    for (format, result) in format_results {
+        match result {
+            Ok(()) => valid_formats.push(format),
+            Err(err) => {
+                format_errors.insert(format, err);
+            }
         }
     }
-    None
+
+    match (valid_formats.first(), valid_formats.len()) {
+        (None, _) => Err(GetFormatError::NoFormat(format_errors)),
+        (Some(format), 1) => Ok(*format),
+        (_, _) => Err(GetFormatError::MultipleFormats(valid_formats)),
+    }
 }
 
 /// Failed to import a dictionary.
@@ -78,11 +113,11 @@ pub struct ImportTracker {
 }
 
 #[derive(Debug)]
-pub(super) struct Importer {
+pub(super) struct Imports {
     insert_lock: Mutex<()>,
 }
 
-impl Importer {
+impl Imports {
     pub fn new() -> Self {
         Self {
             insert_lock: Mutex::new(()),
@@ -90,14 +125,36 @@ impl Importer {
     }
 }
 
+#[derive(Debug, Display, Error)]
+pub enum ImportAnyError {
+    #[display("failed to get archive format")]
+    GetFormat(GetFormatError),
+    #[display("no importer for format `{format:?}`")]
+    NoImporter { format: DictionaryFormat },
+    #[display("failed to import as `{format:?}`")]
+    Import {
+        format: DictionaryFormat,
+        source: ImportError,
+    },
+}
+
 impl Engine {
     pub async fn import_dictionary(
         &self,
-        data: &[u8],
+        archive: Bytes,
         send_tracker: oneshot::Sender<ImportTracker>,
-    ) -> Result<(), ImportError> {
-        self.import_dictionary_yomitan(|| Ok::<_, Infallible>(Cursor::new(data)), send_tracker)
+    ) -> Result<(), ImportAnyError> {
+        let format = format_of(&archive)
             .await
+            .map_err(ImportAnyError::GetFormat)?;
+        let formats = FORMATS;
+        let importer = formats
+            .get(&format)
+            .ok_or(ImportAnyError::NoImporter { format })?;
+        importer
+            .import(self, archive, send_tracker)
+            .await
+            .map_err(|source| ImportAnyError::Import { format, source })
     }
 }
 

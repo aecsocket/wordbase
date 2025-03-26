@@ -23,6 +23,7 @@ wordbase-engine = { workspace = true }
 
 anyhow = { workspace = true }
 ascii_table = { workspace = true, features = ["wide_characters"] }
+bytes = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 directories = { workspace = true }
 futures = { workspace = true }

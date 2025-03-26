@@ -1,7 +1,7 @@
 //! General dictionary schema.
 //!
 //! See [`dictionary-data.d.ts`](https://github.com/yomidevs/yomitan/blob/master/types/ext/dictionary-data.d.ts).
-#![expect(dead_code, reason = "schema completeness")]
+#![expect(dead_code, reason = "we include all fields for completeness")]
 
 use {
     super::structured,
@@ -50,18 +50,6 @@ pub enum FrequencyMode {
 #[derive(Debug, Clone, Deserialize, Deref, DerefMut)]
 pub struct IsoLanguageCode(pub String);
 
-#[derive(Debug, Clone, Default, Deserialize, Deref, DerefMut)]
-pub struct TagBank(pub Vec<Tag>);
-
-impl IntoIterator for TagBank {
-    type IntoIter = <Vec<Tag> as IntoIterator>::IntoIter;
-    type Item = Tag;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Tag {
@@ -70,18 +58,6 @@ pub struct Tag {
     pub order: i64,
     pub notes: String,
     pub score: i64,
-}
-
-#[derive(Debug, Clone, Default, Deserialize, Deref, DerefMut)]
-pub struct TermBank(pub Vec<Term>);
-
-impl IntoIterator for TermBank {
-    type IntoIter = <Vec<Term> as IntoIterator>::IntoIter;
-    type Item = Term;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -118,18 +94,6 @@ pub enum GlossaryContent {
     Text { text: String },
     Image(structured::ImageElementBase),
     StructuredContent { content: structured::Content },
-}
-
-#[derive(Debug, Clone, Default, Deserialize, Deref, DerefMut)]
-pub struct TermMetaBank(pub Vec<TermMeta>);
-
-impl IntoIterator for TermMetaBank {
-    type IntoIter = <Vec<TermMeta> as IntoIterator>::IntoIter;
-    type Item = TermMeta;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -246,18 +210,6 @@ pub struct PhoneticTranscription {
     pub tags: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize, Deref, DerefMut)]
-pub struct KanjiBank(pub Vec<Kanji>);
-
-impl IntoIterator for KanjiBank {
-    type IntoIter = <Vec<Kanji> as IntoIterator>::IntoIter;
-    type Item = Kanji;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Kanji {
@@ -269,21 +221,9 @@ pub struct Kanji {
     pub stats: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize, Deref, DerefMut)]
-pub struct KanjiMetaBank(pub Vec<KanjiMetaFrequency>);
-
-impl IntoIterator for KanjiMetaBank {
-    type IntoIter = <Vec<KanjiMetaFrequency> as IntoIterator>::IntoIter;
-    type Item = KanjiMetaFrequency;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct KanjiMetaFrequency {
+pub struct KanjiMeta {
     pub character: String,
     pub mode: String,
     pub data: GenericFrequencyData,
@@ -295,7 +235,7 @@ mod tests {
 
     #[test]
     fn case_1() {
-        serde_json::from_str::<TermBank>(
+        serde_json::from_str::<Vec<Term>>(
             r##"
 [
     [
@@ -378,7 +318,7 @@ mod tests {
 
     #[test]
     fn case_2() {
-        serde_json::from_str::<TermBank>(
+        serde_json::from_str::<Vec<Term>>(
 r#"
 [
     [

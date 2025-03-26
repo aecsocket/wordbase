@@ -3667,6 +3667,7 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "sqlx",
+ "tar",
  "tokio",
  "tokio-stream",
  "tokio-tungstenite",
@@ -3674,6 +3675,7 @@ dependencies = [
  "unicode-segmentation",
  "wordbase",
  "wordbase-ankiconnect",
+ "xz2",
  "zip",
 ]
 
@@ -3683,6 +3685,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "ascii_table",
+ "bytes",
  "clap",
  "directories",
  "futures",

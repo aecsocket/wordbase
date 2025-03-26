@@ -15,7 +15,7 @@ use {
     anyhow::{Context, Result},
     derive_more::{Deref, DerefMut},
     futures::never::Never,
-    import::Importer,
+    import::Imports,
     sqlx::{Pool, Sqlite},
     std::{path::PathBuf, sync::Arc},
     texthook::PullTexthooker,
@@ -30,7 +30,7 @@ pub struct Engine(Arc<Inner>);
 #[derive(Debug)]
 pub struct Inner {
     db: Pool<Sqlite>,
-    importer: Importer,
+    imports: Imports,
     pull_texthooker: PullTexthooker,
     anki: Anki,
     send_event: broadcast::Sender<Event>,
@@ -49,7 +49,7 @@ impl Engine {
 
         let engine = Self(Arc::new(Inner {
             db,
-            importer: Importer::new(),
+            imports: Imports::new(),
             pull_texthooker,
             anki,
             send_event,

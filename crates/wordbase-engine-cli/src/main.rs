@@ -3,6 +3,7 @@
 use {
     anyhow::{Context as _, Result},
     ascii_table::AsciiTable,
+    bytes::Bytes,
     directories::ProjectDirs,
     std::{collections::HashMap, path::PathBuf, time::Instant},
     tokio::{fs, sync::oneshot},
@@ -350,6 +351,7 @@ async fn dictionary_import(engine: Engine, path: PathBuf) -> Result<()> {
 
     let data = fs::read(path)
         .await
+        .map(Bytes::from)
         .context("failed to read dictionary file into memory")?;
 
     let (send_tracker, recv_tracker) = oneshot::channel::<ImportTracker>();
@@ -368,7 +370,7 @@ async fn dictionary_import(engine: Engine, path: PathBuf) -> Result<()> {
         }
     });
 
-    let (result, _) = tokio::join!(engine.import_dictionary(&data, send_tracker), tracker_task);
+    let (result, _) = tokio::join!(engine.import_dictionary(data, send_tracker), tracker_task);
     result.context("failed to import dictionary")?;
 
     let elapsed = Instant::now().duration_since(start);
