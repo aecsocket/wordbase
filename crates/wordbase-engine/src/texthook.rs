@@ -56,6 +56,7 @@ async fn run(
         let new_task = tokio::spawn(handle_url(send_event.clone(), new_url));
         if let Some(old_task) = current_url_task.replace(new_task) {
             old_task.abort();
+            _ = send_event.send(Event::PullTexthookerDisconnected);
         }
     }
 }
@@ -80,8 +81,10 @@ async fn handle_url(send_event: broadcast::Sender<Event>, url: String) -> ! {
         };
 
         info!("Connected to {url:?}");
+        _ = send_event.send(Event::PullTexthookerConnected);
         let Err(err) = handle_stream(&send_event, stream).await;
         info!("Disconnected: {err:?}");
+        _ = send_event.send(Event::PullTexthookerDisconnected);
     }
 }
 

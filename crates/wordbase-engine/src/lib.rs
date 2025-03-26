@@ -81,6 +81,8 @@ pub struct Config {
 pub enum Event {
     ProfileAdded { profile: ProfileState },
     ProfileRemoved { profile_id: ProfileId },
+    PullTexthookerConnected,
+    PullTexthookerDisconnected,
     HookSentence(HookSentence),
     SyncDictionaries(Vec<DictionaryState>),
 }
