@@ -21,6 +21,7 @@ all-features = true
 render-html = ["dep:maud", "dep:html-escape", "dep:indexmap"]
 
 [dependencies]
+bytes = { workspace = true, features = ["serde"] }
 derive_more = { workspace = true, features = [
   "from",
   "display",

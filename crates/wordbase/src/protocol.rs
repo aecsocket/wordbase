@@ -216,7 +216,7 @@ mod tests {
         round_trip(FromServer::Error { message: default() });
         round_trip(FromServer::from(HookSentence::default()));
         round_trip(FromServer::from(RecordLookup {
-            source: default(),
+            source: DictionaryId(default()),
             term: Term::new(""),
             record: Record::GlossaryHtml(default()),
         }));

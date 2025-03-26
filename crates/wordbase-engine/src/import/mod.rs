@@ -1,14 +1,59 @@
+mod yomichan_audio;
 mod yomitan;
 
 use {
     crate::{Engine, db},
     anyhow::{Context, Result},
+    bytes::Bytes,
     derive_more::{Display, Error, From},
+    futures::{FutureExt, StreamExt, future::BoxFuture, stream::FuturesUnordered},
     sqlx::{Pool, Sqlite, Transaction},
-    std::{convert::Infallible, io::Cursor},
+    std::{
+        convert::Infallible,
+        io::Cursor,
+        sync::{Arc, LazyLock},
+    },
     tokio::sync::{Mutex, mpsc, oneshot},
-    wordbase::{DictionaryId, DictionaryMeta, RecordType, Term},
+    wordbase::{DictionaryFormat, DictionaryId, DictionaryMeta, RecordType, Term},
 };
+
+const IMPORT_FORMATS: LazyLock<Vec<Arc<dyn ImportFormat>>> = LazyLock::new(|| {
+    vec![
+        Arc::new(yomitan::Yomitan),
+        Arc::new(yomichan_audio::YomichanAudio),
+    ]
+});
+
+pub trait ImportFormat {
+    fn dictionary_format(&self) -> DictionaryFormat;
+
+    fn validate(&self, archive: Bytes) -> BoxFuture<Result<()>>;
+
+    fn import(
+        &self,
+        engine: &Engine,
+        archive: Bytes,
+        send_tracker: oneshot::Sender<ImportTracker>,
+    ) -> BoxFuture<Result<(), ImportError>>;
+}
+
+pub async fn format_of(archive: Bytes) -> Option<DictionaryFormat> {
+    let formats = IMPORT_FORMATS;
+    let mut tasks = formats
+        .iter()
+        .map(|format| {
+            format
+                .validate(archive.clone())
+                .map(move |result| (format, result))
+        })
+        .collect::<FuturesUnordered<_>>();
+    while let Some((format, result)) = tasks.next().await {
+        if result.is_ok() {
+            return Some(format.dictionary_format());
+        }
+    }
+    None
+}
 
 /// Failed to import a dictionary.
 #[derive(Debug, Display, Error, From)]

@@ -1,7 +1,7 @@
 #![doc = include_str!("../README.md")]
 #![allow(missing_docs, clippy::missing_errors_doc)]
 
-mod anki;
+pub mod anki;
 mod db;
 mod deinflect;
 mod dictionary;
@@ -11,6 +11,7 @@ mod profile;
 mod texthook;
 
 use {
+    anki::Anki,
     anyhow::{Context, Result},
     derive_more::{Deref, DerefMut},
     futures::never::Never,
@@ -31,6 +32,7 @@ pub struct Inner {
     db: Pool<Sqlite>,
     importer: Importer,
     pull_texthooker: PullTexthooker,
+    anki: Anki,
     send_event: broadcast::Sender<Event>,
 }
 
@@ -43,11 +45,13 @@ impl Engine {
             .context("failed to set up database")?;
         let (send_event, _) = broadcast::channel(CHANNEL_BUF_CAP);
         let (pull_texthooker, pull_texthooker_task) = PullTexthooker::new(send_event.clone());
+        let anki = Anki::new();
 
         let engine = Self(Arc::new(Inner {
             db,
             importer: Importer::new(),
             pull_texthooker,
+            anki,
             send_event,
         }));
         Ok((engine.clone(), async move {

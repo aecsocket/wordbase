@@ -1,5 +1,7 @@
 use {
     super::schema::{Index, KanjiBank, KanjiMetaBank, TagBank, TermBank, TermMetaBank},
+    crate::import::yomitan::INDEX_PATH,
+    anyhow::Result,
     derive_more::{Display, Error},
     rayon::prelude::*,
     regex::Regex,
@@ -102,8 +104,6 @@ where
     ///
     /// Errors if the index could not be parsed.
     pub fn new(new_reader: F) -> Result<(Self, Index), ParseError<E>> {
-        const INDEX_PATH: &str = "index.json";
-
         static TAG_BANK_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
             Regex::new("tag_bank_([0-9]+?)\\.json").expect("should be valid regex")
         });

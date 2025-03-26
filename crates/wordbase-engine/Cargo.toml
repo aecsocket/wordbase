@@ -24,14 +24,17 @@ lang-jpn = ["dep:lindera"]
 
 [dependencies]
 wordbase = { workspace = true }
-wordbase-ankiconnect = { workspace = true, features = ["reqwest"] }
+wordbase-ankiconnect = { workspace = true, features = ["client-reqwest"] }
 
 anyhow = { workspace = true }
+blocking = { workspace = true }
+bytes = { workspace = true }
 derive_more = { workspace = true, features = ["display", "error", "from"] }
 foldhash = { workspace = true }
 futures = { workspace = true }
 rayon = { workspace = true }
 regex = { workspace = true }
+reqwest = { workspace = true, default-features = true }
 rmp-serde = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

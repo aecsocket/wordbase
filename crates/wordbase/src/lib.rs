@@ -117,8 +117,17 @@ macro_rules! for_record_kinds {
             Frequency(record::Frequency),
             JpnPitch(lang::jpn::Pitch),
             YomitanRecord(format::yomitan::Record),
+            // YomichanAudio(format::yomichan_audio::Record),
         );
     };
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[repr(u32)]
+#[non_exhaustive]
+pub enum DictionaryFormat {
+    Yomitan,
+    YomichanAudio,
 }
 
 /// Metadata for a collection of [records] in a Wordbase server.
@@ -132,9 +141,11 @@ macro_rules! for_record_kinds {
 ///
 /// [records]: Record
 /// [term]: Term
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DictionaryMeta {
+    /// Format of this dictionary.
+    pub format: DictionaryFormat,
     /// Human-readable display name.
     ///
     /// This value is **not guaranteed to be unique** across a single server,
@@ -154,7 +165,7 @@ pub struct DictionaryMeta {
 }
 
 /// State of an imported dictionary in a Wordbase server.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DictionaryState {
     /// Unique identifier for this dictionary in the database.
@@ -175,7 +186,7 @@ pub struct DictionaryState {
 }
 
 /// Opaque and unique identifier for a single [`DictionaryState`] in a database.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DictionaryId(pub i64);
 
 /// Key for a [record] in a [dictionary], representing a single interpretation
@@ -325,7 +336,7 @@ impl Record {
 /// [record]: Record
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[expect(missing_docs, reason = "`Record` has more info")]
-#[repr(u16)]
+#[repr(u32)]
 #[non_exhaustive]
 pub enum RecordKind { $($kind,)* }
 
@@ -405,5 +416,5 @@ pub struct ProfileState {
 }
 
 /// Opaque and unique identifier for a single [`ProfileState`] in a database.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ProfileId(pub i64);

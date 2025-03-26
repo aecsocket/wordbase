@@ -4,6 +4,11 @@ TODO:
 - local audio server
 - ankiconnect
 
+audio server:
+- i query たべなかった
+- i get the term "食べる (たべる)"
+- i get audio bytes as a record
+
 # Installation
 
 TODO

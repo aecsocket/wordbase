@@ -2,23 +2,26 @@ mod parse;
 mod schema;
 
 use {
-    super::{ImportError, ImportTracker, insert_term},
+    super::{ImportError, ImportFormat, ImportTracker, insert_term},
     crate::{
         CHANNEL_BUF_CAP, Engine,
         import::{dictionary_exists_by_name, insert_dictionary},
     },
     anyhow::{Context as _, Result},
+    bytes::Bytes,
+    futures::future::BoxFuture,
     parse::{Parse, ParseError},
     sqlx::{Sqlite, Transaction},
     std::{
-        io::{Read, Seek},
+        convert::Infallible,
+        io::{Cursor, Read, Seek},
         iter,
         sync::atomic::{self, AtomicUsize},
     },
     tokio::sync::{Mutex, mpsc, oneshot},
     tracing::debug,
     wordbase::{
-        DictionaryId, DictionaryMeta, Term,
+        DictionaryFormat, DictionaryId, DictionaryMeta, Term,
         format::{
             self,
             yomitan::{GlossaryTag, structured},
@@ -26,7 +29,37 @@ use {
         lang,
         record::Frequency,
     },
+    zip::ZipArchive,
 };
+
+pub struct Yomitan;
+
+impl ImportFormat for Yomitan {
+    fn validate(&self, archive: Bytes) -> BoxFuture<Result<()>> {
+        Box::pin(async move {
+            blocking::unblock(|| {
+                let data = Cursor::new(archive);
+                let mut archive = ZipArchive::new(data).context("not a zip archive")?;
+                archive
+                    .by_name(INDEX_PATH)
+                    .with_context(|| format!("no `{INDEX_PATH}` in archive"))?;
+                Ok(())
+            })
+            .await
+        })
+    }
+
+    fn import(
+        &self,
+        engine: &Engine,
+        archive: Bytes,
+        send_tracker: oneshot::Sender<ImportTracker>,
+    ) -> BoxFuture<Result<(), ImportError>> {
+        todo!()
+    }
+}
+
+const INDEX_PATH: &str = "index.json";
 
 impl Engine {
     pub(super) async fn import_dictionary_yomitan<R: Read + Seek, E: Send>(
@@ -39,6 +72,7 @@ impl Engine {
     {
         let (parser, index) = Parse::new(new_reader).context("failed to parse index")?;
         let meta = DictionaryMeta {
+            format: DictionaryFormat::Yomitan,
             name: index.title,
             version: index.revision,
             description: index.description,
