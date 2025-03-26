@@ -24,8 +24,8 @@ lang-jpn = ["dep:lindera"]
 
 [dependencies]
 wordbase = { workspace = true }
+wordbase-ankiconnect = { workspace = true, features = ["reqwest"] }
 
-ankiconnect = { workspace = true }
 anyhow = { workspace = true }
 derive_more = { workspace = true, features = ["display", "error", "from"] }
 foldhash = { workspace = true }

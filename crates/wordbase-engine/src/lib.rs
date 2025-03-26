@@ -1,14 +1,14 @@
 #![doc = include_str!("../README.md")]
 #![allow(missing_docs, clippy::missing_errors_doc)]
 
+mod anki;
 mod db;
-pub mod deinflect;
+mod deinflect;
 mod dictionary;
 pub mod import;
 mod lookup;
-pub mod platform;
 mod profile;
-pub mod texthook;
+mod texthook;
 
 use {
     anyhow::{Context, Result},
