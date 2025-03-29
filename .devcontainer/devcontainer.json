@@ -3,12 +3,12 @@
   "build": {
     "dockerfile": "Dockerfile"
   },
-  "forwardPorts": [9518],
   "runArgs": [
     "--add-host=host.docker.internal:host-gateway",
-    "--security-opt=seccomp=unconfined",
-    "--device=/dev/dri"
+    "--device=/dev/dri",
+    "--security-opt=seccomp=unconfined"
   ],
+  "forwardPorts": [9518],
   "postCreateCommand": [".devcontainer/setup-schema-db.sh"],
   "containerEnv": {
     "XDG_RUNTIME_DIR": "/tmp/user/1000",

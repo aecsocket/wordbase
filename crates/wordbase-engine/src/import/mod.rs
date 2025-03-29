@@ -16,7 +16,7 @@ use {
     wordbase::{DictionaryFormat, DictionaryId, DictionaryMeta, RecordType, Term},
 };
 
-const FORMATS: LazyLock<HashMap<DictionaryFormat, Arc<dyn Importer>>> = LazyLock::new(|| {
+static FORMATS: LazyLock<HashMap<DictionaryFormat, Arc<dyn Importer>>> = LazyLock::new(|| {
     [
         (
             DictionaryFormat::Yomitan,
@@ -64,8 +64,7 @@ pub async fn format_of(archive: &Bytes) -> Result<DictionaryFormat, GetFormatErr
     let mut valid_formats = Vec::<DictionaryFormat>::new();
     let mut format_errors = HashMap::<DictionaryFormat, anyhow::Error>::new();
 
-    let formats = FORMATS;
-    let format_results = formats
+    let format_results = FORMATS
         .iter()
         .map(|(format, importer)| async move {
             let result = importer.validate(archive.clone()).await;
@@ -147,8 +146,7 @@ impl Engine {
         let format = format_of(&archive)
             .await
             .map_err(ImportAnyError::GetFormat)?;
-        let formats = FORMATS;
-        let importer = formats
+        let importer = FORMATS
             .get(&format)
             .ok_or(ImportAnyError::NoImporter { format })?;
         importer
