@@ -21,7 +21,7 @@ use {
 /// [morae]: https://en.wikipedia.org/wiki/Mora_(linguistics)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Pitch {
+pub struct JpnPitch {
     /// What [mora] position the [downstep] is located on.
     ///
     /// This maps to a typical dictionary's "pitch position" entry:
@@ -118,7 +118,7 @@ pub struct PitchRender<'a> {
     /// Reading of this pitch.
     pub reading: &'a str,
     /// Pitch information.
-    pub pitch: &'a Pitch,
+    pub pitch: &'a JpnPitch,
 }
 
 #[cfg(feature = "render-html")]

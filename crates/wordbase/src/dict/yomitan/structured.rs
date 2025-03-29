@@ -7,7 +7,47 @@ use {
     derive_more::{Deref, DerefMut, Display},
     foldhash::HashMap,
     serde::{Deserialize, Serialize},
+    std::fmt,
 };
+
+macro_rules! display_as_serialize {
+    ($T:ty) => {
+        const _: () = {
+            use std::fmt;
+
+            impl fmt::Display for $T {
+                fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                    let serializer = FormatterSerializer { f };
+                    self.serialize(serializer)
+                }
+            }
+        };
+    };
+}
+
+struct FormatterSerializer<'a, 'b> {
+    pub f: &'a mut fmt::Formatter<'b>,
+}
+
+impl serde::Serializer for FormatterSerializer<'_, '_> {
+    type Ok = ();
+    type Error = fmt::Error;
+
+    fn serialize_unit_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        variant: &'static str,
+    ) -> Result<Self::Ok, Self::Error> {
+        write!(self.f, "{variant}")
+    }
+
+    serde::__serialize_unimplemented! {
+        bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str bytes none some
+        unit unit_struct newtype_struct newtype_variant
+        seq tuple tuple_struct tuple_variant map struct struct_variant
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -22,7 +62,7 @@ pub enum VerticalAlign {
     Bottom,
 }
 
-crate::util::display_as_serialize!(VerticalAlign);
+display_as_serialize!(VerticalAlign);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -32,7 +72,7 @@ pub enum TextDecorationLine {
     LineThrough,
 }
 
-crate::util::display_as_serialize!(TextDecorationLine);
+display_as_serialize!(TextDecorationLine);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -44,7 +84,7 @@ pub enum TextDecorationStyle {
     Wavy,
 }
 
-crate::util::display_as_serialize!(TextDecorationStyle);
+display_as_serialize!(TextDecorationStyle);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -53,7 +93,7 @@ pub enum FontStyle {
     Italic,
 }
 
-crate::util::display_as_serialize!(FontStyle);
+display_as_serialize!(FontStyle);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -62,7 +102,7 @@ pub enum FontWeight {
     Bold,
 }
 
-crate::util::display_as_serialize!(FontWeight);
+display_as_serialize!(FontWeight);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -72,7 +112,7 @@ pub enum WordBreak {
     KeepAll,
 }
 
-crate::util::display_as_serialize!(WordBreak);
+display_as_serialize!(WordBreak);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -85,7 +125,7 @@ pub enum TextAlign {
     Justify,
 }
 
-crate::util::display_as_serialize!(TextAlign);
+display_as_serialize!(TextAlign);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -94,7 +134,7 @@ pub enum SizeUnits {
     Em,
 }
 
-crate::util::display_as_serialize!(SizeUnits);
+display_as_serialize!(SizeUnits);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -104,7 +144,7 @@ pub enum ImageRendering {
     CrispEdges,
 }
 
-crate::util::display_as_serialize!(ImageRendering);
+display_as_serialize!(ImageRendering);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -113,7 +153,7 @@ pub enum ImageAppearance {
     Monochrome,
 }
 
-crate::util::display_as_serialize!(ImageAppearance);
+display_as_serialize!(ImageAppearance);
 
 #[derive(Debug, Display, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -267,7 +307,6 @@ pub enum Element {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Content {
-    // todo doc: must not have \n's
     String(String),
     Element(Box<Element>),
     Content(Vec<Content>),

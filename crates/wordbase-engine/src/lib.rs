@@ -1,7 +1,7 @@
 #![doc = include_str!("../README.md")]
 #![allow(missing_docs, clippy::missing_errors_doc)]
 
-pub mod anki;
+// pub mod anki;
 mod db;
 mod deinflect;
 mod dictionary;
@@ -11,7 +11,6 @@ mod profile;
 mod texthook;
 
 use {
-    anki::Anki,
     anyhow::{Context, Result},
     derive_more::{Deref, DerefMut},
     futures::never::Never,
@@ -20,11 +19,10 @@ use {
     std::{path::PathBuf, sync::Arc},
     texthook::PullTexthooker,
     tokio::sync::broadcast,
-    wordbase::{DictionaryState, ProfileId, ProfileState, hook::HookSentence},
+    wordbase::{DictionaryId, Profile, ProfileId, TexthookerSentence},
 };
 
 #[derive(Debug, Clone, Deref, DerefMut)]
-#[non_exhaustive]
 pub struct Engine(Arc<Inner>);
 
 #[derive(Debug)]
@@ -32,7 +30,7 @@ pub struct Inner {
     db: Pool<Sqlite>,
     imports: Imports,
     pull_texthooker: PullTexthooker,
-    anki: Anki,
+    // anki: Anki,
     send_event: broadcast::Sender<Event>,
 }
 
@@ -45,13 +43,13 @@ impl Engine {
             .context("failed to set up database")?;
         let (send_event, _) = broadcast::channel(CHANNEL_BUF_CAP);
         let (pull_texthooker, pull_texthooker_task) = PullTexthooker::new(send_event.clone());
-        let anki = Anki::new();
+        // let anki = Anki::new();
 
         let engine = Self(Arc::new(Inner {
             db,
             imports: Imports::new(),
             pull_texthooker,
-            anki,
+            // anki,
             send_event,
         }));
         Ok((engine.clone(), async move {
@@ -83,12 +81,13 @@ pub struct Config {
 
 #[derive(Debug, Clone)]
 pub enum Event {
-    ProfileAdded { profile: ProfileState },
-    ProfileRemoved { profile_id: ProfileId },
+    ProfileAdded { profile: Profile },
+    ProfileRemoved { id: ProfileId },
+    DictionaryPositionSet { id: DictionaryId, position: i64 },
+    DictionaryRemoved { id: DictionaryId },
     PullTexthookerConnected,
     PullTexthookerDisconnected,
-    HookSentence(HookSentence),
-    SyncDictionaries(Vec<DictionaryState>),
+    TexthookerSentence(TexthookerSentence),
 }
 
 const CHANNEL_BUF_CAP: usize = 4;

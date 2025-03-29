@@ -2,14 +2,12 @@ mod parse;
 mod schema;
 
 use {
-    super::{ImportError, ImportTracker, Importer, insert_term},
-    crate::{
-        CHANNEL_BUF_CAP, Engine,
-        import::{dictionary_exists_by_name, insert_dictionary},
-    },
-    anyhow::{Context as _, Result},
+    super::{ImportContinue, ImportKind, ImportTracker, insert_term},
+    crate::{CHANNEL_BUF_CAP, Engine, import::insert_dictionary},
+    anyhow::{Context as _, Result, bail},
     bytes::Bytes,
     futures::future::BoxFuture,
+    parse::ParseBanks,
     sqlx::{Sqlite, Transaction},
     std::{
         io::Cursor,
@@ -19,34 +17,31 @@ use {
             atomic::{self, AtomicUsize},
         },
     },
-    tokio::sync::{mpsc, oneshot},
+    tokio::sync::mpsc,
     tracing::debug,
     wordbase::{
-        DictionaryFormat, DictionaryId, DictionaryMeta, Term,
-        format::{
-            self,
-            yomitan::{GlossaryTag, structured},
-        },
-        lang,
-        record::Frequency,
+        DictionaryId, DictionaryKind, DictionaryMeta, Term,
+        dict::yomitan::{Frequency, Glossary, GlossaryTag, Pitch, structured},
     },
     zip::ZipArchive,
 };
 
 pub struct Yomitan;
 
-impl Importer for Yomitan {
-    fn validate(&self, archive: Bytes) -> BoxFuture<'_, Result<()>> {
+impl ImportKind for Yomitan {
+    fn is_of_kind(&self, archive: Bytes) -> BoxFuture<'_, Result<()>> {
         Box::pin(blocking::unblock(move || validate_blocking(&archive)))
     }
 
-    fn import<'a>(
+    fn start_import<'a>(
         &'a self,
         engine: &'a Engine,
         archive: Bytes,
-        send_tracker: oneshot::Sender<ImportTracker>,
-    ) -> BoxFuture<'a, Result<(), ImportError>> {
-        Box::pin(import(engine, archive, send_tracker))
+    ) -> BoxFuture<'a, Result<(ImportTracker, ImportContinue<'a>)>> {
+        Box::pin(async move {
+            let (tracker, continuation) = start_import(engine, archive).await?;
+            Ok((tracker, Box::pin(continuation) as ImportContinue))
+        })
     }
 }
 
@@ -61,41 +56,41 @@ fn validate_blocking(archive: &[u8]) -> Result<()> {
     Ok(())
 }
 
-async fn import(
+async fn start_import(
     engine: &Engine,
     archive: Bytes,
-    send_tracker: oneshot::Sender<ImportTracker>,
-) -> Result<(), ImportError> {
+) -> Result<(ImportTracker, impl Future<Output = Result<()>>)> {
     let (parse_banks, index) = blocking::unblock(|| parse::start_blocking(archive))
         .await
         .context("failed to parse index")?;
-    let meta = DictionaryMeta {
-        format: DictionaryFormat::Yomitan,
-        name: index.title,
-        version: index.revision,
-        description: index.description,
-        url: index.url,
-    };
+    let mut meta = DictionaryMeta::new(DictionaryKind::Yomitan, index.title, index.revision);
+    meta.description = index.description;
+    meta.url = index.url;
+    meta.attribution = index.attribution;
+
+    let (send_progress, recv_progress) = mpsc::channel(CHANNEL_BUF_CAP);
+    Ok((
+        ImportTracker {
+            meta: meta.clone(),
+            recv_progress,
+        },
+        continue_import(engine, parse_banks, meta, send_progress),
+    ))
+}
+
+async fn continue_import(
+    engine: &Engine,
+    parse_banks: ParseBanks,
+    meta: DictionaryMeta,
+    send_progress: mpsc::Sender<f64>,
+) -> Result<()> {
     let banks_len = parse_banks.tag_banks().len()
         + parse_banks.term_banks().len()
         + parse_banks.term_meta_banks().len()
         + parse_banks.kanji_banks().len()
         + parse_banks.kanji_meta_banks().len();
-
-    let (send_progress, recv_progress) = mpsc::channel(CHANNEL_BUF_CAP);
-    _ = send_tracker.send(ImportTracker {
-        meta: meta.clone(),
-        recv_progress,
-    });
-
-    let already_exists = dictionary_exists_by_name(&engine.db, &meta.name)
-        .await
-        .context("failed to check if dictionary exists")?;
-    if already_exists {
-        return Err(ImportError::AlreadyExists);
-    }
-
     let banks_done = Arc::new(AtomicUsize::new(0));
+
     let (send_bank_done, mut recv_bank_done) = mpsc::channel(CHANNEL_BUF_CAP);
     let parse_task = blocking::unblock({
         let banks_done = banks_done.clone();
@@ -116,8 +111,7 @@ async fn import(
     let records_len =
         banks.term.len() + banks.term_meta.len() + banks.kanji.len() + banks.kanji_meta.len();
     if records_len == 0 {
-        debug!("Parse complete, no records to insert");
-        return Err(ImportError::NoRecords);
+        bail!("no records to insert");
     }
 
     let records_done = AtomicUsize::new(0);
@@ -168,11 +162,6 @@ async fn import(
     drop(send_progress);
 
     tx.commit().await.context("failed to commit transaction")?;
-
-    engine
-        .sync_dictionaries()
-        .await
-        .context("failed to sync dictionaries")?;
     Ok(())
 }
 
@@ -199,15 +188,15 @@ async fn import_term(
     )
     .cloned()
     .collect::<Vec<_>>();
-    let glossary = term_data
+    let content = term_data
         .glossary
         .into_iter()
         .filter_map(to_content)
         .collect();
-    let glossary = format::yomitan::Record {
+    let glossary = Glossary {
         popularity: term_data.score,
         tags,
-        glossary,
+        content,
     };
 
     insert_term(tx, source, &term, &glossary, scratch).await?;
@@ -240,19 +229,18 @@ async fn import_term_meta(
     let headword = term_meta.expression;
     match term_meta.data {
         schema::TermMetaData::Frequency(frequency) => {
-            for (reading, record) in to_frequencies(frequency) {
-                let term = reading.map_or_else(
-                    || Term::new(headword.clone()),
-                    |reading| Term::with_reading(headword.clone(), reading),
-                );
+            let (record, reading) = to_frequency_and_reading(frequency);
+            let term = reading.map_or_else(
+                || Term::new(headword.clone()),
+                |reading| Term::with_reading(headword.clone(), reading),
+            );
 
-                insert_term(tx, source, &term, &record, scratch)
-                    .await
-                    .context("failed to insert frequency record")?;
-            }
+            insert_term(tx, source, &term, &record, scratch)
+                .await
+                .context("failed to insert frequency record")?;
         }
         schema::TermMetaData::Pitch(pitch) => {
-            for (reading, record) in to_pitch(pitch) {
+            for (record, reading) in to_pitches_and_readings(pitch) {
                 insert_term(
                     tx,
                     source,
@@ -299,38 +287,51 @@ fn to_content(raw: schema::Glossary) -> Option<structured::Content> {
     }
 }
 
-fn to_frequencies(
-    raw: schema::TermMetaFrequency,
-) -> impl Iterator<Item = (Option<String>, Frequency)> {
+fn to_frequency_and_reading(raw: schema::TermMetaFrequency) -> (Frequency, Option<String>) {
     let (reading, generic) = match raw {
         schema::TermMetaFrequency::Generic(generic) => (None, generic),
         schema::TermMetaFrequency::WithReading { reading, frequency } => (Some(reading), frequency),
     };
 
     let frequency = match generic {
-        schema::GenericFrequencyData::Number(rank) => Some(Frequency::new(rank)),
+        schema::GenericFrequencyData::Number(rank) => Frequency {
+            rank: Some(rank),
+            display: None,
+        },
         schema::GenericFrequencyData::String(rank) => {
             // best-effort attempt
-            rank.trim().parse::<u64>().map(Frequency::new).ok()
+            if let Ok(rank) = rank.trim().parse() {
+                Frequency {
+                    rank: Some(rank),
+                    display: None,
+                }
+            } else {
+                Frequency {
+                    rank: None,
+                    display: Some(rank),
+                }
+            }
         }
         schema::GenericFrequencyData::Complex {
-            value: rank,
-            display_value: display,
-        } => Some(Frequency { rank, display }),
+            value,
+            display_value,
+        } => Frequency {
+            rank: Some(value),
+            display: display_value,
+        },
     };
-
-    frequency.map(|new| (reading, new)).into_iter()
+    (frequency, reading)
 }
 
-fn to_pitch(raw: schema::TermMetaPitch) -> impl Iterator<Item = (String, lang::jpn::Pitch)> {
+fn to_pitches_and_readings(raw: schema::TermMetaPitch) -> impl Iterator<Item = (Pitch, String)> {
     raw.pitches.into_iter().map(move |pitch| {
         (
-            raw.reading.clone(),
-            lang::jpn::Pitch {
+            Pitch {
                 position: pitch.position,
                 nasal: to_pitch_positions(pitch.nasal),
                 devoice: to_pitch_positions(pitch.devoice),
             },
+            raw.reading.clone(),
         )
     })
 }

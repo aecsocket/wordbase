@@ -1,5 +1,5 @@
 use {
-    crate::format::yomitan::structured::{Content, ContentStyle, Element},
+    super::structured::{Content, ContentStyle, Element},
     maud::{Markup, Render, html},
     std::fmt,
 };

@@ -1,12 +1,12 @@
 [package]
 name = "wordbase-server"
 
-authors.workspace = true
-categories.workspace = true
-edition.workspace = true
-keywords.workspace = true
-license.workspace = true
-repository.workspace = true
+authors.workspace      = true
+categories.workspace   = true
+edition.workspace      = true
+keywords.workspace     = true
+license.workspace      = true
+repository.workspace   = true
 rust-version.workspace = true
 
 [lints]
@@ -21,10 +21,10 @@ wordbase = { workspace = true, features = ["parse-yomitan"] }
 anyhow = { workspace = true }
 cfg-if = { workspace = true }
 derive_more = { workspace = true, features = [
-    "display",
-    "error",
-    "deref",
-    "deref_mut",
+  "display",
+  "error",
+  "deref",
+  "deref_mut",
 ] }
 foldhash = { workspace = true }
 futures = { workspace = true }

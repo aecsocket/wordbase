@@ -4,7 +4,7 @@ use {
     futures::{StreamExt, TryStreamExt},
     sqlx::{QueryBuilder, Row},
     std::borrow::Borrow,
-    wordbase::{DictionaryId, Record, RecordKind, Term, for_record_kinds, protocol::RecordLookup},
+    wordbase::{DictionaryId, Record, RecordKind, RecordLookup, Term, for_kinds},
 };
 
 impl Engine {
@@ -57,7 +57,7 @@ impl Engine {
             let term = Term::from_pair(record.headword, record.reading)
                 .context("found record where both headword and reading are null")?;
 
-            macro_rules! deserialize_record { ($($kind:ident($data_ty:path)),* $(,)?) => {{
+            macro_rules! deserialize_record { ($($dict_kind:ident($dict_path:ident) { $($record_kind:ident),* $(,)? }),* $(,)?) => { paste::paste! {{
                 #[allow(
                     non_upper_case_globals,
                     reason = "cannot capitalize ident in macro invocation"
@@ -65,20 +65,24 @@ impl Engine {
                 mod discrim {
                     use super::RecordKind;
 
-                    $(pub const $kind: u16 = RecordKind::$kind as u16;)*
+                    $($(
+                    pub const [< $dict_kind $record_kind >]: u32 = RecordKind::[< $dict_kind $record_kind >] as u32;
+                    )*)*
                 }
 
-                match u16::try_from(record.kind) {
-                    $(Ok(discrim::$kind) => {
+                match u32::try_from(record.kind) {
+                    $($(
+                        Ok(discrim::[< $dict_kind $record_kind >]) => {
                         let record = db::deserialize(&record.data)
-                            .with_context(|| format!("failed to deserialize {} record", stringify!($kind)))?;
-                        Record::$kind(record)
-                    })*
+                            .with_context(|| format!("failed to deserialize {} record", stringify!([< $dict_kind $record_kind >])))?;
+                        Record::[< $dict_kind $record_kind >](record)
+                    }
+                    )*)*
                     _ => bail!("invalid record kind {}", record.kind),
                 }
-            }}}
+            }}}}
 
-            let record = for_record_kinds!(deserialize_record);
+            let record = for_kinds!(deserialize_record);
 
             Ok(RecordLookup {
                 source,

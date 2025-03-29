@@ -5,7 +5,7 @@ use {
     crate::{Engine, db},
     anyhow::{Context, Result},
     bytes::Bytes,
-    derive_more::{Display, Error, From},
+    derive_more::{Display, Error},
     futures::{StreamExt, future::BoxFuture, stream::FuturesUnordered},
     sqlx::{Pool, Sqlite, Transaction},
     std::{
@@ -13,46 +13,47 @@ use {
         sync::{Arc, LazyLock},
     },
     tokio::sync::{Mutex, mpsc, oneshot},
-    wordbase::{DictionaryFormat, DictionaryId, DictionaryMeta, RecordType, Term},
+    wordbase::{DictionaryId, DictionaryKind, DictionaryMeta, RecordType, Term},
 };
 
-static FORMATS: LazyLock<HashMap<DictionaryFormat, Arc<dyn Importer>>> = LazyLock::new(|| {
+static FORMATS: LazyLock<HashMap<DictionaryKind, Arc<dyn ImportKind>>> = LazyLock::new(|| {
     [
         (
-            DictionaryFormat::Yomitan,
-            Arc::new(yomitan::Yomitan) as Arc<dyn Importer>,
+            DictionaryKind::Yomitan,
+            Arc::new(yomitan::Yomitan) as Arc<dyn ImportKind>,
         ),
         (
-            DictionaryFormat::YomichanAudio,
+            DictionaryKind::YomichanAudio,
             Arc::new(yomichan_audio::YomichanAudio),
         ),
     ]
     .into()
 });
 
-pub trait Importer: Send + Sync {
-    fn validate(&self, archive: Bytes) -> BoxFuture<'_, Result<()>>;
+pub trait ImportKind: Send + Sync {
+    fn is_of_kind(&self, archive: Bytes) -> BoxFuture<'_, Result<()>>;
 
-    fn import<'a>(
+    fn start_import<'a>(
         &'a self,
         engine: &'a Engine,
         archive: Bytes,
-        send_tracker: oneshot::Sender<ImportTracker>,
-    ) -> BoxFuture<'a, Result<(), ImportError>>;
+    ) -> BoxFuture<'a, Result<(ImportTracker, ImportContinue<'a>)>>;
 }
+
+pub type ImportContinue<'a> = BoxFuture<'a, Result<()>>;
 
 #[derive(Debug, Display, Error)]
-pub enum GetFormatError {
+pub enum GetKindError {
     #[display(
-        "archive does not represent a valid dictionary format\n{}",
+        "archive does not represent a valid dictionary kind\n{}",
         format_errors(_0)
     )]
-    NoFormat(#[error(ignore)] HashMap<DictionaryFormat, anyhow::Error>),
-    #[display("archive represents multiple dictionary formats: {_0:?}")]
-    MultipleFormats(#[error(ignore)] Vec<DictionaryFormat>),
+    NoFormat(#[error(ignore)] HashMap<DictionaryKind, anyhow::Error>),
+    #[display("archive represents multiple dictionary kinds: {_0:?}")]
+    MultipleFormats(#[error(ignore)] Vec<DictionaryKind>),
 }
 
-fn format_errors(errors: &HashMap<DictionaryFormat, anyhow::Error>) -> String {
+fn format_errors(errors: &HashMap<DictionaryKind, anyhow::Error>) -> String {
     errors
         .iter()
         .map(|(format, err)| format!("does not represent a `{format:?}` dictionary: {err:?}\n"))
@@ -60,14 +61,14 @@ fn format_errors(errors: &HashMap<DictionaryFormat, anyhow::Error>) -> String {
         .join("\n")
 }
 
-pub async fn format_of(archive: &Bytes) -> Result<DictionaryFormat, GetFormatError> {
-    let mut valid_formats = Vec::<DictionaryFormat>::new();
-    let mut format_errors = HashMap::<DictionaryFormat, anyhow::Error>::new();
+pub async fn kind_of(archive: &Bytes) -> Result<DictionaryKind, GetKindError> {
+    let mut valid_formats = Vec::<DictionaryKind>::new();
+    let mut format_errors = HashMap::<DictionaryKind, anyhow::Error>::new();
 
     let format_results = FORMATS
         .iter()
         .map(|(format, importer)| async move {
-            let result = importer.validate(archive.clone()).await;
+            let result = importer.is_of_kind(archive.clone()).await;
             (*format, result)
         })
         .collect::<FuturesUnordered<_>>()
@@ -83,24 +84,10 @@ pub async fn format_of(archive: &Bytes) -> Result<DictionaryFormat, GetFormatErr
     }
 
     match (valid_formats.first(), valid_formats.len()) {
-        (None, _) => Err(GetFormatError::NoFormat(format_errors)),
+        (None, _) => Err(GetKindError::NoFormat(format_errors)),
         (Some(format), 1) => Ok(*format),
-        (_, _) => Err(GetFormatError::MultipleFormats(valid_formats)),
+        (_, _) => Err(GetKindError::MultipleFormats(valid_formats)),
     }
-}
-
-/// Failed to import a dictionary.
-#[derive(Debug, Display, Error, From)]
-pub enum ImportError {
-    /// Dictionary with this name already exists.
-    #[display("already exists")]
-    AlreadyExists,
-    /// Dictionary was parsed, but it had no records to insert into the
-    /// database.
-    #[display("no records to insert")]
-    NoRecords,
-    /// Implementation-specific error.
-    Other(#[from] anyhow::Error),
 }
 
 /// Tracks the state of a dictionary import operation.
@@ -125,15 +112,20 @@ impl Imports {
 }
 
 #[derive(Debug, Display, Error)]
-pub enum ImportAnyError {
-    #[display("failed to get archive format")]
-    GetFormat(GetFormatError),
-    #[display("no importer for format `{format:?}`")]
-    NoImporter { format: DictionaryFormat },
-    #[display("failed to import as `{format:?}`")]
+pub enum ImportError {
+    #[display("failed to determine dictionary kind")]
+    GetKind(GetKindError),
+    #[display("no importer for kind `{kind:?}`")]
+    NoImporter { kind: DictionaryKind },
+    #[display("failed to parse meta as `{kind:?}`")]
+    ParseMeta {
+        kind: DictionaryKind,
+        source: anyhow::Error,
+    },
+    #[display("failed to import as `{kind:?}`")]
     Import {
-        format: DictionaryFormat,
-        source: ImportError,
+        kind: DictionaryKind,
+        source: anyhow::Error,
     },
 }
 
@@ -142,17 +134,17 @@ impl Engine {
         &self,
         archive: Bytes,
         send_tracker: oneshot::Sender<ImportTracker>,
-    ) -> Result<(), ImportAnyError> {
-        let format = format_of(&archive)
+    ) -> Result<(), ImportError> {
+        let kind = kind_of(&archive).await.map_err(ImportError::GetKind)?;
+        let importer = FORMATS.get(&kind).ok_or(ImportError::NoImporter { kind })?;
+        let (tracker, import) = importer
+            .start_import(self, archive)
             .await
-            .map_err(ImportAnyError::GetFormat)?;
-        let importer = FORMATS
-            .get(&format)
-            .ok_or(ImportAnyError::NoImporter { format })?;
-        importer
-            .import(self, archive, send_tracker)
+            .map_err(|source| ImportError::ParseMeta { kind, source })?;
+        _ = send_tracker.send(tracker);
+        import
             .await
-            .map_err(|source| ImportAnyError::Import { format, source })
+            .map_err(|source| ImportError::Import { kind, source })
     }
 }
 

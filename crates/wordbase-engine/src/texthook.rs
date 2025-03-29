@@ -9,7 +9,7 @@ use tokio::{
 };
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tracing::{info, trace};
-use wordbase::hook::HookSentence;
+use wordbase::TexthookerSentence;
 
 use crate::{CHANNEL_BUF_CAP, Engine, Event};
 
@@ -49,19 +49,20 @@ async fn run(
     send_event: broadcast::Sender<Event>,
     mut recv_new_url: mpsc::Receiver<String>,
 ) -> Result<Never> {
-    let mut current_url_task = None;
+    let mut current_task = None;
     loop {
         let new_url = recv_new_url.recv().await.context("channel closed")?;
 
         let new_task = tokio::spawn(handle_url(send_event.clone(), new_url));
-        if let Some(old_task) = current_url_task.replace(new_task) {
+        let old_task = current_task.replace(new_task);
+        if let Some(old_task) = old_task {
             old_task.abort();
             _ = send_event.send(Event::PullTexthookerDisconnected);
         }
     }
 }
 
-async fn handle_url(send_event: broadcast::Sender<Event>, url: String) -> ! {
+async fn handle_url(send_event: broadcast::Sender<Event>, url: String) {
     const RECONNECT_INTERVAL: Duration = Duration::from_secs(1);
 
     if url.trim().is_empty() {
@@ -99,8 +100,8 @@ async fn handle_stream(
             .context("channel closed")?
             .context("connection error")?
             .into_data();
-        let sentence = serde_json::from_slice::<HookSentence>(&message)
+        let sentence = serde_json::from_slice::<TexthookerSentence>(&message)
             .context("failed to deserialize message as hook sentence")?;
-        _ = send_event.send(Event::HookSentence(sentence));
+        _ = send_event.send(Event::TexthookerSentence(sentence));
     }
 }

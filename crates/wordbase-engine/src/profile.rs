@@ -1,6 +1,7 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
+use derive_more::{Display, Error};
 use futures::StreamExt;
-use wordbase::{DictionaryId, ProfileId, ProfileMeta, ProfileState, protocol::NotFound};
+use wordbase::{DictionaryId, Profile, ProfileId, ProfileMeta};
 
 use crate::{Engine, Event};
 
@@ -12,8 +13,8 @@ impl Engine {
         Ok(ProfileId(id))
     }
 
-    pub async fn profiles(&self) -> Result<Vec<ProfileState>> {
-        let mut profiles = Vec::<ProfileState>::new();
+    pub async fn profiles(&self) -> Result<Vec<Profile>> {
+        let mut profiles = Vec::<Profile>::new();
 
         let mut records = sqlx::query!(
             "SELECT profile.id, profile.meta, ped.dictionary
@@ -33,7 +34,7 @@ impl Engine {
                     let index = profiles.len();
                     let meta = serde_json::from_str::<ProfileMeta>(&record.meta)
                         .context("failed to deserialize profile meta")?;
-                    profiles.push(ProfileState {
+                    profiles.push(Profile {
                         id,
                         meta,
                         enabled_dictionaries: Vec::new(),
@@ -83,7 +84,7 @@ impl Engine {
         tx.commit().await.context("failed to commit transaction")?;
 
         _ = self.send_event.send(Event::ProfileAdded {
-            profile: ProfileState {
+            profile: Profile {
                 id: new_id,
                 meta,
                 enabled_dictionaries: vec![], // TODO
@@ -99,17 +100,19 @@ impl Engine {
         Ok(())
     }
 
-    pub async fn delete_profile(&self, id: ProfileId) -> Result<Result<(), NotFound>> {
+    pub async fn delete_profile(&self, id: ProfileId) -> Result<()> {
         let result = sqlx::query!("DELETE FROM profile WHERE id = $1", id.0)
             .execute(&self.db)
             .await?;
         if result.rows_affected() == 0 {
-            return Ok(Err(NotFound));
+            bail!(NotFound);
         }
 
-        _ = self
-            .send_event
-            .send(Event::ProfileRemoved { profile_id: id });
-        Ok(Ok(()))
+        _ = self.send_event.send(Event::ProfileRemoved { id });
+        Ok(())
     }
 }
+
+#[derive(Debug, Clone, Display, Error)]
+#[display("profile not found")]
+pub struct NotFound;

@@ -17,17 +17,14 @@ ENV EDITOR=/usr/bin/helix
 
 # install Rust
 RUN yay -Syu --noconfirm \
-    rustup clang lld && \
+    rustup clang lld taplo && \
     rustup default stable && \
     rustup install nightly && \
     curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | sh && \
     cargo binstall cargo-shear
 
 # install extra tools
-RUN yay -Syu --noconfirm websocat mecab && \
-    sudo mkdir -p /usr/libexec && \
-    sudo ln -s /usr/lib/mecab/ /usr/libexec/mecab && \
-    yay -Syu --noconfirm mecab-ipadic
+RUN yay -Syu --noconfirm websocat
 
 # install UI development libraries
 RUN yay -Syu --noconfirm \

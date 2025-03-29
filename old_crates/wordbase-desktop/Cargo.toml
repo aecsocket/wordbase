@@ -1,12 +1,12 @@
 [package]
 name = "wordbase-desktop"
 
-authors.workspace = true
-categories.workspace = true
-edition.workspace = true
-keywords.workspace = true
-license.workspace = true
-repository.workspace = true
+authors.workspace      = true
+categories.workspace   = true
+edition.workspace      = true
+keywords.workspace     = true
+license.workspace      = true
+repository.workspace   = true
 rust-version.workspace = true
 
 [lints]
@@ -16,26 +16,26 @@ workspace = true
 all-features = true
 
 [dependencies]
-wordbase = { workspace = true }
+wordbase        = { workspace = true }
 wordbase-engine = { workspace = true }
 
-anyhow = { workspace = true }
-bimap = { workspace = true }
-derive_more = { workspace = true, features = ["display"] }
-foldhash = { workspace = true }
-form_urlencoded = { workspace = true }
-futures = { workspace = true }
-glib = { workspace = true, features = ["log"] }
-gtk4 = { workspace = true, features = ["gnome_47", "blueprint"] }
-libadwaita = { workspace = true, features = ["v1_7"] }
-open = { workspace = true }
-rand = { workspace = true }
-rmp-serde = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
-sqlx = { workspace = true, features = ["runtime-tokio", "sqlite"] }
-tokio = { workspace = true, features = ["full"] }
-tracing = { workspace = true }
+anyhow             = { workspace = true }
+bimap              = { workspace = true }
+derive_more        = { workspace = true, features = ["display"] }
+foldhash           = { workspace = true }
+form_urlencoded    = { workspace = true }
+futures            = { workspace = true }
+glib               = { workspace = true, features = ["log"] }
+gtk4               = { workspace = true, features = ["gnome_47", "blueprint"] }
+libadwaita         = { workspace = true, features = ["v1_7"] }
+open               = { workspace = true }
+rand               = { workspace = true }
+rmp-serde          = { workspace = true }
+serde              = { workspace = true, features = ["derive"] }
+serde_json         = { workspace = true }
+sqlx               = { workspace = true, features = ["runtime-tokio", "sqlite"] }
+tokio              = { workspace = true, features = ["full"] }
+tracing            = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-webkit6 = { workspace = true }
-zbus = { workspace = true, features = ["tokio"] }
+webkit6            = { workspace = true }
+zbus               = { workspace = true, features = ["tokio"] }

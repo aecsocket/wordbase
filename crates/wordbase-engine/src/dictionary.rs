@@ -1,12 +1,13 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
+use derive_more::{Display, Error};
 use futures::TryStreamExt;
 use tokio_stream::StreamExt;
-use wordbase::{DictionaryId, DictionaryMeta, DictionaryState, protocol::NotFound};
+use wordbase::{Dictionary, DictionaryId, DictionaryMeta};
 
 use crate::{Engine, Event};
 
 impl Engine {
-    pub async fn dictionaries(&self) -> Result<Vec<DictionaryState>> {
+    pub async fn dictionaries(&self) -> Result<Vec<Dictionary>> {
         sqlx::query!(
             r#"SELECT
                 dictionary.id,
@@ -24,7 +25,7 @@ impl Engine {
             let record = record.context("failed to fetch record")?;
             let meta = serde_json::from_str::<DictionaryMeta>(&record.meta)
                 .context("failed to deserialize dictionary meta")?;
-            anyhow::Ok(DictionaryState {
+            anyhow::Ok(Dictionary {
                 id: DictionaryId(record.id),
                 position: record.position,
                 enabled: record.enabled,
@@ -35,7 +36,7 @@ impl Engine {
         .await
     }
 
-    pub async fn dictionary(&self, id: DictionaryId) -> Result<Result<DictionaryState, NotFound>> {
+    pub async fn dictionary(&self, id: DictionaryId) -> Result<Dictionary> {
         let record = sqlx::query!(
             r#"SELECT
                 dictionary.id,
@@ -51,21 +52,15 @@ impl Engine {
             id.0
         )
         .fetch_one(&self.db)
-        .await;
-        match record {
-            Ok(record) => {
-                let meta = serde_json::from_str::<DictionaryMeta>(&record.meta)
-                    .context("failed to deserialize dictionary meta")?;
-                Ok(Ok(DictionaryState {
-                    id: DictionaryId(record.id),
-                    position: record.position,
-                    enabled: record.enabled,
-                    meta,
-                }))
-            }
-            Err(sqlx::Error::RowNotFound) => Ok(Err(NotFound)),
-            Err(err) => Err(anyhow::Error::new(err)),
-        }
+        .await?;
+        let meta = serde_json::from_str::<DictionaryMeta>(&record.meta)
+            .context("failed to deserialize dictionary meta")?;
+        Ok(Dictionary {
+            id: DictionaryId(record.id),
+            position: record.position,
+            enabled: record.enabled,
+            meta,
+        })
     }
 
     pub async fn enable_dictionary(&self, id: DictionaryId) -> Result<()> {
@@ -92,11 +87,7 @@ impl Engine {
         Ok(())
     }
 
-    pub async fn set_dictionary_position(
-        &self,
-        id: DictionaryId,
-        position: i64,
-    ) -> Result<Result<(), NotFound>> {
+    pub async fn set_dictionary_position(&self, id: DictionaryId, position: i64) -> Result<()> {
         let result = sqlx::query!(
             "UPDATE dictionary
             SET position = $1
@@ -107,35 +98,28 @@ impl Engine {
         .execute(&self.db)
         .await?;
         if result.rows_affected() == 0 {
-            return Ok(Err(NotFound));
+            bail!(NotFound);
         }
 
-        self.sync_dictionaries()
-            .await
-            .context("failed to sync dictionaries")?;
-        Ok(Ok(()))
+        _ = self
+            .send_event
+            .send(Event::DictionaryPositionSet { id, position });
+        Ok(())
     }
 
-    pub async fn delete_dictionary(&self, id: DictionaryId) -> Result<Result<(), NotFound>> {
+    pub async fn remove_dictionary(&self, id: DictionaryId) -> Result<()> {
         let result = sqlx::query!("DELETE FROM dictionary WHERE id = $1", id.0)
             .execute(&self.db)
             .await?;
         if result.rows_affected() == 0 {
-            return Ok(Err(NotFound));
+            bail!(NotFound);
         }
 
-        self.sync_dictionaries()
-            .await
-            .context("failed to sync dictionaries")?;
-        Ok(Ok(()))
-    }
-
-    pub async fn sync_dictionaries(&self) -> Result<()> {
-        let dictionaries = self
-            .dictionaries()
-            .await
-            .context("failed to fetch all dictionaries")?;
-        _ = self.send_event.send(Event::SyncDictionaries(dictionaries));
+        _ = self.send_event.send(Event::DictionaryRemoved { id });
         Ok(())
     }
 }
+
+#[derive(Debug, Clone, Display, Error)]
+#[display("dictionary not found")]
+pub struct NotFound;

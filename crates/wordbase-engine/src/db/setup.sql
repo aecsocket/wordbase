@@ -36,7 +36,7 @@ END;
 
 CREATE TABLE IF NOT EXISTS dictionary (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    position    INTEGER NOT NULL CHECK (position > 0),
+    position    INTEGER NOT NULL,
     meta        TEXT    NOT NULL CHECK (json_valid(meta))
 );
 

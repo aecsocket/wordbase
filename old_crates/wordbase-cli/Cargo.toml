@@ -1,14 +1,14 @@
 [package]
 description = "Command line client for Wordbase servers"
-name = "wordbase-cli"
-version = "0.1.0"
+name        = "wordbase-cli"
+version     = "0.1.0"
 
-authors.workspace = true
-categories.workspace = true
-edition.workspace = true
-keywords.workspace = true
-license.workspace = true
-repository.workspace = true
+authors.workspace      = true
+categories.workspace   = true
+edition.workspace      = true
+keywords.workspace     = true
+license.workspace      = true
+repository.workspace   = true
 rust-version.workspace = true
 
 [lints]
@@ -20,11 +20,11 @@ all-features = true
 [features]
 
 [dependencies]
-wordbase = { workspace = true }
+wordbase              = { workspace = true }
 wordbase-client-tokio = { workspace = true }
 
-anyhow = { workspace = true }
+anyhow      = { workspace = true }
 ascii_table = { workspace = true, features = ["wide_characters"] }
-clap = { workspace = true, features = ["derive"] }
-futures = { workspace = true }
-tokio = { workspace = true, features = ["full"] }
+clap        = { workspace = true, features = ["derive"] }
+futures     = { workspace = true }
+tokio       = { workspace = true, features = ["full"] }

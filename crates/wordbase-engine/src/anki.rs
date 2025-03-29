@@ -3,7 +3,6 @@ use std::cmp::Ordering;
 use anyhow::{Context, Result};
 use derive_more::{Display, Error, From};
 use tokio::sync::Mutex;
-use wordbase_ankiconnect::{VERSION, request};
 
 use crate::Engine;
 
