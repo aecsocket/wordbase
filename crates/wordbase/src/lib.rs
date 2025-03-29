@@ -207,73 +207,51 @@ pub struct DictionaryId(pub i64);
 /// [record]: Record
 /// [dictionary]: Dictionary
 /// [canonical form]: https://en.wikipedia.org/wiki/Lemma_(morphology)#Headword
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(untagged, deny_unknown_fields)]
-pub enum Term {
-    /// Only a headword.
-    Headword(String),
-    /// Only a reading.
-    Reading(String),
-    /// Both a headword and reading.
-    Full {
-        /// Canonical form of the word.
-        headword: String,
-        /// Alternate form of the word.
-        reading: String,
-    },
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Term {
+    pub headword: Option<String>,
+    pub reading: Option<String>,
 }
 
 impl Term {
-    /// Creates a term with only a headword.
     #[must_use]
-    pub fn new(headword: impl Into<String>) -> Self {
-        Self::Headword(headword.into())
+    pub fn new(headword: impl Into<String>, reading: impl Into<String>) -> Self {
+        Self {
+            headword: Some(headword.into()),
+            reading: Some(reading.into()),
+        }
     }
 
-    /// Creates a term with a headword and reading.
     #[must_use]
-    pub fn with_reading(headword: impl Into<String>, reading: impl Into<String>) -> Self {
-        Self::Full {
-            headword: headword.into(),
-            reading: reading.into(),
+    pub fn try_new(headword: Option<String>, reading: Option<String>) -> Option<Self> {
+        match (headword, reading) {
+            (None, None) => None,
+            (headword, reading) => Some(Self { headword, reading }),
+        }
+    }
+
+    /// Creates a term with only a headword.
+    #[must_use]
+    pub fn from_headword(headword: impl Into<String>) -> Self {
+        Self {
+            headword: Some(headword.into()),
+            reading: None,
         }
     }
 
     /// Creates a term with only a reading.
     #[must_use]
-    pub fn only_reading(reading: impl Into<String>) -> Self {
-        Self::Reading(reading.into())
-    }
-
-    /// Creates a term from a headword and reading pair.
-    ///
-    /// If both are [`None`], returns [`None`].
-    #[must_use]
-    pub fn from_pair(headword: Option<String>, reading: Option<String>) -> Option<Self> {
-        match (headword, reading) {
-            (Some(headword), Some(reading)) => Some(Self::Full { headword, reading }),
-            (Some(headword), None) => Some(Self::Headword(headword)),
-            (None, Some(reading)) => Some(Self::Reading(reading)),
-            (None, None) => None,
+    pub fn from_reading(reading: impl Into<String>) -> Self {
+        Self {
+            headword: None,
+            reading: Some(reading.into()),
         }
     }
 
-    /// Gets the headword if it is present.
     #[must_use]
-    pub fn headword(&self) -> Option<&str> {
-        match self {
-            Self::Headword(headword) | Self::Full { headword, .. } => Some(headword),
-            Self::Reading(_) => None,
-        }
-    }
-
-    /// Gets the reading if it is present.
-    #[must_use]
-    pub fn reading(&self) -> Option<&str> {
-        match self {
-            Self::Headword(_) => None,
-            Self::Reading(reading) | Self::Full { reading, .. } => Some(reading),
-        }
+    pub const fn is_none(&self) -> bool {
+        self.headword.is_none() && self.reading.is_none()
     }
 }
 

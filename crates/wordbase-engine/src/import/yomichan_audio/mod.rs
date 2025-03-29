@@ -123,7 +123,7 @@ async fn import(
                     .context("failed to import Forvo file")?;
             } else if path == JPOD_INDEX {
                 jpod_index = Some(
-                    parse_index::<JpodIndex, _>(&mut entry)
+                    parse_index::<GenericIndex, _>(&mut entry)
                         .await
                         .context("failed to parse JPod index")?,
                 );
@@ -159,10 +159,10 @@ async fn import(
                 .context("failed to import NHK file")?;
             } else if path == SHINMEIKAI8_INDEX {
                 shinmeikai8_index = Some(
-                    parse_index::<Shinmeikai8Index, _>(&mut entry)
+                    parse_index::<GenericIndex, _>(&mut entry)
                         .await
                         .context("failed to parse Shinmeikai index")?,
-                )
+                );
             } else if let Some(path) = path.strip_prefix(SHINMEIKAI8_MEDIA) {
                 import_by_index(
                     &mut tx,
@@ -229,7 +229,7 @@ async fn import_forvo<R: AsyncRead + Unpin>(
     insert_term(
         tx,
         source,
-        &Term::new(headword),
+        &Term::from_headword(headword),
         &Forvo {
             username,
             audio: Bytes::from(audio),
@@ -242,17 +242,28 @@ async fn import_forvo<R: AsyncRead + Unpin>(
 }
 
 #[derive(Debug, Deserialize)]
-struct JpodIndex {
+struct GenericIndex {
     headwords: HashMap<String, Vec<String>>,
+    files: HashMap<String, FileInfo>,
 }
 
-impl From<JpodIndex> for Index {
-    fn from(value: JpodIndex) -> Self {
-        let mut path_to_term = HashMap::new();
+#[derive(Debug, Deserialize)]
+struct FileInfo {
+    kana_reading: String,
+}
+
+impl From<GenericIndex> for Index {
+    fn from(value: GenericIndex) -> Self {
+        let mut path_to_term = HashMap::<String, Term>::new();
         for (headword, paths) in value.headwords {
             for path in paths {
-                path_to_term.insert(path, Term::new(&headword));
+                let term = path_to_term.entry(path).or_default();
+                term.headword = Some(headword.clone());
             }
+        }
+        for (path, info) in value.files {
+            let term = path_to_term.entry(path).or_default();
+            term.reading = Some(info.kana_reading);
         }
         Self { path_to_term }
     }
@@ -286,19 +297,44 @@ async fn import_by_index<R: AsyncRead + Unpin, T: RecordType>(
 }
 
 #[derive(Debug, Deserialize)]
-struct Nhk16Index {}
+struct Nhk16Index(Vec<Nhk16Entry>);
 
-impl From<Nhk16Index> for Index {
-    fn from(value: Nhk16Index) -> Self {
-        todo!();
-    }
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Nhk16Entry {
+    kana: String,
+    kanji: Vec<String>,
+    accents: Vec<Nhk16Accent>,
 }
 
 #[derive(Debug, Deserialize)]
-struct Shinmeikai8Index {}
+#[serde(rename_all = "camelCase")]
+struct Nhk16Accent {
+    sound_file: String,
+}
 
-impl From<Shinmeikai8Index> for Index {
-    fn from(value: Shinmeikai8Index) -> Self {
-        todo!();
+impl From<Nhk16Index> for Index {
+    fn from(value: Nhk16Index) -> Self {
+        let mut path_to_term = HashMap::<String, Term>::new();
+        for entry in value.0 {
+            let kanji = entry
+                .kanji
+                .into_iter()
+                .next()
+                .filter(|k| !k.trim().is_empty());
+            let term = if let Some(kanji) = kanji {
+                Term {
+                    headword: Some(kanji),
+                    reading: Some(entry.kana),
+                }
+            } else {
+                Term::from_reading(entry.kana)
+            };
+
+            for accent in entry.accents {
+                path_to_term.insert(accent.sound_file, term.clone());
+            }
+        }
+        Self { path_to_term }
     }
 }

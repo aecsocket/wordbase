@@ -54,7 +54,7 @@ impl Engine {
             };
 
             let source = DictionaryId(record.source);
-            let term = Term::from_pair(record.headword, record.reading)
+            let term = Term::try_new(record.headword, record.reading)
                 .context("found record where both headword and reading are null")?;
 
             macro_rules! deserialize_record { ($($dict_kind:ident($dict_path:ident) { $($record_kind:ident),* $(,)? }),* $(,)?) => { paste::paste! {{

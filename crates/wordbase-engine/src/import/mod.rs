@@ -158,8 +158,8 @@ async fn insert_term<R: RecordType>(
     scratch.clear();
     db::serialize(record, &mut *scratch).context("failed to serialize record")?;
 
-    let headword = term.headword();
-    let reading = term.reading();
+    let headword = &term.headword;
+    let reading = &term.reading;
     let data = &scratch[..];
     sqlx::query!(
         "INSERT INTO term (source, headword, reading, kind, data)

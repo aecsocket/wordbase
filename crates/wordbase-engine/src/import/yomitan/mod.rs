@@ -176,11 +176,8 @@ async fn import_term(
     all_tags: &[GlossaryTag],
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
-    let term = Term::from_pair(
-        sanitize(term_data.reading.clone()),
-        sanitize(term_data.expression.clone()),
-    )
-    .context("term has no headword or reading")?;
+    let term = Term::try_new(sanitize(term_data.expression), sanitize(term_data.reading))
+        .context("term has no headword or reading")?;
 
     let tags = match_tags(
         all_tags,
@@ -231,8 +228,8 @@ async fn import_term_meta(
         schema::TermMetaData::Frequency(frequency) => {
             let (record, reading) = to_frequency_and_reading(frequency);
             let term = reading.map_or_else(
-                || Term::new(headword.clone()),
-                |reading| Term::with_reading(headword.clone(), reading),
+                || Term::from_headword(headword.clone()),
+                |reading| Term::new(headword.clone(), reading),
             );
 
             insert_term(tx, source, &term, &record, scratch)
@@ -244,7 +241,7 @@ async fn import_term_meta(
                 insert_term(
                     tx,
                     source,
-                    &Term::with_reading(headword.clone(), reading),
+                    &Term::new(headword.clone(), reading),
                     &record,
                     scratch,
                 )
