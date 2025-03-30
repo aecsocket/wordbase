@@ -18,13 +18,12 @@ workspace = true
 all-features = true
 
 [features]
-render-html = ["dep:maud", "dep:html-escape", "dep:indexmap"]
+render-html = ["dep:maud", "dep:html-escape"]
 
 [dependencies]
 bytes       = { workspace = true, features = ["serde"] }
 foldhash    = { workspace = true }
 html-escape = { workspace = true, optional = true }
-indexmap    = { workspace = true, optional = true }
 maud        = { workspace = true, optional = true }
 paste       = { workspace = true }
 serde       = { workspace = true, features = ["derive"] }

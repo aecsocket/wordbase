@@ -1,5 +1,6 @@
 [package]
-name = "wordbase-desktop"
+description = "Dictionary and word lookup service - desktop application"
+name        = "wordbase-desktop"
 
 authors.workspace      = true
 categories.workspace   = true
@@ -18,6 +19,9 @@ all-features = true
 [dependencies]
 wordbase        = { workspace = true }
 wordbase-engine = { workspace = true }
+
+relm4            = { workspace = true, features = ["libadwaita", "gnome_47"] }
+relm4-components = { workspace = true }
 
 anyhow             = { workspace = true }
 bimap              = { workspace = true }

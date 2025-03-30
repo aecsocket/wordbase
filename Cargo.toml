@@ -58,7 +58,6 @@ futures              = { version = "0.3" }
 glib                 = { version = "0.20" }
 gtk4                 = { version = "0.9" }
 html-escape          = { version = "0.2" }
-indexmap             = { version = "2.7" }
 libadwaita           = { version = "0.7.1" }
 maud                 = { version = "0.27" }
 mecab                = { version = "0.1.6" }
@@ -68,6 +67,7 @@ rand                 = { version = "0.9" }
 rayon                = { version = "1.10" }
 regex                = { version = "1.11" }
 relm4                = { version = "0.9.1" }
+relm4-components     = { version = "0.9.1" }
 reqwest              = { version = "0.12.15", default-features = false }
 rmp-serde            = { version = "1.3" }
 serde                = { version = "1.0" }
