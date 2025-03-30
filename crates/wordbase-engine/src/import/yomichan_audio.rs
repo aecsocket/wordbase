@@ -191,7 +191,10 @@ async fn import(
                     path,
                     &mut entry,
                     &nhk16_index,
-                    |audio| Nhk16 { audio },
+                    |audio| Nhk16 {
+                        audio,
+                        ..Default::default() // TODO
+                    },
                 )
                 .await?;
             } else if let Some(path) = path.strip_prefix(SHINMEIKAI8_MEDIA) {
@@ -202,7 +205,10 @@ async fn import(
                     path,
                     &mut entry,
                     &shinmeikai8_index,
-                    |audio| Shinmeikai8 { audio },
+                    |audio| Shinmeikai8 {
+                        audio,
+                        ..Default::default() // TODO
+                    },
                 )
                 .await?;
             }

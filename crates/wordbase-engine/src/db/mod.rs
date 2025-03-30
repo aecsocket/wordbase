@@ -21,7 +21,7 @@ pub async fn setup(path: &Path, max_db_connections: u32) -> Result<Pool<Sqlite>>
         .await
         .context("failed to connect to database")?;
 
-    sqlx::query(include_str!("setup.sql"))
+    sqlx::query(include_str!("schema.sql"))
         .execute(&db)
         .await
         .context("failed to set up database")?;

@@ -103,15 +103,6 @@ impl RecordType for dict::$dict_path::$record_kind {
 }}}
 for_kinds!(define_types);
 
-/// Collection of [`Term`]s mapping to [`Record`]s which may be returned as a
-/// result of a [`Lookup`].
-///
-/// Users import dictionaries into the engine to add records to the internal
-/// database. When performing a lookup, these records are then returned to the
-/// user.
-///
-/// This type is guaranteed to represent a dictionary which has already been
-/// imported into the engine, unlike [`DictionaryMeta`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Dictionary {
@@ -134,7 +125,7 @@ pub struct Dictionary {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct DictionaryMeta {
-    /// What kind of dictionary archive this is.
+    /// What kind of dictionary this was imported from.
     pub kind: DictionaryKind,
     /// Human-readable display name.
     ///
@@ -173,85 +164,48 @@ impl DictionaryMeta {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DictionaryId(pub i64);
 
-/// Key for a [`Record`] in a [`Dictionary`], representing a single
-/// interpretation of some text.
-///
-/// A term contains at least one of a headword or a reading:
-/// - the headword is the [canonical form] of the term, as seen in a dictionary
-/// - the reading is how the term is represented in an alternate form, e.g.
-///   hiragana reading in Japanese.
-///
-/// # Examples
-///
-/// ```
-/// # use wordbase::Term;
-/// // English word "rust"
-/// assert_eq!(Term::new("rust"), Term::Headword("rust".into()));
-///
-/// // Greek word "σκουριά"
-/// assert_eq!(Term::new("σκουριά"), Term::Headword("σκουριά".into()));
-///
-/// // Japanese word "錆" ("さび")
-/// assert_eq!(
-///     Term::with_reading("錆", "さび"),
-///     Term::Full {
-///         headword: "錆".into(),
-///         reading: Some("さび".into())
-///     }
-/// );
-///
-/// // Japanese word with only a reading
-/// assert_eq!(Term::only_reading("さび"), Term::Reading("さび".into()));
-/// ```
-///
-/// [record]: Record
-/// [dictionary]: Dictionary
-/// [canonical form]: https://en.wikipedia.org/wiki/Lemma_(morphology)#Headword
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum TermKind {
+    Headword,
+    Reading,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Term {
-    pub headword: Option<String>,
-    pub reading: Option<String>,
+    kind: TermKind,
+    text: String,
 }
 
 impl Term {
     #[must_use]
-    pub fn new(headword: impl Into<String>, reading: impl Into<String>) -> Self {
-        Self {
-            headword: Some(headword.into()),
-            reading: Some(reading.into()),
+    pub fn new(kind: TermKind, text: impl Into<String>) -> Option<Self> {
+        let text = text.into();
+        if text.trim().is_empty() {
+            None
+        } else {
+            Some(Self { kind, text })
         }
     }
 
     #[must_use]
-    pub fn try_new(headword: Option<String>, reading: Option<String>) -> Option<Self> {
-        match (headword, reading) {
-            (None, None) => None,
-            (headword, reading) => Some(Self { headword, reading }),
-        }
-    }
-
-    /// Creates a term with only a headword.
-    #[must_use]
-    pub fn from_headword(headword: impl Into<String>) -> Self {
-        Self {
-            headword: Some(headword.into()),
-            reading: None,
-        }
-    }
-
-    /// Creates a term with only a reading.
-    #[must_use]
-    pub fn from_reading(reading: impl Into<String>) -> Self {
-        Self {
-            headword: None,
-            reading: Some(reading.into()),
-        }
+    pub fn headword(text: impl Into<String>) -> Option<Self> {
+        Self::new(TermKind::Headword, text.into())
     }
 
     #[must_use]
-    pub const fn is_none(&self) -> bool {
-        self.headword.is_none() && self.reading.is_none()
+    pub fn reading(text: impl Into<String>) -> Option<Self> {
+        Self::new(TermKind::Reading, text.into())
+    }
+
+    #[must_use]
+    pub const fn kind(&self) -> TermKind {
+        self.kind
+    }
+
+    #[must_use]
+    pub fn text(&self) -> &str {
+        &self.text
     }
 }
 
@@ -308,13 +262,18 @@ pub struct Lookup {
 /// Single record returned by the server in response to a [`Lookup`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecordLookup {
+    /// ID of the [`Record`].
+    pub id: RecordId,
     /// ID of the [`Dictionary`] from which the record was retrieved.
     pub source: DictionaryId,
-    /// The [`Term`] that this record is for.
+    /// [`Term`] that this record is for.
     pub term: Term,
-    /// The [`Record`] that was found.
+    /// [`Record`] that was found.
     pub record: Record,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct RecordId(pub i64);
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TexthookerSentence {

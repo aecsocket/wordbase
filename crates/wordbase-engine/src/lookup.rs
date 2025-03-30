@@ -4,7 +4,9 @@ use {
     futures::{StreamExt, TryStreamExt},
     sqlx::{QueryBuilder, Row},
     std::borrow::Borrow,
-    wordbase::{DictionaryId, Record, RecordKind, RecordLookup, Term, for_kinds},
+    wordbase::{
+        DictionaryId, Record, RecordId, RecordKind, RecordLookup, Term, TermKind, for_kinds,
+    },
 };
 
 impl Engine {
@@ -14,18 +16,22 @@ impl Engine {
         record_kinds: impl IntoIterator<Item = impl Borrow<RecordKind>>,
     ) -> Result<Vec<RecordLookup>> {
         let mut query = QueryBuilder::new(
-            "SELECT source, headword, reading, kind, data
-            FROM term
-            INNER JOIN dictionary ON term.source = dictionary.id
+            r#"SELECT
+                record.id,
+                record.source,
+                record.kind,
+                record.data,
+                term.text as "term_text",
+                term.kind AS "term_kind"
+            FROM record
+            INNER JOIN dictionary ON record.source = dictionary.id
             INNER JOIN profile_enabled_dictionary ped ON dictionary.id = ped.dictionary
             INNER JOIN config ON ped.profile = config.current_profile
-            WHERE
-                (term.headword = ",
+            INNER JOIN term ON term.record = record.id
+            WHERE term.text = "#,
         );
         query.push_bind(lemma);
-        query.push(" OR term.reading = ");
-        query.push_bind(lemma);
-        query.push(") AND term.kind IN (");
+        query.push("AND term.kind IN (");
         {
             let mut query = query.separated(", ");
             for record_kind in record_kinds {
@@ -37,25 +43,33 @@ impl Engine {
 
         query.build().fetch(&self.db).map(|record| {
             struct QueryRecord {
+                id: i64,
                 source: i64,
-                headword: Option<String>,
-                reading: Option<String>,
                 kind: i64,
                 data: Vec<u8>,
+                term_text: String,
+                term_kind: i64,
             }
 
             let row = record.context("failed to fetch record")?;
             let record = QueryRecord {
-                source: row.get(0),
-                headword: row.get(1),
-                reading: row.get(2),
-                kind: row.get(3),
-                data: row.get(4),
+                id: row.get(0),
+                source: row.get(1),
+                kind: row.get(2),
+                data: row.get(3),
+                term_text: row.get(4),
+                term_kind: row.get(5),
             };
 
             let source = DictionaryId(record.source);
-            let term = Term::try_new(record.headword, record.reading)
-                .context("found record where both headword and reading are null")?;
+            let term_kind = match record.term_kind {
+                0 => TermKind::Headword,
+                1 => TermKind::Reading,
+                _ => bail!("invalid term kind `{}`", record.term_kind),
+            };
+            let term = Term::new(term_kind, record.term_text)
+                .context("database contained empty term - this should never happen due to SQL contraints")?;
+            let record_id = RecordId(record.id);
 
             macro_rules! deserialize_record { ($($dict_kind:ident($dict_path:ident) { $($record_kind:ident),* $(,)? }),* $(,)?) => { paste::paste! {{
                 #[allow(
@@ -87,6 +101,7 @@ impl Engine {
             Ok(RecordLookup {
                 source,
                 term,
+                record_id,
                 record,
             })
         })

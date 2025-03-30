@@ -2,7 +2,7 @@ mod parse;
 mod schema;
 
 use {
-    super::{ImportContinue, ImportKind, ImportStarted, insert_term},
+    super::{ImportContinue, ImportKind, ImportStarted, insert_record, insert_term},
     crate::{CHANNEL_BUF_CAP, Engine, import::insert_dictionary},
     anyhow::{Context as _, Result, bail},
     bytes::Bytes,
@@ -165,10 +165,6 @@ async fn continue_import(
     Ok(dictionary_id)
 }
 
-fn sanitize(s: String) -> Option<String> {
-    if s.trim().is_empty() { None } else { Some(s) }
-}
-
 async fn import_term(
     source: DictionaryId,
     tx: &mut Transaction<'_, Sqlite>,
@@ -176,9 +172,6 @@ async fn import_term(
     all_tags: &[GlossaryTag],
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
-    let term = Term::try_new(sanitize(term_data.expression), sanitize(term_data.reading))
-        .context("term has no headword or reading")?;
-
     let tags = match_tags(
         all_tags,
         term_data.definition_tags.as_deref().unwrap_or_default(),
@@ -190,13 +183,25 @@ async fn import_term(
         .into_iter()
         .filter_map(to_content)
         .collect();
-    let glossary = Glossary {
+    let record = Glossary {
         popularity: term_data.score,
         tags,
         content,
     };
+    let record_id = insert_record(tx, source, &record, scratch)
+        .await
+        .context("failed to insert record")?;
 
-    insert_term(tx, source, &term, &glossary, scratch).await?;
+    if let Some(term) = Term::headword(term_data.expression) {
+        insert_term(tx, &term, record_id)
+            .await
+            .context("failed to insert headword term")?;
+    }
+    if let Some(term) = Term::reading(term_data.reading) {
+        insert_term(tx, &term, record_id)
+            .await
+            .context("failed to insert reading term")?;
+    }
     Ok(())
 }
 
@@ -223,30 +228,40 @@ async fn import_term_meta(
     term_meta: schema::TermMeta,
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
-    let headword = term_meta.expression;
+    let headword = Term::headword(term_meta.expression);
     match term_meta.data {
         schema::TermMetaData::Frequency(frequency) => {
             let (record, reading) = to_frequency_and_reading(frequency);
-            let term = reading.map_or_else(
-                || Term::from_headword(headword.clone()),
-                |reading| Term::new(headword.clone(), reading),
-            );
-
-            insert_term(tx, source, &term, &record, scratch)
+            let record_id = insert_record(tx, source, &record, scratch)
                 .await
                 .context("failed to insert frequency record")?;
+
+            if let Some(term) = headword {
+                insert_term(tx, &term, record_id)
+                    .await
+                    .context("failed to insert headword term")?;
+            }
+            if let Some(term) = reading.and_then(Term::reading) {
+                insert_term(tx, &term, record_id)
+                    .await
+                    .context("failed to insert reading term")?;
+            }
         }
         schema::TermMetaData::Pitch(pitch) => {
             for (record, reading) in to_pitches_and_readings(pitch) {
-                insert_term(
-                    tx,
-                    source,
-                    &Term::new(headword.clone(), reading),
-                    &record,
-                    scratch,
-                )
-                .await
-                .context("failed to insert pitch data")?;
+                let reading = Term::reading(reading).context("empty pitch reading")?;
+                let record_id = insert_record(tx, source, &record, scratch)
+                    .await
+                    .context("failed to insert pitch record")?;
+
+                if let Some(term) = &headword {
+                    insert_term(tx, term, record_id)
+                        .await
+                        .context("failed to insert headword term")?;
+                }
+                insert_term(tx, &reading, record_id)
+                    .await
+                    .context("failed to insert reading term")?;
             }
         }
         schema::TermMetaData::Phonetic(_) => {}

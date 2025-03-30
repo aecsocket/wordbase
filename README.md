@@ -15,6 +15,8 @@ I don't like how `Term` is hardcoded to a headword and reading. It's totally pos
 
 However I also don't want a `reading_1`, `reading_2`, `reading_3` etc columns in the database. It's theoretically possible to do that, but that's really ugly.
 
+DONE!
+
 I want to rewrite the Yomitan importer to take advantage of async. But how will it affect parsing performance? Since right now we can use multicore to parse all of the entries in parallel. But our bottleneck is inserting them into the database. Need to investigate more.
 
 # Installation

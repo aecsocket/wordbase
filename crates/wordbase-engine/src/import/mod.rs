@@ -1,4 +1,4 @@
-mod yomichan_audio;
+// mod yomichan_audio;
 mod yomitan;
 
 use {
@@ -14,7 +14,7 @@ use {
     },
     tokio::sync::{Mutex, mpsc, oneshot},
     tracing::debug,
-    wordbase::{DictionaryId, DictionaryKind, DictionaryMeta, RecordType, Term},
+    wordbase::{DictionaryId, DictionaryKind, DictionaryMeta, RecordId, RecordType, Term},
 };
 
 static FORMATS: LazyLock<HashMap<DictionaryKind, Arc<dyn ImportKind>>> = LazyLock::new(|| {
@@ -23,10 +23,10 @@ static FORMATS: LazyLock<HashMap<DictionaryKind, Arc<dyn ImportKind>>> = LazyLoc
             DictionaryKind::Yomitan,
             Arc::new(yomitan::Yomitan) as Arc<dyn ImportKind>,
         ),
-        (
-            DictionaryKind::YomichanAudio,
-            Arc::new(yomichan_audio::YomichanAudio),
-        ),
+        // (
+        //     DictionaryKind::YomichanAudio,
+        //     Arc::new(yomichan_audio::YomichanAudio),
+        // ),
     ]
     .into()
 });
@@ -171,30 +171,47 @@ impl Engine {
     }
 }
 
-async fn insert_term<R: RecordType>(
+async fn insert_record<R: RecordType>(
     tx: &mut Transaction<'_, Sqlite>,
     source: DictionaryId,
-    term: &Term,
     record: &R,
     scratch: &mut Vec<u8>,
-) -> Result<()> {
+) -> Result<RecordId> {
     scratch.clear();
     db::serialize(record, &mut *scratch).context("failed to serialize record")?;
 
-    let headword = &term.headword;
-    let reading = &term.reading;
     let data = &scratch[..];
-    sqlx::query!(
-        "INSERT INTO term (source, headword, reading, kind, data)
-        VALUES ($1, $2, $3, $4, $5)",
+    let record_id = sqlx::query!(
+        "INSERT INTO record (source, kind, data)
+        VALUES ($1, $2, $3)",
         source.0,
-        headword,
-        reading,
         R::KIND as u16,
-        data
+        data,
     )
     .execute(&mut **tx)
-    .await?;
+    .await
+    .context("failed to insert record")?
+    .last_insert_rowid();
+    Ok(RecordId(record_id))
+}
+
+async fn insert_term(
+    tx: &mut Transaction<'_, Sqlite>,
+    term: &Term,
+    record_id: RecordId,
+) -> Result<()> {
+    let text = term.text();
+    let kind = term.kind() as u8;
+    sqlx::query!(
+        "INSERT OR IGNORE INTO term (text, kind, record)
+        VALUES ($1, $2, $3)",
+        text,
+        kind,
+        record_id.0
+    )
+    .execute(&mut **tx)
+    .await
+    .context("failed to insert term")?;
     Ok(())
 }
 

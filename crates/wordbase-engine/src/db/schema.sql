@@ -48,14 +48,28 @@ CREATE TABLE IF NOT EXISTS profile_enabled_dictionary (
 CREATE INDEX IF NOT EXISTS index_profile_enabled_dictionary ON profile_enabled_dictionary(profile, dictionary);
 
 CREATE TABLE IF NOT EXISTS term (
-    source      INTEGER NOT NULL REFERENCES dictionary(id) ON DELETE CASCADE,
-    headword    TEXT,
-    reading     TEXT,
-    kind        INTEGER NOT NULL,
-    data        BLOB    NOT NULL,
-    CHECK       (headword IS NOT NULL OR reading IS NOT NULL)
+    text    TEXT    NOT NULL CHECK (text <> ''),
+    kind    INTEGER NOT NULL CHECK (kind IN (0, 1)),
+    record  INTEGER NOT NULL REFERENCES record(id),
+    UNIQUE  (text, kind, record)
 );
-CREATE INDEX IF NOT EXISTS term_source   ON term(source);
-CREATE INDEX IF NOT EXISTS term_headword ON term(headword);
-CREATE INDEX IF NOT EXISTS term_reading  ON term(reading);
-CREATE INDEX IF NOT EXISTS term_kind     ON term(kind);
+CREATE INDEX IF NOT EXISTS index_term_text ON term(text);
+
+CREATE TABLE IF NOT EXISTS record (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    source      INTEGER NOT NULL REFERENCES dictionary(id) ON DELETE CASCADE,
+    kind        INTEGER NOT NULL,
+    data        BLOB    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS record_source    ON record(source);
+CREATE INDEX IF NOT EXISTS record_kind      ON record(kind);
+CREATE TRIGGER IF NOT EXISTS delete_orphaned_terms
+AFTER DELETE ON record
+BEGIN
+    DELETE FROM term
+    WHERE record = OLD.id
+    AND NOT EXISTS (
+        SELECT 1 FROM record
+        WHERE record.id = term.record
+    );
+END
