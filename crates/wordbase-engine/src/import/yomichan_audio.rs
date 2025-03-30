@@ -1,3 +1,5 @@
+use std::collections::hash_map::Entry;
+
 use anyhow::{Context, Result, bail};
 use async_compression::futures::bufread::XzDecoder;
 use async_tar::EntryType;
@@ -10,13 +12,13 @@ use sqlx::{Sqlite, Transaction};
 use tokio::sync::mpsc;
 use tracing::{debug, trace};
 use wordbase::{
-    DictionaryId, DictionaryKind, DictionaryMeta, RecordType, Term,
+    DictionaryId, DictionaryKind, DictionaryMeta, NonEmptyString, RecordType, Term,
     dict::yomichan_audio::{Forvo, Jpod, Nhk16, Shinmeikai8},
 };
 
 use crate::{CHANNEL_BUF_CAP, Engine, import::insert_dictionary};
 
-use super::{ImportContinue, ImportKind, ImportStarted, insert_term};
+use super::{ImportContinue, ImportKind, ImportStarted, insert_record, insert_term_record};
 
 pub struct YomichanAudio;
 
@@ -95,6 +97,17 @@ async fn import(
     meta: DictionaryMeta,
     send_progress: mpsc::Sender<f64>,
 ) -> Result<DictionaryId> {
+    todo!()
+}
+
+/*
+
+async fn import(
+    engine: &Engine,
+    archive: Bytes,
+    meta: DictionaryMeta,
+    send_progress: mpsc::Sender<f64>,
+) -> Result<DictionaryId> {
     let mut tx = engine
         .db
         .begin()
@@ -123,13 +136,13 @@ async fn import(
         (async {
             match path.as_str() {
                 JPOD_INDEX => {
-                    jpod_index = Some(parse_index::<GenericIndex, _>(&mut entry).await?);
+                    jpod_index = Some(parse_index::<JpodIndex, _>(&mut entry).await?);
                 }
                 NHK16_INDEX => {
                     nhk16_index = Some(parse_index::<Nhk16Index, _>(&mut entry).await?);
                 }
                 SHINMEIKAI8_INDEX => {
-                    shinmeikai8_index = Some(parse_index::<GenericIndex, _>(&mut entry).await?);
+                    shinmeikai8_index = Some(parse_index::<Shinmeikai8Index, _>(&mut entry).await?);
                 }
                 _ => {}
             }
@@ -139,9 +152,6 @@ async fn import(
         .with_context(|| format!("failed to process `{path}`"))?;
 
         num_entries += 1;
-        if num_entries % 10_000 == 0 {
-            debug!("{num_entries} entries...");
-        }
     }
     debug!("{num_entries} total entries");
 
@@ -228,13 +238,15 @@ async fn import(
 }
 
 #[derive(Debug, Deref)]
-struct Index {
-    path_to_term: HashMap<String, Term>,
+struct Index<T> {
+    for_path: HashMap<String, (Term, T)>,
 }
 
-async fn parse_index<I: Into<Index> + DeserializeOwned, R: AsyncRead + Unpin>(
-    entry: &mut async_tar::Entry<R>,
-) -> Result<Index> {
+async fn parse_index<T, I, R>(entry: &mut async_tar::Entry<R>) -> Result<Index<T>>
+where
+    I: DeserializeOwned + TryInto<Index<T>, Error = anyhow::Error>,
+    R: AsyncRead + Unpin,
+{
     let mut buf = Vec::new();
     entry
         .read_to_end(&mut buf)
@@ -242,7 +254,8 @@ async fn parse_index<I: Into<Index> + DeserializeOwned, R: AsyncRead + Unpin>(
         .context("failed to read file into memory")?;
     let raw_index = serde_json::from_reader::<_, I>(std::io::Cursor::new(buf))
         .context("failed to parse index")?;
-    Ok(raw_index.into())
+    let index = raw_index.try_into().context("failed to reverse index")?;
+    Ok(index)
 }
 
 async fn import_forvo<R: AsyncRead + Unpin>(
@@ -257,21 +270,21 @@ async fn import_forvo<R: AsyncRead + Unpin>(
         .next()
         .map(ToOwned::to_owned)
         .context("no Forvo username in path")?;
-    let headword_path = parts.next().context("no headword in path")?;
-    let headword = headword_path
-        .rsplit_once('.')
-        .map_or(headword_path, |(name, _)| name);
+    let headword = parts
+        .next()
+        .and_then(|part| part.rsplit_once('.'))
+        .and_then(|(name, _)| Term::from_headword(name))
+        .context("no headword in path")?;
 
     let mut audio = Vec::new();
     entry
         .read_to_end(&mut audio)
         .await
-        .context("failed to read file into memory")?;
+        .context("failed to read audio into memory")?;
 
-    insert_term(
+    let record_id = insert_record(
         tx,
         source,
-        &Term::from_headword(headword),
         &Forvo {
             username,
             audio: Bytes::from(audio),
@@ -279,38 +292,54 @@ async fn import_forvo<R: AsyncRead + Unpin>(
         scratch,
     )
     .await
-    .context("failed to insert term")?;
+    .context("failed to insert record")?;
+    insert_term_record(tx, &headword, record_id)
+        .await
+        .context("failed to insert headword term")?;
     Ok(())
 }
 
 #[derive(Debug, Deserialize)]
-struct GenericIndex {
+struct GenericRawIndex {
     headwords: HashMap<String, Vec<String>>,
     files: HashMap<String, FileInfo>,
 }
 
 #[derive(Debug, Deserialize)]
 struct FileInfo {
-    // some entries don't have this field
     kana_reading: Option<String>,
+    pitch_pattern: Option<String>,
+    pitch_number: Option<String>,
 }
 
-impl From<GenericIndex> for Index {
-    fn from(value: GenericIndex) -> Self {
-        let mut path_to_term = HashMap::<String, Term>::new();
+impl From<GenericRawIndex> for Index {
+    fn from(value: GenericRawIndex) -> Self {
+        let mut for_path = HashMap::<String, (Term,)>::new();
         for (headword, paths) in value.headwords {
+            let Some(headword) = NonEmptyString::new(headword) else {
+                continue;
+            };
+
+            let term = Term::Headword { headword };
             for path in paths {
-                let term = path_to_term.entry(path).or_default();
-                term.headword = Some(headword.clone());
+                for_path.insert(path, term.clone());
             }
         }
         for (path, info) in value.files {
-            let term = path_to_term.entry(path).or_default();
-            if let Some(reading) = info.kana_reading {
-                term.reading = Some(reading);
+            let Some(reading) = info.kana_reading.and_then(NonEmptyString::new) else {
+                continue;
+            };
+
+            match for_path.entry(path) {
+                Entry::Vacant(entry) => {
+                    entry.insert(Term::Reading { reading });
+                }
+                Entry::Occupied(mut entry) => {
+                    entry.get_mut().set_reading(reading);
+                }
             }
         }
-        Self { path_to_term }
+        Self { for_path }
     }
 }
 
@@ -323,9 +352,9 @@ async fn import_by_index<R: AsyncRead + Unpin, T: RecordType>(
     index: &Index,
     to_record: impl FnOnce(Bytes) -> T,
 ) -> Result<()> {
-    let Some(term) = index.path_to_term.get(path) else {
+    let Some(term) = index.for_path.get(path) else {
         // some files literally just don't have an index entry
-        // like Nhk16 `20170616125948.opus`
+        // like NHK `20170616125948.opus`
         trace!("{path} does not have an index entry, skipping");
         return Ok(());
     };
@@ -336,9 +365,12 @@ async fn import_by_index<R: AsyncRead + Unpin, T: RecordType>(
         .await
         .context("failed to read file into memory")?;
 
-    insert_term(tx, source, term, &to_record(Bytes::from(audio)), scratch)
+    let record_id = insert_record(tx, source, &to_record(Bytes::from(audio)), scratch)
         .await
-        .context("failed to insert term")?;
+        .context("failed to insert record")?;
+    insert_term_record(tx, term, record_id)
+        .await
+        .context("failed to insert term record")?;
     Ok(())
 }
 
@@ -357,7 +389,6 @@ struct Nhk16Entry {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Nhk16Accent {
-    // some entries are `null`
     sound_file: Option<String>,
 }
 
@@ -375,13 +406,10 @@ impl From<Nhk16Index> for Index {
             let kanji = entry
                 .kanji
                 .into_iter()
-                .next()
-                .filter(|k| !k.trim().is_empty());
-            let term = if let Some(kanji) = kanji {
-                Term::new(kanji, &entry.kana)
-            } else {
-                Term::from_reading(&entry.kana)
-            };
+                .filter_map(NonEmptyString::new)
+                .next();
+            let kana = entry.kana;
+            let term = Term::new(kanji, kana).context("kanji and kana are both empty")?;
 
             for accent in entry.accents {
                 if let Some(path) = accent.sound_file {
@@ -403,6 +431,9 @@ impl From<Nhk16Index> for Index {
                 }
             }
         }
-        Self { path_to_term }
+        Self {
+            for_path: path_to_term,
+        }
     }
 }
+ */

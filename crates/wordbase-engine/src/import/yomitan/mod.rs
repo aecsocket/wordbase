@@ -2,7 +2,7 @@ mod parse;
 mod schema;
 
 use {
-    super::{ImportContinue, ImportKind, ImportStarted, insert_record, insert_term},
+    super::{ImportContinue, ImportKind, ImportStarted, insert_record, insert_term_record},
     crate::{CHANNEL_BUF_CAP, Engine, import::insert_dictionary},
     anyhow::{Context as _, Result, bail},
     bytes::Bytes,
@@ -20,7 +20,7 @@ use {
     tokio::sync::mpsc,
     tracing::debug,
     wordbase::{
-        DictionaryId, DictionaryKind, DictionaryMeta, Term,
+        DictionaryId, DictionaryKind, DictionaryMeta, NonEmptyString, Term,
         dict::yomitan::{Frequency, Glossary, GlossaryTag, Pitch, structured},
     },
     zip::ZipArchive,
@@ -172,6 +172,9 @@ async fn import_term(
     all_tags: &[GlossaryTag],
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
+    let term = Term::new(term_data.expression, term_data.reading)
+        .context("term does not contain headword or reading")?;
+
     let tags = match_tags(
         all_tags,
         term_data.definition_tags.as_deref().unwrap_or_default(),
@@ -191,17 +194,9 @@ async fn import_term(
     let record_id = insert_record(tx, source, &record, scratch)
         .await
         .context("failed to insert record")?;
-
-    if let Some(term) = Term::headword(term_data.expression) {
-        insert_term(tx, &term, record_id)
-            .await
-            .context("failed to insert headword term")?;
-    }
-    if let Some(term) = Term::reading(term_data.reading) {
-        insert_term(tx, &term, record_id)
-            .await
-            .context("failed to insert reading term")?;
-    }
+    insert_term_record(tx, &term, record_id)
+        .await
+        .context("failed to insert term record")?;
     Ok(())
 }
 
@@ -228,40 +223,31 @@ async fn import_term_meta(
     term_meta: schema::TermMeta,
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
-    let headword = Term::headword(term_meta.expression);
+    let headword = NonEmptyString::new(term_meta.expression);
     match term_meta.data {
         schema::TermMetaData::Frequency(frequency) => {
             let (record, reading) = to_frequency_and_reading(frequency);
+            let term = Term::new(headword, reading)
+                .context("frequency term has no headword or reading")?;
+
             let record_id = insert_record(tx, source, &record, scratch)
                 .await
                 .context("failed to insert frequency record")?;
-
-            if let Some(term) = headword {
-                insert_term(tx, &term, record_id)
-                    .await
-                    .context("failed to insert headword term")?;
-            }
-            if let Some(term) = reading.and_then(Term::reading) {
-                insert_term(tx, &term, record_id)
-                    .await
-                    .context("failed to insert reading term")?;
-            }
+            insert_term_record(tx, &term, record_id)
+                .await
+                .context("failed to insert frequency term record")?;
         }
         schema::TermMetaData::Pitch(pitch) => {
             for (record, reading) in to_pitches_and_readings(pitch) {
-                let reading = Term::reading(reading).context("empty pitch reading")?;
+                let term = Term::new(headword.clone(), reading)
+                    .context("pitch term has no headword or reading")?;
+
                 let record_id = insert_record(tx, source, &record, scratch)
                     .await
                     .context("failed to insert pitch record")?;
-
-                if let Some(term) = &headword {
-                    insert_term(tx, term, record_id)
-                        .await
-                        .context("failed to insert headword term")?;
-                }
-                insert_term(tx, &reading, record_id)
+                insert_term_record(tx, &term, record_id)
                     .await
-                    .context("failed to insert reading term")?;
+                    .context("failed to insert pitch term record")?;
             }
         }
         schema::TermMetaData::Phonetic(_) => {}

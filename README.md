@@ -15,9 +15,38 @@ I don't like how `Term` is hardcoded to a headword and reading. It's totally pos
 
 However I also don't want a `reading_1`, `reading_2`, `reading_3` etc columns in the database. It's theoretically possible to do that, but that's really ugly.
 
-DONE!
-
 I want to rewrite the Yomitan importer to take advantage of async. But how will it affect parsing performance? Since right now we can use multicore to parse all of the entries in parallel. But our bottleneck is inserting them into the database. Need to investigate more.
+
+what happens we import a yomitan dictionary?
+
+- we import (expr 日本語 reading にほんご)
+  - we know for a fact that にほんご is a reading of 日本語
+  - we don't know for certain whether 日本語 is a headword, but it probably is
+
+- or: we import (expr 日本語 reading ())
+  - we don't know what 日本語, it could be a reading or a headword
+  - for now we'll treat it as a headword, but if we get evidence of the contrary (i.e. an entry where reading = 日本語), then we'll change our mind
+
+- or: we import (expr () reading にほんご)
+  - if we've already imported (日本語, にほんご) then this term already exists, skip
+  - else, we don't know if this is a headword or a reading yet. assume it's a headword for now
+
+querying:
+
+CREATE TABLE IF NOT EXISTS term (
+    text      TEXT    NOT NULL CHECK (text <> ''),
+    record    INTEGER REFERENCES record(id),
+    headword  INTEGER REFERENCES term(id),
+    UNIQUE  (text, record)
+);
+
+- if we search for X, our goal is to find any terms where `term.text = X`
+- if we find a bunch of terms, but all their `headword = NULL`, then we ASSUME that X is a headword, not a reading
+- if we find at least 1 `term` for which `headword != NULL`, then X is a READING of 1 or more headwords
+  - where `headword = Y AND headword != NULL`, pull in any terms where `term.text = Y` - and mark Y as the headword
+- TODO: what if those terms pulled in also have `term.headword != NULL`? should that be allowed?
+
+OR: have a headword and term tables
 
 # Installation
 

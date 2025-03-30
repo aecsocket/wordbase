@@ -1,4 +1,4 @@
-// mod yomichan_audio;
+mod yomichan_audio;
 mod yomitan;
 
 use {
@@ -14,7 +14,7 @@ use {
     },
     tokio::sync::{Mutex, mpsc, oneshot},
     tracing::debug,
-    wordbase::{DictionaryId, DictionaryKind, DictionaryMeta, RecordId, RecordType, Term},
+    wordbase::{DictionaryId, DictionaryKind, DictionaryMeta, RecordType, Term},
 };
 
 static FORMATS: LazyLock<HashMap<DictionaryKind, Arc<dyn ImportKind>>> = LazyLock::new(|| {
@@ -23,10 +23,10 @@ static FORMATS: LazyLock<HashMap<DictionaryKind, Arc<dyn ImportKind>>> = LazyLoc
             DictionaryKind::Yomitan,
             Arc::new(yomitan::Yomitan) as Arc<dyn ImportKind>,
         ),
-        // (
-        //     DictionaryKind::YomichanAudio,
-        //     Arc::new(yomichan_audio::YomichanAudio),
-        // ),
+        (
+            DictionaryKind::YomichanAudio,
+            Arc::new(yomichan_audio::YomichanAudio),
+        ),
     ]
     .into()
 });
@@ -171,6 +171,9 @@ impl Engine {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RecordId(pub i64);
+
 async fn insert_record<R: RecordType>(
     tx: &mut Transaction<'_, Sqlite>,
     source: DictionaryId,
@@ -189,29 +192,27 @@ async fn insert_record<R: RecordType>(
         data,
     )
     .execute(&mut **tx)
-    .await
-    .context("failed to insert record")?
+    .await?
     .last_insert_rowid();
     Ok(RecordId(record_id))
 }
 
-async fn insert_term(
+async fn insert_term_record(
     tx: &mut Transaction<'_, Sqlite>,
     term: &Term,
     record_id: RecordId,
 ) -> Result<()> {
-    let text = term.text();
-    let kind = term.kind() as u8;
+    let headword = term.headword().map(|s| s.as_str());
+    let reading = term.reading().map(|s| s.as_str());
     sqlx::query!(
-        "INSERT OR IGNORE INTO term (text, kind, record)
+        "INSERT OR IGNORE INTO term_record (record, headword, reading)
         VALUES ($1, $2, $3)",
-        text,
-        kind,
-        record_id.0
+        record_id.0,
+        headword,
+        reading,
     )
     .execute(&mut **tx)
-    .await
-    .context("failed to insert term")?;
+    .await?;
     Ok(())
 }
 
