@@ -32,7 +32,7 @@ impl Engine {
 }
 
 #[derive(Debug)]
-pub(super) struct PullTexthooker {
+pub struct PullTexthooker {
     send_new_url: mpsc::Sender<String>,
 }
 

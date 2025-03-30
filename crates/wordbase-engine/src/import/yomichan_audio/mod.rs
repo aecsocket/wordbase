@@ -13,7 +13,6 @@ use schema::{
 };
 use serde::de::DeserializeOwned;
 use sqlx::{Sqlite, Transaction};
-use std::iter;
 use tokio::sync::mpsc;
 use tracing::{debug, trace};
 use wordbase::{
