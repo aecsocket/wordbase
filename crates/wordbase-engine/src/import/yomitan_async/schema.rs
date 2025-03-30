@@ -7,9 +7,25 @@ use {
     super::structured,
     derive_more::{Deref, DerefMut, From},
     foldhash::HashMap,
+    regex::Regex,
     serde::Deserialize,
     serde_repr::Deserialize_repr,
+    std::sync::LazyLock,
 };
+
+pub const INDEX_PATH: &str = "index.json";
+
+macro_rules! re {
+    ($re:expr) => {
+        LazyLock::new(|| Regex::new($re).expect("should be valid regex"))
+    };
+}
+
+pub static TAG_BANK_PATTERN: LazyLock<Regex> = re!("tag_bank_([0-9]+?)\\.json");
+pub static TERM_BANK_PATTERN: LazyLock<Regex> = re!("term_bank_([0-9]+?)\\.json");
+pub static TERM_META_BANK_PATTERN: LazyLock<Regex> = re!("term_meta_bank_([0-9]+?)\\.json");
+pub static KANJI_BANK_PATTERN: LazyLock<Regex> = re!("kanji_bank_([0-9]+?)\\.json");
+pub static KANJI_META_BANK_PATTERN: LazyLock<Regex> = re!("kanji_meta_bank_([0-9]+?)\\.json");
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]

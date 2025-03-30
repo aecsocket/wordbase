@@ -24,7 +24,7 @@ pub struct YomichanAudio;
 
 impl ImportKind for YomichanAudio {
     fn is_of_kind(&self, archive: Bytes) -> BoxFuture<'_, Result<()>> {
-        Box::pin(async move { validate(&archive).await })
+        Box::pin(validate(archive))
     }
 
     fn start_import<'a>(
@@ -69,21 +69,18 @@ const MARKER_PATHS: &[&str] = &[
     SHINMEIKAI8_MEDIA,
 ];
 
-async fn validate(archive: &[u8]) -> Result<()> {
+async fn validate(archive: Bytes) -> Result<()> {
     let archive = async_tar::Archive::new(XzDecoder::new(Cursor::new(archive)));
     let mut entries = archive
         .entries()
         .context("failed to read archive entries")?;
     while let Some(entry) = entries.next().await {
-        let Ok(entry) = entry else {
-            continue;
-        };
-        let Ok(path) = entry.path() else {
-            continue;
-        };
-        let Some(path) = path.to_str() else {
-            continue;
-        };
+        let entry = entry.context("failed to read entry")?;
+        let path = entry.path().context("failed to read entry path")?;
+        let path = path
+            .to_str()
+            .with_context(|| format!("path {path:?} is not UTF-8"))?;
+
         if MARKER_PATHS.contains(&path) {
             return Ok(());
         }

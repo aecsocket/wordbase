@@ -22,7 +22,7 @@ static FORMATS: LazyLock<HashMap<DictionaryKind, Arc<dyn ImportKind>>> = LazyLoc
     [
         (
             DictionaryKind::Yomitan,
-            Arc::new(yomitan_sync::Yomitan) as Arc<dyn ImportKind>,
+            Arc::new(yomitan_async::Yomitan) as Arc<dyn ImportKind>,
         ),
         (
             DictionaryKind::YomichanAudio,
@@ -142,6 +142,8 @@ impl Engine {
     ) -> Result<(), ImportError> {
         debug!("Attempting to determine dictionary kind");
         let kind = kind_of(&archive).await.map_err(ImportError::GetKind)?;
+        debug!("Importing as {kind:?}");
+
         let importer = FORMATS.get(&kind).ok_or(ImportError::NoImporter { kind })?;
         let (tracker, import) = importer
             .start_import(self, archive)
