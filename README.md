@@ -48,6 +48,10 @@ CREATE TABLE IF NOT EXISTS term (
 
 OR: have a headword and term tables
 
+super basic yomitan async becnhmark:
+- async: 65.8 sec
+- sync: 74.6 sec
+
 # Installation
 
 TODO

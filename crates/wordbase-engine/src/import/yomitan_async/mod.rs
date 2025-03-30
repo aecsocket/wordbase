@@ -4,9 +4,9 @@ use {
     super::{ImportContinue, ImportKind, ImportStarted, insert_record, insert_term_record},
     crate::{CHANNEL_BUF_CAP, Engine, import::insert_dictionary},
     anyhow::{Context, Result, bail},
-    async_zip::base::read::{WithEntry, ZipEntryReader, seek::ZipFileReader},
+    async_zip::base::read::seek::ZipFileReader,
     bytes::Bytes,
-    futures::{AsyncBufRead, future::BoxFuture, io::Cursor},
+    futures::{future::BoxFuture, io::Cursor},
     schema::{
         INDEX_PATH, KANJI_BANK_PATTERN, KANJI_META_BANK_PATTERN, TAG_BANK_PATTERN,
         TERM_BANK_PATTERN, TERM_META_BANK_PATTERN,
@@ -20,7 +20,7 @@ use {
             atomic::{self, AtomicUsize},
         },
     },
-    tokio::sync::mpsc,
+    tokio::{sync::mpsc, task::JoinSet},
     tracing::debug,
     wordbase::{
         DictionaryId, DictionaryKind, DictionaryMeta, NonEmptyString, Term,
@@ -118,65 +118,79 @@ async fn continue_import(
     meta: DictionaryMeta,
     send_progress: mpsc::Sender<f64>,
 ) -> Result<DictionaryId> {
-    let mut zip = ZipFileReader::new(Cursor::new(&archive))
+    let zip = ZipFileReader::new(Cursor::new(&archive))
         .await
         .context("failed to open zip archive")?;
 
-    let mut tx = engine
-        .db
-        .begin()
-        .await
-        .context("failed to begin transaction")?;
-
-    let dictionary_id = insert_dictionary(&mut tx, &meta)
-        .await
-        .context("failed to insert dictionary")?;
-
-    let mut tag_bank = Vec::<schema::Tag>::new();
-    let mut term_bank = Vec::<schema::Term>::new();
-    let mut term_meta_bank = Vec::<schema::TermMeta>::new();
-    let mut kanji_bank = Vec::<schema::Kanji>::new();
-    let mut kanji_meta_bank = Vec::<schema::KanjiMeta>::new();
-    let num_entries = zip.file().entries().len();
-    let mut index = 0;
-    while let Ok(mut entry) = zip.reader_with_entry(index).await {
-        index += 1;
-        let filename = entry.entry().filename();
+    let mut tag_bank_paths = Vec::<(usize, String)>::new();
+    let mut term_bank_paths = Vec::<(usize, String)>::new();
+    let mut term_meta_bank_paths = Vec::<(usize, String)>::new();
+    let mut kanji_bank_paths = Vec::<(usize, String)>::new();
+    let mut kanji_meta_bank_paths = Vec::<(usize, String)>::new();
+    for (index, entry) in zip.file().entries().iter().enumerate() {
+        let filename = entry.filename();
         let path = filename
             .as_str()
             .with_context(|| format!("`{filename:?}` is not a UTF-8 file name"))?
             .to_owned();
 
-        (async {
-            if TAG_BANK_PATTERN.is_match(&path) {
-                parse_bank_into(&mut entry, &mut tag_bank)
-                    .await
-                    .context("failed to parse as tag bank")?;
-            } else if TERM_BANK_PATTERN.is_match(&path) {
-                parse_bank_into(&mut entry, &mut term_bank)
-                    .await
-                    .context("failed to parse as term bank")?;
-            } else if TERM_META_BANK_PATTERN.is_match(&path) {
-                parse_bank_into(&mut entry, &mut term_meta_bank)
-                    .await
-                    .context("failed to parse as term meta bank")?;
-            } else if KANJI_BANK_PATTERN.is_match(&path) {
-                parse_bank_into(&mut entry, &mut kanji_bank)
-                    .await
-                    .context("failed to parse as kanji bank")?;
-            } else if KANJI_META_BANK_PATTERN.is_match(&path) {
-                parse_bank_into(&mut entry, &mut kanji_meta_bank)
-                    .await
-                    .context("failed to parse as kanji meta bank")?;
-            }
-            anyhow::Ok(())
-        })
-        .await
-        .with_context(|| format!("failed to parse `{path}`"))?;
-
-        let progress = (index as f64) / (num_entries as f64);
-        _ = send_progress.try_send(0.5 * progress);
+        if TAG_BANK_PATTERN.is_match(&path) {
+            tag_bank_paths.push((index, path));
+        } else if TERM_BANK_PATTERN.is_match(&path) {
+            term_bank_paths.push((index, path));
+        } else if TERM_META_BANK_PATTERN.is_match(&path) {
+            term_meta_bank_paths.push((index, path));
+        } else if KANJI_BANK_PATTERN.is_match(&path) {
+            kanji_bank_paths.push((index, path));
+        } else if KANJI_META_BANK_PATTERN.is_match(&path) {
+            kanji_meta_bank_paths.push((index, path));
+        }
     }
+
+    let num_banks = tag_bank_paths.len()
+        + term_bank_paths.len()
+        + term_meta_bank_paths.len()
+        + kanji_bank_paths.len()
+        + kanji_meta_bank_paths.len();
+    let banks_parsed = Arc::new(AtomicUsize::new(0));
+    let (tag_bank, term_bank, term_meta_bank, kanji_bank, kanji_meta_bank) = tokio::try_join!(
+        spawn_flatten(parse_all_banks::<schema::Tag>(
+            tag_bank_paths,
+            archive.clone(),
+            banks_parsed.clone(),
+            num_banks,
+            send_progress.clone()
+        )),
+        spawn_flatten(parse_all_banks::<schema::Term>(
+            term_bank_paths,
+            archive.clone(),
+            banks_parsed.clone(),
+            num_banks,
+            send_progress.clone(),
+        )),
+        spawn_flatten(parse_all_banks::<schema::TermMeta>(
+            term_meta_bank_paths,
+            archive.clone(),
+            banks_parsed.clone(),
+            num_banks,
+            send_progress.clone(),
+        )),
+        spawn_flatten(parse_all_banks::<schema::Kanji>(
+            kanji_bank_paths,
+            archive.clone(),
+            banks_parsed.clone(),
+            num_banks,
+            send_progress.clone(),
+        )),
+        spawn_flatten(parse_all_banks::<schema::KanjiMeta>(
+            kanji_meta_bank_paths,
+            archive.clone(),
+            banks_parsed.clone(),
+            num_banks,
+            send_progress.clone(),
+        )),
+    )
+    .context("failed to parse banks")?;
 
     // explicitly exclude tags, since we don't insert tags as a record
     let records_len =
@@ -198,7 +212,17 @@ async fn continue_import(
     };
 
     debug!("Importing records");
-    let mut scratch = Vec::<u8>::new();
+    let _import_lock = engine.imports.insert_lock.lock().await;
+    let mut tx = engine
+        .db
+        .begin()
+        .await
+        .context("failed to begin transaction")?;
+    let dictionary_id = insert_dictionary(&mut tx, &meta)
+        .await
+        .context("failed to insert dictionary")?;
+
+    let mut scratch = Vec::new();
     for term in term_bank {
         let headword = term.expression.clone();
         let reading = term.reading.clone();
@@ -220,22 +244,67 @@ async fn continue_import(
     Ok(dictionary_id)
 }
 
-async fn parse_bank_into<T, R>(
-    entry: &mut ZipEntryReader<'_, R, WithEntry<'_>>,
-    dst: &mut Vec<T>,
+async fn spawn_flatten<F, T>(fut: F) -> Result<T>
+where
+    F: Future<Output = Result<T>> + Send + 'static,
+    T: Send + 'static,
+{
+    match tokio::spawn(fut).await.context("task canceled") {
+        Ok(Ok(t)) => Ok(t),
+        Ok(Err(err)) | Err(err) => Err(err),
+    }
+}
+
+async fn parse_all_banks<T>(
+    bank_paths: impl IntoIterator<Item = (usize, String)>,
+    archive: Bytes,
+    banks_parsed: Arc<AtomicUsize>,
+    num_banks: usize,
+    send_progress: mpsc::Sender<f64>,
 ) -> Result<Vec<T>>
 where
-    T: Clone,
+    T: Clone + Send + Sync + 'static,
     Vec<T>: DeserializeOwned,
-    R: AsyncBufRead + Unpin,
 {
+    let mut parse_tasks = JoinSet::new();
+    for (index, path) in bank_paths {
+        let archive = archive.clone();
+        parse_tasks.spawn(async move {
+            parse_bank::<T>(&archive, index)
+                .await
+                .with_context(|| format!("failed to parse `{path}` as tag bank"))
+        });
+    }
+
+    let mut total_bank = Vec::<T>::new();
+    while let Some(bank) = parse_tasks.join_next().await {
+        let bank = bank.context("import task canceled")??;
+        total_bank.extend_from_slice(&bank);
+
+        let banks_parsed = banks_parsed.fetch_add(1, atomic::Ordering::SeqCst) + 1;
+        let progress = (banks_parsed as f64) / (num_banks as f64);
+        _ = send_progress.try_send(0.5 * progress);
+    }
+    Ok(total_bank)
+}
+
+async fn parse_bank<T>(archive: &[u8], entry_index: usize) -> Result<Vec<T>>
+where
+    Vec<T>: DeserializeOwned,
+{
+    let mut zip = ZipFileReader::new(Cursor::new(archive))
+        .await
+        .context("failed to open zip archive")?;
+    let mut entry = zip
+        .reader_with_entry(entry_index)
+        .await
+        .context("failed to read entry")?;
     let mut bank = Vec::new();
     entry
         .read_to_end_checked(&mut bank)
         .await
         .context("failed to read into memory")?;
-    let bank = serde_json::from_slice::<Vec<T>>(&bank).context("failed to parse tag bank")?;
-    dst.extend_from_slice(&bank);
+    let bank = serde_json::from_slice::<Vec<T>>(&bank).context("failed to parse bank")?;
     Ok(bank)
 }
 

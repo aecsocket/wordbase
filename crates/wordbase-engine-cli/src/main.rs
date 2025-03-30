@@ -124,7 +124,7 @@ enum TexthookerCommand {
     Watch,
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -355,7 +355,9 @@ async fn dictionary_import(engine: Engine, path: PathBuf) -> Result<()> {
         .context("failed to read dictionary file into memory")?;
 
     let (send_tracker, recv_tracker) = oneshot::channel::<ImportStarted>();
-    let tracker_task = tokio::spawn(async move {
+    let import_task =
+        tokio::spawn(async move { engine.import_dictionary(data, send_tracker).await });
+    let tracker_task = async move {
         let Ok(mut tracker) = recv_tracker.await else {
             return;
         };
@@ -368,10 +370,12 @@ async fn dictionary_import(engine: Engine, path: PathBuf) -> Result<()> {
         while let Some(progress) = tracker.recv_progress.recv().await {
             info!("{:.02}% imported", progress * 100.0);
         }
-    });
+    };
 
-    let (result, _) = tokio::join!(engine.import_dictionary(data, send_tracker), tracker_task);
-    result.context("failed to import dictionary")?;
+    let (result, ()) = tokio::join!(import_task, tracker_task);
+    result
+        .context("import task canceled")?
+        .context("failed to import dictionary")?;
 
     let elapsed = Instant::now().duration_since(start);
     info!("Import complete in {elapsed:?}");

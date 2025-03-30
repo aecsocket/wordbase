@@ -142,7 +142,7 @@ impl Engine {
     ) -> Result<(), ImportError> {
         debug!("Attempting to determine dictionary kind");
         let kind = kind_of(&archive).await.map_err(ImportError::GetKind)?;
-        debug!("Importing as {kind:?}");
+        debug!("Importing as {kind:?} dictionary");
 
         let importer = FORMATS.get(&kind).ok_or(ImportError::NoImporter { kind })?;
         let (tracker, import) = importer
