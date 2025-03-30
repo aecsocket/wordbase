@@ -383,8 +383,6 @@ impl From<Nhk16Index> for Index {
                 }
             }
 
-            // TODO: NHK16 also stores `accent[i].pronunciation` which might be useful
-            // this format has a ton of useful stuff in general... we should expose it
             for subentry in entry.subentries {
                 let headword = subentry.head.or_else(|| term.headword.clone());
                 let term = Term {

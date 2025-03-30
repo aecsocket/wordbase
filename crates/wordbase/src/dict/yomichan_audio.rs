@@ -1,6 +1,9 @@
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
+// TODO: this dictionary format has a ton of extra useful information,
+// we should find a way to expose it!
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Forvo {
     pub username: String,
