@@ -100,7 +100,7 @@ impl Engine {
         Ok(())
     }
 
-    pub async fn delete_profile(&self, id: ProfileId) -> Result<()> {
+    pub async fn remove_profile(&self, id: ProfileId) -> Result<()> {
         let result = sqlx::query!("DELETE FROM profile WHERE id = $1", id.0)
             .execute(&self.db)
             .await?;

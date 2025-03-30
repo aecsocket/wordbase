@@ -2,7 +2,7 @@ mod parse;
 mod schema;
 
 use {
-    super::{ImportContinue, ImportKind, ImportTracker, insert_term},
+    super::{ImportContinue, ImportKind, ImportStarted, insert_term},
     crate::{CHANNEL_BUF_CAP, Engine, import::insert_dictionary},
     anyhow::{Context as _, Result, bail},
     bytes::Bytes,
@@ -37,10 +37,10 @@ impl ImportKind for Yomitan {
         &'a self,
         engine: &'a Engine,
         archive: Bytes,
-    ) -> BoxFuture<'a, Result<(ImportTracker, ImportContinue<'a>)>> {
+    ) -> BoxFuture<'a, Result<(ImportStarted, ImportContinue<'a>)>> {
         Box::pin(async move {
-            let (tracker, continuation) = start_import(engine, archive).await?;
-            Ok((tracker, Box::pin(continuation) as ImportContinue))
+            let (result, continuation) = start_import(engine, archive).await?;
+            Ok((result, Box::pin(continuation) as ImportContinue))
         })
     }
 }
@@ -59,7 +59,7 @@ fn validate_blocking(archive: &[u8]) -> Result<()> {
 async fn start_import(
     engine: &Engine,
     archive: Bytes,
-) -> Result<(ImportTracker, impl Future<Output = Result<()>>)> {
+) -> Result<(ImportStarted, impl Future<Output = Result<DictionaryId>>)> {
     let (parse_banks, index) = blocking::unblock(|| parse::start_blocking(archive))
         .await
         .context("failed to parse index")?;
@@ -70,7 +70,7 @@ async fn start_import(
 
     let (send_progress, recv_progress) = mpsc::channel(CHANNEL_BUF_CAP);
     Ok((
-        ImportTracker {
+        ImportStarted {
             meta: meta.clone(),
             recv_progress,
         },
@@ -83,7 +83,7 @@ async fn continue_import(
     parse_banks: ParseBanks,
     meta: DictionaryMeta,
     send_progress: mpsc::Sender<f64>,
-) -> Result<()> {
+) -> Result<DictionaryId> {
     let banks_len = parse_banks.tag_banks().len()
         + parse_banks.term_banks().len()
         + parse_banks.term_meta_banks().len()
@@ -162,7 +162,7 @@ async fn continue_import(
     drop(send_progress);
 
     tx.commit().await.context("failed to commit transaction")?;
-    Ok(())
+    Ok(dictionary_id)
 }
 
 fn sanitize(s: String) -> Option<String> {
@@ -295,20 +295,16 @@ fn to_frequency_and_reading(raw: schema::TermMetaFrequency) -> (Frequency, Optio
             rank: Some(rank),
             display: None,
         },
-        schema::GenericFrequencyData::String(rank) => {
-            // best-effort attempt
-            if let Ok(rank) = rank.trim().parse() {
-                Frequency {
-                    rank: Some(rank),
-                    display: None,
-                }
-            } else {
-                Frequency {
-                    rank: None,
-                    display: Some(rank),
-                }
-            }
-        }
+        schema::GenericFrequencyData::String(rank) => rank.trim().parse().map_or(
+            Frequency {
+                rank: None,
+                display: Some(rank),
+            },
+            |rank| Frequency {
+                rank: Some(rank),
+                display: None,
+            },
+        ),
         schema::GenericFrequencyData::Complex {
             value,
             display_value,

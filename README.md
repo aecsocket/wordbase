@@ -9,6 +9,12 @@ audio server:
 - i get the term "食べる (たべる)"
 - i get audio bytes as a record
 
+FUTURE ROADMAP:
+
+I don't like how `Term` is hardcoded to a headword and reading. It's totally possible to have multiple readings for the same headword, i.e. a hiragana katakana and reading for the same kanji. And things like NHK16 Yomichan local audio dict use katakana readings for pronunciation. It'd be really useful to support that, but we just don't right now.
+
+However I also don't want a `reading_1`, `reading_2`, `reading_3` etc columns in the database. It's theoretically possible to do that, but that's really ugly.
+
 # Installation
 
 TODO

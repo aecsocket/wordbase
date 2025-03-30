@@ -33,7 +33,7 @@ type_complexity         = "allow"
 wordbase = { path = "crates/wordbase" }
 # wordbase-ankiconnect = { path = "crates/wordbase-ankiconnect" }
 # wordbase-client-tokio = { path = "crates/wordbase-client-tokio" }
-# wordbase-engine = { path = "crates/wordbase-engine" }
+wordbase-engine = { path = "crates/wordbase-engine" }
 # wordbase-server = { path = "crates/wordbase-server" }
 
 ankiconnect          = { version = "0.2" }

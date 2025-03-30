@@ -10,7 +10,7 @@ use {
     tracing::{info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
     wordbase::{DictionaryId, ProfileId, ProfileMeta, RecordKind},
-    wordbase_engine::{Config, Engine, Event, import::ImportTracker},
+    wordbase_engine::{Config, Engine, Event, import::ImportStarted},
 };
 
 #[derive(Debug, clap::Parser)]
@@ -284,7 +284,7 @@ async fn profile_set(engine: Engine, id: i64) -> Result<()> {
 
 async fn profile_rm(engine: Engine, id: i64) -> Result<()> {
     let id = ProfileId(id);
-    engine.delete_profile(id).await??;
+    engine.remove_profile(id).await?;
     Ok(())
 }
 
@@ -315,7 +315,7 @@ async fn dictionary_ls(engine: Engine) -> Result<()> {
 
 async fn dictionary_info(engine: Engine, id: i64) -> Result<()> {
     let id = DictionaryId(id);
-    let dictionary = engine.dictionary(id).await??;
+    let dictionary = engine.dictionary(id).await?;
     println!(
         "{:?} version {:?}",
         dictionary.meta.name, dictionary.meta.version
@@ -354,7 +354,7 @@ async fn dictionary_import(engine: Engine, path: PathBuf) -> Result<()> {
         .map(Bytes::from)
         .context("failed to read dictionary file into memory")?;
 
-    let (send_tracker, recv_tracker) = oneshot::channel::<ImportTracker>();
+    let (send_tracker, recv_tracker) = oneshot::channel::<ImportStarted>();
     let tracker_task = tokio::spawn(async move {
         let Ok(mut tracker) = recv_tracker.await else {
             return;
@@ -392,13 +392,13 @@ async fn dictionary_disable(engine: Engine, id: i64) -> Result<()> {
 
 async fn dictionary_position(engine: Engine, id: i64, position: i64) -> Result<()> {
     let id = DictionaryId(id);
-    engine.set_dictionary_position(id, position).await??;
+    engine.set_dictionary_position(id, position).await?;
     Ok(())
 }
 
 async fn dictionary_rm(engine: Engine, id: i64) -> Result<()> {
     let id = DictionaryId(id);
-    engine.delete_dictionary(id).await??;
+    engine.remove_dictionary(id).await?;
     Ok(())
 }
 
@@ -443,7 +443,7 @@ async fn texthooker_watch(engine: Engine) -> Result<()> {
     println!("Watching for texthooker sentences");
     loop {
         let event = recv_event.recv().await?;
-        if let Event::HookSentence(sentence) = event {
+        if let Event::TexthookerSentence(sentence) = event {
             println!("{sentence:?}");
         }
     }

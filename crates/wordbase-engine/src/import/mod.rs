@@ -5,7 +5,7 @@ use {
     crate::{Engine, db},
     anyhow::{Context, Result},
     bytes::Bytes,
-    derive_more::{Display, Error},
+    derive_more::{Display, Error, From},
     futures::{StreamExt, future::BoxFuture, stream::FuturesUnordered},
     sqlx::{Pool, Sqlite, Transaction},
     std::{
@@ -13,6 +13,7 @@ use {
         sync::{Arc, LazyLock},
     },
     tokio::sync::{Mutex, mpsc, oneshot},
+    tracing::debug,
     wordbase::{DictionaryId, DictionaryKind, DictionaryMeta, RecordType, Term},
 };
 
@@ -37,10 +38,10 @@ pub trait ImportKind: Send + Sync {
         &'a self,
         engine: &'a Engine,
         archive: Bytes,
-    ) -> BoxFuture<'a, Result<(ImportTracker, ImportContinue<'a>)>>;
+    ) -> BoxFuture<'a, Result<(ImportStarted, ImportContinue<'a>)>>;
 }
 
-pub type ImportContinue<'a> = BoxFuture<'a, Result<()>>;
+pub type ImportContinue<'a> = BoxFuture<'a, Result<DictionaryId>>;
 
 #[derive(Debug, Display, Error)]
 pub enum GetKindError {
@@ -92,8 +93,7 @@ pub async fn kind_of(archive: &Bytes) -> Result<DictionaryKind, GetKindError> {
 
 /// Tracks the state of a dictionary import operation.
 #[derive(Debug)]
-pub struct ImportTracker {
-    /// Parsed dictionary meta.
+pub struct ImportStarted {
     pub meta: DictionaryMeta,
     pub recv_progress: mpsc::Receiver<f64>,
 }
@@ -111,7 +111,7 @@ impl Imports {
     }
 }
 
-#[derive(Debug, Display, Error)]
+#[derive(Debug, Display, Error, From)]
 pub enum ImportError {
     #[display("failed to determine dictionary kind")]
     GetKind(GetKindError),
@@ -122,29 +122,52 @@ pub enum ImportError {
         kind: DictionaryKind,
         source: anyhow::Error,
     },
+    #[display("dictionary with this name already exists")]
+    AlreadyExists,
     #[display("failed to import as `{kind:?}`")]
     Import {
         kind: DictionaryKind,
         source: anyhow::Error,
     },
+    #[from]
+    Other(anyhow::Error),
 }
 
 impl Engine {
     pub async fn import_dictionary(
         &self,
         archive: Bytes,
-        send_tracker: oneshot::Sender<ImportTracker>,
+        send_tracker: oneshot::Sender<ImportStarted>,
     ) -> Result<(), ImportError> {
+        debug!("Attempting to determine dictionary kind");
         let kind = kind_of(&archive).await.map_err(ImportError::GetKind)?;
         let importer = FORMATS.get(&kind).ok_or(ImportError::NoImporter { kind })?;
         let (tracker, import) = importer
             .start_import(self, archive)
             .await
             .map_err(|source| ImportError::ParseMeta { kind, source })?;
-        _ = send_tracker.send(tracker);
-        import
+        let meta = &tracker.meta;
+        debug!(
+            "Importing {:?} dictionary {:?} version {:?}",
+            meta.kind, meta.name, meta.version
+        );
+
+        let already_exists = dictionary_exists_by_name(&self.db, &meta.name)
             .await
-            .map_err(|source| ImportError::Import { kind, source })
+            .context("failed to fetch if this dictionary already exists")?;
+        if already_exists {
+            return Err(ImportError::AlreadyExists);
+        }
+
+        _ = send_tracker.send(tracker);
+        let dictionary_id = import
+            .await
+            .map_err(|source| ImportError::Import { kind, source })?;
+
+        self.enable_dictionary(dictionary_id)
+            .await
+            .context("failed to enable dictionary")?;
+        Ok(())
     }
 }
 
