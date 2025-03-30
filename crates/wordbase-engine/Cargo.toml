@@ -44,3 +44,4 @@ tokio-stream         = { workspace = true }
 tokio-tungstenite    = { workspace = true }
 tracing              = { workspace = true }
 unicode-segmentation = { workspace = true }
+zip                  = { version = "2.5.0" }
