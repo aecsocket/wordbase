@@ -18,17 +18,17 @@ impl Engine {
                 record.source,
                 record.kind,
                 record.data,
-                term.headword,
-                term.reading
+                term_record.headword,
+                term_record.reading
             FROM record
             INNER JOIN dictionary ON record.source = dictionary.id
             INNER JOIN profile_enabled_dictionary ped ON dictionary.id = ped.dictionary
             INNER JOIN config ON ped.profile = config.current_profile
-            INNER JOIN term ON term.record = record.id
-            WHERE (term.headword = ",
+            INNER JOIN term_record ON term_record.record = record.id
+            WHERE (term_record.headword = ",
         );
         query.push_bind(lemma);
-        query.push("OR term.reading = ");
+        query.push("OR term_record.reading = ");
         query.push_bind(lemma);
         query.push(") AND record.kind IN (");
         {

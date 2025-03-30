@@ -94,17 +94,6 @@ async fn import(
     meta: DictionaryMeta,
     send_progress: mpsc::Sender<f64>,
 ) -> Result<DictionaryId> {
-    todo!()
-}
-
-/*
-
-async fn import(
-    engine: &Engine,
-    archive: Bytes,
-    meta: DictionaryMeta,
-    send_progress: mpsc::Sender<f64>,
-) -> Result<DictionaryId> {
     let mut tx = engine
         .db
         .begin()
@@ -115,9 +104,9 @@ async fn import(
         .context("failed to insert dictionary")?;
 
     debug!("Counting entries and parsing indexes");
-    let mut jpod_index = None;
-    let mut nhk16_index = None;
-    let mut shinmeikai8_index = None;
+    // let mut jpod_index = None;
+    // let mut nhk16_index = None;
+    // let mut shinmeikai8_index = None;
     let mut entries = async_tar::Archive::new(XzDecoder::new(Cursor::new(&archive)))
         .entries()
         .context("failed to read archive entries")?;
@@ -132,15 +121,15 @@ async fn import(
 
         (async {
             match path.as_str() {
-                JPOD_INDEX => {
-                    jpod_index = Some(parse_index::<JpodIndex, _>(&mut entry).await?);
-                }
-                NHK16_INDEX => {
-                    nhk16_index = Some(parse_index::<Nhk16Index, _>(&mut entry).await?);
-                }
-                SHINMEIKAI8_INDEX => {
-                    shinmeikai8_index = Some(parse_index::<Shinmeikai8Index, _>(&mut entry).await?);
-                }
+                // JPOD_INDEX => {
+                //     jpod_index = Some(parse_index::<JpodIndex, _>(&mut entry).await?);
+                // }
+                // NHK16_INDEX => {
+                //     nhk16_index = Some(parse_index::<Nhk16Index, _>(&mut entry).await?);
+                // }
+                // SHINMEIKAI8_INDEX => {
+                //     shinmeikai8_index = Some(parse_index::<Shinmeikai8Index, _>(&mut entry).await?);
+                // }
                 _ => {}
             }
             anyhow::Ok(())
@@ -152,10 +141,10 @@ async fn import(
     }
     debug!("{num_entries} total entries");
 
-    let jpod_index = jpod_index.with_context(|| format!("no JPod index at `{JPOD_INDEX}`"))?;
-    let nhk16_index = nhk16_index.with_context(|| format!("no NHK index at `{NHK16_INDEX}`"))?;
-    let shinmeikai8_index = shinmeikai8_index
-        .with_context(|| format!("no Shinmeikai index at `{SHINMEIKAI8_INDEX}`"))?;
+    //     let jpod_index = jpod_index.with_context(|| format!("no JPod index at `{JPOD_INDEX}`"))?;
+    //     let nhk16_index = nhk16_index.with_context(|| format!("no NHK index at `{NHK16_INDEX}`"))?;
+    //     let shinmeikai8_index = shinmeikai8_index
+    //         .with_context(|| format!("no Shinmeikai index at `{SHINMEIKAI8_INDEX}`"))?;
 
     let mut entries = async_tar::Archive::new(XzDecoder::new(Cursor::new(&archive)))
         .entries()
@@ -179,45 +168,45 @@ async fn import(
                 import_forvo(&mut tx, dictionary_id, &mut scratch, path, &mut entry)
                     .await
                     .context("failed to import Forvo file")?;
-            } else if let Some(path) = path.strip_prefix(JPOD_MEDIA) {
-                import_by_index(
-                    &mut tx,
-                    dictionary_id,
-                    &mut scratch,
-                    path,
-                    &mut entry,
-                    &jpod_index,
-                    |audio| Jpod { audio },
-                )
-                .await?;
-            } else if let Some(path) = path.strip_prefix(NHK16_AUDIO) {
-                import_by_index(
-                    &mut tx,
-                    dictionary_id,
-                    &mut scratch,
-                    path,
-                    &mut entry,
-                    &nhk16_index,
-                    |audio| Nhk16 {
-                        audio,
-                        ..Default::default() // TODO
-                    },
-                )
-                .await?;
-            } else if let Some(path) = path.strip_prefix(SHINMEIKAI8_MEDIA) {
-                import_by_index(
-                    &mut tx,
-                    dictionary_id,
-                    &mut scratch,
-                    path,
-                    &mut entry,
-                    &shinmeikai8_index,
-                    |audio| Shinmeikai8 {
-                        audio,
-                        ..Default::default() // TODO
-                    },
-                )
-                .await?;
+                // } else if let Some(path) = path.strip_prefix(JPOD_MEDIA) {
+                //     import_by_index(
+                //         &mut tx,
+                //         dictionary_id,
+                //         &mut scratch,
+                //         path,
+                //         &mut entry,
+                //         &jpod_index,
+                //         |audio| Jpod { audio },
+                //     )
+                //     .await?;
+                // } else if let Some(path) = path.strip_prefix(NHK16_AUDIO) {
+                //     import_by_index(
+                //         &mut tx,
+                //         dictionary_id,
+                //         &mut scratch,
+                //         path,
+                //         &mut entry,
+                //         &nhk16_index,
+                //         |audio| Nhk16 {
+                //             audio,
+                //             ..Default::default() // TODO
+                //         },
+                //     )
+                //     .await?;
+                // } else if let Some(path) = path.strip_prefix(SHINMEIKAI8_MEDIA) {
+                //     import_by_index(
+                //         &mut tx,
+                //         dictionary_id,
+                //         &mut scratch,
+                //         path,
+                //         &mut entry,
+                //         &shinmeikai8_index,
+                //         |audio| Shinmeikai8 {
+                //             audio,
+                //             ..Default::default() // TODO
+                //         },
+                //     )
+                //     .await?;
             }
             anyhow::Ok(())
         })
@@ -226,33 +215,13 @@ async fn import(
 
         entries_done += 1;
         if entries_done % 1000 == 0 {
-            _ = send_progress.try_send((entries_done as f64) / (num_entries as f64));
+            let progress = (entries_done as f64) / (num_entries as f64);
+            _ = send_progress.try_send(progress);
         }
     }
 
     tx.commit().await.context("failed to commit transaction")?;
     Ok(dictionary_id)
-}
-
-#[derive(Debug, Deref)]
-struct Index<T> {
-    for_path: HashMap<String, (Term, T)>,
-}
-
-async fn parse_index<T, I, R>(entry: &mut async_tar::Entry<R>) -> Result<Index<T>>
-where
-    I: DeserializeOwned + TryInto<Index<T>, Error = anyhow::Error>,
-    R: AsyncRead + Unpin,
-{
-    let mut buf = Vec::new();
-    entry
-        .read_to_end(&mut buf)
-        .await
-        .context("failed to read file into memory")?;
-    let raw_index = serde_json::from_reader::<_, I>(std::io::Cursor::new(buf))
-        .context("failed to parse index")?;
-    let index = raw_index.try_into().context("failed to reverse index")?;
-    Ok(index)
 }
 
 async fn import_forvo<R: AsyncRead + Unpin>(
@@ -294,6 +263,29 @@ async fn import_forvo<R: AsyncRead + Unpin>(
         .await
         .context("failed to insert headword term")?;
     Ok(())
+}
+
+/*
+
+#[derive(Debug, Deref)]
+struct Index<T> {
+    for_path: HashMap<String, (Term, T)>,
+}
+
+async fn parse_index<T, I, R>(entry: &mut async_tar::Entry<R>) -> Result<Index<T>>
+where
+    I: DeserializeOwned + TryInto<Index<T>, Error = anyhow::Error>,
+    R: AsyncRead + Unpin,
+{
+    let mut buf = Vec::new();
+    entry
+        .read_to_end(&mut buf)
+        .await
+        .context("failed to read file into memory")?;
+    let raw_index = serde_json::from_reader::<_, I>(std::io::Cursor::new(buf))
+        .context("failed to parse index")?;
+    let index = raw_index.try_into().context("failed to reverse index")?;
+    Ok(index)
 }
 
 #[derive(Debug, Deserialize)]
