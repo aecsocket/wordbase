@@ -41,6 +41,7 @@ anyhow               = { version = "1.0" }
 ascii_table          = { version = "4.0" }
 async-compression    = { version = "0.4" }
 async-tar            = { version = "0.5" }
+async_zip            = { version = "0.0.17" }
 bimap                = { version = "0.6" }
 blocking             = { version = "1.6" }
 bytes                = { version = "1.10" }
@@ -81,7 +82,6 @@ unicode-segmentation = { version = "1.12" }
 webkit6              = { version = "0.4" }
 xz2                  = { version = "0.1" }
 zbus                 = { version = "5.5", default-features = false }
-zip                  = { version = "2.2" }
 
 [workspace.metadata.cargo-shear]
 ignored = ["bzip2"]

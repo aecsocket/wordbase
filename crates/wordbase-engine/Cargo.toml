@@ -23,6 +23,7 @@ wordbase = { workspace = true }
 anyhow               = { workspace = true }
 async-compression    = { workspace = true, features = ["futures-io", "xz"] }
 async-tar            = { workspace = true }
+async_zip            = { workspace = true, features = ["deflate"] }
 blocking             = { workspace = true }
 bytes                = { workspace = true }
 derive_more          = { workspace = true, features = ["display", "error", "from"] }
@@ -43,4 +44,3 @@ tokio-stream         = { workspace = true }
 tokio-tungstenite    = { workspace = true }
 tracing              = { workspace = true }
 unicode-segmentation = { workspace = true }
-zip                  = { workspace = true }

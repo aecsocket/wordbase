@@ -4,13 +4,13 @@ mod schema;
 use {
     super::{ImportContinue, ImportKind, ImportStarted, insert_record, insert_term_record},
     crate::{CHANNEL_BUF_CAP, Engine, import::insert_dictionary},
-    anyhow::{Context as _, Result, bail},
+    anyhow::{Context, Result, bail},
+    async_zip::base::read::seek::ZipFileReader,
     bytes::Bytes,
-    futures::future::BoxFuture,
+    futures::{future::BoxFuture, io::Cursor},
     parse::ParseBanks,
     sqlx::{Sqlite, Transaction},
     std::{
-        io::Cursor,
         iter,
         sync::{
             Arc,
@@ -23,14 +23,13 @@ use {
         DictionaryId, DictionaryKind, DictionaryMeta, NonEmptyString, Term,
         dict::yomitan::{Frequency, Glossary, GlossaryTag, Pitch, structured},
     },
-    zip::ZipArchive,
 };
 
 pub struct Yomitan;
 
 impl ImportKind for Yomitan {
     fn is_of_kind(&self, archive: Bytes) -> BoxFuture<'_, Result<()>> {
-        Box::pin(blocking::unblock(move || validate_blocking(&archive)))
+        Box::pin(validate(archive))
     }
 
     fn start_import<'a>(
@@ -47,12 +46,21 @@ impl ImportKind for Yomitan {
 
 const INDEX_PATH: &str = "index.json";
 
-fn validate_blocking(archive: &[u8]) -> Result<()> {
-    let mut archive =
-        ZipArchive::new(Cursor::new(archive)).context("failed to read as zip archive")?;
+async fn validate(archive: Bytes) -> Result<()> {
+    let archive = ZipFileReader::new(Cursor::new(&archive))
+        .await
+        .context("failed to open zip archive")?;
     archive
-        .by_name(INDEX_PATH)
-        .with_context(|| format!("failed to read `{INDEX_PATH}` in archive"))?;
+        .file()
+        .entries()
+        .iter()
+        .find(|entry| {
+            entry
+                .filename()
+                .as_str()
+                .is_ok_and(|name| name == INDEX_PATH)
+        })
+        .with_context(|| format!("no `{INDEX_PATH}` in archive"))?;
     Ok(())
 }
 
@@ -60,6 +68,13 @@ async fn start_import(
     engine: &Engine,
     archive: Bytes,
 ) -> Result<(ImportStarted, impl Future<Output = Result<DictionaryId>>)> {
+    let archive = ZipFileReader::new(Cursor::new(&archive)).await.context("");
+
+    let archive = (&archive[..])
+        .read_zip()
+        .await
+        .context("failed to open zip archive")?;
+
     let (parse_banks, index) = blocking::unblock(|| parse::start_blocking(archive))
         .await
         .context("failed to parse index")?;
