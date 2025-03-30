@@ -138,7 +138,7 @@ pub struct DictionaryMeta {
     ///
     /// This does not guarantee to conform to any format, e.g. semantic
     /// versioning.
-    pub version: String,
+    pub version: Option<String>,
     /// Describes the content of this dictionary.
     pub description: Option<String>,
     /// Homepage URL where users can learn more about this dictionary.
@@ -148,11 +148,11 @@ pub struct DictionaryMeta {
 
 impl DictionaryMeta {
     #[must_use]
-    pub fn new(kind: DictionaryKind, name: impl Into<String>, version: impl Into<String>) -> Self {
+    pub fn new(kind: DictionaryKind, name: impl Into<String>) -> Self {
         Self {
             kind,
             name: name.into(),
-            version: version.into(),
+            version: None,
             description: None,
             url: None,
             attribution: None,

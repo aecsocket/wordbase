@@ -26,6 +26,7 @@ cast_precision_loss     = "allow"
 missing_const_for_fn    = "allow"
 module_name_repetitions = "allow"
 struct_field_names      = "allow"
+too_many_arguments      = "allow"
 too_many_lines          = "allow"
 type_complexity         = "allow"
 

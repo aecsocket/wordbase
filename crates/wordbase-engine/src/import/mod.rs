@@ -1,6 +1,5 @@
 mod yomichan_audio;
-mod yomitan_async;
-mod yomitan_sync;
+mod yomitan;
 
 use {
     crate::{Engine, db},
@@ -22,7 +21,7 @@ static FORMATS: LazyLock<HashMap<DictionaryKind, Arc<dyn ImportKind>>> = LazyLoc
     [
         (
             DictionaryKind::Yomitan,
-            Arc::new(yomitan_async::Yomitan) as Arc<dyn ImportKind>,
+            Arc::new(yomitan::Yomitan) as Arc<dyn ImportKind>,
         ),
         (
             DictionaryKind::YomichanAudio,

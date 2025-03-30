@@ -305,7 +305,7 @@ async fn dictionary_ls(engine: Engine) -> Result<()> {
                 format!("{}", dictionary.position),
                 format!("{}", dictionary.id.0),
                 dictionary.meta.name,
-                dictionary.meta.version,
+                dictionary.meta.version.unwrap_or_default(),
             ]
         })
         .collect::<Vec<_>>();

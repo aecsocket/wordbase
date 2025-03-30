@@ -1,5 +1,3 @@
-//! General dictionary schema.
-//!
 //! See [`dictionary-data.d.ts`](https://github.com/yomidevs/yomitan/blob/master/types/ext/dictionary-data.d.ts).
 #![expect(dead_code, reason = "we include all fields for completeness")]
 

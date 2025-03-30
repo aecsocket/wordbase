@@ -97,7 +97,8 @@ async fn start_import(
         .context("failed to read index into memory")?;
     let index = serde_json::from_slice::<schema::Index>(&index).context("failed to parse index")?;
 
-    let mut meta = DictionaryMeta::new(DictionaryKind::Yomitan, index.title, index.revision);
+    let mut meta = DictionaryMeta::new(DictionaryKind::Yomitan, index.title);
+    meta.version = Some(index.revision);
     meta.description = index.description;
     meta.url = index.url;
     meta.attribution = index.attribution;
