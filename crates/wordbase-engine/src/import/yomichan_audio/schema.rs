@@ -20,8 +20,7 @@ pub const MARKER_PATHS: &[&str] = &[
 ];
 
 pub mod generic {
-    use foldhash::HashMap;
-    use serde::Deserialize;
+    use {foldhash::HashMap, serde::Deserialize};
 
     #[derive(Debug, Deserialize)]
     pub struct Index {
@@ -38,8 +37,7 @@ pub mod generic {
 }
 
 pub mod nhk16 {
-    use bytes::Bytes;
-    use serde::Deserialize;
+    use {bytes::Bytes, serde::Deserialize};
 
     #[derive(Debug, Deserialize)]
     pub struct Index(pub Vec<Entry>);

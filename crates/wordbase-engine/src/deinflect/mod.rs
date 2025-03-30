@@ -1,15 +1,16 @@
 // mod lindera;
 
-use anyhow::{Context, Result};
-use foldhash::{HashSet, HashSetExt};
-use lindera::{
-    dictionary::{DictionaryKind, load_dictionary_from_kind},
-    mode::Mode,
-    segmenter::Segmenter,
-    tokenizer::Tokenizer,
+use {
+    crate::Engine,
+    anyhow::{Context, Result},
+    foldhash::{HashSet, HashSetExt},
+    lindera::{
+        dictionary::{DictionaryKind, load_dictionary_from_kind},
+        mode::Mode,
+        segmenter::Segmenter,
+        tokenizer::Tokenizer,
+    },
 };
-
-use crate::Engine;
 
 #[derive(Debug, Clone)]
 #[non_exhaustive]

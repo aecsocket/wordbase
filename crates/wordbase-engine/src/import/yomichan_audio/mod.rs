@@ -1,28 +1,28 @@
 mod schema;
 
-use anyhow::{Context, Result, bail};
-use async_compression::futures::bufread::XzDecoder;
-use async_tar::EntryType;
-use bytes::Bytes;
-use derive_more::Deref;
-use foldhash::{HashMap, HashMapExt};
-use futures::{AsyncRead, AsyncReadExt, StreamExt, future::BoxFuture, io::Cursor};
-use schema::{
-    FORVO_PATH, JPOD_INDEX, JPOD_MEDIA, MARKER_PATHS, NHK16_AUDIO, NHK16_INDEX, SHINMEIKAI8_INDEX,
-    SHINMEIKAI8_MEDIA,
+use {
+    super::{ImportContinue, ImportKind, ImportStarted, insert_record, insert_term_record},
+    crate::{CHANNEL_BUF_CAP, Engine, import::insert_dictionary},
+    anyhow::{Context, Result, bail},
+    async_compression::futures::bufread::XzDecoder,
+    async_tar::EntryType,
+    bytes::Bytes,
+    derive_more::Deref,
+    foldhash::{HashMap, HashMapExt},
+    futures::{AsyncRead, AsyncReadExt, StreamExt, future::BoxFuture, io::Cursor},
+    schema::{
+        FORVO_PATH, JPOD_INDEX, JPOD_MEDIA, MARKER_PATHS, NHK16_AUDIO, NHK16_INDEX,
+        SHINMEIKAI8_INDEX, SHINMEIKAI8_MEDIA,
+    },
+    serde::de::DeserializeOwned,
+    sqlx::{Sqlite, Transaction},
+    tokio::sync::mpsc,
+    tracing::{debug, trace},
+    wordbase::{
+        DictionaryId, DictionaryKind, DictionaryMeta, NonEmptyString, RecordType, Term,
+        dict::yomichan_audio::{Forvo, Jpod, Nhk16, Shinmeikai8},
+    },
 };
-use serde::de::DeserializeOwned;
-use sqlx::{Sqlite, Transaction};
-use tokio::sync::mpsc;
-use tracing::{debug, trace};
-use wordbase::{
-    DictionaryId, DictionaryKind, DictionaryMeta, NonEmptyString, RecordType, Term,
-    dict::yomichan_audio::{Forvo, Jpod, Nhk16, Shinmeikai8},
-};
-
-use crate::{CHANNEL_BUF_CAP, Engine, import::insert_dictionary};
-
-use super::{ImportContinue, ImportKind, ImportStarted, insert_record, insert_term_record};
 
 pub struct YomichanAudio;
 
@@ -299,7 +299,8 @@ impl TryFrom<schema::nhk16::Index> for RevIndex<Nhk16Info> {
     fn try_from(value: schema::nhk16::Index) -> Result<Self, Self::Error> {
         let mut for_path = HashMap::<String, Nhk16Info>::new();
         for entry in value.0 {
-            // let kanji = entry.kanji.into_iter().filter_map(NonEmptyString::new);
+            // let kanji =
+            // entry.kanji.into_iter().filter_map(NonEmptyString::new);
         }
         Ok(Self { for_path })
     }

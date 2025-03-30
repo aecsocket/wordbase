@@ -1,17 +1,17 @@
-use std::time::Duration;
-
-use anyhow::{Context, Result};
-use futures::{StreamExt, never::Never};
-use tokio::{
-    net::TcpStream,
-    sync::{broadcast, mpsc},
-    time,
+use {
+    crate::{CHANNEL_BUF_CAP, Engine, Event},
+    anyhow::{Context, Result},
+    futures::{StreamExt, never::Never},
+    std::time::Duration,
+    tokio::{
+        net::TcpStream,
+        sync::{broadcast, mpsc},
+        time,
+    },
+    tokio_tungstenite::{MaybeTlsStream, WebSocketStream},
+    tracing::{info, trace},
+    wordbase::TexthookerSentence,
 };
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
-use tracing::{info, trace};
-use wordbase::TexthookerSentence;
-
-use crate::{CHANNEL_BUF_CAP, Engine, Event};
 
 impl Engine {
     pub async fn texthooker_url(&self) -> Result<String> {

@@ -1,10 +1,11 @@
-use anyhow::{Context, Result, bail};
-use derive_more::{Display, Error};
-use futures::TryStreamExt;
-use tokio_stream::StreamExt;
-use wordbase::{Dictionary, DictionaryId, DictionaryMeta};
-
-use crate::{Engine, Event};
+use {
+    crate::{Engine, Event},
+    anyhow::{Context, Result, bail},
+    derive_more::{Display, Error},
+    futures::TryStreamExt,
+    tokio_stream::StreamExt,
+    wordbase::{Dictionary, DictionaryId, DictionaryMeta},
+};
 
 impl Engine {
     pub async fn dictionaries(&self) -> Result<Vec<Dictionary>> {

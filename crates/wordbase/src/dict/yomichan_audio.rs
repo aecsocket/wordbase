@@ -1,7 +1,8 @@
-use bytes::Bytes;
-use serde::{Deserialize, Serialize};
-
-use crate::NonEmptyString;
+use {
+    crate::NonEmptyString,
+    bytes::Bytes,
+    serde::{Deserialize, Serialize},
+};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Forvo {

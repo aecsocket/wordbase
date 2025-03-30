@@ -1,9 +1,10 @@
-use anyhow::{Context, Result, bail};
-use derive_more::{Display, Error};
-use futures::StreamExt;
-use wordbase::{DictionaryId, Profile, ProfileId, ProfileMeta};
-
-use crate::{Engine, Event};
+use {
+    crate::{Engine, Event},
+    anyhow::{Context, Result, bail},
+    derive_more::{Display, Error},
+    futures::StreamExt,
+    wordbase::{DictionaryId, Profile, ProfileId, ProfileMeta},
+};
 
 impl Engine {
     pub async fn current_profile(&self) -> Result<ProfileId> {

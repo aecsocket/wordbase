@@ -72,7 +72,6 @@ pub struct GlossaryTag {
     /// [tags]: https://github.com/yomidevs/yomitan/blob/09c55aeecd1d0912e3a664496a7a87640a41aa05/docs/making-yomitan-dictionaries.md#tag-categories
     pub category: String,
     /// Human-readable description of what this tag means for this term.
-    ///
     // TODO: what?
     // In kanji banks, if `category` is [`GlossaryTag::INDEX`], this is used as
     // the name of a dictionary.

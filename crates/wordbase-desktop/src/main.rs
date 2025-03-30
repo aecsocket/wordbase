@@ -2,6 +2,10 @@
 
 use relm4::{ComponentParts, RelmApp, SimpleComponent, adw};
 
+fn main() {
+    RelmApp::new("io.github.aecsocket.Wordbase").run::<Model>(());
+}
+
 struct Model {}
 
 struct Widgets {}
@@ -27,8 +31,4 @@ impl SimpleComponent for Model {
             widgets: Widgets {},
         }
     }
-}
-
-fn main() {
-    RelmApp::new("io.github.aecsocket.Wordbase").run::<Model>(());
 }
