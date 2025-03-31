@@ -14,7 +14,7 @@ use {
     },
     tokio::sync::{Mutex, mpsc, oneshot},
     tracing::debug,
-    wordbase::{DictionaryId, DictionaryKind, DictionaryMeta, FrequencyRank, RecordType, Term},
+    wordbase::{DictionaryId, DictionaryKind, DictionaryMeta, FrequencyValue, RecordType, Term},
 };
 
 static FORMATS: LazyLock<HashMap<DictionaryKind, Arc<dyn ImportKind>>> = LazyLock::new(|| {
@@ -222,20 +222,18 @@ async fn insert_frequency(
     tx: &mut Transaction<'_, Sqlite>,
     source: DictionaryId,
     term: &Term,
-    rank: FrequencyRank,
+    frequency: FrequencyValue,
 ) -> Result<()> {
     let headword = term.headword().map(|s| s.as_str());
     let reading = term.reading().map(|s| s.as_str());
-    let (mode, value) = match rank {
-        FrequencyRank::Occurrence(n) => (0, n),
-        FrequencyRank::Rank(n) => (1, n),
+    let (mode, value) = match frequency {
+        FrequencyValue::Rank(n) => (0, n),
+        FrequencyValue::Occurrence(n) => (1, n),
     };
-    // TODO: is this ok? do I care?
-    #[expect(clippy::cast_possible_wrap)]
-    let value = value as i64;
+    let value = i64::try_from(value).unwrap_or(i64::MAX);
     sqlx::query!(
         "INSERT OR IGNORE INTO frequency (source, headword, reading, mode, value)
-            VALUES ($1, $2, $3, $4, $5)",
+        VALUES ($1, $2, $3, $4, $5)",
         source.0,
         headword,
         reading,

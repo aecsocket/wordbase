@@ -290,9 +290,9 @@ impl Term {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum FrequencyRank {
-    Occurrence(u64),
+pub enum FrequencyValue {
     Rank(u64),
+    Occurrence(u64),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -361,6 +361,8 @@ pub struct RecordLookup {
     pub term: Term,
     /// [`Record`] that was found.
     pub record: Record,
+    /// [`FrequencyValue`] of the associated record.
+    pub frequency: Option<FrequencyValue>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

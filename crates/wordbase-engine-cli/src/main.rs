@@ -29,7 +29,7 @@ enum Command {
         command: ProfileCommand,
     },
     /// View and manage dictionaries
-    #[command(alias = "dic")]
+    #[command(alias = "dict")]
     Dictionary {
         #[command(subcommand)]
         command: DictionaryCommand,

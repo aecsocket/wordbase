@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS dictionary (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    id          INTEGER PRIMARY KEY,
     meta        TEXT    NOT NULL CHECK (json_valid(meta)),
     position    INTEGER NOT NULL
 );
@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS dictionary (
 --
 
 CREATE TABLE IF NOT EXISTS profile (
-    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    id                  INTEGER PRIMARY KEY,
     meta                TEXT    NOT NULL CHECK (json_valid(meta)),
     sorting_dictionary  INTEGER REFERENCES dictionary(id)
 );
@@ -72,7 +72,7 @@ END;
 --
 
 CREATE TABLE IF NOT EXISTS record (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    id          INTEGER PRIMARY KEY,
     source      INTEGER NOT NULL REFERENCES dictionary(id) ON DELETE CASCADE,
     kind        INTEGER NOT NULL,
     data        BLOB    NOT NULL
@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS frequency (
     reading     TEXT,
     mode        INTEGER NOT NULL CHECK (mode IN (0, 1)),
     value       INTEGER NOT NULL,
+    UNIQUE (source, headword, reading)
     CHECK (headword IS NOT NULL OR reading IS NOT NULL)
 );
 CREATE INDEX IF NOT EXISTS frequency_headword   ON frequency(source, headword);

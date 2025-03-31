@@ -26,7 +26,7 @@ use {
     tokio::{sync::mpsc, task::JoinSet},
     tracing::debug,
     wordbase::{
-        DictionaryId, DictionaryKind, DictionaryMeta, FrequencyRank, NonEmptyString, Term,
+        DictionaryId, DictionaryKind, DictionaryMeta, FrequencyValue, NonEmptyString, Term,
         dict::yomitan::{Frequency, Glossary, GlossaryTag, Pitch, structured},
     },
 };
@@ -453,8 +453,8 @@ fn to_frequency_and_reading(
     };
 
     let rank_from = |n: u64| match frequency_mode {
-        schema::FrequencyMode::OccurrenceBased => FrequencyRank::Occurrence(n),
-        schema::FrequencyMode::RankBased => FrequencyRank::Rank(n),
+        schema::FrequencyMode::OccurrenceBased => FrequencyValue::Occurrence(n),
+        schema::FrequencyMode::RankBased => FrequencyValue::Rank(n),
     };
 
     let frequency = match generic {

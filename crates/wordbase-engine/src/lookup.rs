@@ -2,24 +2,33 @@ use {
     crate::{Engine, db},
     anyhow::{Context, Result, bail},
     futures::{StreamExt, TryStreamExt},
-    sqlx::{QueryBuilder, Row},
     std::borrow::Borrow,
-    wordbase::{DictionaryId, Record, RecordKind, RecordLookup, Term, for_kinds},
+    wordbase::{DictionaryId, FrequencyValue, Record, RecordKind, RecordLookup, Term, for_kinds},
 };
 
 impl Engine {
+    #[expect(clippy::missing_panics_doc, reason = "shouldn't panic")]
     pub async fn lookup_lemma(
         &self,
         lemma: &str,
         record_kinds: impl IntoIterator<Item = impl Borrow<RecordKind>>,
     ) -> Result<Vec<RecordLookup>> {
+        let record_kinds = record_kinds
+            .into_iter()
+            .map(|kind| format!("{}", *kind.borrow() as u16))
+            .collect::<Vec<_>>();
+        let kinds_str = serde_json::to_string(&record_kinds)
+            .expect("should be able to generate JSON for record kinds array");
+
         let query = sqlx::query!(
             "SELECT
                 record.source,
                 record.kind,
                 record.data,
                 term_record.headword,
-                term_record.reading
+                term_record.reading,
+                frequency.mode AS 'frequency_mode?',
+                frequency.value AS 'frequency_value?'
             FROM record
             INNER JOIN dictionary ON record.source = dictionary.id
             INNER JOIN profile_enabled_dictionary ped ON dictionary.id = ped.dictionary
@@ -27,84 +36,31 @@ impl Engine {
             INNER JOIN term_record ON term_record.record = record.id
             LEFT JOIN frequency ON (
                 frequency.source = (SELECT sorting_dictionary FROM profile WHERE id = config.current_profile)
-                AND (
-                    (frequency.headword IS NOT NULL AND frequency.headword = term_record.headword)
-                    OR
-                    (frequency.reading IS NOT NULL AND frequency.reading = term_record.reading)
-                )
+                AND (frequency.headword = term_record.headword AND frequency.reading = term_record.reading)
             )
             WHERE
                 (term_record.headword = $1 OR term_record.reading = $1)
-                -- AND record.kind IN $2
+                AND kind IN (SELECT value FROM json_each($2))
             ORDER BY
                 dictionary.position,
                 CASE
-                    WHEN frequency.mode = 0 THEN -frequency.value  -- occurrence mode
-                    WHEN frequency.mode = 1 THEN  frequency.value  -- rank mode
+                    -- put entries without an explicit frequency value first
+                    WHEN frequency.mode IS NULL THEN 0
+                    ELSE 1
+                END,
+                CASE
+                    -- frequency rank
+                    WHEN frequency.mode = 0 THEN  frequency.value
+                    -- frequency occurrence
+                    WHEN frequency.mode = 1 THEN -frequency.value
                     ELSE 0
                 END",
-            lemma
+            lemma,
+            kinds_str
         );
-
-        /*
-        let mut query = QueryBuilder::new(
-            "SELECT
-                record.source,
-                record.kind,
-                record.data,
-                term_record.headword,
-                term_record.reading
-            FROM record
-            INNER JOIN dictionary ON record.source = dictionary.id
-            INNER JOIN profile_enabled_dictionary ped ON dictionary.id = ped.dictionary
-            INNER JOIN config ON ped.profile = config.current_profile
-            INNER JOIN term_record ON term_record.record = record.id
-            LEFT JOIN frequency ON (
-                frequency.source = (SELECT sorting_dictionary FROM profile WHERE id = config.current_profile)
-                AND (
-                    (frequency.headword IS NOT NULL AND frequency.headword = term_record.headword)
-                    OR
-                    (frequency.reading IS NOT NULL AND frequency.reading = term_record.reading)
-                )
-            )
-            WHERE (term_record.headword = ",
-        );
-        query.push_bind(lemma);
-        query.push("OR term_record.reading = ");
-        query.push_bind(lemma);
-        query.push(") AND record.kind IN (");
-        {
-            let mut query = query.separated(", ");
-            for record_kind in record_kinds {
-                query.push_bind(*record_kind.borrow() as u16);
-            }
-            query.push_unseparated(") ");
-        }
-        query.push(
-            "ORDER BY
-                CASE
-                    WHEN
-                dictionary.position",
-        );*/
 
         query.fetch(&self.db).map(|record| {
             let record = record.context("failed to fetch record")?;
-            /*
-            struct QueryRecord {
-                source: i64,
-                kind: i64,
-                data: Vec<u8>,
-                headword: String,
-                reading: String,
-            }
-            let record = QueryRecord {
-                source: record.get(0),
-                kind: record.get(1),
-                data: record.get(2),
-                headword: record.get(3),
-                reading: record.get(4),
-            };
-             */
 
             macro_rules! deserialize_record { ($($dict_kind:ident($dict_path:ident) { $($record_kind:ident),* $(,)? }),* $(,)?) => { paste::paste! {{
                 #[allow(
@@ -135,6 +91,11 @@ impl Engine {
                 source: DictionaryId(record.source),
                 term: Term::new(record.headword, record.reading).context("fetched empty term")?,
                 record: for_kinds!(deserialize_record),
+                frequency: match (record.frequency_mode, record.frequency_value.map(u64::try_from)) {
+                    (Some(0), Some(Ok(value))) => Some(FrequencyValue::Rank(value)),
+                    (Some(1), Some(Ok(value))) => Some(FrequencyValue::Occurrence(value)),
+                    _ => None
+                }
             })
         })
         .try_collect()

@@ -8,7 +8,7 @@ pub mod structured;
 
 use serde::{Deserialize, Serialize};
 
-use crate::FrequencyRank;
+use crate::FrequencyValue;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -25,7 +25,7 @@ pub struct Glossary {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Frequency {
-    pub rank: Option<FrequencyRank>,
+    pub rank: Option<FrequencyValue>,
     pub display: Option<String>,
 }
 

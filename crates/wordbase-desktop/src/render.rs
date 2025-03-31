@@ -8,6 +8,7 @@ pub fn to_html(records: impl IntoIterator<Item = RecordLookup>) -> Markup {
         source,
         term,
         record,
+        frequency: _,
     } in records
     {
         let info = terms.entry(term).or_default();
