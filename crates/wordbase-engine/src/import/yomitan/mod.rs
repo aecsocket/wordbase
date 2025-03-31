@@ -1,7 +1,10 @@
 mod schema;
 
 use {
-    super::{ImportContinue, ImportKind, ImportStarted, insert_record, insert_term_record},
+    super::{
+        ImportContinue, ImportKind, ImportStarted, insert_frequency, insert_record,
+        insert_term_record,
+    },
     crate::{CHANNEL_BUF_CAP, Engine, import::insert_dictionary},
     anyhow::{Context, Result, bail},
     async_zip::base::read::seek::ZipFileReader,
@@ -23,7 +26,7 @@ use {
     tokio::{sync::mpsc, task::JoinSet},
     tracing::debug,
     wordbase::{
-        DictionaryId, DictionaryKind, DictionaryMeta, NonEmptyString, Term,
+        DictionaryId, DictionaryKind, DictionaryMeta, FrequencyRank, NonEmptyString, Term,
         dict::yomitan::{Frequency, Glossary, GlossaryTag, Pitch, structured},
     },
 };
@@ -97,11 +100,11 @@ async fn start_import(
         .context("failed to read index into memory")?;
     let index = serde_json::from_slice::<schema::Index>(&index).context("failed to parse index")?;
 
-    let mut meta = DictionaryMeta::new(DictionaryKind::Yomitan, index.title);
-    meta.version = Some(index.revision);
-    meta.description = index.description;
-    meta.url = index.url;
-    meta.attribution = index.attribution;
+    let mut meta = DictionaryMeta::new(DictionaryKind::Yomitan, index.title.clone());
+    meta.version = Some(index.revision.clone());
+    index.description.clone_into(&mut meta.description);
+    index.url.clone_into(&mut meta.url);
+    index.attribution.clone_into(&mut meta.attribution);
 
     let (send_progress, recv_progress) = mpsc::channel(CHANNEL_BUF_CAP);
     Ok((
@@ -109,7 +112,7 @@ async fn start_import(
             meta: meta.clone(),
             recv_progress,
         },
-        continue_import(engine, archive, meta, send_progress),
+        continue_import(engine, archive, meta, index, send_progress),
     ))
 }
 
@@ -117,6 +120,7 @@ async fn continue_import(
     engine: &Engine,
     archive: Bytes,
     meta: DictionaryMeta,
+    index: schema::Index,
     send_progress: mpsc::Sender<f64>,
 ) -> Result<DictionaryId> {
     let zip = ZipFileReader::new(Cursor::new(&archive))
@@ -234,7 +238,7 @@ async fn continue_import(
     }
     for term_meta in term_meta_bank {
         let headword = term_meta.expression.clone();
-        import_term_meta(dictionary_id, &mut tx, term_meta, &mut scratch)
+        import_term_meta(dictionary_id, &mut tx, &index, term_meta, &mut scratch)
             .await
             .with_context(|| format!("failed to import term meta {headword:?}"))?;
         notify_inserted();
@@ -373,13 +377,17 @@ fn match_tags<'a>(
 async fn import_term_meta(
     source: DictionaryId,
     tx: &mut Transaction<'_, Sqlite>,
+    index: &schema::Index,
     term_meta: schema::TermMeta,
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
     let headword = NonEmptyString::new(term_meta.expression);
     match term_meta.data {
         schema::TermMetaData::Frequency(frequency) => {
-            let (record, reading) = to_frequency_and_reading(frequency);
+            let frequency_mode = index.frequency_mode.context(
+                "encountered frequency entry but dictionary does not specify a frequency mode",
+            )?;
+            let (record, reading) = to_frequency_and_reading(frequency_mode, frequency);
             let term = Term::new(headword, reading)
                 .context("frequency term has no headword or reading")?;
 
@@ -389,6 +397,12 @@ async fn import_term_meta(
             insert_term_record(tx, &term, record_id)
                 .await
                 .context("failed to insert frequency term record")?;
+
+            if let Some(rank) = record.rank {
+                insert_frequency(tx, source, &term, rank)
+                    .await
+                    .context("failed to insert frequency sorting record")?;
+            }
         }
         schema::TermMetaData::Pitch(pitch) => {
             for (record, reading) in to_pitches_and_readings(pitch) {
@@ -429,24 +443,32 @@ fn to_content(raw: schema::Glossary) -> Option<structured::Content> {
     }
 }
 
-fn to_frequency_and_reading(raw: schema::TermMetaFrequency) -> (Frequency, Option<String>) {
+fn to_frequency_and_reading(
+    frequency_mode: schema::FrequencyMode,
+    raw: schema::TermMetaFrequency,
+) -> (Frequency, Option<String>) {
     let (reading, generic) = match raw {
         schema::TermMetaFrequency::Generic(generic) => (None, generic),
         schema::TermMetaFrequency::WithReading { reading, frequency } => (Some(reading), frequency),
     };
 
+    let rank_from = |n: u64| match frequency_mode {
+        schema::FrequencyMode::OccurrenceBased => FrequencyRank::Occurrence(n),
+        schema::FrequencyMode::RankBased => FrequencyRank::Rank(n),
+    };
+
     let frequency = match generic {
         schema::GenericFrequencyData::Number(rank) => Frequency {
-            rank: Some(rank),
+            rank: Some(rank_from(rank)),
             display: None,
         },
-        schema::GenericFrequencyData::String(rank) => rank.trim().parse().map_or(
+        schema::GenericFrequencyData::String(rank) => rank.trim().parse::<u64>().map_or(
             Frequency {
                 rank: None,
                 display: Some(rank),
             },
             |rank| Frequency {
-                rank: Some(rank),
+                rank: Some(rank_from(rank)),
                 display: None,
             },
         ),
@@ -454,7 +476,7 @@ fn to_frequency_and_reading(raw: schema::TermMetaFrequency) -> (Frequency, Optio
             value,
             display_value,
         } => Frequency {
-            rank: Some(value),
+            rank: Some(rank_from(value)),
             display: display_value,
         },
     };

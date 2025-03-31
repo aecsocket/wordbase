@@ -4,9 +4,12 @@
 pub mod dict;
 
 use {
-    derive_more::{Deref, From},
+    derive_more::{Deref, Display, From},
     serde::{Deserialize, Serialize, de::DeserializeOwned},
-    std::{fmt::Debug, mem},
+    std::{
+        fmt::{self, Debug},
+        mem,
+    },
 };
 
 #[macro_export]
@@ -286,16 +289,29 @@ impl Term {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FrequencyRank {
+    Occurrence(u64),
+    Rank(u64),
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Profile {
     /// Unique identifier for this profile in the database.
     pub id: ProfileId,
     /// Metadata.
     pub meta: ProfileMeta,
-    /// Set of dictionaries which are [enabled] under this profile.
+    /// Set of [`Dictionary`] entries which are [enabled] under this profile.
     ///
-    /// [enabled]: DictionaryState::enabled
+    /// [enabled]: Dictionary::enabled
     pub enabled_dictionaries: Vec<DictionaryId>,
+    /// Which [`Dictionary`] is used for sorting records by their frequencies.
+    ///
+    /// The user-set dictionary [position] always takes priority over any
+    /// frequency sorting.
+    ///
+    /// [position]: Dictionary::position
+    pub sorting_dictionary: Option<DictionaryId>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -310,7 +326,7 @@ pub struct ProfileMeta {
     /// This is purely aesthetic, but you can use this to style output for
     /// different profiles, and allow users to quickly differentiate between
     /// their profiles by color.
-    pub accent_color: [f32; 3],
+    pub accent_color: Option<[f32; 3]>,
 }
 
 /// Opaque and unique identifier for a single [`Profile`] in a database.
@@ -353,7 +369,7 @@ pub struct TexthookerSentence {
     pub sentence: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deref, Serialize)]
+#[derive(Display, Clone, PartialEq, Eq, Hash, Deref, Serialize)]
 pub struct NonEmptyString(String);
 
 impl NonEmptyString {
@@ -375,6 +391,12 @@ impl NonEmptyString {
     #[must_use]
     pub fn into_inner(self) -> String {
         self.0
+    }
+}
+
+impl Debug for NonEmptyString {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.0.fmt(f)
     }
 }
 

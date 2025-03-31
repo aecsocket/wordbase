@@ -20,9 +20,11 @@ all-features = true
 wordbase        = { workspace = true }
 wordbase-engine = { workspace = true, features = ["default-db-path"] }
 
+anyhow      = { workspace = true }
 directories = { workspace = true }
+indexmap    = { workspace = true }
+maud        = { workspace = true }
 
-anyhow             = { workspace = true }
 bimap              = { workspace = true }
 bzip2              = { workspace = true, features = ["static"] }
 derive_more        = { workspace = true, features = ["display"] }

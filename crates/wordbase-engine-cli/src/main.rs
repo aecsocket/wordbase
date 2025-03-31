@@ -4,6 +4,7 @@ use {
     anyhow::{Context as _, Result},
     ascii_table::AsciiTable,
     bytes::Bytes,
+    directories::ProjectDirs,
     std::{collections::HashMap, path::PathBuf, time::Instant},
     tokio::{fs, sync::oneshot},
     tracing::{info, level_filters::LevelFilter},
@@ -15,7 +16,7 @@ use {
 #[derive(Debug, clap::Parser)]
 struct Args {
     #[arg(long)]
-    db_path: PathBuf,
+    db_path: Option<PathBuf>,
     #[command(subcommand)]
     command: Command,
 }
@@ -60,15 +61,28 @@ enum ProfileCommand {
         /// New profile name
         name: String,
     },
-    /// Mark a profile as the current profile
+    /// Set a property of a profile
     Set {
-        /// Profile ID to mark as current
-        id: i64,
+        /// Profile ID to modify
+        profile_id: i64,
+        #[command(subcommand)]
+        command: ProfileSetCommand,
     },
     /// Delete a profile with the given ID
     Rm {
         /// Profile ID
         id: i64,
+    },
+}
+
+#[derive(Debug, clap::Parser)]
+enum ProfileSetCommand {
+    /// Mark this profile as the current profile
+    Current,
+    /// Set or unset the sorting dictionary
+    SortingDictionary {
+        /// Dictionary ID, or none to unset
+        dictionary_id: Option<i64>,
     },
 }
 
@@ -135,7 +149,17 @@ async fn main() -> Result<()> {
         .init();
     let args = <Args as clap::Parser>::parse();
 
-    let (engine, engine_task) = Engine::new(args.db_path)
+    let db_path = if let Some(db_path) = args.db_path {
+        db_path
+    } else {
+        ProjectDirs::from("io.github", "aecsocket", "Wordbase")
+            .context("failed to get default app directories")?
+            .data_dir()
+            .join("wordbase.db")
+    };
+    info!("Using {db_path:?} as database path");
+
+    let (engine, engine_task) = Engine::new(db_path)
         .await
         .context("failed to create engine")?;
     let engine_task = async move { engine_task.await.expect("engine error") };
@@ -148,8 +172,19 @@ async fn main() -> Result<()> {
             command: ProfileCommand::New { name },
         } => profile_new(engine, name).await?,
         Command::Profile {
-            command: ProfileCommand::Set { id },
-        } => profile_set(engine, id).await?,
+            command:
+                ProfileCommand::Set {
+                    profile_id,
+                    command: ProfileSetCommand::Current,
+                },
+        } => profile_set_current(engine, profile_id).await?,
+        Command::Profile {
+            command:
+                ProfileCommand::Set {
+                    profile_id,
+                    command: ProfileSetCommand::SortingDictionary { dictionary_id },
+                },
+        } => profile_set_sorting_dictionary(engine, profile_id, dictionary_id).await?,
         Command::Profile {
             command: ProfileCommand::Rm { id },
         } => profile_rm(engine, id).await?,
@@ -201,7 +236,8 @@ async fn profile_ls(engine: Engine) -> Result<()> {
     let mut table = AsciiTable::default();
     table.column(1).set_header("ID");
     table.column(2).set_header("Name");
-    table.column(3).set_header("Dictionaries");
+    table.column(3).set_header("Sorting Dict");
+    table.column(4).set_header("Dictionaries");
 
     let current_profile_id = engine.current_profile().await?;
     let dictionaries = engine
@@ -219,23 +255,25 @@ async fn profile_ls(engine: Engine) -> Result<()> {
             let enabled_dictionaries = profile
                 .enabled_dictionaries
                 .into_iter()
-                .filter_map(|dictionary_id| {
-                    dictionaries
-                        .get(&dictionary_id)
-                        .map(|dictionary| dictionary.meta.name.as_ref())
-                })
+                .filter_map(|dict| dictionaries.get(&dict).map(|dict| dict.meta.name.as_ref()))
                 .collect::<Vec<_>>()
                 .join(", ");
 
+            let selected = if profile.id == current_profile_id {
+                "✔"
+            } else {
+                ""
+            };
+            let sorting_dictionary = profile
+                .sorting_dictionary
+                .and_then(|dict| dictionaries.get(&dict).map(|dict| dict.meta.name.clone()))
+                .unwrap_or_default();
+
             vec![
-                (if profile.id == current_profile_id {
-                    "✔"
-                } else {
-                    ""
-                })
-                .to_string(),
+                selected.to_string(),
                 format!("{}", profile.id.0),
                 profile.meta.name.unwrap_or_else(|| "(default)".into()),
+                sorting_dictionary,
                 format!("({num_dictionaries}) {enabled_dictionaries}"),
             ]
         })
@@ -248,16 +286,29 @@ async fn profile_new(engine: Engine, name: String) -> Result<()> {
     let new_id = engine
         .insert_profile(ProfileMeta {
             name: Some(name),
-            accent_color: [1.0, 1.0, 1.0],
+            accent_color: None,
         })
         .await?;
     println!("Created profile with ID {}", new_id.0);
     Ok(())
 }
 
-async fn profile_set(engine: Engine, id: i64) -> Result<()> {
-    let id = ProfileId(id);
-    engine.set_current_profile(id).await?;
+async fn profile_set_current(engine: Engine, profile_id: i64) -> Result<()> {
+    let profile_id = ProfileId(profile_id);
+    engine.set_current_profile(profile_id).await?;
+    Ok(())
+}
+
+async fn profile_set_sorting_dictionary(
+    engine: Engine,
+    profile_id: i64,
+    dictionary_id: Option<i64>,
+) -> Result<()> {
+    let profile_id = ProfileId(profile_id);
+    let dictionary_id = dictionary_id.map(DictionaryId);
+    engine
+        .set_profile_sorting_dictionary(profile_id, dictionary_id)
+        .await?;
     Ok(())
 }
 
@@ -395,17 +446,20 @@ async fn deinflect(engine: Engine, text: String) -> Result<()> {
 }
 
 async fn lookup(engine: Engine, text: String) -> Result<()> {
-    let lemmas = engine
-        .deinflect(&text)
-        .await
-        .context("failed to deinflect text")?;
+    let records = engine.lookup_lemma(&text, RecordKind::ALL).await?;
+    println!("{records:#?}");
 
-    for lemma in lemmas {
-        println!("{lemma:?}:");
-        let records = engine.lookup_lemma(&lemma, RecordKind::ALL).await?;
-        println!("{records:#?}");
-        println!();
-    }
+    // let lemmas = engine
+    //     .deinflect(&text)
+    //     .await
+    //     .context("failed to deinflect text")?;
+
+    // for lemma in lemmas {
+    //     println!("{lemma:?}:");
+    //     let records = engine.lookup_lemma(&lemma, RecordKind::ALL).await?;
+    //     println!("{records:#?}");
+    //     println!();
+    // }
 
     Ok(())
 }

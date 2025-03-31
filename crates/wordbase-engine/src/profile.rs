@@ -18,7 +18,11 @@ impl Engine {
         let mut profiles = Vec::<Profile>::new();
 
         let mut records = sqlx::query!(
-            "SELECT profile.id, profile.meta, ped.dictionary
+            "SELECT
+                id,
+                meta,
+                sorting_dictionary,
+                ped.dictionary
             FROM profile
             LEFT JOIN profile_enabled_dictionary ped ON profile.id = ped.profile
             ORDER BY profile.id"
@@ -39,6 +43,7 @@ impl Engine {
                         id,
                         meta,
                         enabled_dictionaries: Vec::new(),
+                        sorting_dictionary: record.sorting_dictionary.map(DictionaryId),
                     });
                     index
                 };
@@ -84,11 +89,13 @@ impl Engine {
         .context("failed to copy enabled dictionaries")?;
         tx.commit().await.context("failed to commit transaction")?;
 
+        // TODO: do we even want to send events?
         _ = self.send_event.send(Event::ProfileAdded {
             profile: Profile {
                 id: new_id,
                 meta,
                 enabled_dictionaries: vec![], // TODO
+                sorting_dictionary: None,     // TODO
             },
         });
         Ok(new_id)
@@ -98,6 +105,22 @@ impl Engine {
         sqlx::query!("UPDATE config SET current_profile = $1", id.0)
             .execute(&self.db)
             .await?;
+        Ok(())
+    }
+
+    pub async fn set_profile_sorting_dictionary(
+        &self,
+        profile_id: ProfileId,
+        dictionary_id: Option<DictionaryId>,
+    ) -> Result<()> {
+        let dictionary_id = dictionary_id.map(|id| id.0);
+        sqlx::query!(
+            "UPDATE profile SET sorting_dictionary = $1 WHERE id = $2",
+            dictionary_id,
+            profile_id.0
+        )
+        .execute(&self.db)
+        .await?;
         Ok(())
     }
 

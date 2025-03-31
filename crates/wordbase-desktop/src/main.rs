@@ -2,6 +2,7 @@
 #![allow(clippy::future_not_send, reason = "`gtk` types aren't `Send`")]
 
 // mod popup;
+mod render;
 
 use {
     anyhow::{Context, Result},
@@ -13,17 +14,28 @@ use {
         view,
     },
     tokio::fs,
+    tracing::{info, level_filters::LevelFilter},
+    tracing_subscriber::EnvFilter,
     webkit6::prelude::WebViewExt,
+    wordbase::RecordKind,
     wordbase_engine::Engine,
 };
 
 fn main() {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::builder()
+                .with_default_directive(LevelFilter::INFO.into())
+                .from_env_lossy(),
+        )
+        .init();
+
     RelmApp::new("io.github.aecsocket.Wordbase").run_async::<App>(());
 }
 
 #[derive(Debug)]
 struct App {
-    engine: Result<Engine>,
+    engine: Engine,
     web_view: webkit6::WebView,
 }
 
@@ -83,9 +95,10 @@ impl AsyncComponent for App {
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
+        let engine = create_engine().await.expect("failed to create engine");
         let widgets = view_output!();
         let model = Self {
-            engine: create_engine().await,
+            engine,
             web_view: widgets.web_view.clone(),
         };
         AsyncComponentParts { model, widgets }
@@ -99,7 +112,16 @@ impl AsyncComponent for App {
     ) {
         match message {
             AppMsg::Search { query } => {
-                self.web_view.load_html(&query, None);
+                println!("query");
+
+                let Ok(records) = self.engine.lookup_lemma(&query, RecordKind::ALL).await else {
+                    return;
+                };
+
+                let html = render::to_html(records);
+                println!("{}", html.0);
+
+                self.web_view.load_html(&html.0, None);
             }
         }
     }
@@ -109,12 +131,12 @@ async fn create_engine() -> Result<Engine> {
     let dirs = ProjectDirs::from("io.github", "aecsocket", "Wordbase")
         .context("failed to get default app directories")?;
     let data_path = dirs.data_dir();
-    let db_path = data_path.join("wordbase.db");
-
+    info!("Using {data_path:?} as data path");
     fs::create_dir_all(data_path)
         .await
         .context("failed to create data directory")?;
 
+    let db_path = data_path.join("wordbase.db");
     let (engine, engine_task) = Engine::new(db_path).await?;
     tokio::spawn(async move {
         engine_task.await.expect("engine error");

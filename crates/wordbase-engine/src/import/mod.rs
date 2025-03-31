@@ -14,7 +14,7 @@ use {
     },
     tokio::sync::{Mutex, mpsc, oneshot},
     tracing::debug,
-    wordbase::{DictionaryId, DictionaryKind, DictionaryMeta, RecordType, Term},
+    wordbase::{DictionaryId, DictionaryKind, DictionaryMeta, FrequencyRank, RecordType, Term},
 };
 
 static FORMATS: LazyLock<HashMap<DictionaryKind, Arc<dyn ImportKind>>> = LazyLock::new(|| {
@@ -218,6 +218,35 @@ async fn insert_term_record(
     Ok(())
 }
 
+async fn insert_frequency(
+    tx: &mut Transaction<'_, Sqlite>,
+    source: DictionaryId,
+    term: &Term,
+    rank: FrequencyRank,
+) -> Result<()> {
+    let headword = term.headword().map(|s| s.as_str());
+    let reading = term.reading().map(|s| s.as_str());
+    let (mode, value) = match rank {
+        FrequencyRank::Occurrence(n) => (0, n),
+        FrequencyRank::Rank(n) => (1, n),
+    };
+    // TODO: is this ok? do I care?
+    #[expect(clippy::cast_possible_wrap)]
+    let value = value as i64;
+    sqlx::query!(
+        "INSERT OR IGNORE INTO frequency (source, headword, reading, mode, value)
+            VALUES ($1, $2, $3, $4, $5)",
+        source.0,
+        headword,
+        reading,
+        mode,
+        value,
+    )
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
 async fn dictionary_exists_by_name(db: &Pool<Sqlite>, name: &str) -> Result<bool> {
     let result = sqlx::query_scalar!(
         "SELECT EXISTS(SELECT 1 FROM dictionary WHERE json_extract(meta, '$.name') = $1)",
@@ -234,8 +263,8 @@ async fn insert_dictionary(
 ) -> Result<DictionaryId> {
     let meta = serde_json::to_string(meta).context("failed to serialize dictionary meta")?;
     let new_id = sqlx::query!(
-        "INSERT INTO dictionary (position, meta)
-        VALUES ((SELECT COALESCE(MAX(position), 0) + 1 FROM dictionary), $1)",
+        "INSERT INTO dictionary (meta, position)
+        VALUES ($1, (SELECT COALESCE(MAX(position), 0) + 1 FROM dictionary))",
         meta
     )
     .execute(&mut **tx)

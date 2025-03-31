@@ -13,6 +13,40 @@ impl Engine {
         lemma: &str,
         record_kinds: impl IntoIterator<Item = impl Borrow<RecordKind>>,
     ) -> Result<Vec<RecordLookup>> {
+        let query = sqlx::query!(
+            "SELECT
+                record.source,
+                record.kind,
+                record.data,
+                term_record.headword,
+                term_record.reading
+            FROM record
+            INNER JOIN dictionary ON record.source = dictionary.id
+            INNER JOIN profile_enabled_dictionary ped ON dictionary.id = ped.dictionary
+            INNER JOIN config ON ped.profile = config.current_profile
+            INNER JOIN term_record ON term_record.record = record.id
+            LEFT JOIN frequency ON (
+                frequency.source = (SELECT sorting_dictionary FROM profile WHERE id = config.current_profile)
+                AND (
+                    (frequency.headword IS NOT NULL AND frequency.headword = term_record.headword)
+                    OR
+                    (frequency.reading IS NOT NULL AND frequency.reading = term_record.reading)
+                )
+            )
+            WHERE
+                (term_record.headword = $1 OR term_record.reading = $1)
+                -- AND record.kind IN $2
+            ORDER BY
+                dictionary.position,
+                CASE
+                    WHEN frequency.mode = 0 THEN -frequency.value  -- occurrence mode
+                    WHEN frequency.mode = 1 THEN  frequency.value  -- rank mode
+                    ELSE 0
+                END",
+            lemma
+        );
+
+        /*
         let mut query = QueryBuilder::new(
             "SELECT
                 record.source,
@@ -25,6 +59,14 @@ impl Engine {
             INNER JOIN profile_enabled_dictionary ped ON dictionary.id = ped.dictionary
             INNER JOIN config ON ped.profile = config.current_profile
             INNER JOIN term_record ON term_record.record = record.id
+            LEFT JOIN frequency ON (
+                frequency.source = (SELECT sorting_dictionary FROM profile WHERE id = config.current_profile)
+                AND (
+                    (frequency.headword IS NOT NULL AND frequency.headword = term_record.headword)
+                    OR
+                    (frequency.reading IS NOT NULL AND frequency.reading = term_record.reading)
+                )
+            )
             WHERE (term_record.headword = ",
         );
         query.push_bind(lemma);
@@ -38,9 +80,16 @@ impl Engine {
             }
             query.push_unseparated(") ");
         }
-        query.push("ORDER BY dictionary.position");
+        query.push(
+            "ORDER BY
+                CASE
+                    WHEN
+                dictionary.position",
+        );*/
 
-        query.build().fetch(&self.db).map(|record| {
+        query.fetch(&self.db).map(|record| {
+            let record = record.context("failed to fetch record")?;
+            /*
             struct QueryRecord {
                 source: i64,
                 kind: i64,
@@ -48,8 +97,6 @@ impl Engine {
                 headword: String,
                 reading: String,
             }
-
-            let record = record.context("failed to fetch record")?;
             let record = QueryRecord {
                 source: record.get(0),
                 kind: record.get(1),
@@ -57,6 +104,7 @@ impl Engine {
                 headword: record.get(3),
                 reading: record.get(4),
             };
+             */
 
             macro_rules! deserialize_record { ($($dict_kind:ident($dict_path:ident) { $($record_kind:ident),* $(,)? }),* $(,)?) => { paste::paste! {{
                 #[allow(

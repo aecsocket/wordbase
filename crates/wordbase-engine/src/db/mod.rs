@@ -3,7 +3,7 @@ use {
     serde::{Deserialize, Serialize},
     sqlx::{
         Pool, Sqlite,
-        sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
+        sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     },
     std::{io, path::Path},
 };
@@ -13,6 +13,10 @@ pub async fn setup(path: &Path) -> Result<Pool<Sqlite>> {
         .connect_with(connect_options(path))
         .await
         .context("failed to perform initial connection")?;
+    sqlx::query(include_str!("schema.sql"))
+        .execute(&db)
+        .await
+        .context("failed to run initial SQL script")?;
     let config = sqlx::query!("SELECT max_db_connections FROM config")
         .fetch_one(&db)
         .await
@@ -24,11 +28,6 @@ pub async fn setup(path: &Path) -> Result<Pool<Sqlite>> {
         .connect_with(connect_options(path))
         .await
         .context("failed to connect to database")?;
-    sqlx::query(include_str!("schema.sql"))
-        .execute(&db)
-        .await
-        .context("failed to set up database")?;
-
     Ok(db)
 }
 
