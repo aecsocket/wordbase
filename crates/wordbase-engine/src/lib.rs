@@ -10,13 +10,17 @@ mod lookup;
 mod profile;
 mod texthook;
 
+pub use wordbase;
 use {
     anyhow::{Context, Result},
     derive_more::{Deref, DerefMut},
     futures::never::Never,
     import::Imports,
     sqlx::{Pool, Sqlite},
-    std::{path::PathBuf, sync::Arc},
+    std::{
+        path::{Path, PathBuf},
+        sync::Arc,
+    },
     texthook::PullTexthooker,
     tokio::sync::broadcast,
     wordbase::{DictionaryId, Profile, ProfileId, TexthookerSentence},
@@ -35,10 +39,10 @@ pub struct Inner {
 }
 
 impl Engine {
-    pub async fn new(
-        config: &Config,
-    ) -> Result<(Self, impl Future<Output = Result<Never>> + use<>)> {
-        let db = db::setup(&config.db_path, config.max_db_connections)
+    pub async fn new<P: AsRef<Path>>(
+        db_path: P,
+    ) -> Result<(Self, impl Future<Output = Result<Never>> + use<P>)> {
+        let db = db::setup(db_path.as_ref())
             .await
             .context("failed to set up database")?;
         let (send_event, _) = broadcast::channel(CHANNEL_BUF_CAP);
@@ -73,13 +77,6 @@ impl Engine {
 }
 
 #[derive(Debug, Clone)]
-pub struct Config {
-    pub db_path: PathBuf,
-    pub max_db_connections: u32,
-    pub max_concurrent_imports: usize,
-}
-
-#[derive(Debug, Clone)]
 pub enum Event {
     ProfileAdded { profile: Profile },
     ProfileRemoved { id: ProfileId },
@@ -88,6 +85,16 @@ pub enum Event {
     PullTexthookerConnected,
     PullTexthookerDisconnected,
     TexthookerSentence(TexthookerSentence),
+}
+
+#[cfg(feature = "default-db-path")]
+#[must_use]
+pub fn default_db_path() -> Option<PathBuf> {
+    Some(
+        directories::ProjectDirs::from("io.github", "aecsocket", "Wordbase")?
+            .config_dir()
+            .join("wordbase.db"),
+    )
 }
 
 const CHANNEL_BUF_CAP: usize = 4;

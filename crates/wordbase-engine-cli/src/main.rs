@@ -4,19 +4,18 @@ use {
     anyhow::{Context as _, Result},
     ascii_table::AsciiTable,
     bytes::Bytes,
-    directories::ProjectDirs,
     std::{collections::HashMap, path::PathBuf, time::Instant},
     tokio::{fs, sync::oneshot},
     tracing::{info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
     wordbase::{DictionaryId, ProfileId, ProfileMeta, RecordKind},
-    wordbase_engine::{Config, Engine, Event, import::ImportStarted},
+    wordbase_engine::{Engine, Event, import::ImportStarted},
 };
 
 #[derive(Debug, clap::Parser)]
 struct Args {
     #[arg(long)]
-    db_path: Option<PathBuf>,
+    db_path: PathBuf,
     #[command(subcommand)]
     command: Command,
 }
@@ -136,29 +135,9 @@ async fn main() -> Result<()> {
         .init();
     let args = <Args as clap::Parser>::parse();
 
-    let db_path = if let Some(db_path) = args.db_path {
-        db_path
-    } else {
-        ProjectDirs::from("io.github", "aecsocket", "Wordbase")
-            .context("failed to get config dir")?
-            .config_dir()
-            .join("wordbase.db")
-    };
-    info!("Using {db_path:?} as database path");
-
-    if let Some(parent) = db_path.parent() {
-        fs::create_dir_all(parent)
-            .await
-            .context("failed to create parent directories")?;
-    }
-
-    let (engine, engine_task) = Engine::new(&Config {
-        db_path,
-        max_db_connections: 8,
-        max_concurrent_imports: 4,
-    })
-    .await
-    .context("failed to create engine")?;
+    let (engine, engine_task) = Engine::new(args.db_path)
+        .await
+        .context("failed to create engine")?;
     let engine_task = async move { engine_task.await.expect("engine error") };
 
     match args.command {

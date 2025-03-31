@@ -20,6 +20,7 @@ END;
 
 CREATE TABLE IF NOT EXISTS config (
     id                  INTEGER PRIMARY KEY CHECK (id = 1),
+    max_db_connections  INTEGER NOT NULL DEFAULT 8,
     current_profile     INTEGER NOT NULL DEFAULT 1 REFERENCES profile(id),
     texthooker_url      TEXT    NOT NULL DEFAULT 'ws://127.0.0.1:9001',
     ankiconnect_url     TEXT    NOT NULL DEFAULT 'http://127.0.0.1:8765',
