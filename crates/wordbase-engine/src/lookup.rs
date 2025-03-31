@@ -73,7 +73,6 @@ impl Engine {
 
         query.fetch(&self.db).map(|record| {
             let record = record.context("failed to fetch record")?;
-            println!("{:?}, {:?}: mode = {:?} value = {:?}", record.headword, record.reading, record.frequency_mode, record.frequency_value);
 
             macro_rules! deserialize_record { ($($dict_kind:ident($dict_path:ident) { $($record_kind:ident),* $(,)? }),* $(,)?) => { paste::paste! {{
                 #[allow(

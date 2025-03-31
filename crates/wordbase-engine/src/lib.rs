@@ -17,10 +17,7 @@ use {
     futures::never::Never,
     import::Imports,
     sqlx::{Pool, Sqlite},
-    std::{
-        path::{Path, PathBuf},
-        sync::Arc,
-    },
+    std::{path::Path, sync::Arc},
     texthook::PullTexthooker,
     tokio::sync::broadcast,
     wordbase::{DictionaryId, Profile, ProfileId, TexthookerSentence},
@@ -85,16 +82,6 @@ pub enum Event {
     PullTexthookerConnected,
     PullTexthookerDisconnected,
     TexthookerSentence(TexthookerSentence),
-}
-
-#[cfg(feature = "default-db-path")]
-#[must_use]
-pub fn default_db_path() -> Option<PathBuf> {
-    Some(
-        directories::ProjectDirs::from("io.github", "aecsocket", "Wordbase")?
-            .config_dir()
-            .join("wordbase.db"),
-    )
 }
 
 const CHANNEL_BUF_CAP: usize = 4;

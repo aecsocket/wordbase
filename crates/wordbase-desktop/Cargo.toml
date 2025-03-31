@@ -17,8 +17,8 @@ workspace = true
 all-features = true
 
 [dependencies]
-wordbase        = { workspace = true }
-wordbase-engine = { workspace = true, features = ["default-db-path"] }
+wordbase        = { workspace = true, features = ["render-html"] }
+wordbase-engine = { workspace = true }
 
 anyhow      = { workspace = true }
 directories = { workspace = true }
@@ -34,6 +34,7 @@ futures            = { workspace = true }
 glib               = { workspace = true, features = ["log"] }
 gtk4               = { workspace = true, features = ["gnome_47", "blueprint"] }
 libadwaita         = { workspace = true, features = ["v1_7"] }
+notify             = { workspace = true }
 open               = { workspace = true }
 rand               = { workspace = true }
 relm4              = { workspace = true, features = ["libadwaita", "gnome_47"] }

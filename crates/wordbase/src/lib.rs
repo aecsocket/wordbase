@@ -295,6 +295,14 @@ pub enum FrequencyValue {
     Occurrence(u64),
 }
 
+impl FrequencyValue {
+    #[must_use]
+    pub const fn value(self) -> u64 {
+        let (Self::Rank(n) | Self::Occurrence(n)) = self;
+        n
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Profile {
     /// Unique identifier for this profile in the database.
