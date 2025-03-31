@@ -28,12 +28,10 @@ pub fn to_html(records: impl IntoIterator<Item = RecordLookup>) -> Markup {
     }
 
     html! {
-        ul {
-            @for (term, info) in terms.0 {
-                li {
-                    "term = "
-                    ({ format!("{term:?}") })
-                }
+        @for (term, info) in terms.0 {
+            div .term {
+                "term = "
+                ({ format!("{term:?}") })
             }
         }
     }

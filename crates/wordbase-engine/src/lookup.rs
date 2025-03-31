@@ -31,17 +31,29 @@ impl Engine {
                 frequency.value AS 'frequency_value?'
             FROM record
             INNER JOIN dictionary ON record.source = dictionary.id
-            INNER JOIN profile_enabled_dictionary ped ON dictionary.id = ped.dictionary
-            INNER JOIN config ON ped.profile = config.current_profile
-            INNER JOIN term_record ON term_record.record = record.id
+
+            -- make sure the dictionary we're getting this record from is enabled
+            INNER JOIN config
+            INNER JOIN profile_enabled_dictionary ped ON (ped.profile = config.current_profile AND ped.dictionary = dictionary.id)
+
+            -- find which terms reference this record, either through the headword or reading
+            INNER JOIN term_record ON (
+                term_record.record = record.id
+                AND (term_record.headword = $1 OR term_record.reading = $1)
+            )
+
+            -- join on frequency information, for the `ORDER BY` below
             LEFT JOIN frequency ON (
+                -- only use frequency info from the currently selected sorting dict in this profile
                 frequency.source = (SELECT sorting_dictionary FROM profile WHERE id = config.current_profile)
                 AND (frequency.headword = term_record.headword AND frequency.reading = term_record.reading)
             )
-            WHERE
-                (term_record.headword = $1 OR term_record.reading = $1)
-                AND kind IN (SELECT value FROM json_each($2))
+
+            -- only include records for the given record kinds
+            WHERE kind IN (SELECT value FROM json_each($2))
+
             ORDER BY
+                -- user-specified dictionary sorting position always takes priority
                 dictionary.position,
                 CASE
                     -- put entries without an explicit frequency value first
@@ -61,6 +73,7 @@ impl Engine {
 
         query.fetch(&self.db).map(|record| {
             let record = record.context("failed to fetch record")?;
+            println!("{:?}, {:?}: mode = {:?} value = {:?}", record.headword, record.reading, record.frequency_mode, record.frequency_value);
 
             macro_rules! deserialize_record { ($($dict_kind:ident($dict_path:ident) { $($record_kind:ident),* $(,)? }),* $(,)?) => { paste::paste! {{
                 #[allow(

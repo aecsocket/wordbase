@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS profile_enabled_dictionary (
     dictionary  INTEGER NOT NULL REFERENCES dictionary(id)  ON DELETE CASCADE,
     UNIQUE      (profile, dictionary)
 );
-CREATE INDEX IF NOT EXISTS index_profile_enabled_dictionary ON profile_enabled_dictionary(profile, dictionary);
+CREATE INDEX IF NOT EXISTS profile_enabled_dictionary_idx ON profile_enabled_dictionary(dictionary);
 
 --
 
@@ -77,8 +77,6 @@ CREATE TABLE IF NOT EXISTS record (
     kind        INTEGER NOT NULL,
     data        BLOB    NOT NULL
 );
-CREATE INDEX IF NOT EXISTS record_source    ON record(source);
-CREATE INDEX IF NOT EXISTS record_kind      ON record(kind);
 
 --
 
@@ -89,8 +87,8 @@ CREATE TABLE IF NOT EXISTS term_record (
     UNIQUE (record, headword, reading),
     CHECK (headword IS NOT NULL OR reading IS NOT NULL)
 );
-CREATE INDEX IF NOT EXISTS term_record_headword ON term_record(headword);
-CREATE INDEX IF NOT EXISTS term_record_reading  ON term_record(reading);
+CREATE INDEX IF NOT EXISTS term_record_idx1 ON term_record(reading, record);
+CREATE INDEX IF NOT EXISTS term_record_idx2 ON term_record(headword);
 
 --
 
@@ -103,5 +101,5 @@ CREATE TABLE IF NOT EXISTS frequency (
     UNIQUE (source, headword, reading)
     CHECK (headword IS NOT NULL OR reading IS NOT NULL)
 );
-CREATE INDEX IF NOT EXISTS frequency_headword   ON frequency(source, headword);
-CREATE INDEX IF NOT EXISTS frequency_reading    ON frequency(source, reading);
+-- CREATE INDEX IF NOT EXISTS frequency_headword   ON frequency(source, headword);
+-- CREATE INDEX IF NOT EXISTS frequency_reading    ON frequency(source, reading);
