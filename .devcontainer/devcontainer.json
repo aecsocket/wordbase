@@ -14,7 +14,8 @@
     "XDG_RUNTIME_DIR": "/tmp/user/1000",
     "WAYLAND_DISPLAY": "${localEnv:XDG_RUNTIME_DIR}/wayland-0",
     "DBUS_SESSION_BUS_ADDRESS": "unix:path=${localEnv:XDG_RUNTIME_DIR}/bus",
-    "LINDERA_CACHE": "/workspaces/wordbase/lindera_cache"
+    "LINDERA_CACHE": "${containerWorkspaceFolder}/lindera_cache",
+    "WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS": "1"
   },
   "mounts": [
     {
@@ -24,22 +25,22 @@
     },
     {
       "type": "bind",
-      "source": "${env:XDG_RUNTIME_DIR}/${env:WAYLAND_DISPLAY}",
+      "source": "${localEnv:XDG_RUNTIME_DIR}/${localEnv:WAYLAND_DISPLAY}",
       "target": "${localEnv:XDG_RUNTIME_DIR}/wayland-0"
     },
     {
       "type": "bind",
-      "source": "${env:XDG_RUNTIME_DIR}/bus",
+      "source": "${localEnv:XDG_RUNTIME_DIR}/bus",
       "target": "${localEnv:XDG_RUNTIME_DIR}/bus"
     },
     {
       "type": "bind",
-      "source": "${env:XDG_RUNTIME_DIR}/at-spi/bus",
+      "source": "${localEnv:XDG_RUNTIME_DIR}/at-spi/bus",
       "target": "${localEnv:XDG_RUNTIME_DIR}/at-spi/bus"
     },
     {
       "type": "bind",
-      "source": "${env:HOME}/.local/share/gnome-shell/extensions/",
+      "source": "${localEnv:HOME}/.local/share/gnome-shell/extensions/",
       "target": "/workspaces/gnome-shell-extensions"
     }
   ],

@@ -32,6 +32,11 @@ RUN yay -Syu --noconfirm \
     meson blueprint-compiler python-sphinx-furo blueprint-compiler-docs-git \
     noto-fonts noto-fonts-cjk noto-fonts-emoji
 
+# install audio playback libraries
+RUN yay -Syu --noconfirm \
+    alsa-utils pipewire pipewire-alsa \
+    gstreamer gst-libav gst-plugins-good gst-plugins-bad
+
 # install GNOME extension development tools
 RUN yay -Syu --noconfirm \
     npm gnome-shell zip
