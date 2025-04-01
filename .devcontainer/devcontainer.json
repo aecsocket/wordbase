@@ -3,20 +3,20 @@
   "build": {
     "dockerfile": "Dockerfile"
   },
+  "forwardPorts": [9518],
   "runArgs": [
     "--add-host=host.docker.internal:host-gateway",
-    "--device=/dev/dri",
-    "--security-opt=seccomp=unconfined"
+    "--device=/dev/dri"
   ],
-  "forwardPorts": [9518],
-  "postCreateCommand": [".devcontainer/setup-schema-db.sh"],
+  "securityOpt": ["seccomp=unconfined"],
   "containerEnv": {
-    "XDG_RUNTIME_DIR": "/tmp/user/1000",
-    "WAYLAND_DISPLAY": "${localEnv:XDG_RUNTIME_DIR}/wayland-0",
-    "DBUS_SESSION_BUS_ADDRESS": "unix:path=${localEnv:XDG_RUNTIME_DIR}/bus",
+    "XDG_RUNTIME_DIR": "/run/user/1000",
+    "WAYLAND_DISPLAY": "wayland-0",
     "LINDERA_CACHE": "${containerWorkspaceFolder}/lindera_cache",
     "WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS": "1"
   },
+  "onCreateCommand": "sudo chown dev:dev /run/user/1000",
+  "postCreateCommand": [".devcontainer/setup-schema-db.sh"],
   "mounts": [
     {
       "type": "volume",
@@ -26,17 +26,22 @@
     {
       "type": "bind",
       "source": "${localEnv:XDG_RUNTIME_DIR}/${localEnv:WAYLAND_DISPLAY}",
-      "target": "${localEnv:XDG_RUNTIME_DIR}/wayland-0"
+      "target": "/run/user/1000/wayland-0"
     },
     {
       "type": "bind",
       "source": "${localEnv:XDG_RUNTIME_DIR}/bus",
-      "target": "${localEnv:XDG_RUNTIME_DIR}/bus"
+      "target": "/run/user/1000/bus"
     },
     {
       "type": "bind",
       "source": "${localEnv:XDG_RUNTIME_DIR}/at-spi/bus",
-      "target": "${localEnv:XDG_RUNTIME_DIR}/at-spi/bus"
+      "target": "/run/user/1000/at-spi/bus"
+    },
+    {
+      "type": "bind",
+      "source": "${localEnv:XDG_RUNTIME_DIR}/pipewire-0",
+      "target": "/run/user/1000/pipewire-0"
     },
     {
       "type": "bind",
