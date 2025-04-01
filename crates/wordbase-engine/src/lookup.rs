@@ -59,9 +59,9 @@ impl Engine {
                 -- user-specified dictionary sorting position always takes priority
                 dictionary.position,
                 CASE
-                    -- put entries without an explicit frequency value first
-                    WHEN frequency.mode IS NULL THEN 0
-                    ELSE 1
+                    -- put entries without an explicit frequency value last
+                    WHEN frequency.mode IS NULL THEN 1
+                    ELSE 0
                 END,
                 CASE
                     -- frequency rank

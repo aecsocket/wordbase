@@ -143,8 +143,52 @@ fn render_term(term: &Term) -> Markup {
     }
 }
 
-fn render_pitch(_term: &Term, _pitch: &dict::yomitan::Pitch) -> Markup {
-    html! { "TODO" }
+fn render_pitch(term: &Term, pitch: &dict::yomitan::Pitch) -> Markup {
+    let Some(reading) = term.reading() else {
+        return html! {};
+    };
+
+    let downstep = usize::try_from(pitch.position).unwrap_or(usize::MAX);
+    let morae = lang::jpn::morae(reading).collect::<Vec<_>>();
+
+    let pitch_css_class = match downstep {
+        0 => "heiban",
+        1 => "atamadaka",
+        n if n == morae.len() => "odaka",
+        _ => "nakadaka",
+    };
+
+    let morae = morae.into_iter().enumerate().map(|(position, mora)| {
+        let this_css_class = if lang::jpn::is_high(downstep, position) {
+            "high"
+        } else {
+            "low"
+        };
+
+        let next_css_class = if lang::jpn::is_high(downstep, position + 1) {
+            "next-high"
+        } else {
+            "next-low"
+        };
+
+        html! {
+            span .mora .(this_css_class) .(next_css_class) {
+                @for ch in mora.chars() {
+                    span .char {
+                        (ch)
+                    }
+                }
+            }
+        }
+    });
+
+    html! {
+        .(pitch_css_class) {
+            @for mora in morae {
+                (mora)
+            }
+        }
+    }
 }
 
 fn render_frequency<H: BuildHasher>(

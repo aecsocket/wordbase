@@ -81,6 +81,8 @@ impl AsyncComponent for App {
             #[local]
             root {
                 set_title: Some("Wordbase"),
+                set_default_width: 480,
+                set_default_height: 600,
 
                 #[name(spinner)]
                 adw::Spinner {}

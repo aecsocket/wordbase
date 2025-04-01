@@ -16,6 +16,10 @@ use {
     },
     serde::de::DeserializeOwned,
     sqlx::{Sqlite, Transaction},
+    std::{
+        pin::Pin,
+        sync::{Arc, atomic::AtomicU64},
+    },
     tokio::sync::mpsc,
     tracing::{debug, trace},
     wordbase::{
@@ -71,6 +75,11 @@ async fn validate(archive: Bytes) -> Result<()> {
         }
     }
     bail!("missing one of {MARKER_PATHS:?}");
+}
+
+struct CountCursor<T> {
+    inner: Pin<Box<Cursor<T>>>,
+    pos: Arc<AtomicU64>,
 }
 
 async fn import(
@@ -288,7 +297,7 @@ impl TryFrom<schema::generic::Index> for RevIndex<GenericInfo> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Nhk16Info {
     terms: Vec<Term>,
 }
@@ -299,8 +308,26 @@ impl TryFrom<schema::nhk16::Index> for RevIndex<Nhk16Info> {
     fn try_from(value: schema::nhk16::Index) -> Result<Self, Self::Error> {
         let mut for_path = HashMap::<String, Nhk16Info>::new();
         for entry in value.0 {
-            // let kanji =
-            // entry.kanji.into_iter().filter_map(NonEmptyString::new);
+            let reading = NonEmptyString::new(entry.kana);
+            let terms = entry
+                .kanji
+                .into_iter()
+                .filter_map(NonEmptyString::new)
+                .filter_map(|headword| Term::new(headword, reading.clone()))
+                .collect::<Vec<_>>();
+
+            for accent in entry.accents {
+                if let Some(sound_file) = accent.sound_file {
+                    for_path
+                        .entry(sound_file)
+                        .or_default()
+                        .terms
+                        .extend_from_slice(&terms);
+                }
+            }
+
+            // subentries are usually just conjugations of top-level entries,
+            // so we ignore them
         }
         Ok(Self { for_path })
     }
