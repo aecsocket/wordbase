@@ -1,9 +1,13 @@
 use {
     crate::lang,
+    base64::{Engine, prelude::BASE64_STANDARD},
     derive_more::{Deref, DerefMut},
     maud::{Markup, html},
-    std::{collections::HashMap, hash::BuildHasher},
-    wordbase::{Dictionary, DictionaryId, Record, RecordLookup, Term, dict},
+    std::{collections::HashMap, fmt::Write as _, hash::BuildHasher},
+    wordbase::{
+        Dictionary, DictionaryId, Record, RecordLookup, Term,
+        dict::{self, yomichan_audio::AudioFormat},
+    },
 };
 
 pub fn render_records<H: BuildHasher>(
@@ -68,7 +72,9 @@ pub fn render_records<H: BuildHasher>(
                     "HERE IS THE AUDIO GROUP"
 
                     @for (_, audio) in &info.audio {
-                        p { "AUDIO "}
+                        .audio {
+                            (render_audio(audio))
+                        }
                     }
                 }
 
@@ -160,6 +166,28 @@ fn render_frequency<H: BuildHasher>(
                 .or_else(|| frequency.rank.map(|rank| format!("{}", rank.value())))
                 .unwrap_or_else(|| "?".into())
             )
+        }
+    }
+}
+
+fn render_audio(record: &Audio) -> Markup {
+    let audio = match record {
+        Audio::Forvo(dict::yomichan_audio::Forvo { audio, .. }) => audio,
+        Audio::Jpod(dict::yomichan_audio::Jpod { audio }) => audio,
+        Audio::Nhk16(dict::yomichan_audio::Nhk16 { audio }) => audio,
+        Audio::Shinmeikai8(dict::yomichan_audio::Shinmeikai8 { audio, .. }) => audio,
+    };
+
+    let mime_type = match audio.format {
+        AudioFormat::Opus => "audio/opus",
+    };
+    let mut on_click = format!("new Audio('data:{mime_type};base64,");
+    BASE64_STANDARD.encode_string(&audio.data, &mut on_click);
+    _ = write!(&mut on_click, "').play()");
+
+    html! {
+        button onclick=(on_click) {
+            "Play Audio"
         }
     }
 }

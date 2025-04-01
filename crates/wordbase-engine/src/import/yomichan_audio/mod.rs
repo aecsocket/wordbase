@@ -20,7 +20,7 @@ use {
     tracing::{debug, trace},
     wordbase::{
         DictionaryId, DictionaryKind, DictionaryMeta, NonEmptyString, RecordType, Term,
-        dict::yomichan_audio::{Forvo, Jpod, Nhk16, Shinmeikai8},
+        dict::yomichan_audio::{Audio, AudioFormat, Forvo, Jpod, Nhk16, Shinmeikai8},
     },
 };
 
@@ -324,18 +324,21 @@ pub async fn import_forvo<R: AsyncRead + Unpin>(
         .and_then(|(name, _)| Term::from_headword(name))
         .context("no headword in path")?;
 
-    let mut audio = Vec::new();
+    let mut data = Vec::new();
     entry
-        .read_to_end(&mut audio)
+        .read_to_end(&mut data)
         .await
-        .context("failed to read audio into memory")?;
+        .context("failed to read audio data into memory")?;
 
     let record_id = insert_record(
         tx,
         source,
         &Forvo {
             username,
-            audio: Bytes::from(audio),
+            audio: Audio {
+                format: AudioFormat::Opus,
+                data: Bytes::from(data),
+            },
         },
         scratch,
     )
@@ -356,7 +359,7 @@ async fn import_by_rev_index<'a, R, Rev, T, Terms>(
     entry: &mut async_tar::Entry<R>,
     index: &'a RevIndex<Rev>,
     terms_of: impl FnOnce(&'a Rev) -> Terms,
-    into_record: impl FnOnce(Bytes, &Rev) -> T,
+    into_record: impl FnOnce(Audio, &Rev) -> T,
 ) -> Result<()>
 where
     R: AsyncRead + Unpin,
@@ -370,13 +373,17 @@ where
         return Ok(());
     };
 
-    let mut audio = Vec::new();
+    let mut data = Vec::new();
     entry
-        .read_to_end(&mut audio)
+        .read_to_end(&mut data)
         .await
-        .context("failed to read audio into memory")?;
+        .context("failed to read audio data into memory")?;
 
-    let record = into_record(Bytes::from(audio), info);
+    let audio = Audio {
+        format: AudioFormat::Opus,
+        data: Bytes::from(data),
+    };
+    let record = into_record(audio, info);
     let record_id = insert_record(tx, source, &record, scratch)
         .await
         .context("failed to insert record")?;

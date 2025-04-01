@@ -4722,6 +4722,7 @@ dependencies = [
  "async-compression",
  "async-tar",
  "async_zip",
+ "base64",
  "blocking",
  "bytes",
  "derive_more",
