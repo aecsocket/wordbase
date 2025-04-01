@@ -2113,9 +2113,9 @@ dependencies = [
 
 [[package]]
 name = "lindera"
-version = "0.40.1"
+version = "0.40.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e4788d40d68746f81d50faba969dca5d9226ab527a9da90a7708dcbd1203f69"
+checksum = "5fc96440caa8bb9e832f1fc737ca807d603117e598ebb7d00c96d9558e8d7a30"
 dependencies = [
  "anyhow",
  "bincode",
@@ -2139,9 +2139,9 @@ dependencies = [
 
 [[package]]
 name = "lindera-dictionary"
-version = "0.40.1"
+version = "0.40.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc5a12c962d4acf12d4bca442fd6420ca7be5e78163167443dd95503ab8b3ee0"
+checksum = "396b5be33424f4843e6dd8f2c98baebb1697cac3c0807846a07d9c65968fb849"
 dependencies = [
  "anyhow",
  "bincode",
@@ -2164,9 +2164,9 @@ dependencies = [
 
 [[package]]
 name = "lindera-unidic"
-version = "0.40.1"
+version = "0.40.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32f95b856c9a016df9f713ffc34fdf5d5e8e4353779fe1f114e95cfa2e04fb22"
+checksum = "b074127b5117e24bf2023c4ec569e1055254113a6c243bac92261e043a94eb11"
 dependencies = [
  "bincode",
  "byteorder",
@@ -4694,7 +4694,6 @@ dependencies = [
  "glib",
  "gtk4",
  "indexmap",
- "libadwaita",
  "maud",
  "notify",
  "open",

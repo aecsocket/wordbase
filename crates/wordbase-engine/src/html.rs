@@ -69,8 +69,6 @@ pub fn render_records<H: BuildHasher>(
                 }
 
                 .audio-group {
-                    "HERE IS THE AUDIO GROUP"
-
                     @for (_, audio) in &info.audio {
                         .audio {
                             (render_audio(audio))
@@ -171,11 +169,15 @@ fn render_frequency<H: BuildHasher>(
 }
 
 fn render_audio(record: &Audio) -> Markup {
-    let audio = match record {
-        Audio::Forvo(dict::yomichan_audio::Forvo { audio, .. }) => audio,
-        Audio::Jpod(dict::yomichan_audio::Jpod { audio }) => audio,
-        Audio::Nhk16(dict::yomichan_audio::Nhk16 { audio }) => audio,
-        Audio::Shinmeikai8(dict::yomichan_audio::Shinmeikai8 { audio, .. }) => audio,
+    let (name, audio) = match record {
+        Audio::Forvo(dict::yomichan_audio::Forvo { audio, username }) => {
+            (format!("Forvo {username}"), audio)
+        }
+        Audio::Jpod(dict::yomichan_audio::Jpod { audio }) => (format!("JPod"), audio),
+        Audio::Nhk16(dict::yomichan_audio::Nhk16 { audio }) => (format!("Nhk16"), audio),
+        Audio::Shinmeikai8(dict::yomichan_audio::Shinmeikai8 { audio, .. }) => {
+            (format!("Shinmeikai8"), audio)
+        }
     };
 
     let mime_type = match audio.format {
@@ -187,7 +189,7 @@ fn render_audio(record: &Audio) -> Markup {
 
     html! {
         button onclick=(on_click) {
-            "Play Audio"
+            "Play Audio " (name)
         }
     }
 }

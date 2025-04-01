@@ -7,6 +7,7 @@ use {
         prelude::*,
     },
     std::sync::Arc,
+    tracing::warn,
     webkit6::prelude::*,
     wordbase::{Dictionary, DictionaryId, RecordLookup},
     wordbase_engine::html,
@@ -51,6 +52,14 @@ impl SimpleComponent for RecordRender {
             set_hexpand: true,
             set_vexpand: true,
             set_background_color: &gdk::RGBA::new(0.0, 0.0, 0.0, 0.0),
+            connect_context_menu => |_, _, _| {
+                // prevent opening context menu
+                true
+            },
+            connect_decide_policy => |_, decision, _| {
+                on_decide_policy(decision);
+                true
+            },
         }
     }
 
@@ -107,5 +116,22 @@ impl RecordRender {
             (records_html)
         };
         self.web_view.load_html(&full_html.0, None);
+    }
+}
+
+fn on_decide_policy(decision: &webkit6::PolicyDecision) {
+    if let Some(decision) = decision.downcast_ref::<webkit6::NavigationPolicyDecision>() {
+        if let Some(mut action) = decision.navigation_action() {
+            if action.is_user_gesture() {
+                decision.ignore();
+                if let Some(request) = action.request() {
+                    if let Some(uri) = request.uri() {
+                        if let Err(err) = open::that_detached(&uri) {
+                            warn!("Failed to open {uri:?}: {err:?}");
+                        }
+                    }
+                }
+            }
+        }
     }
 }

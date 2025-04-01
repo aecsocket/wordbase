@@ -35,7 +35,7 @@ RUN yay -Syu --noconfirm \
 # install audio playback libraries
 RUN yay -Syu --noconfirm \
     alsa-utils pipewire pipewire-alsa \
-    gstreamer gst-libav gst-plugins-good gst-plugins-bad
+    gstreamer gst-libav gst-plugins-base gst-plugins-good gst-plugins-bad
 
 # install GNOME extension development tools
 RUN yay -Syu --noconfirm \
