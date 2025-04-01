@@ -351,7 +351,7 @@ async fn import_term(
     let record_id = insert_record(tx, source, &record, scratch)
         .await
         .context("failed to insert record")?;
-    insert_term_record(tx, &term, record_id)
+    insert_term_record(tx, source, record_id, &term)
         .await
         .context("failed to insert term record")?;
     Ok(())
@@ -394,7 +394,7 @@ async fn import_term_meta(
             let record_id = insert_record(tx, source, &record, scratch)
                 .await
                 .context("failed to insert frequency record")?;
-            insert_term_record(tx, &term, record_id)
+            insert_term_record(tx, source, record_id, &term)
                 .await
                 .context("failed to insert frequency term record")?;
 
@@ -412,7 +412,7 @@ async fn import_term_meta(
                 let record_id = insert_record(tx, source, &record, scratch)
                     .await
                     .context("failed to insert pitch record")?;
-                insert_term_record(tx, &term, record_id)
+                insert_term_record(tx, source, record_id, &term)
                     .await
                     .context("failed to insert pitch term record")?;
             }

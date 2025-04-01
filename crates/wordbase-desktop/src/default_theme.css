@@ -1,0 +1,139 @@
+/* Base container styling */
+.term-group {
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+    background: white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Term text styling (top left) */
+.term {
+    font-size: 1.5rem;
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+
+/* Ruby/furigana styling */
+.term rt {
+    font-size: 0.7em;
+    opacity: 0.8;
+}
+
+/* Frequency tags container */
+.frequency-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0;
+}
+
+/* Individual frequency tag */
+.frequency-group .frequency {
+    background: #f0f3f7;
+    border-radius: 16px;
+    padding: 4px 10px;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.frequency .source {
+    color: #586069;
+    font-weight: 500;
+}
+
+.frequency .value {
+    color: #24292e;
+    font-weight: 600;
+}
+
+/* Glossaries container */
+.source-glossaries-group {
+    margin-top: 12px;
+}
+
+/* Dictionary source header */
+.source-name {
+    display: block;
+    font-size: 0.8rem;
+    color: #586069;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #eaecef;
+}
+
+/* Glossary entry */
+.glossary {
+    margin-bottom: 12px;
+}
+
+/* Tags styling */
+.tag {
+    display: inline-block;
+    background: #e1f5fe;
+    color: #0288d1;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.75rem;
+    margin-right: 6px;
+    margin-bottom: 4px;
+}
+
+/* Definition lists */
+.glossary ul {
+    padding-left: 1.2em;
+    margin: 8px 0;
+}
+
+.glossary li {
+    margin-bottom: 4px;
+    line-height: 1.5;
+}
+
+/* Example sentences */
+.glossary div[style*="background-color:color-mix"] {
+    margin: 8px 0;
+    padding: 10px;
+    border-left: 3px solid #1a73e8;
+    background-color: #f8f9fa !important;
+}
+
+/* Kanji variants table */
+table {
+    border-collapse: collapse;
+    margin: 8px 0;
+    width: 100%;
+}
+
+table th,
+table td {
+    padding: 6px;
+    text-align: left;
+    border-bottom: 1px solid #eaecef;
+}
+
+/* Special styling for priority tags */
+.tag[title*="priority"] {
+    background: #fff8e1;
+    color: #ff8f00;
+}
+
+/* Auxiliary verb styling */
+.tag[title="auxiliary verb"] {
+    background: #f3e5f5;
+    color: #8e24aa;
+}
+
+/* Archaic marker */
+.tag[title="archaic"] {
+    background: #efebe9;
+    color: #6d4c41;
+}
+
+/* Verb type indicators */
+.tag[title*="verb"] {
+    background: #e8f5e9;
+    color: #2e7d32;
+}

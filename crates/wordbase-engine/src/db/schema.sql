@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS record (
 --
 
 CREATE TABLE IF NOT EXISTS term_record (
+    source      INTEGER NOT NULL REFERENCES dictionary(id) ON DELETE CASCADE,
     record      INTEGER NOT NULL REFERENCES record(id) ON DELETE CASCADE,
     headword    TEXT,
     reading     TEXT,
@@ -101,5 +102,3 @@ CREATE TABLE IF NOT EXISTS frequency (
     UNIQUE (source, headword, reading)
     CHECK (headword IS NOT NULL OR reading IS NOT NULL)
 );
--- CREATE INDEX IF NOT EXISTS frequency_headword   ON frequency(source, headword);
--- CREATE INDEX IF NOT EXISTS frequency_reading    ON frequency(source, reading);

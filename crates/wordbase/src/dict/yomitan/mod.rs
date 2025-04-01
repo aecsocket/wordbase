@@ -6,9 +6,10 @@
 mod html;
 pub mod structured;
 
-use serde::{Deserialize, Serialize};
-
-use crate::FrequencyValue;
+use {
+    crate::FrequencyValue,
+    serde::{Deserialize, Serialize},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

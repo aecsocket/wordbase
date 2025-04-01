@@ -5,7 +5,9 @@
 mod db;
 mod deinflect;
 mod dictionary;
+pub mod html;
 pub mod import;
+pub mod lang;
 mod lookup;
 mod profile;
 mod texthook;

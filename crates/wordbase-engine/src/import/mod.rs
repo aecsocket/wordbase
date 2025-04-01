@@ -201,14 +201,16 @@ async fn insert_record<R: RecordType>(
 
 async fn insert_term_record(
     tx: &mut Transaction<'_, Sqlite>,
-    term: &Term,
+    source: DictionaryId,
     record_id: RecordId,
+    term: &Term,
 ) -> Result<()> {
     let headword = term.headword().map(|s| s.as_str());
     let reading = term.reading().map(|s| s.as_str());
     sqlx::query!(
-        "INSERT OR IGNORE INTO term_record (record, headword, reading)
-        VALUES ($1, $2, $3)",
+        "INSERT OR IGNORE INTO term_record (source, record, headword, reading)
+        VALUES ($1, $2, $3, $4)",
+        source.0,
         record_id.0,
         headword,
         reading,

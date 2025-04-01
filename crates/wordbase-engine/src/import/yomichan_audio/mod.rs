@@ -341,7 +341,7 @@ pub async fn import_forvo<R: AsyncRead + Unpin>(
     )
     .await
     .context("failed to insert record")?;
-    insert_term_record(tx, &headword, record_id)
+    insert_term_record(tx, source, record_id, &headword)
         .await
         .context("failed to insert headword term")?;
     Ok(())
@@ -382,7 +382,7 @@ where
         .context("failed to insert record")?;
 
     for term in terms_of(info) {
-        insert_term_record(tx, term, record_id)
+        insert_term_record(tx, source, record_id, term)
             .await
             .context("failed to insert term record")?;
     }

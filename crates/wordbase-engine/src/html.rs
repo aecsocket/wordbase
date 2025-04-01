@@ -1,0 +1,213 @@
+use {
+    crate::lang,
+    derive_more::{Deref, DerefMut},
+    maud::{Markup, html},
+    std::{collections::HashMap, hash::BuildHasher},
+    wordbase::{Dictionary, DictionaryId, Record, RecordLookup, Term, dict},
+};
+
+pub fn render_records<H: BuildHasher>(
+    dictionaries: &HashMap<DictionaryId, Dictionary, H>,
+    records: &[RecordLookup],
+) -> Markup {
+    let mut terms = Terms::default();
+    for record in records {
+        let source = record.source;
+        let info = terms.entry(record.term.clone()).or_default();
+
+        match &record.record {
+            Record::YomitanGlossary(glossary) => {
+                info.glossaries.entry(source).or_default().push(glossary);
+            }
+            Record::YomitanFrequency(frequency) => {
+                info.frequencies.push((source, frequency));
+            }
+            Record::YomitanPitch(pitch) => {
+                info.pitches.push((source, pitch));
+            }
+            Record::YomichanAudioForvo(audio) => {
+                info.audio.push((source, Audio::Forvo(audio)));
+            }
+            Record::YomichanAudioJpod(audio) => {
+                info.audio.push((source, Audio::Jpod(audio)));
+            }
+            Record::YomichanAudioNhk16(audio) => {
+                info.audio.push((source, Audio::Nhk16(audio)));
+            }
+            Record::YomichanAudioShinmeikai8(audio) => {
+                info.audio.push((source, Audio::Shinmeikai8(audio)));
+            }
+            _ => {}
+        }
+    }
+
+    html! {
+        @for (term, info) in &terms.0 {
+            .term-group {
+                .term {
+                    (render_term(term))
+                }
+
+                .pitch-group {
+                    @for (_, pitch) in &info.pitches {
+                        .pitch {
+                            (render_pitch(term, pitch))
+                        }
+                    }
+                }
+
+                .frequency-group {
+                    @for &(source, frequency) in &info.frequencies {
+                        .frequency {
+                            (render_frequency(dictionaries, source, frequency))
+                        }
+                    }
+                }
+
+                .audio-group {
+                    "HERE IS THE AUDIO GROUP"
+
+                    @for (_, audio) in &info.audio {
+                        p { "AUDIO "}
+                    }
+                }
+
+                .source-glossaries-group {
+                    @for (&source, glossaries) in &info.glossaries {
+                        .glossaries {
+                            (render_glossaries(dictionaries, source, glossaries))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+type IndexMap<K, V> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
+
+#[derive(Debug, Default, Deref, DerefMut)]
+struct Terms<'a>(IndexMap<Term, TermInfo<'a>>);
+
+#[derive(Debug, Default)]
+struct TermInfo<'a> {
+    glossaries: IndexMap<DictionaryId, SourceGlossaries<'a>>,
+    frequencies: Vec<(DictionaryId, &'a dict::yomitan::Frequency)>,
+    pitches: Vec<(DictionaryId, &'a dict::yomitan::Pitch)>,
+    audio: Vec<(DictionaryId, Audio<'a>)>,
+}
+
+#[derive(Debug, Default, Deref, DerefMut)]
+struct SourceGlossaries<'a>(Vec<&'a dict::yomitan::Glossary>);
+
+#[derive(Debug)]
+enum Audio<'a> {
+    Forvo(&'a dict::yomichan_audio::Forvo),
+    Jpod(&'a dict::yomichan_audio::Jpod),
+    Nhk16(&'a dict::yomichan_audio::Nhk16),
+    Shinmeikai8(&'a dict::yomichan_audio::Shinmeikai8),
+}
+
+fn render_term(term: &Term) -> Markup {
+    match term {
+        Term::Headword { headword } => html! {
+            ruby {
+                (headword)
+            }
+        },
+        Term::Reading { reading } => html! {
+            ruby {
+                rt {
+                    (reading)
+                }
+            }
+        },
+        Term::Full { headword, reading } => {
+            let parts = lang::jpn::furigana_parts(headword, reading);
+            html! {
+                ruby {
+                    @for (headword_part, reading_part) in parts {
+                        (headword_part)
+
+                        rt {
+                            (reading_part)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn render_pitch(_term: &Term, _pitch: &dict::yomitan::Pitch) -> Markup {
+    html! { "TODO" }
+}
+
+fn render_frequency<H: BuildHasher>(
+    dictionaries: &HashMap<DictionaryId, Dictionary, H>,
+    source: DictionaryId,
+    frequency: &dict::yomitan::Frequency,
+) -> Markup {
+    html! {
+        span .source {
+            (name_of(dictionaries, source))
+        }
+
+        span .value {
+            (frequency
+                .display
+                .clone()
+                .or_else(|| frequency.rank.map(|rank| format!("{}", rank.value())))
+                .unwrap_or_else(|| "?".into())
+            )
+        }
+    }
+}
+
+fn render_glossaries<H: BuildHasher>(
+    dictionaries: &HashMap<DictionaryId, Dictionary, H>,
+    source: DictionaryId,
+    glossaries: &SourceGlossaries,
+) -> Markup {
+    html! {
+        span .source-name {
+            (name_of(dictionaries, source))
+        }
+
+        @for glossary in &glossaries.0 {
+            .glossary {
+                (render_glossary(glossary))
+            }
+        }
+    }
+}
+
+fn render_glossary(glossary: &dict::yomitan::Glossary) -> Markup {
+    let mut tags = glossary.tags.iter().collect::<Vec<_>>();
+    tags.sort_by(|tag_a, tag_b| tag_a.order.cmp(&tag_b.order));
+
+    html! {
+        @for tag in tags {
+            .tag title=(tag.description) {
+                (tag.name)
+            }
+        }
+
+        ul {
+            @for content in &glossary.content {
+                li {
+                    (content)
+                }
+            }
+        }
+    }
+}
+
+fn name_of<H: BuildHasher>(
+    dictionaries: &HashMap<DictionaryId, Dictionary, H>,
+    dictionary_id: DictionaryId,
+) -> &str {
+    dictionaries
+        .get(&dictionary_id)
+        .map_or("?", |dict| dict.meta.name.as_str())
+}

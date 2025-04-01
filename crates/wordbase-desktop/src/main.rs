@@ -3,26 +3,25 @@
 
 // mod popup;
 mod render;
+mod theme;
 
 use {
     anyhow::{Context, Result},
     directories::ProjectDirs,
     foldhash::HashMap,
-    notify::{
-        Watcher,
-        event::{DataChange, ModifyKind},
-    },
     relm4::{
-        adw::{self, gdk, prelude::*},
+        adw::{self, prelude::*},
         loading_widgets::LoadingWidgets,
         prelude::*,
         view,
     },
+    render::{RecordRender, RecordRenderConfig, RecordRenderMsg},
+    std::sync::Arc,
+    theme::DefaultTheme,
     tokio::fs,
-    tracing::{info, level_filters::LevelFilter},
+    tracing::{info, level_filters::LevelFilter, warn},
     tracing_subscriber::EnvFilter,
-    webkit6::prelude::WebViewExt,
-    wordbase::{Dictionary, DictionaryId, RecordLookup},
+    wordbase::{Dictionary, DictionaryId, RecordKind},
     wordbase_engine::Engine,
 };
 
@@ -41,17 +40,14 @@ fn main() {
 #[derive(Debug)]
 struct App {
     engine: Engine,
-    _themes_watcher: notify::RecommendedWatcher,
-    theme_css: String,
-    web_view: webkit6::WebView,
-    dictionaries: HashMap<DictionaryId, Dictionary>,
-    records: Vec<RecordLookup>,
+    dictionaries: Arc<HashMap<DictionaryId, Dictionary>>,
+    _default_theme_watcher: Option<notify::RecommendedWatcher>,
+    renderer: Controller<RecordRender>,
 }
 
 #[derive(Debug)]
 enum AppMsg {
-    SetThemeCss { theme_css: String },
-    Search { query: String },
+    Lookup { query: String },
 }
 
 #[relm4::component(async)]
@@ -63,28 +59,20 @@ impl AsyncComponent for App {
 
     view! {
         adw::Window {
-            gtk::Box {
-                set_orientation: gtk::Orientation::Vertical,
-                set_spacing: 16,
-
-                gtk::SearchEntry {
-                    set_margin_top: 16,
-                    set_margin_bottom: 16,
-                    set_margin_start: 16,
-                    set_margin_end: 16,
-                    set_valign: gtk::Align::Start,
-                    connect_search_changed => move |widget| {
-                        sender.input(AppMsg::Search { query: widget.text().into() });
+            adw::ToolbarView {
+                set_top_bar_style: adw::ToolbarStyle::Raised,
+                add_top_bar = &adw::HeaderBar {
+                    #[wrap(Some)]
+                    set_title_widget = &gtk::SearchEntry {
+                        set_hexpand: true,
+                        connect_search_changed => move |widget| {
+                            sender.input(AppMsg::Lookup { query: widget.text().into() });
+                        },
                     },
                 },
 
-                #[name(web_view)]
-                webkit6::WebView {
-                    set_hexpand: true,
-                    set_vexpand: true,
-                    set_background_color: &gdk::RGBA::new(0.0, 0.0, 0.0, 0.0),
-                }
-            }
+                model.renderer.widget(),
+            },
         }
     }
 
@@ -106,30 +94,66 @@ impl AsyncComponent for App {
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
-        let init = init(sender.clone()).await.unwrap();
-        let widgets = view_output!();
+        let init = init().await.unwrap();
+        let renderer = RecordRender::builder()
+            .launch(RecordRenderConfig {
+                default_theme: init.default_theme.theme,
+                custom_theme: None,
+            })
+            .forward(sender.input_sender(), |response| match response {});
+
+        let renderer_sender = renderer.sender().clone();
+        let default_theme_watcher = init
+            .default_theme
+            .watcher_factory
+            .create(move |theme| {
+                info!("Default theme changed");
+                _ = renderer_sender.send(RecordRenderMsg::SetDefaultTheme(Arc::new(theme)));
+            })
+            .unwrap();
+
         let model = Self {
             engine: init.engine,
-            _themes_watcher: init.themes_watcher,
-            theme_css: init.theme_css,
             dictionaries: init.dictionaries,
-            web_view: widgets.web_view.clone(),
-            records: Vec::new(),
+            _default_theme_watcher: default_theme_watcher,
+            renderer,
         };
+        let widgets = view_output!();
         AsyncComponentParts { model, widgets }
+    }
+
+    async fn update(
+        &mut self,
+        message: Self::Input,
+        sender: AsyncComponentSender<Self>,
+        root: &Self::Root,
+    ) {
+        match message {
+            AppMsg::Lookup { query } => {
+                let records = match self.engine.lookup_lemma(&query, RecordKind::ALL).await {
+                    Ok(records) => records,
+                    Err(err) => {
+                        warn!("Failed to lookup records for {query:?}: {err:?}");
+                        return;
+                    }
+                };
+                _ = self.renderer.sender().send(RecordRenderMsg::Lookup {
+                    dictionaries: self.dictionaries.clone(),
+                    records,
+                });
+            }
+        }
     }
 }
 
 #[derive(Debug)]
 struct AppInit {
     engine: Engine,
-    dictionaries: HashMap<DictionaryId, Dictionary>,
-    themes_watcher: notify::RecommendedWatcher,
-    theme_css: String,
+    dictionaries: Arc<HashMap<DictionaryId, Dictionary>>,
+    default_theme: DefaultTheme,
 }
 
-async fn init(sender: AsyncComponentSender<App>) -> Result<AppInit> {
-    let tokio = tokio::runtime::Handle::current();
+async fn init() -> Result<AppInit> {
     let dirs = ProjectDirs::from("io.github", "aecsocket", "Wordbase")
         .context("failed to get default app directories")?;
     let data_path = dirs.data_dir();
@@ -149,197 +173,14 @@ async fn init(sender: AsyncComponentSender<App>) -> Result<AppInit> {
         .context("failed to fetch initial dictionaries")?
         .into_iter()
         .map(|dict| (dict.id, dict))
-        .collect();
+        .collect::<HashMap<_, _>>();
 
-    let themes_path = data_path.join("themes");
-    fs::create_dir_all(&themes_path)
+    let default_theme = theme::default_theme()
         .await
-        .context("failed to create themes directory")?;
-
-    let mut themes_watcher =
-        notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
-            let Ok(event) = event else { return };
-            tokio.spawn(on_fs_theme_event(sender.clone(), event));
-        })
-        .context("failed to create themes file watcher")?;
-    themes_watcher
-        .watch(&themes_path, notify::RecursiveMode::NonRecursive)
-        .context("failed to start watching themes directory")?;
-    let theme_css = fs::read_to_string(themes_path.join("default.css"))
-        .await
-        .context("failed to read default theme CSS")?;
-
+        .context("failed to get default theme")?;
     Ok(AppInit {
         engine,
-        dictionaries,
-        themes_watcher,
-        theme_css,
+        dictionaries: Arc::new(dictionaries),
+        default_theme,
     })
 }
-
-async fn on_fs_theme_event(sender: AsyncComponentSender<App>, event: notify::Event) {
-    match event.kind {
-        notify::EventKind::Modify(ModifyKind::Data(DataChange::Any)) => {
-            info!("{event:?}");
-        }
-        _ => {}
-    }
-}
-
-const CSS: &str = r#"
-/* Base container styling */
-.term-box {
-  border: 1px solid #e1e4e8;
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 16px;
-  background: white;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-}
-
-/* Term text styling (top left) */
-.term {
-  font-size: 1.5rem;
-  font-weight: 500;
-  margin-bottom: 8px;
-}
-
-/* Ruby/furigana styling */
-.term rt {
-  font-size: 0.7em;
-  opacity: 0.8;
-}
-
-/* Frequency tags container */
-.frequency-box {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 8px 0;
-}
-
-/* Individual frequency tag */
-.frequency {
-  background: #f0f3f7;
-  border-radius: 16px;
-  padding: 4px 10px;
-  font-size: 0.85rem;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.frequency .source {
-  color: #586069;
-  font-weight: 500;
-}
-
-.frequency .value {
-  color: #24292e;
-  font-weight: 600;
-}
-
-/* Glossaries container */
-.source-glossaries-box {
-  margin-top: 12px;
-}
-
-/* Dictionary source header */
-.source-name {
-  display: block;
-  font-size: 0.8rem;
-  color: #586069;
-  margin-bottom: 8px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid #eaecef;
-}
-
-/* Glossary entry */
-.glossary {
-  margin-bottom: 12px;
-}
-
-/* Tags styling */
-.tag {
-  display: inline-block;
-  background: #e1f5fe;
-  color: #0288d1;
-  border-radius: 4px;
-  padding: 2px 6px;
-  font-size: 0.75rem;
-  margin-right: 6px;
-  margin-bottom: 4px;
-}
-
-/* Definition lists */
-.glossary ul {
-  padding-left: 1.2em;
-  margin: 8px 0;
-}
-
-.glossary li {
-  margin-bottom: 4px;
-  line-height: 1.5;
-}
-
-/* Example sentences */
-.glossary div[style*="background-color:color-mix"] {
-  margin: 8px 0;
-  padding: 10px;
-  border-left: 3px solid #1a73e8;
-  background-color: #f8f9fa !important;
-}
-
-/* Kanji variants table */
-table {
-  border-collapse: collapse;
-  margin: 8px 0;
-  width: 100%;
-}
-
-table th, table td {
-  padding: 6px;
-  text-align: left;
-  border-bottom: 1px solid #eaecef;
-}
-
-/* Responsive adjustments */
-@media (max-width: 600px) {
-  .term {
-    font-size: 1.3rem;
-  }
-
-  .frequency-box {
-    gap: 4px;
-  }
-
-  .frequency {
-    font-size: 0.75rem;
-    padding: 2px 8px;
-  }
-}
-
-/* Special styling for priority tags */
-.tag[title*="priority"] {
-  background: #fff8e1;
-  color: #ff8f00;
-}
-
-/* Auxiliary verb styling */
-.tag[title="auxiliary verb"] {
-  background: #f3e5f5;
-  color: #8e24aa;
-}
-
-/* Archaic marker */
-.tag[title="archaic"] {
-  background: #efebe9;
-  color: #6d4c41;
-}
-
-/* Verb type indicators */
-.tag[title*="verb"] {
-  background: #e8f5e9;
-  color: #2e7d32;
-}
-"#;

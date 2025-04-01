@@ -18,7 +18,7 @@ workspace = true
 all-features = true
 
 [dependencies]
-wordbase = { workspace = true }
+wordbase = { workspace = true, features = ["render-html"] }
 
 anyhow               = { workspace = true }
 async-compression    = { workspace = true, features = ["futures-io", "xz"] }
@@ -29,7 +29,10 @@ bytes                = { workspace = true }
 derive_more          = { workspace = true, features = ["display", "error", "from"] }
 foldhash             = { workspace = true }
 futures              = { workspace = true }
+indexmap             = { workspace = true }
+itertools            = { workspace = true }
 lindera              = { version = "0.40.0", features = ["unidic"] }
+maud                 = { workspace = true }
 paste                = { workspace = true }
 rayon                = { workspace = true }
 regex                = { workspace = true }
