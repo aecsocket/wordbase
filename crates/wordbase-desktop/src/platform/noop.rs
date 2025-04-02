@@ -7,6 +7,7 @@ use super::WindowFilter;
 pub struct Platform;
 
 impl Platform {
+    #[expect(clippy::unused_async, reason = "matches signature of other `fn new`s")]
     pub async fn new() -> Result<Self> {
         Ok(Self)
     }

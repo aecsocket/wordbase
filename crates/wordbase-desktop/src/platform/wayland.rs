@@ -1,9 +1,9 @@
-use std::pin::Pin;
-
-use adw::prelude::*;
 use anyhow::{Context, Result};
-use wordbase::protocol::WindowFilter;
+use futures::future::BoxFuture;
+use relm4::adw::{self, prelude::*};
 use zbus::zvariant::{DeserializeDict, SerializeDict, Type};
+
+use super::WindowFilter;
 
 pub struct Platform {
     integration: IntegrationProxy<'static>,
@@ -16,7 +16,7 @@ impl Platform {
             .context("failed to establish session bus connection")?;
         let integration = IntegrationProxy::new(&dbus)
             .await
-            .context("failed to create dbus proxy")?;
+            .context("failed to create integration dbus proxy")?;
         Ok(Self { integration })
     }
 }
@@ -26,12 +26,9 @@ const WORDBASE_WINDOW_TOKEN: &str = "wordbase_window_token";
 type WindowToken = u64;
 
 impl super::Platform for Platform {
-    fn affix_to_focused_window(
-        &self,
-        window: &adw::ApplicationWindow,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + '_>> {
+    fn affix_to_focused_window(&self, window: &adw::Window) -> BoxFuture<Result<()>> {
         let window_token = rand::random::<WindowToken>();
-        // SAFETY: we will always read this in the extension as a `WindowToken`
+        // SAFETY: we will never read this out from Rust code
         unsafe {
             window.set_data(WORDBASE_WINDOW_TOKEN, window_token);
         }
@@ -47,23 +44,25 @@ impl super::Platform for Platform {
 
     fn move_to_window(
         &self,
-        window: &adw::ApplicationWindow,
+        window: &adw::Window,
         to: WindowFilter,
         offset: (i32, i32),
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + '_>> {
-        let window_token = rand::random::<WindowToken>();
-        // SAFETY: we will always read this in the extension as a `WindowToken`
-        unsafe {
-            window.set_data(WORDBASE_WINDOW_TOKEN, window_token);
-        }
+    ) -> BoxFuture<Result<()>> {
+        todo!();
 
-        Box::pin(async move {
-            self.integration
-                .move_to_window(window_token, to.into(), offset)
-                .await
-                .context("failed to send request to integration")?;
-            Ok(())
-        })
+        // let window_token = rand::random::<WindowToken>();
+        // // SAFETY: we will always read this in the extension as a `WindowToken`
+        // unsafe {
+        //     window.set_data(WORDBASE_WINDOW_TOKEN, window_token);
+        // }
+
+        // Box::pin(async move {
+        //     self.integration
+        //         .move_to_window(window_token, to.into(), offset)
+        //         .await
+        //         .context("failed to send request to integration")?;
+        //     Ok(())
+        // })
     }
 }
 
@@ -92,13 +91,13 @@ struct WindowFilterSerial {
     pub wm_class: Option<String>,
 }
 
-impl From<WindowFilter> for WindowFilterSerial {
-    fn from(value: WindowFilter) -> Self {
-        Self {
-            id: value.id,
-            pid: value.pid,
-            title: value.title,
-            wm_class: value.wm_class,
-        }
-    }
-}
+// impl From<WindowFilter> for WindowFilterSerial {
+//     fn from(value: WindowFilter) -> Self {
+//         Self {
+//             id: value.id,
+//             pid: value.pid,
+//             title: value.title,
+//             wm_class: value.wm_class,
+//         }
+//     }
+// }

@@ -1,10 +1,14 @@
 use std::sync::Arc;
 
 use foldhash::HashMap;
+use futures::never::Never;
 use relm4::prelude::*;
+use tokio::task::JoinHandle;
 use tracing::warn;
 use wordbase::RecordKind;
 use wordbase_engine::Engine;
+
+use crate::theme;
 
 use super::render::{RecordRender, RecordRenderConfig, RecordRenderMsg, RecordRenderResponse};
 
@@ -12,6 +16,13 @@ use super::render::{RecordRender, RecordRenderConfig, RecordRenderMsg, RecordRen
 pub struct RecordView {
     engine: Engine,
     render: Controller<RecordRender>,
+    recv_default_theme_task: JoinHandle<()>,
+}
+
+impl Drop for RecordView {
+    fn drop(&mut self) {
+        self.recv_default_theme_task.abort();
+    }
 }
 
 #[derive(Debug)]
@@ -42,17 +53,35 @@ impl AsyncComponent for RecordView {
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
+        let default_theme = theme::default().await;
         let render = RecordRender::builder()
             .launch(RecordRenderConfig {
-                default_theme: todo!(),
+                default_theme,
                 custom_theme: None,
             })
             .forward(sender.input_sender(), |resp| match resp {
                 RecordRenderResponse::RequestLookup { query } => RecordViewMsg::Lookup { query },
             });
+
+        let mut recv_default_theme_changed = theme::recv_default_changed().await;
+        let render_sender = render.sender().clone();
+        let recv_default_theme_task = tokio::spawn(async move {
+            // TODO: is there a better way to do this?
+            let _: Option<Never> = async move {
+                loop {
+                    let default_theme = recv_default_theme_changed.recv().await.ok()?;
+                    render_sender
+                        .send(RecordRenderMsg::SetDefaultTheme(default_theme))
+                        .ok()?;
+                }
+            }
+            .await;
+        });
+
         let model = Self {
             engine: init.engine,
             render,
+            recv_default_theme_task,
         };
         let widgets = view_output!();
         AsyncComponentParts { model, widgets }
@@ -84,7 +113,7 @@ impl AsyncComponent for RecordView {
                     }
                 };
 
-                self.render.sender().send(RecordRenderMsg::Lookup {
+                _ = self.render.sender().send(RecordRenderMsg::Lookup {
                     dictionaries: Arc::new(dictionaries),
                     records,
                 });

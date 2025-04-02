@@ -1,8 +1,9 @@
-// mod wayland;
-// use wayland as default;
-mod noop;
+mod wayland;
+use wayland as default;
+// mod noop;
+// use noop as default;
+
 use futures::future::BoxFuture;
-use noop as default;
 
 use anyhow::Result;
 use relm4::adw;

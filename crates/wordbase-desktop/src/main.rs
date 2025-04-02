@@ -11,6 +11,7 @@ use {
     anyhow::{Context, Result},
     directories::ProjectDirs,
     foldhash::HashMap,
+    futures::never::Never,
     record::view::{RecordView, RecordViewConfig, RecordViewMsg},
     relm4::{
         adw::{self, prelude::*},
@@ -19,9 +20,8 @@ use {
         view,
     },
     std::sync::Arc,
-    theme::DefaultTheme,
     tokio::{fs, sync::mpsc},
-    tracing::{info, level_filters::LevelFilter},
+    tracing::{error, info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
     wordbase::{Dictionary, DictionaryId},
     wordbase_engine::{Engine, texthook::TexthookerEvent},
@@ -46,8 +46,6 @@ fn main() {
 #[derive(Debug)]
 struct App {
     engine: Engine,
-    dictionaries: Arc<HashMap<DictionaryId, Dictionary>>,
-    _default_theme_watcher: Option<notify::RecommendedWatcher>,
     record_view: AsyncController<RecordView>,
 }
 
@@ -109,20 +107,8 @@ impl AsyncComponent for App {
             })
             .detach();
 
-        // let renderer_sender = record_view.sender().clone();
-        // let default_theme_watcher = init
-        //     .default_theme
-        //     .watcher_factory
-        //     .create(move |theme| {
-        //         info!("Default theme changed");
-        //         _ = renderer_sender.send(RecordRenderMsg::SetDefaultTheme(Arc::new(theme)));
-        //     })
-        //     .unwrap();
-
         let model = Self {
             engine: init.engine,
-            dictionaries: init.dictionaries,
-            _default_theme_watcher: None, // TODO default_theme_watcher,
             record_view,
         };
         let widgets = view_output!();
@@ -149,8 +135,6 @@ impl AsyncComponent for App {
 #[derive(Debug)]
 struct AppInit {
     engine: Engine,
-    dictionaries: Arc<HashMap<DictionaryId, Dictionary>>,
-    default_theme: DefaultTheme,
 }
 
 async fn init(app: adw::Application) -> Result<AppInit> {
@@ -172,40 +156,29 @@ async fn init(app: adw::Application) -> Result<AppInit> {
     let engine = Engine::new(db_path)
         .await
         .context("failed to create engine")?;
-    let dictionaries = engine
-        .dictionaries()
-        .await
-        .context("failed to fetch initial dictionaries")?
-        .into_iter()
-        .map(|dict| (dict.id, dict))
-        .collect::<HashMap<_, _>>();
 
     let (send_sentence, recv_sentence) = mpsc::channel(CHANNEL_BUF_CAP);
     let (texthooker_task, mut recv_texthooker_event) = engine
         .texthooker_task()
         .await
         .context("failed to start texthooker task")?;
+    tokio::spawn(texthooker_task);
+    glib::spawn_future_local(overlay::run(app, platform, recv_sentence));
+    // forward pull texthooker events to overlay
     tokio::spawn(async move {
-        texthooker_task.await.unwrap();
-    });
-    tokio::spawn(async move {
-        let texthooker_event = recv_texthooker_event.recv().await.unwrap();
-        if let TexthookerEvent::Sentence(sentence) = texthooker_event {
-            send_sentence.send(sentence).await.unwrap();
+        let _: Option<Never> = async move {
+            loop {
+                let texthooker_event = recv_texthooker_event.recv().await?;
+                if let TexthookerEvent::Sentence(sentence) = texthooker_event {
+                    send_sentence.send(sentence).await.ok()?;
+                }
+            }
         }
+        .await;
     });
-    glib::spawn_future_local(async move {
-        overlay::run(app, platform, recv_sentence).await.unwrap();
-    });
+    // TODO: forward server sentence events to overlay
 
-    let default_theme = theme::default_theme()
-        .await
-        .context("failed to get default theme")?;
-    Ok(AppInit {
-        engine,
-        dictionaries: Arc::new(dictionaries),
-        default_theme,
-    })
+    Ok(AppInit { engine })
 }
 
 const CHANNEL_BUF_CAP: usize = 4;
