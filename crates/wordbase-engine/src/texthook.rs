@@ -79,12 +79,12 @@ async fn run(
             .context("new URL channel closed")?;
 
         current_task.abort();
-        _ = send_event.send(TexthookerEvent::Replaced).await;
+        send_event.send(TexthookerEvent::Replaced).await?;
         current_task = tokio::spawn(handle_url(send_event.clone(), new_url));
     }
 }
 
-async fn handle_url(send_event: mpsc::Sender<TexthookerEvent>, url: String) {
+async fn handle_url(send_event: mpsc::Sender<TexthookerEvent>, url: String) -> Result<Never> {
     const RECONNECT_INTERVAL: Duration = Duration::from_secs(1);
 
     if url.trim().is_empty() {
@@ -104,12 +104,12 @@ async fn handle_url(send_event: mpsc::Sender<TexthookerEvent>, url: String) {
         };
 
         info!("Connected to {url:?}");
-        _ = send_event.send(TexthookerEvent::Connected).await;
+        send_event.send(TexthookerEvent::Connected).await?;
         let Err(reason) = handle_stream(&send_event, stream).await;
         info!("Disconnected: {reason:?}");
-        _ = send_event
+        send_event
             .send(TexthookerEvent::Disconnected { reason })
-            .await;
+            .await?;
     }
 }
 
@@ -126,6 +126,6 @@ async fn handle_stream(
             .into_data();
         let sentence = serde_json::from_slice::<TexthookerSentence>(&message)
             .context("failed to deserialize message as hook sentence")?;
-        _ = send_event.send(TexthookerEvent::Sentence(sentence)).await;
+        send_event.send(TexthookerEvent::Sentence(sentence)).await?;
     }
 }
