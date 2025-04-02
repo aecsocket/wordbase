@@ -70,14 +70,14 @@ impl SimpleComponent for RecordRender {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let widgets = view_output!();
         let model = Self {
             default_theme: init.default_theme,
             custom_theme: init.custom_theme,
-            web_view: root,
+            web_view: root.clone(),
             dictionaries: Arc::new(HashMap::new()),
             records: Vec::new(),
         };
+        let widgets = view_output!();
         ComponentParts { model, widgets }
     }
 

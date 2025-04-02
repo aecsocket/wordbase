@@ -1,26 +1,27 @@
-mod wayland;
-use wayland as default;
-
-use std::pin::Pin;
+// mod wayland;
+// use wayland as default;
+mod noop;
+use futures::future::BoxFuture;
+use noop as default;
 
 use anyhow::Result;
-use wordbase::protocol::WindowFilter;
+use relm4::adw;
 
 pub trait Platform {
-    fn affix_to_focused_window(
-        &self,
-        window: &adw::ApplicationWindow,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + '_>>;
+    fn affix_to_focused_window(&self, window: &adw::Window) -> BoxFuture<Result<()>>;
 
     fn move_to_window(
         &self,
-        window: &adw::ApplicationWindow,
+        window: &adw::Window,
         target: WindowFilter,
         offset: (i32, i32),
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + '_>>;
+    ) -> BoxFuture<Result<()>>;
 }
 
 pub async fn default() -> Result<Box<dyn Platform>> {
     let platform = default::Platform::new().await?;
     Ok(Box::new(platform))
 }
+
+#[derive(Debug, Clone)]
+pub struct WindowFilter {}
