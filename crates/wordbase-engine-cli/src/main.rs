@@ -10,7 +10,7 @@ use {
     tracing::{info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
     wordbase::{DictionaryId, ProfileId, ProfileMeta, RecordKind},
-    wordbase_engine::{Engine, Event, import::ImportStarted},
+    wordbase_engine::{Engine, import::ImportStarted, texthook::TexthookerEvent},
 };
 
 #[derive(Debug, clap::Parser)]
@@ -159,10 +159,9 @@ async fn main() -> Result<()> {
     };
     info!("Using {db_path:?} as database path");
 
-    let (engine, engine_task) = Engine::new(db_path)
+    let engine = Engine::new(db_path)
         .await
         .context("failed to create engine")?;
-    let engine_task = async move { engine_task.await.expect("engine error") };
 
     match args.command {
         Command::Profile {
@@ -224,7 +223,6 @@ async fn main() -> Result<()> {
         Command::Texthooker {
             command: TexthookerCommand::Watch,
         } => {
-            tokio::spawn(engine_task);
             texthooker_watch(engine).await?;
         }
     }
@@ -476,12 +474,27 @@ async fn texthooker_set_url(engine: Engine, url: String) -> Result<()> {
 }
 
 async fn texthooker_watch(engine: Engine) -> Result<()> {
-    let mut recv_event = engine.recv_event();
+    let (texthooker_task, mut recv_event) = engine.texthooker_task().await?;
+    tokio::spawn(async move {
+        texthooker_task.await.expect("texthooker error");
+    });
+
     println!("Watching for texthooker sentences");
     loop {
-        let event = recv_event.recv().await?;
-        if let Event::TexthookerSentence(sentence) = event {
-            println!("{sentence:?}");
+        let event = recv_event.recv().await.context("event channel closed")?;
+        match event {
+            TexthookerEvent::Connected => {
+                println!("Connected");
+            }
+            TexthookerEvent::Disconnected { reason } => {
+                println!("Disconnected: {reason:?}");
+            }
+            TexthookerEvent::Replaced => {
+                println!("Replaced");
+            }
+            TexthookerEvent::Sentence(sentence) => {
+                println!("{sentence:?}");
+            }
         }
     }
 }

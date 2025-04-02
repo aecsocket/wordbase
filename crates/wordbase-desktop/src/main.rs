@@ -167,10 +167,9 @@ async fn init() -> Result<AppInit> {
         .context("failed to create data directory")?;
 
     let db_path = data_path.join("wordbase.db");
-    let (engine, engine_task) = Engine::new(db_path).await?;
-    tokio::spawn(async move {
-        engine_task.await.expect("engine error");
-    });
+    let engine = Engine::new(db_path)
+        .await
+        .context("failed to create engine")?;
     let dictionaries = engine
         .dictionaries()
         .await

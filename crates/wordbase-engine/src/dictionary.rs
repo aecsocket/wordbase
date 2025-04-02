@@ -1,5 +1,5 @@
 use {
-    crate::{Engine, Event},
+    crate::Engine,
     anyhow::{Context, Result, bail},
     derive_more::{Display, Error},
     futures::TryStreamExt,
@@ -101,10 +101,6 @@ impl Engine {
         if result.rows_affected() == 0 {
             bail!(NotFound);
         }
-
-        _ = self
-            .send_event
-            .send(Event::DictionaryPositionSet { id, position });
         Ok(())
     }
 
@@ -115,8 +111,6 @@ impl Engine {
         if result.rows_affected() == 0 {
             bail!(NotFound);
         }
-
-        _ = self.send_event.send(Event::DictionaryRemoved { id });
         Ok(())
     }
 }

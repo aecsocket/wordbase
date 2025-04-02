@@ -1,5 +1,5 @@
 use {
-    crate::{Engine, Event},
+    crate::Engine,
     anyhow::{Context, Result, bail},
     derive_more::{Display, Error},
     futures::StreamExt,
@@ -88,16 +88,6 @@ impl Engine {
         .await
         .context("failed to copy enabled dictionaries")?;
         tx.commit().await.context("failed to commit transaction")?;
-
-        // TODO: do we even want to send events?
-        _ = self.send_event.send(Event::ProfileAdded {
-            profile: Profile {
-                id: new_id,
-                meta,
-                enabled_dictionaries: vec![], // TODO
-                sorting_dictionary: None,     // TODO
-            },
-        });
         Ok(new_id)
     }
 
@@ -131,8 +121,6 @@ impl Engine {
         if result.rows_affected() == 0 {
             bail!(NotFound);
         }
-
-        _ = self.send_event.send(Event::ProfileRemoved { id });
         Ok(())
     }
 }

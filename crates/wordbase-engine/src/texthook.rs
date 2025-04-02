@@ -1,5 +1,5 @@
 use {
-    crate::{CHANNEL_BUF_CAP, Engine, Event},
+    crate::{CHANNEL_BUF_CAP, Engine},
     anyhow::{Context, Result},
     futures::{StreamExt, never::Never},
     std::time::Duration,
@@ -26,43 +26,65 @@ impl Engine {
         sqlx::query!("UPDATE config SET texthooker_url = $1", url)
             .execute(&self.db)
             .await?;
-        self.pull_texthooker.send_new_url.send(url).await?;
+        _ = self.texthookers.send_new_url.send(url);
         Ok(())
+    }
+
+    pub async fn texthooker_task(
+        &self,
+    ) -> Result<(
+        impl Future<Output = Result<Never>> + use<>,
+        mpsc::Receiver<TexthookerEvent>,
+    )> {
+        let initial_url = self
+            .texthooker_url()
+            .await
+            .context("failed to fetch initial texthooker URL")?;
+        let (send_event, recv_event) = mpsc::channel(CHANNEL_BUF_CAP);
+        let recv_new_url = self.texthookers.send_new_url.subscribe();
+        Ok((run(initial_url, send_event, recv_new_url), recv_event))
     }
 }
 
 #[derive(Debug)]
-pub struct PullTexthooker {
-    send_new_url: mpsc::Sender<String>,
+pub enum TexthookerEvent {
+    Connected,
+    Disconnected { reason: anyhow::Error },
+    Replaced,
+    Sentence(TexthookerSentence),
 }
 
-impl PullTexthooker {
-    pub fn new(
-        send_event: broadcast::Sender<Event>,
-    ) -> (Self, impl Future<Output = Result<Never>>) {
-        let (send_new_url, recv_new_url) = mpsc::channel(CHANNEL_BUF_CAP);
-        (Self { send_new_url }, run(send_event, recv_new_url))
+#[derive(Debug)]
+pub(super) struct Texthookers {
+    send_new_url: broadcast::Sender<String>,
+}
+
+impl Texthookers {
+    pub fn new() -> Self {
+        let (send_new_url, _) = broadcast::channel(CHANNEL_BUF_CAP);
+        Self { send_new_url }
     }
 }
 
 async fn run(
-    send_event: broadcast::Sender<Event>,
-    mut recv_new_url: mpsc::Receiver<String>,
+    initial_url: String,
+    send_event: mpsc::Sender<TexthookerEvent>,
+    mut recv_new_url: broadcast::Receiver<String>,
 ) -> Result<Never> {
-    let mut current_task = None;
+    let mut current_task = tokio::spawn(handle_url(send_event.clone(), initial_url));
     loop {
-        let new_url = recv_new_url.recv().await.context("channel closed")?;
+        let new_url = recv_new_url
+            .recv()
+            .await
+            .context("new URL channel closed")?;
 
-        let new_task = tokio::spawn(handle_url(send_event.clone(), new_url));
-        let old_task = current_task.replace(new_task);
-        if let Some(old_task) = old_task {
-            old_task.abort();
-            _ = send_event.send(Event::PullTexthookerDisconnected);
-        }
+        current_task.abort();
+        _ = send_event.send(TexthookerEvent::Replaced).await;
+        current_task = tokio::spawn(handle_url(send_event.clone(), new_url));
     }
 }
 
-async fn handle_url(send_event: broadcast::Sender<Event>, url: String) {
+async fn handle_url(send_event: mpsc::Sender<TexthookerEvent>, url: String) {
     const RECONNECT_INTERVAL: Duration = Duration::from_secs(1);
 
     if url.trim().is_empty() {
@@ -82,15 +104,17 @@ async fn handle_url(send_event: broadcast::Sender<Event>, url: String) {
         };
 
         info!("Connected to {url:?}");
-        _ = send_event.send(Event::PullTexthookerConnected);
-        let Err(err) = handle_stream(&send_event, stream).await;
-        info!("Disconnected: {err:?}");
-        _ = send_event.send(Event::PullTexthookerDisconnected);
+        _ = send_event.send(TexthookerEvent::Connected).await;
+        let Err(reason) = handle_stream(&send_event, stream).await;
+        info!("Disconnected: {reason:?}");
+        _ = send_event
+            .send(TexthookerEvent::Disconnected { reason })
+            .await;
     }
 }
 
 async fn handle_stream(
-    send_event: &broadcast::Sender<Event>,
+    send_event: &mpsc::Sender<TexthookerEvent>,
     mut stream: WebSocketStream<MaybeTlsStream<TcpStream>>,
 ) -> Result<Never> {
     loop {
@@ -102,6 +126,6 @@ async fn handle_stream(
             .into_data();
         let sentence = serde_json::from_slice::<TexthookerSentence>(&message)
             .context("failed to deserialize message as hook sentence")?;
-        _ = send_event.send(Event::TexthookerSentence(sentence));
+        _ = send_event.send(TexthookerEvent::Sentence(sentence)).await;
     }
 }

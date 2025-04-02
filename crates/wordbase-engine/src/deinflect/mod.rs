@@ -2,8 +2,7 @@
 
 use {
     crate::Engine,
-    anyhow::{Context, Result},
-    foldhash::{HashSet, HashSetExt},
+    anyhow::Result,
     lindera::{
         dictionary::{DictionaryKind, load_dictionary_from_kind},
         mode::Mode,

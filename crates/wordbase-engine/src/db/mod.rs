@@ -12,11 +12,11 @@ pub async fn setup(path: &Path) -> Result<Pool<Sqlite>> {
     let db = SqlitePoolOptions::new()
         .connect_with(connect_options(path))
         .await
-        .context("failed to perform initial connection")?;
+        .context("failed to connect to database")?;
     sqlx::query(include_str!("schema.sql"))
         .execute(&db)
         .await
-        .context("failed to run initial SQL script")?;
+        .context("failed to set up database")?;
     let config = sqlx::query!("SELECT max_db_connections FROM config")
         .fetch_one(&db)
         .await
