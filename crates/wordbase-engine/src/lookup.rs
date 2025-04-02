@@ -2,23 +2,26 @@ use {
     crate::{Engine, db},
     anyhow::{Context, Result, bail},
     futures::{StreamExt, TryStreamExt},
+    itertools::Itertools,
     std::borrow::Borrow,
     wordbase::{DictionaryId, FrequencyValue, Record, RecordKind, RecordLookup, Term, for_kinds},
 };
 
 impl Engine {
-    #[expect(clippy::missing_panics_doc, reason = "shouldn't panic")]
     pub async fn lookup_lemma(
         &self,
         lemma: &str,
         record_kinds: impl IntoIterator<Item = impl Borrow<RecordKind>>,
     ) -> Result<Vec<RecordLookup>> {
-        let record_kinds = record_kinds
-            .into_iter()
-            .map(|kind| format!("{}", *kind.borrow() as u16))
-            .collect::<Vec<_>>();
-        let kinds_str = serde_json::to_string(&record_kinds)
-            .expect("should be able to generate JSON for record kinds array");
+        // we do a hack where we turn `record_kinds` into a JSON array of record kind ints
+        // because SQLite doesn't support placeholders of tuples or arrays
+        let record_kinds = format!(
+            "[{}]",
+            record_kinds
+                .into_iter()
+                .map(|kind| *kind.borrow() as u32)
+                .format(",")
+        );
 
         let query = sqlx::query!(
             "SELECT
@@ -34,8 +37,8 @@ impl Engine {
 
             -- make sure the dictionary we're getting this record from is enabled
             INNER JOIN config
-            INNER JOIN profile_enabled_dictionary ped ON (ped.profile = config.current_profile AND \
-             ped.dictionary = dictionary.id)
+            INNER JOIN profile_enabled_dictionary ped
+                ON (ped.profile = config.current_profile AND ped.dictionary = dictionary.id)
 
             -- find which terms reference this record, either through the headword or reading
             INNER JOIN term_record ON (
@@ -46,10 +49,12 @@ impl Engine {
             -- join on frequency information, for the `ORDER BY` below
             LEFT JOIN frequency ON (
                 -- only use frequency info from the currently selected sorting dict in this profile
-                frequency.source = (SELECT sorting_dictionary FROM profile WHERE id = \
-             config.current_profile)
-                AND (frequency.headword = term_record.headword AND frequency.reading = \
-             term_record.reading)
+                frequency.source = (
+                    SELECT sorting_dictionary FROM profile
+                    WHERE id = config.current_profile
+                )
+                AND frequency.headword = term_record.headword
+                AND frequency.reading = term_record.reading
             )
 
             -- only include records for the given record kinds
@@ -71,7 +76,7 @@ impl Engine {
                     ELSE 0
                 END",
             lemma,
-            kinds_str
+            record_kinds
         );
 
         query.fetch(&self.db).map(|record| {

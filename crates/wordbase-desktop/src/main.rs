@@ -15,7 +15,7 @@ use {
         prelude::*,
         view,
     },
-    render::{RecordRender, RecordRenderConfig, RecordRenderMsg},
+    render::{RecordRender, RecordRenderConfig, RecordRenderMsg, RecordRenderResponse},
     std::sync::Arc,
     theme::DefaultTheme,
     tokio::fs,
@@ -102,7 +102,9 @@ impl AsyncComponent for App {
                 default_theme: init.default_theme.theme,
                 custom_theme: None,
             })
-            .forward(sender.input_sender(), |response| match response {});
+            .forward(sender.input_sender(), |response| match response {
+                RecordRenderResponse::RequestLookup { query } => AppMsg::Lookup { query },
+            });
 
         let renderer_sender = renderer.sender().clone();
         let default_theme_watcher = init

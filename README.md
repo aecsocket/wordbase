@@ -1,7 +1,15 @@
 # Features
 
 TODO:
-- local audio server
+- Better stylesheet
+- AnkiConnect
+- Optional AI integration
+  - Receives context of the looked up sentence (let's say 1 sentence before and after), and asks AI to generate an explanation
+  - Can include extra metadata from the app e.g. video file name, browser tab title, so the AI has more context on what the user is doing
+  - Local-first support via Ramalama
+
+TODO:
+- local audio server - SORTA DONE
 - ankiconnect
 
 audio server:
@@ -131,7 +139,7 @@ After looking up a word, you may want to add it to your Anki deck to study it la
 
 ### 📦 `wordbase`
 
-Provides the core API types, and defines the protocol for communicating with the engine (which actually performs most of the logic). This includes details such as the kinds of records that the engine may provide; format- and language-specific types; schemas and import logic for different dictionary formats.
+Provides the core API types, and defines the protocol for communicating with the engine (which actually performs most of the logic). This includes all of the kinds of records that the engine may store and provide.
 
 ### 📦 `wordbase-engine`
 
@@ -143,20 +151,21 @@ This is the heart of Wordbase, which implements the logic for:
 - performing lookups
 - connecting to texthooker servers
 
-The engine is a library, not a binary - it is intended to be packaged inside of an app. This is because the engine cannot perform all of the functions by itself. Some functions like spawning a popup dictionary are platform-dependent, and the engine asks the app to perform this function for it. The app may also choose to not support some functions (i.e. on a mobile platform, you can't spawn a popup on top of the currently active app).
+The engine is a library, not a binary - it is intended to be packaged inside of an app. This is because the engine only implements the platform-agnostic logic, and cannot perform platform-dependent actions like spawning a popup dictionary. The app may also choose to not support some functions (i.e. on a mobile platform, you may not be able to spawn a popup on top of the currently active app).
 
 The engine also does not handle allowing clients to communicate with the engine, and leaves this up to the app through a server (via e.g. a WebSocket server, DBus, or some other form of IPC).
 
-### 📦 `wordbase-desktop`
+### ⚙️ `wordbase-desktop`
 
-This is a GTK/Adwaita app which runs on the desktop, and runs `wordbase-engine` plus exposes ways for clients to talk to the engine via a WebSocket server and DBus. This app targets the Linux GNOME desktop as its top priority, and aims to follow modern Linux desktop app standards, including using Wayland and being compatible with Flatpak sandboxing. However, it also aims to be as cross-platform as possible (though not necessarily as native as possible on other platforms). This implements the logic for:
+This is a GTK/Adwaita app which runs on the desktop, and runs `wordbase-engine` plus exposes ways for clients to talk to the engine via a WebSocket server and DBus. This app targets the Linux GNOME desktop as the first-class target, and aims to follow modern Linux desktop app standards, including using Wayland and being compatible with Flatpak sandboxing. However, it also aims to be as cross-platform as possible (though not necessarily as native as possible on other platforms). This implements the logic for:
 - running and persisting an engine instance
+- rendering dictionary contents, and allowing users to search all dictionaries
 - showing a user-friendly GUI to manage the engine
 - allowing importing dictionary files via XDG desktop portals
 - providing the DBus service over the app's known name
 - running a WebSocket server (requires extra Flatpak permissions)
 
-### 📦 `wordbase-mobile`
+### ⚙️ `wordbase-mobile`
 
 TODO: could we make a mobile app? Have it use accessibility APIs to render on top of other app content, and show a popup?
 

@@ -16,10 +16,6 @@ use {
     },
     serde::de::DeserializeOwned,
     sqlx::{Sqlite, Transaction},
-    std::{
-        pin::Pin,
-        sync::{Arc, atomic::AtomicU64},
-    },
     tokio::sync::mpsc,
     tracing::{debug, trace},
     wordbase::{
@@ -75,11 +71,6 @@ async fn validate(archive: Bytes) -> Result<()> {
         }
     }
     bail!("missing one of {MARKER_PATHS:?}");
-}
-
-struct CountCursor<T> {
-    inner: Pin<Box<Cursor<T>>>,
-    pos: Arc<AtomicU64>,
 }
 
 async fn import(

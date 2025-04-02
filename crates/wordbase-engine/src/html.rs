@@ -95,14 +95,14 @@ struct Terms<'a>(IndexMap<Term, TermInfo<'a>>);
 
 #[derive(Debug, Default)]
 struct TermInfo<'a> {
-    glossaries: IndexMap<DictionaryId, SourceGlossaries<'a>>,
+    glossaries: IndexMap<DictionaryId, Glossaries<'a>>,
     frequencies: Vec<(DictionaryId, &'a dict::yomitan::Frequency)>,
     pitches: Vec<(DictionaryId, &'a dict::yomitan::Pitch)>,
     audio: Vec<(DictionaryId, Audio<'a>)>,
 }
 
 #[derive(Debug, Default, Deref, DerefMut)]
-struct SourceGlossaries<'a>(Vec<&'a dict::yomitan::Glossary>);
+struct Glossaries<'a>(Vec<&'a dict::yomitan::Glossary>);
 
 #[derive(Debug)]
 enum Audio<'a> {
@@ -241,7 +241,7 @@ fn render_audio(record: &Audio) -> Markup {
 fn render_glossaries<H: BuildHasher>(
     dictionaries: &HashMap<DictionaryId, Dictionary, H>,
     source: DictionaryId,
-    glossaries: &SourceGlossaries,
+    glossaries: &Glossaries,
 ) -> Markup {
     html! {
         span .source-name {

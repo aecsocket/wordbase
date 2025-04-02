@@ -7,7 +7,7 @@ use {
         prelude::*,
     },
     std::sync::Arc,
-    tracing::warn,
+    tracing::{debug, info, warn},
     webkit6::prelude::*,
     wordbase::{Dictionary, DictionaryId, RecordLookup},
     wordbase_engine::html,
@@ -39,7 +39,9 @@ pub enum RecordRenderMsg {
 }
 
 #[derive(Debug)]
-pub enum RecordRenderResponse {}
+pub enum RecordRenderResponse {
+    RequestLookup { query: String },
+}
 
 #[relm4::component(pub)]
 impl SimpleComponent for RecordRender {
@@ -56,8 +58,8 @@ impl SimpleComponent for RecordRender {
                 // prevent opening context menu
                 true
             },
-            connect_decide_policy => |_, decision, _| {
-                on_decide_policy(decision);
+            connect_decide_policy => move |_, decision, _| {
+                on_decide_policy(decision, &sender);
                 true
             },
         }
@@ -66,7 +68,7 @@ impl SimpleComponent for RecordRender {
     fn init(
         init: Self::Init,
         root: Self::Root,
-        _sender: ComponentSender<Self>,
+        sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
         let widgets = view_output!();
         let model = Self {
@@ -119,19 +121,39 @@ impl RecordRender {
     }
 }
 
-fn on_decide_policy(decision: &webkit6::PolicyDecision) {
-    if let Some(decision) = decision.downcast_ref::<webkit6::NavigationPolicyDecision>() {
-        if let Some(mut action) = decision.navigation_action() {
-            if action.is_user_gesture() {
-                decision.ignore();
-                if let Some(request) = action.request() {
-                    if let Some(uri) = request.uri() {
-                        if let Err(err) = open::that_detached(&uri) {
-                            warn!("Failed to open {uri:?}: {err:?}");
-                        }
-                    }
-                }
-            }
+fn on_decide_policy(decision: &webkit6::PolicyDecision, sender: &ComponentSender<RecordRender>) {
+    let Some(decision) = decision.downcast_ref::<webkit6::NavigationPolicyDecision>() else {
+        return;
+    };
+    let Some(mut action) = decision.navigation_action() else {
+        return;
+    };
+    if !action.is_user_gesture() {
+        return;
+    };
+    decision.ignore();
+
+    let Some(request) = action.request() else {
+        return;
+    };
+    let Some(uri) = request.uri() else {
+        return;
+    };
+    debug!("Figuring out how to open {uri:?}");
+
+    if let Some(form_uri) = uri.strip_prefix("?") {
+        if let Some((_, query)) =
+            form_urlencoded::parse(form_uri.as_bytes()).find(|(key, _)| key == "query")
+        {
+            let query = query.into_owned();
+            info!("Opening {query:?} as query");
+            _ = sender.output(RecordRenderResponse::RequestLookup { query });
         }
+        return;
+    }
+
+    info!("Opening {uri:?} in browser");
+    if let Err(err) = open::that_detached(&uri) {
+        warn!("Failed to open {uri:?}: {err:?}");
     }
 }

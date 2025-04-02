@@ -1,51 +1,6 @@
 //! Japanese-specific items.
 
-use {
-    itertools::Itertools,
-    serde::{Deserialize, Serialize},
-    std::iter,
-};
-
-/// Single pitch reading for a [term].
-///
-/// Japanese [dictionaries] may collect information on how a specific term is
-/// [pronounced orally][jpa]. This information is represented in this type.
-///
-/// A single term may have multiple ways of being pronounced, which maps to
-/// multiple [`Pitch`] values.
-///
-/// Values in this type map to [morae] in an input string - see [`morae`].
-///
-/// [term]: crate::Term
-/// [dictionaries]: crate::Dictionary
-/// [jpa]: https://en.wikipedia.org/wiki/Japanese_pitch_accent
-/// [morae]: https://en.wikipedia.org/wiki/Mora_(linguistics)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct JpnPitch {
-    /// What [mora] position the [downstep] is located on.
-    ///
-    /// This maps to a typical dictionary's "pitch position" entry:
-    /// - 0: *heiban* (no downstep)
-    /// - 1: *atamadaka*
-    /// - greater than 1: *nakadaka* or *odaka*
-    ///
-    /// See [Binary pitch](https://en.wikipedia.org/wiki/Japanese_pitch_accent#Binary_pitch).
-    ///
-    /// [mora]: https://en.wikipedia.org/wiki/Mora_(linguistics)
-    /// [downstep]: https://en.wikipedia.org/wiki/Downstep
-    pub position: u64,
-    /// What [morae][mora] positions have a [nasal] sound.
-    ///
-    /// [mora]: https://en.wikipedia.org/wiki/Mora_(linguistics)
-    /// [nasal]: https://en.wikipedia.org/wiki/Nasal_consonant
-    pub nasal: Vec<u64>,
-    /// What [morae][mora] positions have a [devoiced] sound.
-    ///
-    /// [mora]: https://en.wikipedia.org/wiki/Mora_(linguistics)
-    /// [devoiced]: https://en.wikipedia.org/wiki/Devoicing
-    pub devoice: Vec<u64>,
-}
+use {itertools::Itertools, std::iter};
 
 /// Checks if the given character is hiragana
 ///
@@ -122,6 +77,34 @@ pub fn kana_to_hiragana(s: &str) -> String {
         .collect()
 }
 
+/// Splits a Japanese term into segments with optional furigana readings.
+///
+/// For a given Japanese term and its reading, this function returns a vector of pairs
+/// where each pair consists of:
+/// - A segment of the original term
+/// - The furigana reading for that segment (empty string for kana segments)
+///
+/// The function intelligently matches kanji segments with their corresponding readings
+/// by using kana segments as anchors.
+///
+/// # Examples
+///
+/// ```
+/// # use wordbase_engine::lang::jpn::furigana_parts;
+/// assert_eq!(furigana_parts("日本", "にほん"), [("日本", "にほん")]);
+/// assert_eq!(furigana_parts("食べる", "たべる"), [("食", "た"), ("べる", "")]);
+/// assert_eq!(
+///     furigana_parts("取り扱い説明書", "とりあつかいせつめいしょ"),
+///     [
+///         ("取", "と"),
+///         ("り", ""),
+///         ("扱", "あつか"),
+///         ("い", ""),
+///         ("説明書", "せつめいしょ")
+///     ]
+/// );
+/// ```
+#[must_use]
 pub fn furigana_parts<'a>(headword: &'a str, mut reading: &'a str) -> Vec<(&'a str, &'a str)> {
     #[derive(Debug)]
     struct HeadwordPart<'a> {
@@ -240,60 +223,6 @@ pub const fn is_high(downstep: usize, position: usize) -> bool {
         0 => position > 0,
         1 => position == 0,
         _ => position > 0 && position < downstep,
-    }
-}
-
-/// Used for rendering a [`Pitch`] with a reading to another format.
-#[derive(Debug, Clone)]
-pub struct PitchRender<'a> {
-    /// Reading of this pitch.
-    pub reading: &'a str,
-    /// Pitch information.
-    pub pitch: &'a JpnPitch,
-}
-
-#[cfg(feature = "render-html")]
-impl maud::Render for PitchRender<'_> {
-    fn render(&self) -> maud::Markup {
-        let downstep = usize::try_from(self.pitch.position).unwrap_or(usize::MAX);
-        let morae = morae(self.reading).collect::<Vec<_>>();
-
-        let pitch_css_class = match downstep {
-            0 => "heiban",
-            1 => "atamadaka",
-            n if n == morae.len() => "odaka",
-            _ => "nakadaka",
-        };
-
-        let morae = morae.into_iter().enumerate().map(|(position, mora)| {
-            let this_css_class = if is_high(downstep, position) {
-                "high"
-            } else {
-                "low"
-            };
-
-            let next_css_class = if is_high(downstep, position + 1) {
-                "next-high"
-            } else {
-                "next-low"
-            };
-
-            maud::html! {
-                span .mora .(this_css_class) .(next_css_class) {
-                    @for ch in mora.chars() {
-                        span .char { (ch) }
-                    }
-                }
-            }
-        });
-
-        maud::html! {
-            .pitch .(pitch_css_class) {
-                @for mora in morae {
-                    (mora)
-                }
-            }
-        }
     }
 }
 
