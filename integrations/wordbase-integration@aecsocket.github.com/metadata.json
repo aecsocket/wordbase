@@ -1,8 +1,0 @@
-{
-    "uuid": "wordbase-integration@aecsocket.github.com",
-    "name": "Wordbase Integration",
-    "description": "Integrates with the Wordbase popup dictionary, enabling instant word lookups from your desktop",
-    "url": "https://github.com/aecsocket/wordbase",
-    "settings-schema": "org.gnome.shell.extensions.wordbase-integration",
-    "shell-version": ["47"]
-}

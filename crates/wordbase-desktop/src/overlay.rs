@@ -58,7 +58,7 @@ pub async fn run(
 
                 entry.insert(overlay);
             }
-        }
+        };
     }
 }
 
@@ -88,6 +88,8 @@ impl Component for Overlay {
     view! {
         adw::Window {
             set_title: Some(&format!("{} — Wordbase", init.process_path)),
+            set_width_request: 180,
+            set_height_request: 100,
 
             gtk::ScrolledWindow {
                 set_hexpand: true,
@@ -124,6 +126,35 @@ impl Component for Overlay {
             sentence: init.sentence,
         };
         let widgets = view_output!();
+
+        let opacity_target = adw::PropertyAnimationTarget::new(&root, "opacity");
+        let animation = adw::TimedAnimation::builder()
+            .widget(&root)
+            .duration(100)
+            .target(&opacity_target)
+            .value_from(0.5)
+            .value_to(0.95)
+            .build();
+
+        let controller = gtk::EventControllerMotion::new();
+        controller.connect_enter({
+            let animation = animation.clone();
+            move |_, _, _| {
+                animation.set_reverse(false);
+                animation.play();
+            }
+        });
+        controller.connect_leave({
+            let animation = animation.clone();
+            move |_| {
+                animation.set_reverse(true);
+                animation.play();
+            }
+        });
+        animation.set_reverse(true);
+        animation.play();
+        root.add_controller(controller);
+
         ComponentParts { model, widgets }
     }
 

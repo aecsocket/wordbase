@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use futures::future::BoxFuture;
+use futures::future::{BoxFuture, LocalBoxFuture};
 use relm4::adw::{self, prelude::*};
 use zbus::zvariant::{DeserializeDict, SerializeDict, Type};
 
@@ -21,21 +21,13 @@ impl Platform {
     }
 }
 
-const WORDBASE_WINDOW_TOKEN: &str = "wordbase_window_token";
-
-type WindowToken = u64;
-
 impl super::Platform for Platform {
-    fn affix_to_focused_window(&self, window: &adw::Window) -> BoxFuture<Result<()>> {
-        let window_token = rand::random::<WindowToken>();
-        // SAFETY: we will never read this out from Rust code
-        unsafe {
-            window.set_data(WORDBASE_WINDOW_TOKEN, window_token);
-        }
-
+    fn affix_to_focused_window(&self, window: &adw::Window) -> LocalBoxFuture<Result<()>> {
+        let window = window.clone();
         Box::pin(async move {
+            let title = window.title().context("window has no title")?;
             self.integration
-                .affix_to_focused_window(window_token)
+                .affix_to_focused_window(&title)
                 .await
                 .context("failed to send request to integration")?;
             Ok(())
@@ -47,7 +39,7 @@ impl super::Platform for Platform {
         window: &adw::Window,
         to: WindowFilter,
         offset: (i32, i32),
-    ) -> BoxFuture<Result<()>> {
+    ) -> LocalBoxFuture<Result<()>> {
         todo!();
 
         // let window_token = rand::random::<WindowToken>();
@@ -67,12 +59,12 @@ impl super::Platform for Platform {
 }
 
 #[zbus::proxy(
-    interface = "io.github.aecsocket.WordbaseIntegrationGnome",
-    default_service = "io.github.aecsocket.WordbaseIntegrationGnome",
-    default_path = "/io/github/aecsocket/WordbaseIntegrationGnome"
+    interface = "io.github.aecsocket.WordbaseIntegration",
+    default_service = "io.github.aecsocket.WordbaseIntegration",
+    default_path = "/io/github/aecsocket/WordbaseIntegration"
 )]
 trait Integration {
-    async fn affix_to_focused_window(&self, window_token: u64) -> zbus::Result<()>;
+    async fn affix_to_focused_window(&self, target_title: &str) -> zbus::Result<()>;
 
     async fn move_to_window(
         &self,
