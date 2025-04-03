@@ -10,7 +10,6 @@ import GLib from "gi://GLib";
 import Meta from "gi://Meta";
 
 import { Extension } from "resource:///org/gnome/shell/extensions/extension.js";
-import * as Main from "resource:///org/gnome/shell/ui/main.js";
 
 export default class WordbaseIntegrationExtension extends Extension {
     /** @type {number} */
@@ -168,6 +167,7 @@ class IntegrationService {
 
         overlay_actor.get_parent().remove_child(overlay_actor);
         parent_actor.add_child(overlay_actor);
+        overlay_actor.set_position(0, 0);
 
         // clean up to avoid a gnome-shell crash
         parent_actor.connect("destroy", (__) => {
@@ -194,6 +194,10 @@ class IntegrationService {
             // TODO: how to make this instant?
             GLib.timeout_add(0, 50, () => {
                 if (parent_window.is_alive) {
+                    console.log(
+                        `parent window focus = PARENT: ${parent_actor} / OVERLAY: ${overlay_actor} / OVERLAY PARENT = ${overlay_actor.get_parent()}`,
+                    );
+
                     parent_actor.set_child_above_sibling(overlay_actor, null);
                     return false;
                 }
@@ -201,6 +205,10 @@ class IntegrationService {
         });
         overlay_window.connect("focus", (__) => {
             if (parent_window.is_alive) {
+                console.log(
+                    `overlay window focus = PARENT: ${parent_actor} / OVERLAY: ${overlay_actor} / OVERLAY PARENT = ${overlay_actor.get_parent()}`,
+                );
+
                 parent_actor.set_child_above_sibling(overlay_actor, null);
             }
         });

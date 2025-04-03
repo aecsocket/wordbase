@@ -49,10 +49,12 @@ pub struct RecordLookup {
     pub frequency: Option<FrequencyValue>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct TexthookerSentence {
-    pub process_path: String,
-    pub sentence: String,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PopupRequest {
+    pub target_window: WindowFilter,
+    pub origin: (i32, i32),
+    pub anchor: PopupAnchor,
+    pub lookup: Lookup,
 }
 
 /// Specifies a specific window on the user's window manager.
@@ -80,6 +82,28 @@ pub struct WindowFilter {
     /// Linux `WM_CLASS` (or whatever is reported as the `WM_CLASS`) of the
     /// target window.
     pub wm_class: Option<String>,
+}
+
+/// What corner a [`ShowPopupRequest`] is relative to.
+///
+/// See [`ShowPopupRequest::anchor`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[expect(missing_docs, reason = "self-explanatory")]
+pub enum PopupAnchor {
+    TopLeft,
+    TopCenter,
+    TopRight,
+    CenterLeft,
+    CenterRight,
+    BottomLeft,
+    BottomCenter,
+    BottomRight,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TexthookerSentence {
+    pub process_path: String,
+    pub sentence: String,
 }
 
 pub enum Request {

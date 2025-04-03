@@ -26,18 +26,13 @@ impl Drop for RecordView {
 }
 
 #[derive(Debug)]
-pub struct RecordViewConfig {
-    pub engine: Engine,
-}
-
-#[derive(Debug)]
 pub enum RecordViewMsg {
     Lookup(Lookup),
 }
 
 #[relm4::component(pub, async)]
 impl AsyncComponent for RecordView {
-    type Init = RecordViewConfig;
+    type Init = Engine;
     type Input = RecordViewMsg;
     type Output = ();
     type CommandOutput = ();
@@ -49,7 +44,7 @@ impl AsyncComponent for RecordView {
     }
 
     async fn init(
-        init: Self::Init,
+        engine: Self::Init,
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
@@ -82,7 +77,7 @@ impl AsyncComponent for RecordView {
         });
 
         let model = Self {
-            engine: init.engine,
+            engine,
             render,
             recv_default_theme_task,
         };
@@ -93,8 +88,8 @@ impl AsyncComponent for RecordView {
     async fn update(
         &mut self,
         message: Self::Input,
-        sender: AsyncComponentSender<Self>,
-        root: &Self::Root,
+        _sender: AsyncComponentSender<Self>,
+        _root: &Self::Root,
     ) {
         match message {
             RecordViewMsg::Lookup(lookup) => {

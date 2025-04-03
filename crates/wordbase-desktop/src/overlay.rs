@@ -1,17 +1,20 @@
-use std::{collections::hash_map::Entry, sync::Arc};
+use std::{collections::hash_map::Entry, process, sync::Arc};
 
 use anyhow::{Context, Result};
 use foldhash::{HashMap, HashMapExt};
 use futures::never::Never;
 use relm4::{
-    adw::{self, gtk::pango, prelude::*},
+    adw::{
+        self,
+        gtk::{graphene, pango},
+        prelude::*,
+    },
     css::classes,
     prelude::*,
 };
 use tokio::sync::mpsc;
 use tracing::{info, trace, warn};
-use wordbase::{Lookup, TexthookerSentence};
-use wordbase_engine::Engine;
+use wordbase::{Lookup, PopupAnchor, PopupRequest, TexthookerSentence, WindowFilter};
 
 use crate::platform::Platform;
 
@@ -19,6 +22,7 @@ pub async fn run(
     app: adw::Application,
     platform: Arc<dyn Platform>,
     mut recv_sentence: mpsc::Receiver<TexthookerSentence>,
+    send_popup_request: mpsc::Sender<PopupRequest>,
 ) -> Result<Never> {
     let mut overlays = HashMap::<String, Controller<Overlay>>::new();
 
@@ -32,7 +36,8 @@ pub async fn run(
             event.process_path, event.sentence
         );
 
-        if let Err(err) = handle(&app, &*platform, &mut overlays, event).await {
+        if let Err(err) = handle(&app, &*platform, &send_popup_request, &mut overlays, event).await
+        {
             warn!("Failed to handle new sentence event: {err:?}");
         }
     }
@@ -41,6 +46,7 @@ pub async fn run(
 async fn handle(
     app: &adw::Application,
     platform: &dyn Platform,
+    send_popup_request: &mpsc::Sender<PopupRequest>,
     overlays: &mut HashMap<String, Controller<Overlay>>,
     TexthookerSentence {
         process_path,
@@ -62,7 +68,9 @@ async fn handle(
                     process_path,
                     sentence,
                 })
-                .connect_receiver(|sender, resp| {});
+                .connect_receiver(|_sender, scan| {
+                    // tokio.spawn(on_scan(, send_popup_request, scan))
+                });
             let window = overlay.widget();
             app.add_window(window);
 
@@ -94,15 +102,16 @@ enum OverlayMsg {
 }
 
 #[derive(Debug)]
-enum OverlayResponse {
-    Scan { lookup: Lookup },
+struct OverlayScan {
+    lookup: Lookup,
+    origin: (f32, f32),
 }
 
 #[relm4::component(pub)]
 impl Component for Overlay {
     type Init = OverlayConfig;
     type Input = OverlayMsg;
-    type Output = OverlayResponse;
+    type Output = OverlayScan;
     type CommandOutput = ();
 
     view! {
@@ -148,7 +157,7 @@ impl Component for Overlay {
         };
         let widgets = view_output!();
         setup_root_opacity_animation(&root);
-        setup_sentence_scan(&widgets.sentence_label, &sender);
+        setup_sentence_scan(&root, &widgets.sentence_label, &sender);
         ComponentParts { model, widgets }
     }
 
@@ -192,16 +201,18 @@ fn setup_root_opacity_animation(root: &adw::Window) {
     animation.play();
 }
 
-fn setup_sentence_scan(label: &gtk::Label, sender: &ComponentSender<Overlay>) {
+fn setup_sentence_scan(root: &adw::Window, label: &gtk::Label, sender: &ComponentSender<Overlay>) {
     let controller = gtk::EventControllerMotion::new();
     label.add_controller(controller.clone());
 
+    let root = root.clone();
     let label = label.clone();
+    let sender = sender.clone();
     controller.connect_motion(move |_, x, y| {
         #[expect(clippy::cast_possible_truncation, reason = "no other way to convert")]
         let (x, y) = (x as i32 * pango::SCALE, y as i32 * pango::SCALE);
 
-        let (valid, byte_index, halfway_through_char) = label.layout().xy_to_index(x, y);
+        let (valid, byte_index, _grapheme_pos) = label.layout().xy_to_index(x, y);
         if !valid {
             return;
         }
@@ -215,29 +226,34 @@ fn setup_sentence_scan(label: &gtk::Label, sender: &ComponentSender<Overlay>) {
             context: text.to_string(),
             cursor: byte_index,
         };
-        // TODO
-        // sender.output_sender().send(OverlayResponse::Scan(lookup));
 
-        // let text = &label.text();
-        // let Some(mut text) = text.get(byte_index..) else {
-        //     return;
-        // };
-        // if halfway_through == 1 {
-        //     if let Some(next_char) = text.chars().next() {
-        //         if let Some(slice) = text.get(next_char.len_utf8()..) {
-        //             text = slice;
-        //         }
-        //     }
-        // }
+        let abs_point = label
+            .compute_point(&root, &graphene::Point::new(x as f32, y as f32))
+            .expect("should be able to compute point transform from `label` space to `root` space");
 
-        // println!("{:?}", text.chars().next());
+        _ = sender.output_sender().send(OverlayScan {
+            lookup,
+            origin: (abs_point.x(), abs_point.y()),
+        });
     });
 }
 
-async fn on_response(engine: Engine, sender: ComponentSender<Overlay>, resp: OverlayResponse) {
-    match resp {
-        OverlayResponse::Scan { lookup } => {
-            // engine.lookup(&lookup.context, lookup.cursor, record_kinds)
-        }
-    }
+async fn on_scan(
+    root: adw::Window,
+    send_popup_request: mpsc::Sender<PopupRequest>,
+    scan: OverlayScan,
+) {
+    send_popup_request
+        .send(PopupRequest {
+            target_window: WindowFilter {
+                id: None,
+                pid: Some(process::id()),
+                title: root.title().map(|s| s.to_string()),
+                wm_class: None, // todo
+            },
+            origin: (scan.origin.0 as i32, scan.origin.1 as i32),
+            anchor: PopupAnchor::BottomCenter,
+            lookup: scan.lookup,
+        })
+        .await;
 }

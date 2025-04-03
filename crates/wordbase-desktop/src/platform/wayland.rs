@@ -1,7 +1,6 @@
 use anyhow::{Context, Result, bail};
 use futures::future::LocalBoxFuture;
 use relm4::adw::{self, prelude::*};
-use tracing::{debug, info};
 use wordbase::WindowFilter;
 
 pub struct Platform {

@@ -12,7 +12,7 @@ use {
     directories::ProjectDirs,
     futures::never::Never,
     platform::Platform,
-    record::view::{RecordView, RecordViewConfig, RecordViewMsg},
+    record::view::{RecordView, RecordViewMsg},
     relm4::{
         adw::{self, prelude::*},
         loading_widgets::LoadingWidgets,
@@ -102,11 +102,7 @@ impl AsyncComponent for App {
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
         let init = init(app).await.unwrap();
-        let record_view = RecordView::builder()
-            .launch(RecordViewConfig {
-                engine: init.engine.clone(),
-            })
-            .detach();
+        let record_view = RecordView::builder().launch(init.engine.clone()).detach();
 
         let model = Self {
             engine: init.engine,
@@ -163,12 +159,13 @@ async fn init(app: adw::Application) -> Result<AppInit> {
         .context("failed to create engine")?;
 
     // popup
-    // let (send_popup_request, recv_popup_request) = mpsc::channel(CHANNEL_BUF_CAP);
-    // glib::spawn_future_local(popup::run(
-    //     app.clone(),
-    //     platform.clone(),
-    //     recv_popup_request,
-    // ));
+    let (send_popup_request, recv_popup_request) = mpsc::channel(CHANNEL_BUF_CAP);
+    glib::spawn_future_local(popup::run(
+        engine.clone(),
+        app.clone(),
+        platform.clone(),
+        recv_popup_request,
+    ));
 
     // overlay
     let (send_sentence, recv_sentence) = mpsc::channel(CHANNEL_BUF_CAP);
@@ -177,7 +174,12 @@ async fn init(app: adw::Application) -> Result<AppInit> {
         .await
         .context("failed to start texthooker task")?;
     tokio::spawn(texthooker_task);
-    glib::spawn_future_local(overlay::run(app, platform, recv_sentence));
+    glib::spawn_future_local(overlay::run(
+        app,
+        platform,
+        recv_sentence,
+        send_popup_request,
+    ));
     // forward pull texthooker events to overlay
     tokio::spawn(async move {
         let _: Option<Never> = async move {
