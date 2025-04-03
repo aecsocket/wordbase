@@ -165,52 +165,73 @@ class IntegrationService {
             );
         }
 
-        overlay_actor.get_parent().remove_child(overlay_actor);
-        parent_actor.add_child(overlay_actor);
-        overlay_actor.set_position(0, 0);
+        // actual logic
 
-        // clean up to avoid a gnome-shell crash
-        parent_actor.connect("destroy", (__) => {
-            parent_actor.remove_child(overlay_actor);
-            overlay_window.kill();
+        const parent_rect = parent_window.get_frame_rect();
+        overlay_window.move_frame(false, parent_rect.x, parent_rect.y);
+
+        let [parent_last_x, parent_last_y] = [
+            parent_window.get_frame_rect().x,
+            parent_window.get_frame_rect().y,
+        ];
+        parent_window.connect("position-changed", (__) => {
+            const [parent_now_x, parent_now_y] = [
+                parent_window.get_frame_rect().x,
+                parent_window.get_frame_rect().y,
+            ];
+            const [parent_delta_x, parent_delta_y] = [
+                parent_now_x - parent_last_x,
+                parent_now_y - parent_last_y,
+            ];
+            parent_last_x = parent_now_x;
+            parent_last_y = parent_now_y;
+
+            const [overlay_now_x, overlay_now_y] = [
+                overlay_window.get_frame_rect().x,
+                overlay_window.get_frame_rect().y,
+            ];
+            const [overlay_new_x, overlay_new_y] = [
+                overlay_now_x + parent_delta_x,
+                overlay_now_y + parent_delta_y,
+            ];
+            overlay_window.move_frame(false, overlay_new_x, overlay_new_y);
         });
 
-        // make the overlay follow the workspace of the focus
         parent_window.connect("workspace-changed", (__) => {
             // TODO: how to make this instant?
             GLib.timeout_add(0, 50, () => {
                 const workspace = parent_window.get_workspace();
-                // workspace may be null
                 if (workspace) {
                     overlay_window.change_workspace(workspace);
                 }
                 return false;
             });
         });
+        overlay_window.connect("workspace-changed", (__) => {
+            const workspace = parent_window.get_workspace();
+            if (workspace) {
+                overlay_window.change_workspace(workspace);
+            }
+        });
 
-        // make the overlay always the first child of the focus
-        // so it renders on top of the content
         parent_window.connect("focus", (__) => {
             // TODO: how to make this instant?
             GLib.timeout_add(0, 50, () => {
-                if (parent_window.is_alive) {
-                    console.log(
-                        `parent window focus = PARENT: ${parent_actor} / OVERLAY: ${overlay_actor} / OVERLAY PARENT = ${overlay_actor.get_parent()}`,
-                    );
-
-                    parent_actor.set_child_above_sibling(overlay_actor, null);
-                    return false;
-                }
+                overlay_window.raise();
+                return false;
             });
         });
-        overlay_window.connect("focus", (__) => {
-            if (parent_window.is_alive) {
-                console.log(
-                    `overlay window focus = PARENT: ${parent_actor} / OVERLAY: ${overlay_actor} / OVERLAY PARENT = ${overlay_actor.get_parent()}`,
-                );
+        parent_window.connect("raised", (__) => {
+            // TODO: how to make this instant?
+            GLib.timeout_add(0, 50, () => {
+                overlay_window.raise();
+                return false;
+            });
+        });
 
-                parent_actor.set_child_above_sibling(overlay_actor, null);
-            }
+        parent_actor.connect("destroy", (__) => {
+            // TODO: don't kill, but send a signal to the overlay window somehow
+            overlay_window.kill();
         });
 
         console.log(
