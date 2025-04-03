@@ -193,12 +193,16 @@ class IntegrationService {
         parent_window.connect("focus", (__) => {
             // TODO: how to make this instant?
             GLib.timeout_add(0, 50, () => {
-                parent_actor.set_child_above_sibling(overlay_actor, null);
-                return false;
+                if (parent_window.is_alive) {
+                    parent_actor.set_child_above_sibling(overlay_actor, null);
+                    return false;
+                }
             });
         });
         overlay_window.connect("focus", (__) => {
-            parent_actor.set_child_above_sibling(overlay_actor, null);
+            if (parent_window.is_alive) {
+                parent_actor.set_child_above_sibling(overlay_actor, null);
+            }
         });
 
         console.log(
