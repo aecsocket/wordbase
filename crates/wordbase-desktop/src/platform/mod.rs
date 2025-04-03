@@ -1,15 +1,17 @@
+mod noop;
 mod wayland;
-use wayland as default;
-// mod noop;
+
 // use noop as default;
+use wayland as default;
 
 use futures::future::LocalBoxFuture;
 
 use anyhow::Result;
 use relm4::adw;
+use wordbase::WindowFilter;
 
 pub trait Platform {
-    fn affix_to_focused_window(&self, window: &adw::Window) -> LocalBoxFuture<Result<()>>;
+    fn init_overlay(&self, window: &adw::Window) -> LocalBoxFuture<Result<()>>;
 
     fn move_to_window(
         &self,
@@ -23,6 +25,3 @@ pub async fn default() -> Result<Box<dyn Platform>> {
     let platform = default::Platform::new().await?;
     Ok(Box::new(platform))
 }
-
-#[derive(Debug, Clone)]
-pub struct WindowFilter {}

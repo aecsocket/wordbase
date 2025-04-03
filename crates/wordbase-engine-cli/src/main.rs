@@ -9,7 +9,7 @@ use {
     tokio::{fs, sync::oneshot},
     tracing::{info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
-    wordbase::{DictionaryId, ProfileId, ProfileMeta, RecordKind},
+    wordbase::{DictionaryId, Lookup, ProfileId, ProfileMeta, RecordKind},
     wordbase_engine::{Engine, import::ImportStarted, texthook::TexthookerEvent},
 };
 
@@ -444,7 +444,15 @@ async fn deinflect(engine: Engine, text: String) -> Result<()> {
 }
 
 async fn lookup(engine: Engine, text: String) -> Result<()> {
-    let records = engine.lookup_lemma(&text, RecordKind::ALL).await?;
+    let records = engine
+        .lookup(
+            &Lookup {
+                context: text,
+                cursor: 0,
+            },
+            RecordKind::ALL,
+        )
+        .await?;
     println!("{records:#?}");
 
     // let lemmas = engine

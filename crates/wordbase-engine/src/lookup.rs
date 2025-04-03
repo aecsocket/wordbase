@@ -4,7 +4,9 @@ use {
     futures::{StreamExt, TryStreamExt},
     itertools::Itertools,
     std::borrow::Borrow,
-    wordbase::{DictionaryId, FrequencyValue, Record, RecordKind, RecordLookup, Term, for_kinds},
+    wordbase::{
+        DictionaryId, FrequencyValue, Lookup, Record, RecordKind, RecordLookup, Term, for_kinds,
+    },
 };
 
 impl Engine {
@@ -120,5 +122,18 @@ impl Engine {
         })
         .try_collect()
         .await
+    }
+
+    pub async fn lookup(
+        &self,
+        lookup: &Lookup,
+        record_kinds: impl IntoIterator<Item = impl Borrow<RecordKind>>,
+    ) -> Result<Vec<RecordLookup>> {
+        // TODO: everything
+        let query = lookup
+            .context
+            .get(lookup.cursor..)
+            .context("cursor not on UTF-8 sequence boundary")?;
+        self.lookup_lemma(query, record_kinds).await
     }
 }

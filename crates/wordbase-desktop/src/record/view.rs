@@ -5,7 +5,7 @@ use futures::never::Never;
 use relm4::prelude::*;
 use tokio::task::JoinHandle;
 use tracing::warn;
-use wordbase::RecordKind;
+use wordbase::{Lookup, RecordKind};
 use wordbase_engine::Engine;
 
 use crate::theme;
@@ -32,7 +32,7 @@ pub struct RecordViewConfig {
 
 #[derive(Debug)]
 pub enum RecordViewMsg {
-    Lookup { query: String },
+    Lookup(Lookup),
 }
 
 #[relm4::component(pub, async)]
@@ -60,7 +60,10 @@ impl AsyncComponent for RecordView {
                 custom_theme: None,
             })
             .forward(sender.input_sender(), |resp| match resp {
-                RecordRenderResponse::RequestLookup { query } => RecordViewMsg::Lookup { query },
+                RecordRenderResponse::RequestLookup { query } => RecordViewMsg::Lookup(Lookup {
+                    context: query,
+                    cursor: 0,
+                }),
             });
 
         let mut recv_default_theme_changed = theme::recv_default_changed().await;
@@ -94,7 +97,7 @@ impl AsyncComponent for RecordView {
         root: &Self::Root,
     ) {
         match message {
-            RecordViewMsg::Lookup { query } => {
+            RecordViewMsg::Lookup(lookup) => {
                 // TODO cache this
                 let dictionaries = self
                     .engine
@@ -105,10 +108,10 @@ impl AsyncComponent for RecordView {
                     .map(|dict| (dict.id, dict))
                     .collect::<HashMap<_, _>>();
 
-                let records = match self.engine.lookup_lemma(&query, RecordKind::ALL).await {
+                let records = match self.engine.lookup(&lookup, RecordKind::ALL).await {
                     Ok(records) => records,
                     Err(err) => {
-                        warn!("Failed to fetch records for {query:?}: {err:?}");
+                        warn!("Failed to fetch records: {err:?}");
                         return;
                     }
                 };

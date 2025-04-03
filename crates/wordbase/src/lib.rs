@@ -3,6 +3,9 @@
 
 pub mod dict;
 
+mod protocol;
+pub use protocol::*;
+
 use {
     derive_more::{Deref, Display, From},
     serde::{Deserialize, Serialize, de::DeserializeOwned},
@@ -340,44 +343,6 @@ pub struct ProfileMeta {
 /// Opaque and unique identifier for a single [`Profile`] in a database.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ProfileId(pub i64);
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Lookup {
-    /// Text to search in.
-    ///
-    /// This may be arbitrarily large, but the engine will limit how far ahead
-    /// it reads to find lookup results.
-    pub text: String,
-    /// What kinds of records we want to receive.
-    ///
-    /// You must explicitly list what kinds of records you want to receive, as
-    /// it is possible (and expected!) that you won't be able to process all
-    /// kinds of records.
-    ///
-    /// You can also use this to fetch a small amount of info when doing an
-    /// initial lookup, then fetch more records (e.g. pronunciation audio) when
-    /// the user selects a specific term.
-    pub record_kinds: Vec<RecordKind>,
-}
-
-/// Single record returned in response to a [`Lookup`].
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RecordLookup {
-    /// ID of the [`Dictionary`] from which the record was retrieved.
-    pub source: DictionaryId,
-    /// [`Term`] that this record is for.
-    pub term: Term,
-    /// [`Record`] that was found.
-    pub record: Record,
-    /// [`FrequencyValue`] of the associated record.
-    pub frequency: Option<FrequencyValue>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct TexthookerSentence {
-    pub process_path: String,
-    pub sentence: String,
-}
 
 #[derive(Display, Clone, PartialEq, Eq, Hash, Deref, Serialize)]
 pub struct NonEmptyString(String);

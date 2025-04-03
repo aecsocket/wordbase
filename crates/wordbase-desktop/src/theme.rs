@@ -30,7 +30,7 @@ pub async fn recv_default_changed() -> broadcast::Receiver<Arc<Theme>> {
 struct DefaultThemeWatcher {
     current: Arc<Theme>,
     recv_theme: broadcast::Receiver<Arc<Theme>>,
-    file_watcher: Option<notify::RecommendedWatcher>,
+    _file_watcher: Option<notify::RecommendedWatcher>,
 }
 
 const DEFAULT_THEME_PATH: &str = "default_theme.css";
@@ -48,7 +48,7 @@ async fn default_watcher() -> &'static DefaultThemeWatcher {
 
         // we're running from source, so the developer can hot reload the theme
         let default_theme_src_path = Arc::<Path>::from(default_theme_src_path);
-        let file_watcher = create_default_theme_watcher(default_theme_src_path.clone(), send_theme)
+        let file_watcher = create_default_theme_watcher(&default_theme_src_path, send_theme)
             .unwrap_or_else(|err| {
                 warn!("Failed to create default theme file watcher: {err:?}");
                 None
@@ -67,7 +67,7 @@ async fn default_watcher() -> &'static DefaultThemeWatcher {
         DEFAULT_THEME_WATCHER.get_or_init(|| DefaultThemeWatcher {
             current: Arc::new(current),
             recv_theme,
-            file_watcher,
+            _file_watcher: file_watcher,
         })
     } else {
         let current = Theme {
@@ -76,7 +76,7 @@ async fn default_watcher() -> &'static DefaultThemeWatcher {
         DEFAULT_THEME_WATCHER.get_or_init(|| DefaultThemeWatcher {
             current: Arc::new(current),
             recv_theme,
-            file_watcher: None,
+            _file_watcher: None,
         })
     }
 }
@@ -90,7 +90,7 @@ fn default_theme_src_path() -> Option<PathBuf> {
 }
 
 fn create_default_theme_watcher(
-    default_theme_src_path: Arc<Path>,
+    default_theme_src_path: &Arc<Path>,
     send_theme: broadcast::Sender<Arc<Theme>>,
 ) -> Result<Option<notify::RecommendedWatcher>> {
     let tokio = tokio::runtime::Handle::current();
@@ -120,13 +120,13 @@ fn create_default_theme_watcher(
                     }
                 };
                 let theme = Arc::new(Theme { style });
-                send_theme.send(theme);
+                _ = send_theme.send(theme);
             });
         }
     })
     .context("failed to create watcher")?;
     watcher
-        .watch(&default_theme_src_path, notify::RecursiveMode::NonRecursive)
+        .watch(default_theme_src_path, notify::RecursiveMode::NonRecursive)
         .context("failed to start watching file")?;
     Ok(Some(watcher))
 }

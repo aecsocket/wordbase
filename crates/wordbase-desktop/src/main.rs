@@ -1,17 +1,17 @@
 #![doc = include_str!("../README.md")]
 #![allow(clippy::future_not_send, reason = "`gtk` types aren't `Send`")]
 
-// mod popup;
 mod overlay;
 mod platform;
+mod popup;
 mod record;
 mod theme;
 
 use {
     anyhow::{Context, Result},
     directories::ProjectDirs,
-    foldhash::HashMap,
     futures::never::Never,
+    platform::Platform,
     record::view::{RecordView, RecordViewConfig, RecordViewMsg},
     relm4::{
         adw::{self, prelude::*},
@@ -21,9 +21,9 @@ use {
     },
     std::sync::Arc,
     tokio::{fs, sync::mpsc},
-    tracing::{error, info, level_filters::LevelFilter},
+    tracing::{info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
-    wordbase::{Dictionary, DictionaryId},
+    wordbase::Lookup,
     wordbase_engine::{Engine, texthook::TexthookerEvent},
 };
 
@@ -82,6 +82,7 @@ impl AsyncComponent for App {
                 set_top_bar_style: adw::ToolbarStyle::Raised,
                 add_top_bar = &adw::HeaderBar {
                     #[wrap(Some)]
+                    #[name(search_entry)]
                     set_title_widget = &gtk::SearchEntry {
                         set_hexpand: true,
                         connect_search_changed => move |widget| {
@@ -112,6 +113,7 @@ impl AsyncComponent for App {
             record_view,
         };
         let widgets = view_output!();
+        widgets.search_entry.grab_focus();
         AsyncComponentParts { model, widgets }
     }
 
@@ -126,7 +128,10 @@ impl AsyncComponent for App {
                 _ = self
                     .record_view
                     .sender()
-                    .send(RecordViewMsg::Lookup { query });
+                    .send(RecordViewMsg::Lookup(Lookup {
+                        context: query,
+                        cursor: 0,
+                    }));
             }
         }
     }
@@ -138,7 +143,7 @@ struct AppInit {
 }
 
 async fn init(app: adw::Application) -> Result<AppInit> {
-    let platform = Arc::from(
+    let platform = Arc::<dyn Platform>::from(
         platform::default()
             .await
             .context("failed to create platform")?,
@@ -157,6 +162,15 @@ async fn init(app: adw::Application) -> Result<AppInit> {
         .await
         .context("failed to create engine")?;
 
+    // popup
+    // let (send_popup_request, recv_popup_request) = mpsc::channel(CHANNEL_BUF_CAP);
+    // glib::spawn_future_local(popup::run(
+    //     app.clone(),
+    //     platform.clone(),
+    //     recv_popup_request,
+    // ));
+
+    // overlay
     let (send_sentence, recv_sentence) = mpsc::channel(CHANNEL_BUF_CAP);
     let (texthooker_task, mut recv_texthooker_event) = engine
         .texthooker_task()
