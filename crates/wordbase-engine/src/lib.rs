@@ -12,6 +12,8 @@ pub mod lookup;
 mod profile;
 pub mod texthook;
 
+use anyhow::Context;
+use deinflect::Deinflectors;
 pub use wordbase;
 use {
     anyhow::Result,
@@ -29,6 +31,7 @@ pub struct Engine(Arc<Inner>);
 pub struct Inner {
     db: Pool<Sqlite>,
     imports: Imports,
+    deinflectors: Deinflectors,
     texthookers: Texthookers,
 }
 
@@ -38,6 +41,7 @@ impl Engine {
         let engine = Self(Arc::new(Inner {
             db,
             imports: Imports::new(),
+            deinflectors: Deinflectors::new().context("failed to create deinflectors")?,
             texthookers: Texthookers::new(),
         }));
         Ok(engine)

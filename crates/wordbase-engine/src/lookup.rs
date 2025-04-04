@@ -19,7 +19,7 @@ impl Engine {
     pub fn lookup_lemma(
         &self,
         lemma: impl AsRef<str>,
-        record_kinds: impl IntoIterator<Item = impl Borrow<RecordKind>>,
+        record_kinds: &[impl Borrow<RecordKind>],
     ) -> impl Stream<Item = Result<LemmaLookup>> {
         stream::once(async move {
             let lemma = lemma.as_ref();
@@ -28,7 +28,7 @@ impl Engine {
             let record_kinds = format!(
                 "[{}]",
                 record_kinds
-                    .into_iter()
+                    .iter()
                     .map(|kind| *kind.borrow() as u32)
                     .format(",")
             );
@@ -143,14 +143,24 @@ impl Engine {
 
     pub fn lookup(
         &self,
-        query: impl AsRef<str>,
-        record_kinds: &[RecordKind],
+        context: &str,
+        cursor: usize,
+        record_kinds: &[impl Borrow<RecordKind>],
     ) -> impl Stream<Item = Result<RecordLookup>> {
+        // TODO: languages with words separated by e.g. spaces need a different strategy
+        let Some((_, query)) = context.split_at_checked(cursor) else {
+            return stream::once(
+                async move { bail!("cursor is not on a UTF-8 character boundary") },
+            )
+            .left_stream();
+        };
+
         self.deinflect(query)
             .map(move |lemma| {
-                self.lookup_lemma(lemma, record_kinds).map(|result| {
+                let bytes_scanned = lemma.len();
+                self.lookup_lemma(lemma, record_kinds).map(move |result| {
                     result.map(|lookup| RecordLookup {
-                        bytes_scanned: 0,
+                        bytes_scanned,
                         source: lookup.source,
                         term: lookup.term,
                         record: lookup.record,
@@ -159,44 +169,6 @@ impl Engine {
                 })
             })
             .flatten()
-
-        // let x = self
-        //     .deinflect(query)
-        //     .await
-        //     .map(|lemma| {
-        //         stream::once(async move {
-        //             self.lookup_lemma(lemma, record_kinds)
-        //                 .await
-        //                 .map(move |result| {
-        //                     result.map(move |lookup| RecordLookup {
-        // bytes_scanned: 0,
-        // source: lookup.source,
-        // term: lookup.term,
-        // record: lookup.record,
-        // frequency: lookup.frequency,
-        //                     })
-        //                 })
-        //         })
-        //     })
-        //     .flatten()
-        //     .collect::<Vec<_>>()
-        //     .await;
-
-        // Ok(self.lookup_lemma(query, record_kinds).await.map(|result| {
-        //     result.map(
-        //         |LemmaLookup {
-        //              source,
-        //              term,
-        //              record,
-        //              frequency,
-        //          }| RecordLookup {
-        //             bytes_scanned: 0,
-        //             source,
-        //             term,
-        //             record,
-        //             frequency,
-        //         },
-        //     )
-        // }))
+            .right_stream()
     }
 }

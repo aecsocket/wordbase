@@ -4,11 +4,10 @@ use {
         SUPPORTED_RECORD_KINDS,
     },
     crate::{Dictionaries, theme},
-    futures::never::Never,
+    futures::{TryStreamExt, never::Never},
     relm4::prelude::*,
     std::sync::Arc,
     tokio_util::task::AbortOnDropHandle,
-    wordbase::Lookup,
     wordbase_engine::Engine,
 };
 
@@ -30,7 +29,10 @@ pub struct RecordViewConfig {
 pub enum RecordViewMsg {
     Dictionaries(Arc<Dictionaries>),
     Records(Arc<Records>),
-    Lookup(Lookup),
+    #[doc(hidden)]
+    LemmaLookup {
+        lemma: String,
+    },
 }
 
 #[relm4::component(pub, async)]
@@ -60,10 +62,9 @@ impl AsyncComponent for RecordView {
                 records: Arc::<Records>::default(),
             })
             .forward(sender.input_sender(), |resp| match resp {
-                RecordRenderResponse::RequestLookup { query } => RecordViewMsg::Lookup(Lookup {
-                    context: query,
-                    cursor: 0,
-                }),
+                RecordRenderResponse::RequestLookup { query } => {
+                    RecordViewMsg::LemmaLookup { lemma: query }
+                }
             });
 
         let mut recv_default_theme_changed = theme::recv_default_changed().await;
@@ -108,8 +109,13 @@ impl AsyncComponent for RecordView {
             RecordViewMsg::Records(records) => {
                 _ = self.render.sender().send(RecordRenderMsg::Records(records));
             }
-            RecordViewMsg::Lookup(lookup) => {
-                let Ok(records) = self.engine.lookup(&lookup, SUPPORTED_RECORD_KINDS).await else {
+            RecordViewMsg::LemmaLookup { lemma } => {
+                let Ok(records) = self
+                    .engine
+                    .lookup_lemma(&lemma, SUPPORTED_RECORD_KINDS)
+                    .try_collect::<Vec<_>>()
+                    .await
+                else {
                     return;
                 };
 

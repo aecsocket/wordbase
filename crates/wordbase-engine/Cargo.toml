@@ -27,7 +27,6 @@ async_zip            = { workspace = true, features = ["deflate"] }
 base64               = { workspace = true }
 blocking             = { workspace = true }
 bytes                = { workspace = true }
-derive_more          = { workspace = true, features = ["display", "error", "from"] }
 foldhash             = { workspace = true }
 futures              = { workspace = true }
 indexmap             = { workspace = true }
@@ -48,3 +47,10 @@ tokio-stream         = { workspace = true }
 tokio-tungstenite    = { workspace = true }
 tracing              = { workspace = true }
 unicode-segmentation = { workspace = true }
+
+derive_more = { workspace = true, features = [
+  "debug",
+  "display",
+  "error",
+  "from",
+] }

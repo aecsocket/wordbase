@@ -436,15 +436,18 @@ async fn dictionary_rm(engine: Engine, id: i64) -> Result<()> {
 }
 
 async fn deinflect(engine: Engine, text: String) -> Result<()> {
-    todo!();
+    let mut lemmas = engine.deinflect(&text).boxed();
+    while let Some(lemma) = lemmas.next().await {
+        println!("{lemma:?}");
+    }
+    Ok(())
 }
 
 async fn lookup(engine: Engine, text: String) -> Result<()> {
-    let mut records = engine.lookup(&text, 0, RecordKind::ALL).await?;
+    let mut records = engine.lookup(&text, 0, RecordKind::ALL).boxed();
     while let Some(record) = records.next().await {
         println!("{record:#?}");
     }
-
     Ok(())
 }
 

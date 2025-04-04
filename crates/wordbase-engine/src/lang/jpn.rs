@@ -261,7 +261,7 @@ mod tests {
 
     #[test]
     fn morae() {
-        fn splits_into<'a>(reading: &str, target: impl AsRef<[&'a str]>) {
+        fn splits_into(reading: &str, target: impl AsRef<[&'static str]>) {
             assert_eq!(&super::morae(reading).collect::<Vec<_>>(), target.as_ref());
         }
 

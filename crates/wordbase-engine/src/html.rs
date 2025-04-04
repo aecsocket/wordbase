@@ -1,18 +1,18 @@
 use {
-    crate::lang,
+    crate::{lang, lookup::LemmaLookup},
     base64::{Engine, prelude::BASE64_STANDARD},
     derive_more::{Deref, DerefMut},
     maud::{Markup, html},
     std::{collections::HashMap, fmt::Write as _, hash::BuildHasher},
     wordbase::{
-        Dictionary, DictionaryId, Record, RecordLookup, Term,
+        Dictionary, DictionaryId, Record, Term,
         dict::{self, yomichan_audio::AudioFormat},
     },
 };
 
 pub fn render_records<H: BuildHasher>(
     dictionaries: &HashMap<DictionaryId, Dictionary, H>,
-    records: &[RecordLookup],
+    records: &[LemmaLookup],
 ) -> Markup {
     let mut terms = Terms::default();
     for record in records {
