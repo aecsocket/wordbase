@@ -3,11 +3,11 @@ mod wayland;
 
 // use noop as default;
 use {
-    anyhow::Result, futures::future::LocalBoxFuture, relm4::adw, wayland as default,
-    wordbase::WindowFilter,
+    anyhow::Result, futures::future::LocalBoxFuture, relm4::adw, std::fmt::Debug,
+    wayland as default, wordbase::WindowFilter,
 };
 
-pub trait Platform {
+pub trait Platform: Debug {
     fn init_overlay(&self, overlay: &adw::Window) -> LocalBoxFuture<Result<()>>;
 
     fn init_popup(&self, popup: &adw::Window) -> LocalBoxFuture<Result<()>>;

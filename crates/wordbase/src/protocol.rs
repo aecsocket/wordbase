@@ -3,7 +3,7 @@ use {
     serde::{Deserialize, Serialize},
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Lookup {
     /// Context text for the lookup.
     ///
@@ -50,7 +50,7 @@ pub struct RecordLookup {
     pub frequency: Option<FrequencyValue>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PopupRequest {
     pub target_window: WindowFilter,
     pub origin: (i32, i32),
@@ -59,7 +59,7 @@ pub struct PopupRequest {
 }
 
 /// Specifies a specific window on the user's window manager.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct WindowFilter {
     /// Internal ID of the window.
     ///
@@ -86,9 +86,10 @@ pub struct WindowFilter {
 /// What corner a [`ShowPopupRequest`] is relative to.
 ///
 /// See [`ShowPopupRequest::anchor`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[expect(missing_docs, reason = "self-explanatory")]
 pub enum PopupAnchor {
+    #[default]
     TopLeft,
     TopCenter,
     TopRight,

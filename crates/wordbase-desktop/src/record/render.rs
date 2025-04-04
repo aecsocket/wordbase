@@ -8,7 +8,7 @@ use {
     std::sync::Arc,
     tracing::{debug, info, warn},
     webkit6::prelude::*,
-    wordbase::RecordLookup,
+    wordbase::{RecordKind, RecordLookup},
     wordbase_engine::html,
 };
 
@@ -17,24 +17,28 @@ pub struct RecordRender {
     default_theme: Arc<Theme>,
     custom_theme: Option<Arc<Theme>>,
     web_view: webkit6::WebView,
-    dictionaries: Dictionaries,
-    records: Vec<RecordLookup>,
+    dictionaries: Arc<Dictionaries>,
+    records: Arc<Records>,
 }
+
+pub type Records = Vec<RecordLookup>;
+
+pub const SUPPORTED_RECORD_KINDS: &[RecordKind] = RecordKind::ALL;
 
 #[derive(Debug)]
 pub struct RecordRenderConfig {
     pub default_theme: Arc<Theme>,
     pub custom_theme: Option<Arc<Theme>>,
-    pub dictionaries: Dictionaries,
-    pub records: Vec<RecordLookup>,
+    pub dictionaries: Arc<Dictionaries>,
+    pub records: Arc<Records>,
 }
 
 #[derive(Debug)]
 pub enum RecordRenderMsg {
     DefaultTheme(Arc<Theme>),
     CustomTheme(Option<Arc<Theme>>),
-    Dictionaries(Dictionaries),
-    Records(Vec<RecordLookup>),
+    Dictionaries(Arc<Dictionaries>),
+    Records(Arc<Records>),
 }
 
 #[derive(Debug)]

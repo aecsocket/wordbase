@@ -1,71 +1,64 @@
 use {
     crate::{
-        Dictionaries,
         platform::Platform,
-        record::view::{RecordView, RecordViewConfig, RecordViewMsg},
+        record::{
+            render::Records,
+            view::{RecordView, RecordViewConfig, RecordViewMsg},
+        },
     },
-    anyhow::{Context, Result},
-    futures::never::Never,
+    anyhow::Result,
     relm4::{
         adw::{self, prelude::*},
+        component::AsyncConnector,
         loading_widgets::LoadingWidgets,
         prelude::*,
         view,
     },
     std::sync::Arc,
-    tokio::sync::mpsc,
     tracing::warn,
-    wordbase::PopupRequest,
-    wordbase_engine::Engine,
+    wordbase::{PopupAnchor, WindowFilter},
 };
 
-pub async fn run(
-    engine: Engine,
-    platform: Arc<dyn Platform>,
-    dictionaries: Dictionaries,
-    app: adw::Application,
-    mut recv_popup_request: mpsc::Receiver<PopupRequest>,
-) -> Result<Never> {
-    let popup = Popup::builder().launch(PopupConfig {
+pub async fn connector(
+    app: &adw::Application,
+    platform: &Arc<dyn Platform>,
+    record_view: RecordViewConfig,
+) -> Result<AsyncConnector<Popup>> {
+    let connector = Popup::builder().launch(PopupConfig {
         platform: platform.clone(),
-        record_view: RecordViewConfig {
-            engine,
-            dictionaries,
-        },
+        record_view,
     });
-    let window = popup.widget().clone();
-    app.add_window(&window);
-    let popup = popup.detach();
-
-    platform
-        .init_popup(&window)
-        .await
-        .context("failed to initialize popup window")?;
+    let window = connector.widget();
+    app.add_window(window);
+    platform.init_popup(window).await?;
     window.set_visible(false);
-
-    loop {
-        let request = recv_popup_request
-            .recv()
-            .await
-            .context("popup request channel closed")?;
-        _ = popup.sender().send(request);
-    }
+    Ok(connector)
 }
 
-struct Popup {
+#[derive(Debug)]
+pub struct Popup {
     platform: Arc<dyn Platform>,
     record_view: AsyncController<RecordView>,
 }
 
-struct PopupConfig {
+#[derive(Debug)]
+pub struct PopupConfig {
     platform: Arc<dyn Platform>,
     record_view: RecordViewConfig,
+}
+
+#[derive(Debug, Clone)]
+pub struct AppPopupRequest {
+    pub target_window: WindowFilter,
+    pub origin: (i32, i32),
+    pub anchor: PopupAnchor,
+    pub records: Arc<Records>,
 }
 
 #[relm4::component(pub, async)]
 impl AsyncComponent for Popup {
     type Init = PopupConfig;
-    type Input = PopupRequest;
+    type Input = AppPopupRequest;
     type Output = ();
     type CommandOutput = ();
 
@@ -115,7 +108,7 @@ impl AsyncComponent for Popup {
         _ = self
             .record_view
             .sender()
-            .send(RecordViewMsg::Lookup(request.lookup));
+            .send(RecordViewMsg::Records(request.records));
 
         // TODO compute it
         let origin = request.origin;

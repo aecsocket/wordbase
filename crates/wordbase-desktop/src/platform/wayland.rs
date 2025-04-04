@@ -11,6 +11,7 @@ implementation notes:
   since we show/hide the `gtk::Window`, which creates/destroys `Meta.Window`s
 */
 
+#[derive(Debug)]
 pub struct Platform {
     integration: IntegrationProxy<'static>,
 }

@@ -9,7 +9,6 @@ mod theme;
 
 use {
     anyhow::{Context, Result},
-    derive_more::Deref,
     directories::ProjectDirs,
     foldhash::HashMap,
     futures::never::Never,
@@ -45,8 +44,7 @@ fn main() {
     RelmApp::from_app(app.clone()).run_async::<App>(app);
 }
 
-#[derive(Debug, Clone, Deref)]
-struct Dictionaries(Arc<HashMap<DictionaryId, Dictionary>>);
+type Dictionaries = HashMap<DictionaryId, Dictionary>;
 
 #[derive(Debug)]
 struct App {
@@ -146,7 +144,7 @@ impl AsyncComponent for App {
 #[derive(Debug)]
 struct AppInit {
     engine: Engine,
-    dictionaries: Dictionaries,
+    dictionaries: Arc<Dictionaries>,
 }
 
 async fn init(app: adw::Application) -> Result<AppInit> {
@@ -169,7 +167,7 @@ async fn init(app: adw::Application) -> Result<AppInit> {
         .await
         .context("failed to create engine")?;
 
-    let dictionaries = Dictionaries(Arc::new(
+    let dictionaries = Arc::<Dictionaries>::new(
         engine
             .dictionaries()
             .await
@@ -177,17 +175,19 @@ async fn init(app: adw::Application) -> Result<AppInit> {
             .into_iter()
             .map(|dict| (dict.id, dict))
             .collect(),
-    ));
+    );
 
-    // popup
-    let (send_popup_request, recv_popup_request) = mpsc::channel(CHANNEL_BUF_CAP);
-    glib::spawn_future_local(popup::run(
-        engine.clone(),
-        platform.clone(),
-        dictionaries.clone(),
-        app.clone(),
-        recv_popup_request,
-    ));
+    let mut popup = popup::connector(
+        &app,
+        &platform,
+        RecordViewConfig {
+            engine: engine.clone(),
+            dictionaries: dictionaries.clone(),
+        },
+    )
+    .await?
+    .detach();
+    popup.detach_runtime();
 
     // overlay
     let (send_sentence, recv_sentence) = mpsc::channel(CHANNEL_BUF_CAP);
@@ -199,8 +199,9 @@ async fn init(app: adw::Application) -> Result<AppInit> {
     glib::spawn_future_local(overlay::run(
         app,
         platform,
+        engine.clone(),
         recv_sentence,
-        send_popup_request,
+        popup.sender().clone(),
     ));
     // forward pull texthooker events to overlay
     tokio::spawn(async move {

@@ -5,6 +5,7 @@ use {
     relm4::adw,
 };
 
+#[derive(Debug)]
 pub struct Platform;
 
 impl Platform {

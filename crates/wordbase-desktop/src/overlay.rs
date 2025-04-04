@@ -1,5 +1,7 @@
 use {
-    crate::{APP_ID, platform::Platform},
+    crate::{
+        APP_ID, platform::Platform, popup::AppPopupRequest, record::render::SUPPORTED_RECORD_KINDS,
+    },
     anyhow::{Context, Result},
     foldhash::{HashMap, HashMapExt},
     futures::never::Never,
@@ -9,8 +11,11 @@ use {
             gtk::{graphene, pango},
             prelude::*,
         },
+        component::AsyncConnector,
         css::classes,
+        loading_widgets::LoadingWidgets,
         prelude::*,
+        view,
     },
     std::{
         collections::hash_map::Entry,
@@ -21,16 +26,18 @@ use {
     },
     tokio::sync::mpsc,
     tracing::{info, trace, warn},
-    wordbase::{Lookup, PopupAnchor, PopupRequest, TexthookerSentence, WindowFilter},
+    wordbase::{Lookup, PopupAnchor, TexthookerSentence, WindowFilter},
+    wordbase_engine::Engine,
 };
 
 pub async fn run(
     app: adw::Application,
     platform: Arc<dyn Platform>,
+    engine: Engine,
     mut recv_sentence: mpsc::Receiver<TexthookerSentence>,
-    send_popup_request: mpsc::Sender<PopupRequest>,
+    popup: relm4::Sender<AppPopupRequest>,
 ) -> Result<Never> {
-    let mut overlays = HashMap::<String, Controller<Overlay>>::new();
+    let mut overlays = HashMap::<String, AsyncController<Overlay>>::new();
 
     loop {
         let event = recv_sentence
@@ -42,8 +49,7 @@ pub async fn run(
             event.process_path, event.sentence
         );
 
-        if let Err(err) = handle(&app, &*platform, &send_popup_request, &mut overlays, event).await
-        {
+        if let Err(err) = handle(&app, &*platform, &engine, &popup, &mut overlays, event).await {
             warn!("Failed to handle new sentence event: {err:?}");
         }
     }
@@ -52,8 +58,9 @@ pub async fn run(
 async fn handle(
     app: &adw::Application,
     platform: &dyn Platform,
-    send_popup_request: &mpsc::Sender<PopupRequest>,
-    overlays: &mut HashMap<String, Controller<Overlay>>,
+    engine: &Engine,
+    popup: &relm4::Sender<AppPopupRequest>,
+    overlays: &mut HashMap<String, AsyncController<Overlay>>,
     TexthookerSentence {
         process_path,
         sentence,
@@ -61,36 +68,24 @@ async fn handle(
 ) -> Result<()> {
     match overlays.entry(process_path.clone()) {
         Entry::Occupied(entry) => {
-            _ = entry
-                .get()
-                .sender()
-                .send(OverlayMsg::NewSentence { sentence });
+            _ = entry.get().sender().send(OverlayMsg::Sentence { sentence });
         }
         Entry::Vacant(entry) => {
             info!("Creating overlay for new process {process_path:?}");
 
-            let overlay = Overlay::builder().launch(OverlayConfig {
-                process_path,
-                sentence,
-            });
-            let window = overlay.widget().clone();
-            app.add_window(&window);
-            let overlay = overlay.connect_receiver({
-                let window = window.clone();
-                let send_popup_request = send_popup_request.clone();
-                move |_sender, scan| {
-                    glib::spawn_future_local(on_scan(
-                        window.clone(),
-                        send_popup_request.clone(),
-                        scan,
-                    ));
-                }
-            });
-
-            platform
-                .init_overlay(&window)
-                .await
-                .context("failed to initialize overlay window")?;
+            let overlay = connector(
+                app,
+                platform,
+                OverlayConfig {
+                    engine: engine.clone(),
+                    popup: popup.clone(),
+                    process_path,
+                    sentence,
+                },
+            )
+            .await
+            .context("failed to create overlay window")?
+            .detach();
 
             entry.insert(overlay);
         }
@@ -98,40 +93,64 @@ async fn handle(
     Ok(())
 }
 
+async fn connector(
+    app: &adw::Application,
+    platform: &dyn Platform,
+    config: OverlayConfig,
+) -> Result<AsyncConnector<Overlay>> {
+    let connector = Overlay::builder().launch(config);
+    let window = connector.widget();
+    app.add_window(window);
+    platform.init_overlay(window).await?;
+    Ok(connector)
+}
+
 #[derive(Debug)]
 struct Overlay {
+    engine: Engine,
+    popup: relm4::Sender<AppPopupRequest>,
     sentence: String,
 }
 
 #[derive(Debug)]
 struct OverlayConfig {
+    engine: Engine,
+    popup: relm4::Sender<AppPopupRequest>,
     process_path: String,
     sentence: String,
 }
 
 #[derive(Debug)]
 enum OverlayMsg {
-    NewSentence { sentence: String },
+    Sentence { sentence: String },
+    Scan { lookup: Lookup, origin: (i32, i32) },
 }
 
-#[derive(Debug)]
-struct OverlayScan {
-    lookup: Lookup,
-    origin: (i32, i32),
-}
-
-#[relm4::component(pub)]
-impl Component for Overlay {
+#[relm4::component(pub, async)]
+impl AsyncComponent for Overlay {
     type Init = OverlayConfig;
     type Input = OverlayMsg;
-    type Output = OverlayScan;
+    type Output = ();
     type CommandOutput = ();
+
+    fn init_loading_widgets(root: Self::Root) -> Option<LoadingWidgets> {
+        view! {
+            #[local]
+            root {
+                set_title: Some("Wordbase Overlay"),
+                set_width_request: 180,
+                set_height_request: 100,
+
+                #[name(spinner)]
+                adw::Spinner {},
+            }
+        }
+        Some(LoadingWidgets::new(root, spinner))
+    }
 
     view! {
         adw::Window {
             set_title: Some(&format!("{} — Wordbase", init.process_path)),
-            set_width_request: 180,
-            set_height_request: 100,
 
             gtk::ScrolledWindow {
                 set_hexpand: true,
@@ -160,24 +179,50 @@ impl Component for Overlay {
         }
     }
 
-    fn init(
+    async fn init(
         init: Self::Init,
         root: Self::Root,
-        sender: ComponentSender<Self>,
-    ) -> ComponentParts<Self> {
+        sender: AsyncComponentSender<Self>,
+    ) -> AsyncComponentParts<Self> {
         let model = Self {
+            engine: init.engine,
             sentence: init.sentence,
+            popup: init.popup,
         };
         let widgets = view_output!();
         setup_root_opacity_animation(&root);
         setup_sentence_scan(&root, &widgets.sentence_label, &sender);
-        ComponentParts { model, widgets }
+        AsyncComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>, _root: &Self::Root) {
+    async fn update(
+        &mut self,
+        message: Self::Input,
+        _sender: AsyncComponentSender<Self>,
+        root: &Self::Root,
+    ) {
         match message {
-            OverlayMsg::NewSentence { sentence } => {
+            OverlayMsg::Sentence { sentence } => {
                 self.sentence = sentence;
+            }
+            OverlayMsg::Scan { lookup, origin } => {
+                let Ok(records) = self.engine.lookup(&lookup, SUPPORTED_RECORD_KINDS).await else {
+                    return;
+                };
+                if records.is_empty() {
+                    return;
+                }
+
+                _ = self.popup.send(AppPopupRequest {
+                    target_window: WindowFilter {
+                        id: None,
+                        title: root.title().map(|s| s.to_string()),
+                        wm_class: Some(APP_ID.to_owned()),
+                    },
+                    origin,
+                    anchor: PopupAnchor::BottomCenter,
+                    records: Arc::new(records),
+                });
             }
         }
     }
@@ -214,7 +259,11 @@ fn setup_root_opacity_animation(root: &adw::Window) {
     animation.play();
 }
 
-fn setup_sentence_scan(root: &adw::Window, label: &gtk::Label, sender: &ComponentSender<Overlay>) {
+fn setup_sentence_scan(
+    root: &adw::Window,
+    label: &gtk::Label,
+    sender: &AsyncComponentSender<Overlay>,
+) {
     let controller = gtk::EventControllerMotion::new();
     label.add_controller(controller.clone());
 
@@ -260,31 +309,11 @@ fn setup_sentence_scan(root: &adw::Window, label: &gtk::Label, sender: &Componen
 
         let abs_point = label
             .compute_point(&root, &graphene::Point::new(ch_rel_x, ch_rel_y))
-            .expect("should be able to compute point transform from `label` space to `root` space");
-
-        let scan = OverlayScan {
-            lookup,
-            origin: (abs_point.x() as i32 + 16, abs_point.y() as i32 + 16),
-        };
-        _ = sender.output_sender().send(scan);
+            .expect("`label` and `root` should share a common ancestor");
+        #[expect(clippy::cast_possible_truncation, reason = "no other way to convert")]
+        let origin = (abs_point.x() as i32 + 16, abs_point.y() as i32 + 16);
+        _ = sender
+            .input_sender()
+            .send(OverlayMsg::Scan { lookup, origin });
     });
-}
-
-async fn on_scan(
-    window: adw::Window,
-    send_popup_request: mpsc::Sender<PopupRequest>,
-    scan: OverlayScan,
-) {
-    _ = send_popup_request
-        .send(PopupRequest {
-            target_window: WindowFilter {
-                id: None,
-                title: window.title().map(|s| s.to_string()),
-                wm_class: Some(APP_ID.to_owned()),
-            },
-            origin: scan.origin,
-            anchor: PopupAnchor::BottomCenter,
-            lookup: scan.lookup,
-        })
-        .await;
 }
