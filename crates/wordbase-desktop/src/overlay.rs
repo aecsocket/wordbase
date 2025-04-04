@@ -1,22 +1,28 @@
-use std::{collections::hash_map::Entry, process, sync::Arc};
-
-use anyhow::{Context, Result};
-use foldhash::{HashMap, HashMapExt};
-use futures::never::Never;
-use relm4::{
-    adw::{
-        self,
-        gtk::{graphene, pango},
+use {
+    crate::{APP_ID, platform::Platform},
+    anyhow::{Context, Result},
+    foldhash::{HashMap, HashMapExt},
+    futures::never::Never,
+    relm4::{
+        adw::{
+            self,
+            gtk::{graphene, pango},
+            prelude::*,
+        },
+        css::classes,
         prelude::*,
     },
-    css::classes,
-    prelude::*,
+    std::{
+        collections::hash_map::Entry,
+        sync::{
+            Arc,
+            atomic::{self, AtomicI32},
+        },
+    },
+    tokio::sync::mpsc,
+    tracing::{info, trace, warn},
+    wordbase::{Lookup, PopupAnchor, PopupRequest, TexthookerSentence, WindowFilter},
 };
-use tokio::sync::mpsc;
-use tracing::{info, trace, warn};
-use wordbase::{Lookup, PopupAnchor, PopupRequest, TexthookerSentence, WindowFilter};
-
-use crate::platform::Platform;
 
 pub async fn run(
     app: adw::Application,
@@ -63,21 +69,28 @@ async fn handle(
         Entry::Vacant(entry) => {
             info!("Creating overlay for new process {process_path:?}");
 
-            let overlay = Overlay::builder()
-                .launch(OverlayConfig {
-                    process_path,
-                    sentence,
-                })
-                .connect_receiver(|_sender, scan| {
-                    // tokio.spawn(on_scan(, send_popup_request, scan))
-                });
-            let window = overlay.widget();
-            app.add_window(window);
+            let overlay = Overlay::builder().launch(OverlayConfig {
+                process_path,
+                sentence,
+            });
+            let window = overlay.widget().clone();
+            app.add_window(&window);
+            let overlay = overlay.connect_receiver({
+                let window = window.clone();
+                let send_popup_request = send_popup_request.clone();
+                move |_sender, scan| {
+                    glib::spawn_future_local(on_scan(
+                        window.clone(),
+                        send_popup_request.clone(),
+                        scan,
+                    ));
+                }
+            });
 
             platform
-                .init_overlay(window)
+                .init_overlay(&window)
                 .await
-                .context("failed to initialize window as overlay")?;
+                .context("failed to initialize overlay window")?;
 
             entry.insert(overlay);
         }
@@ -104,7 +117,7 @@ enum OverlayMsg {
 #[derive(Debug)]
 struct OverlayScan {
     lookup: Lookup,
-    origin: (f32, f32),
+    origin: (i32, i32),
 }
 
 #[relm4::component(pub)]
@@ -161,7 +174,7 @@ impl Component for Overlay {
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>, root: &Self::Root) {
+    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>, _root: &Self::Root) {
         match message {
             OverlayMsg::NewSentence { sentence } => {
                 self.sentence = sentence;
@@ -208,15 +221,26 @@ fn setup_sentence_scan(root: &adw::Window, label: &gtk::Label, sender: &Componen
     let root = root.clone();
     let label = label.clone();
     let sender = sender.clone();
-    controller.connect_motion(move |_, x, y| {
+    let last_scan_byte_index = Arc::new(AtomicI32::new(-1));
+    controller.connect_leave({
+        let last_scan_char_idx = last_scan_byte_index.clone();
+        move |_| {
+            last_scan_char_idx.store(-1, atomic::Ordering::Relaxed);
+        }
+    });
+    controller.connect_motion(move |_, rel_x, rel_y| {
         #[expect(clippy::cast_possible_truncation, reason = "no other way to convert")]
-        let (x, y) = (x as i32 * pango::SCALE, y as i32 * pango::SCALE);
+        let (ch_x, ch_y) = (rel_x as i32 * pango::SCALE, rel_y as i32 * pango::SCALE);
 
-        let (valid, byte_index, _grapheme_pos) = label.layout().xy_to_index(x, y);
+        let (valid, byte_index_i32, _grapheme_pos) = label.layout().xy_to_index(ch_x, ch_y);
         if !valid {
             return;
         }
-        let Ok(byte_index) = usize::try_from(byte_index) else {
+        if byte_index_i32 == last_scan_byte_index.swap(byte_index_i32, atomic::Ordering::SeqCst) {
+            // we're scanning the same character as in the last motion event
+            return;
+        }
+        let Ok(byte_index) = usize::try_from(byte_index_i32) else {
             return;
         };
 
@@ -227,31 +251,38 @@ fn setup_sentence_scan(root: &adw::Window, label: &gtk::Label, sender: &Componen
             cursor: byte_index,
         };
 
+        let ch_rect = label.layout().index_to_pos(byte_index_i32);
+        let (ch_rel_x, ch_rel_y) = (
+            // anchor to bottom-right of character
+            (ch_rect.x() + ch_rect.width()) as f32 / pango::SCALE as f32,
+            (ch_rect.y() + ch_rect.height()) as f32 / pango::SCALE as f32,
+        );
+
         let abs_point = label
-            .compute_point(&root, &graphene::Point::new(x as f32, y as f32))
+            .compute_point(&root, &graphene::Point::new(ch_rel_x, ch_rel_y))
             .expect("should be able to compute point transform from `label` space to `root` space");
 
-        _ = sender.output_sender().send(OverlayScan {
+        let scan = OverlayScan {
             lookup,
-            origin: (abs_point.x(), abs_point.y()),
-        });
+            origin: (abs_point.x() as i32 + 16, abs_point.y() as i32 + 16),
+        };
+        _ = sender.output_sender().send(scan);
     });
 }
 
 async fn on_scan(
-    root: adw::Window,
+    window: adw::Window,
     send_popup_request: mpsc::Sender<PopupRequest>,
     scan: OverlayScan,
 ) {
-    send_popup_request
+    _ = send_popup_request
         .send(PopupRequest {
             target_window: WindowFilter {
                 id: None,
-                pid: Some(process::id()),
-                title: root.title().map(|s| s.to_string()),
-                wm_class: None, // todo
+                title: window.title().map(|s| s.to_string()),
+                wm_class: Some(APP_ID.to_owned()),
             },
-            origin: (scan.origin.0 as i32, scan.origin.1 as i32),
+            origin: scan.origin,
             anchor: PopupAnchor::BottomCenter,
             lookup: scan.lookup,
         })

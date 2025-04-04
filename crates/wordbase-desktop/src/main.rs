@@ -9,10 +9,12 @@ mod theme;
 
 use {
     anyhow::{Context, Result},
+    derive_more::Deref,
     directories::ProjectDirs,
+    foldhash::HashMap,
     futures::never::Never,
     platform::Platform,
-    record::view::{RecordView, RecordViewMsg},
+    record::view::{RecordView, RecordViewConfig, RecordViewMsg},
     relm4::{
         adw::{self, prelude::*},
         loading_widgets::LoadingWidgets,
@@ -23,9 +25,11 @@ use {
     tokio::{fs, sync::mpsc},
     tracing::{info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
-    wordbase::Lookup,
+    wordbase::{Dictionary, DictionaryId, Lookup},
     wordbase_engine::{Engine, texthook::TexthookerEvent},
 };
+
+const APP_ID: &str = "io.github.aecsocket.Wordbase";
 
 fn main() {
     tracing_subscriber::fmt()
@@ -37,11 +41,12 @@ fn main() {
         .init();
     glib::log_set_default_handler(glib::rust_log_handler);
 
-    let app = adw::Application::builder()
-        .application_id("io.github.aecsocket.Wordbase")
-        .build();
+    let app = adw::Application::builder().application_id(APP_ID).build();
     RelmApp::from_app(app.clone()).run_async::<App>(app);
 }
+
+#[derive(Debug, Clone, Deref)]
+struct Dictionaries(Arc<HashMap<DictionaryId, Dictionary>>);
 
 #[derive(Debug)]
 struct App {
@@ -102,7 +107,12 @@ impl AsyncComponent for App {
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
         let init = init(app).await.unwrap();
-        let record_view = RecordView::builder().launch(init.engine.clone()).detach();
+        let record_view = RecordView::builder()
+            .launch(RecordViewConfig {
+                engine: init.engine.clone(),
+                dictionaries: init.dictionaries,
+            })
+            .detach();
 
         let model = Self {
             engine: init.engine,
@@ -116,8 +126,8 @@ impl AsyncComponent for App {
     async fn update(
         &mut self,
         message: Self::Input,
-        sender: AsyncComponentSender<Self>,
-        root: &Self::Root,
+        _sender: AsyncComponentSender<Self>,
+        _root: &Self::Root,
     ) {
         match message {
             AppMsg::Lookup { query } => {
@@ -136,6 +146,7 @@ impl AsyncComponent for App {
 #[derive(Debug)]
 struct AppInit {
     engine: Engine,
+    dictionaries: Dictionaries,
 }
 
 async fn init(app: adw::Application) -> Result<AppInit> {
@@ -158,12 +169,23 @@ async fn init(app: adw::Application) -> Result<AppInit> {
         .await
         .context("failed to create engine")?;
 
+    let dictionaries = Dictionaries(Arc::new(
+        engine
+            .dictionaries()
+            .await
+            .context("failed to fetch initial dictionaries")?
+            .into_iter()
+            .map(|dict| (dict.id, dict))
+            .collect(),
+    ));
+
     // popup
     let (send_popup_request, recv_popup_request) = mpsc::channel(CHANNEL_BUF_CAP);
     glib::spawn_future_local(popup::run(
         engine.clone(),
-        app.clone(),
         platform.clone(),
+        dictionaries.clone(),
+        app.clone(),
         recv_popup_request,
     ));
 
@@ -194,7 +216,10 @@ async fn init(app: adw::Application) -> Result<AppInit> {
     });
     // TODO: forward server sentence events to overlay
 
-    Ok(AppInit { engine })
+    Ok(AppInit {
+        engine,
+        dictionaries,
+    })
 }
 
 const CHANNEL_BUF_CAP: usize = 4;

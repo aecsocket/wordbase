@@ -1,7 +1,15 @@
-use anyhow::{Context, Result, bail};
-use futures::future::LocalBoxFuture;
-use relm4::adw::{self, prelude::*};
-use wordbase::WindowFilter;
+use {
+    anyhow::{Context, Result, bail},
+    futures::future::LocalBoxFuture,
+    relm4::adw::{self, prelude::*},
+    wordbase::WindowFilter,
+};
+
+/*
+implementation notes:
+- `Meta.Window`'s `get_id()` and `get_stable_sequence()` are not for us,
+  since we show/hide the `gtk::Window`, which creates/destroys `Meta.Window`s
+*/
 
 pub struct Platform {
     integration: IntegrationProxy<'static>,
@@ -19,11 +27,9 @@ impl Platform {
     }
 }
 
-const WINDOW_ID_KEY: &str = "wordbase_window_id";
-
 impl super::Platform for Platform {
-    fn init_overlay(&self, window: &adw::Window) -> LocalBoxFuture<Result<()>> {
-        let window = window.clone();
+    fn init_overlay(&self, overlay: &adw::Window) -> LocalBoxFuture<Result<()>> {
+        let overlay = overlay.clone();
         Box::pin(async move {
             let focused_window = self
                 .integration
@@ -34,17 +40,7 @@ impl super::Platform for Platform {
                 bail!("no focused window");
             }
 
-            let window_token = format!("{:016x}", rand::random::<u128>());
-            let old_title = window.title();
-            window.set_title(Some(&window_token));
-            window.present();
-            let window_id = self
-                .integration
-                .get_app_window_id(&window_token)
-                .await
-                .context("failed to get app window ID")?;
-            window.set_title(old_title.as_deref());
-
+            let window_id = get_window_id(&self.integration, &overlay).await?;
             self.integration
                 .affix_to_window(focused_window, window_id)
                 .await
@@ -53,37 +49,50 @@ impl super::Platform for Platform {
         })
     }
 
-    fn move_to_window(
+    fn init_popup(&self, popup: &adw::Window) -> LocalBoxFuture<Result<()>> {
+        let popup = popup.clone();
+        Box::pin(async move {
+            popup.present();
+            Ok(())
+        })
+    }
+
+    fn move_popup_to_window(
         &self,
-        window: &adw::Window,
+        popup: &adw::Window,
         to: WindowFilter,
         offset: (i32, i32),
     ) -> LocalBoxFuture<Result<()>> {
-        let window = window.clone();
+        let popup = popup.clone();
         Box::pin(async move {
-            let window_id = read_window_id(&window)?;
+            let popup_window_id = get_window_id(&self.integration, &popup).await?;
             self.integration
                 .move_to_window(
-                    window_id,
+                    popup_window_id,
                     to.id.unwrap_or_default(),
-                    to.pid.unwrap_or_default(),
                     to.title.as_deref().unwrap_or_default(),
                     to.wm_class.as_deref().unwrap_or_default(),
                     offset.0,
                     offset.1,
                 )
                 .await
-                .context("failed to send request to integration")?;
+                .context("failed to request to move popup window")?;
             Ok(())
         })
     }
 }
 
-fn read_window_id(window: &adw::Window) -> Result<u64> {
-    let window_id_ptr = unsafe { window.data::<u64>(WINDOW_ID_KEY) };
-    window_id_ptr
-        .map(|ptr| unsafe { ptr.read() })
-        .context("window ID is not tracked")
+async fn get_window_id(integration: &IntegrationProxy<'_>, window: &adw::Window) -> Result<u64> {
+    let window_token = format!("{:016x}", rand::random::<u128>());
+    let old_title = window.title();
+    window.set_title(Some(&window_token));
+    window.present();
+    let window_id = integration
+        .get_app_window_id(&window_token)
+        .await
+        .context("failed to get app window ID")?;
+    window.set_title(old_title.as_deref());
+    Ok(window_id)
 }
 
 #[zbus::proxy(
@@ -96,13 +105,12 @@ trait Integration {
 
     async fn get_app_window_id(&self, title: &str) -> zbus::Result<u64>;
 
-    async fn affix_to_window(&self, parent_id: u64, child_id: u64) -> zbus::Result<()>;
+    async fn affix_to_window(&self, parent: u64, child_id: u64) -> zbus::Result<()>;
 
     async fn move_to_window(
         &self,
-        target_id: u64,
+        moved_id: u64,
         to_id: u64,
-        to_pid: u32,
         to_title: &str,
         to_wm_class: &str,
         offset_x: i32,

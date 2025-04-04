@@ -2,21 +2,20 @@ mod noop;
 mod wayland;
 
 // use noop as default;
-use wayland as default;
-
-use futures::future::LocalBoxFuture;
-
-use anyhow::Result;
-use relm4::adw;
-use wordbase::WindowFilter;
+use {
+    anyhow::Result, futures::future::LocalBoxFuture, relm4::adw, wayland as default,
+    wordbase::WindowFilter,
+};
 
 pub trait Platform {
-    fn init_overlay(&self, window: &adw::Window) -> LocalBoxFuture<Result<()>>;
+    fn init_overlay(&self, overlay: &adw::Window) -> LocalBoxFuture<Result<()>>;
 
-    fn move_to_window(
+    fn init_popup(&self, popup: &adw::Window) -> LocalBoxFuture<Result<()>>;
+
+    fn move_popup_to_window(
         &self,
-        window: &adw::Window,
-        target: WindowFilter,
+        popup: &adw::Window,
+        to: WindowFilter,
         offset: (i32, i32),
     ) -> LocalBoxFuture<Result<()>>;
 }

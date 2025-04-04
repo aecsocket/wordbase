@@ -1,20 +1,18 @@
-use std::sync::Arc;
-
-use foldhash::HashMap;
-use futures::never::Never;
-use relm4::prelude::*;
-use tokio::task::JoinHandle;
-use tracing::warn;
-use wordbase::{Lookup, RecordKind};
-use wordbase_engine::Engine;
-
-use crate::theme;
-
-use super::render::{RecordRender, RecordRenderConfig, RecordRenderMsg, RecordRenderResponse};
+use {
+    super::render::{RecordRender, RecordRenderConfig, RecordRenderMsg, RecordRenderResponse},
+    crate::{Dictionaries, theme},
+    futures::never::Never,
+    relm4::prelude::*,
+    tokio::task::JoinHandle,
+    tracing::warn,
+    wordbase::{Lookup, RecordKind},
+    wordbase_engine::Engine,
+};
 
 #[derive(Debug)]
 pub struct RecordView {
     engine: Engine,
+    dictionaries: Dictionaries,
     render: Controller<RecordRender>,
     recv_default_theme_task: JoinHandle<()>,
 }
@@ -26,15 +24,27 @@ impl Drop for RecordView {
 }
 
 #[derive(Debug)]
+pub struct RecordViewConfig {
+    pub engine: Engine,
+    pub dictionaries: Dictionaries,
+}
+
+#[derive(Debug)]
 pub enum RecordViewMsg {
+    SetDictionaries(Dictionaries),
     Lookup(Lookup),
+}
+
+#[derive(Debug)]
+pub enum RecordViewResponse {
+    GotRecords { bytes_scanned: usize },
 }
 
 #[relm4::component(pub, async)]
 impl AsyncComponent for RecordView {
-    type Init = Engine;
+    type Init = RecordViewConfig;
     type Input = RecordViewMsg;
-    type Output = ();
+    type Output = RecordViewResponse;
     type CommandOutput = ();
 
     view! {
@@ -44,7 +54,7 @@ impl AsyncComponent for RecordView {
     }
 
     async fn init(
-        engine: Self::Init,
+        config: Self::Init,
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
@@ -53,6 +63,8 @@ impl AsyncComponent for RecordView {
             .launch(RecordRenderConfig {
                 default_theme,
                 custom_theme: None,
+                dictionaries: config.dictionaries.clone(),
+                records: Vec::new(),
             })
             .forward(sender.input_sender(), |resp| match resp {
                 RecordRenderResponse::RequestLookup { query } => RecordViewMsg::Lookup(Lookup {
@@ -77,7 +89,8 @@ impl AsyncComponent for RecordView {
         });
 
         let model = Self {
-            engine,
+            engine: config.engine,
+            dictionaries: config.dictionaries,
             render,
             recv_default_theme_task,
         };
@@ -88,21 +101,18 @@ impl AsyncComponent for RecordView {
     async fn update(
         &mut self,
         message: Self::Input,
-        _sender: AsyncComponentSender<Self>,
+        sender: AsyncComponentSender<Self>,
         _root: &Self::Root,
     ) {
         match message {
+            RecordViewMsg::SetDictionaries(dictionaries) => {
+                self.dictionaries = dictionaries.clone();
+                _ = self
+                    .render
+                    .sender()
+                    .send(RecordRenderMsg::SetDictionaries(dictionaries));
+            }
             RecordViewMsg::Lookup(lookup) => {
-                // TODO cache this
-                let dictionaries = self
-                    .engine
-                    .dictionaries()
-                    .await
-                    .unwrap()
-                    .into_iter()
-                    .map(|dict| (dict.id, dict))
-                    .collect::<HashMap<_, _>>();
-
                 let records = match self.engine.lookup(&lookup, RecordKind::ALL).await {
                     Ok(records) => records,
                     Err(err) => {
@@ -110,11 +120,20 @@ impl AsyncComponent for RecordView {
                         return;
                     }
                 };
+                if records.is_empty() {
+                    return;
+                }
 
-                _ = self.render.sender().send(RecordRenderMsg::Lookup {
-                    dictionaries: Arc::new(dictionaries),
-                    records,
-                });
+                _ = self
+                    .render
+                    .sender()
+                    .send(RecordRenderMsg::SetRecords(records));
+
+                // TODO
+                let bytes_scanned = lookup.context.len() - lookup.cursor;
+                _ = sender
+                    .output_sender()
+                    .send(RecordViewResponse::GotRecords { bytes_scanned });
             }
         }
     }

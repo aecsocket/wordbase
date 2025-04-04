@@ -15,8 +15,8 @@ impl Engine {
         lemma: &str,
         record_kinds: impl IntoIterator<Item = impl Borrow<RecordKind>>,
     ) -> Result<Vec<RecordLookup>> {
-        // we do a hack where we turn `record_kinds` into a JSON array of record kind ints
-        // because SQLite doesn't support placeholders of tuples or arrays
+        // we do a hack where we turn `record_kinds` into a JSON array of record kind
+        // ints because SQLite doesn't support placeholders of tuples or arrays
         let record_kinds = format!(
             "[{}]",
             record_kinds

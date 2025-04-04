@@ -1,6 +1,5 @@
 use {
-    crate::theme::Theme,
-    foldhash::{HashMap, HashMapExt},
+    crate::{Dictionaries, theme::Theme},
     maud::html,
     relm4::{
         adw::{gdk, prelude::*},
@@ -9,7 +8,7 @@ use {
     std::sync::Arc,
     tracing::{debug, info, warn},
     webkit6::prelude::*,
-    wordbase::{Dictionary, DictionaryId, RecordLookup},
+    wordbase::RecordLookup,
     wordbase_engine::html,
 };
 
@@ -18,7 +17,7 @@ pub struct RecordRender {
     default_theme: Arc<Theme>,
     custom_theme: Option<Arc<Theme>>,
     web_view: webkit6::WebView,
-    dictionaries: Arc<HashMap<DictionaryId, Dictionary>>,
+    dictionaries: Dictionaries,
     records: Vec<RecordLookup>,
 }
 
@@ -26,16 +25,16 @@ pub struct RecordRender {
 pub struct RecordRenderConfig {
     pub default_theme: Arc<Theme>,
     pub custom_theme: Option<Arc<Theme>>,
+    pub dictionaries: Dictionaries,
+    pub records: Vec<RecordLookup>,
 }
 
 #[derive(Debug)]
 pub enum RecordRenderMsg {
     SetDefaultTheme(Arc<Theme>),
     SetCustomTheme(Option<Arc<Theme>>),
-    Lookup {
-        dictionaries: Arc<HashMap<DictionaryId, Dictionary>>,
-        records: Vec<RecordLookup>,
-    },
+    SetDictionaries(Dictionaries),
+    SetRecords(Vec<RecordLookup>),
 }
 
 #[derive(Debug)]
@@ -53,6 +52,9 @@ impl SimpleComponent for RecordRender {
         webkit6::WebView {
             set_hexpand: true,
             set_vexpand: true,
+            set_settings = &webkit6::Settings {
+                set_enable_smooth_scrolling: false,
+            },
             set_background_color: &gdk::RGBA::new(0.0, 0.0, 0.0, 0.0),
             connect_context_menu => |_, _, _| {
                 // prevent opening context menu
@@ -74,8 +76,8 @@ impl SimpleComponent for RecordRender {
             default_theme: init.default_theme,
             custom_theme: init.custom_theme,
             web_view: root.clone(),
-            dictionaries: Arc::new(HashMap::new()),
-            records: Vec::new(),
+            dictionaries: init.dictionaries,
+            records: init.records,
         };
         let widgets = view_output!();
         ComponentParts { model, widgets }
@@ -91,11 +93,11 @@ impl SimpleComponent for RecordRender {
                 self.custom_theme = theme;
                 self.update_web_view();
             }
-            RecordRenderMsg::Lookup {
-                dictionaries,
-                records,
-            } => {
+            RecordRenderMsg::SetDictionaries(dictionaries) => {
                 self.dictionaries = dictionaries;
+                self.update_web_view();
+            }
+            RecordRenderMsg::SetRecords(records) => {
                 self.records = records;
                 self.update_web_view();
             }
@@ -115,7 +117,9 @@ impl RecordRender {
                 (self.custom_theme.as_ref().map(|theme| theme.style.as_str()).unwrap_or_default())
             }
 
-            (records_html)
+            .records {
+                (records_html)
+            }
         };
         self.web_view.load_html(&full_html.0, None);
     }

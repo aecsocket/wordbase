@@ -1,6 +1,7 @@
-use serde::{Deserialize, Serialize};
-
-use crate::{DictionaryId, FrequencyValue, Record, RecordKind, Term};
+use {
+    crate::{DictionaryId, FrequencyValue, Record, RecordKind, Term},
+    serde::{Deserialize, Serialize},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Lookup {
@@ -75,8 +76,6 @@ pub struct WindowFilter {
     ///
     /// [gnome]: https://gjs-docs.gnome.org/meta16~16/meta.window#method-get_id
     pub id: Option<u64>,
-    /// Process ID which owns the target window.
-    pub pid: Option<u32>,
     /// Title of the target window.
     pub title: Option<String>,
     /// Linux `WM_CLASS` (or whatever is reported as the `WM_CLASS`) of the
@@ -111,13 +110,13 @@ pub enum Request {
         lookup: Lookup,
         /// What kinds of records we want to receive.
         ///
-        /// You must explicitly list what kinds of records you want to receive, as
-        /// it is possible (and expected!) that you won't be able to process all
-        /// kinds of records.
+        /// You must explicitly list what kinds of records you want to receive,
+        /// as it is possible (and expected!) that you won't be able to
+        /// process all kinds of records.
         ///
         /// You can also use this to fetch a small amount of info when doing an
-        /// initial lookup, then fetch more records (e.g. pronunciation audio) when
-        /// the user selects a specific term.
+        /// initial lookup, then fetch more records (e.g. pronunciation audio)
+        /// when the user selects a specific term.
         record_kinds: Vec<RecordKind>,
     },
 }

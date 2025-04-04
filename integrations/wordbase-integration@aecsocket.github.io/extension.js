@@ -91,9 +91,8 @@ const INTERFACE = `
             <arg direction="in" type="t" name="overlay_id"/>
         </method>
         <method name="MoveToWindow">
-            <arg direction="in" type="t" name="target_id"/>
+            <arg direction="in" type="t" name="moved_id"/>
             <arg direction="in" type="t" name="to_id"/>
-            <arg direction="in" type="u" name="to_pid"/>
             <arg direction="in" type="s" name="to_title"/>
             <arg direction="in" type="s" name="to_wm_class"/>
             <arg direction="in" type="i" name="offset_x"/>
@@ -198,14 +197,18 @@ class IntegrationService {
         });
 
         parent_window.connect("workspace-changed", (__) => {
+            if (!overlay_window.is_alive || !overlay_window.is_alive()) {
+                return;
+            }
+
             // TODO: how to make this instant?
-            GLib.timeout_add(0, 50, () => {
-                const workspace = parent_window.get_workspace();
-                if (workspace) {
-                    overlay_window.change_workspace(workspace);
-                }
-                return false;
-            });
+            // GLib.timeout_add(0, 50, () => {
+            const workspace = parent_window.get_workspace();
+            // if (workspace) {
+            overlay_window.change_workspace(workspace);
+            // }
+            // return false;
+            // });
         });
         overlay_window.connect("workspace-changed", (__) => {
             const workspace = parent_window.get_workspace();
@@ -215,21 +218,37 @@ class IntegrationService {
         });
 
         parent_window.connect("focus", (__) => {
+            if (!overlay_window.is_alive || !overlay_window.is_alive()) {
+                return;
+            }
+
             // TODO: how to make this instant?
-            GLib.timeout_add(0, 50, () => {
-                overlay_window.raise();
-                return false;
-            });
+            // GLib.timeout_add(0, 50, () => {
+            // if (overlay_window.is_alive()) {
+            overlay_window.raise();
+            // }
+            // return false;
+            // });
         });
         parent_window.connect("raised", (__) => {
+            if (!overlay_window.is_alive || !overlay_window.is_alive()) {
+                return;
+            }
+
             // TODO: how to make this instant?
-            GLib.timeout_add(0, 50, () => {
-                overlay_window.raise();
-                return false;
-            });
+            // GLib.timeout_add(0, 50, () => {
+            // if (overlay_window.is_alive()) {
+            overlay_window.raise();
+            // }
+            // return false;
+            // });
         });
 
         parent_actor.connect("destroy", (__) => {
+            if (!overlay_window.is_alive || !overlay_window.is_alive()) {
+                return;
+            }
+
             // TODO: don't kill, but send a signal to the overlay window somehow
             overlay_window.kill();
         });
@@ -240,58 +259,61 @@ class IntegrationService {
     }
 
     /**
-     * @param {number} target_id
+     * @param {number} moved_id
      * @param {number} to_id
-     * @param {number} to_pid
      * @param {string} to_title
      * @param {string} to_wm_class
      * @param {number} offset_x
      * @param {number} offset_y
      */
-    SetPopupPosition(
-        target_id,
-        to_id,
-        to_pid,
-        to_title,
-        to_wm_class,
-        offset_x,
-        offset_y,
-    ) {
-        // const popup_window = global
-        //     .get_window_actors()
-        //     .find((actor) => actor.meta_window.wm_class === APP_ID);
-        // if (!popup_window) {
-        //     logError(`Failed to find popup window with app ID "${APP_ID}"`);
-        //     return;
-        // }
-        // /**
-        //  * @param {Meta.Window} window
-        //  */
-        // const is_valid_window = (window) =>
-        //     (target_id === 0 || target_id === window.get_id()) &&
-        //     (target_pid === 0 || target_pid === window.get_pid()) &&
-        //     (target_title === "" || target_title === window.title) &&
-        //     (target_wm_class === "" || target_wm_class === window.wm_class);
-        // const target_windows = global
-        //     .get_window_actors()
-        //     .filter((actor) => is_valid_window(actor.meta_window));
-        // if (target_windows.length < 1) {
-        //     logError(
-        //         `Failed to find target window matching id ${target_id} pid ${target_pid} title "${target_title}" wm_class "${target_wm_class}"`,
-        //     );
-        //     return;
-        // }
-        // if (target_windows.length > 1) {
-        //     logError(
-        //         `Found ${target_windows.length} target windows matching id ${target_id} pid ${target_pid} title "${target_title}" wm_class "${target_wm_class}"`,
-        //     );
-        //     return;
-        // }
-        // const target_window = target_windows[0];
-        // const target_rect = target_window.meta_window.get_frame_rect();
-        // const [popup_x, popup_y] = [target_rect.x + x, target_rect.y + y];
-        // popup_window.meta_window.raise();
-        // popup_window.meta_window.move_frame(false, popup_x, popup_y);
+    MoveToWindow(moved_id, to_id, to_title, to_wm_class, offset_x, offset_y) {
+        // find moved window
+
+        const moved_actor = global
+            .get_window_actors()
+            .find((window) => window.meta_window.get_id() === moved_id);
+        if (!moved_actor) {
+            throw new Error(
+                `no window with ID ${moved_id}, windows:\n${window_debug_info()}`,
+            );
+        }
+        const moved_window = moved_actor.meta_window;
+        if (moved_window.gtk_application_id !== APP_ID) {
+            throw new Error(
+                `window GTK application ID is ${moved_window.gtk_application_id}, not ${APP_ID}`,
+            );
+        }
+
+        // find to window
+
+        /**
+         * @param {Meta.Window} window
+         */
+        const is_to_window = (window) =>
+            (to_id === 0 || to_id === window.get_id()) &&
+            (to_title === "" || to_title === window.title) &&
+            (to_wm_class === "" || to_wm_class === window.wm_class);
+        const to_actors = global
+            .get_window_actors()
+            .filter((actor) => is_to_window(actor.meta_window));
+        if (to_actors.length < 1) {
+            throw new Error(
+                `no window matching filter (id=${to_id}, to_title=${to_title}, to_wm_class=${to_wm_class}), windows:\n${window_debug_info()}`,
+            );
+            return;
+        }
+        if (to_actors.length > 1) {
+            throw new Error(
+                `found ${to_actors.length} matching (id=${to_id}, to_title=${to_title}, to_wm_class=${to_wm_class}), but only 1 must match; windows:\n${window_debug_info()}`,
+            );
+            return;
+        }
+        const to_actor = to_actors[0];
+        const to_window = to_actor.meta_window;
+        const to_rect = to_window.get_frame_rect();
+        const [moved_x, moved_y] = [to_rect.x + offset_x, to_rect.y + offset_y];
+        moved_window.raise();
+        moved_window.move_frame(false, moved_x, moved_y);
     }
 }
 
@@ -301,7 +323,9 @@ function window_debug_info() {
         .map((window_actor) => window_actor.meta_window)
         .map(
             (window) =>
-                `- "${window.title}" (GTK ID: ${window.gtk_application_id}) -> ${window.get_id()}`,
+                `- "${window.title}" -> ${window.get_id()}
+    GTK app ID: ${window.gtk_application_id}
+    WM_CLASS: ${window.get_wm_class()}`,
         )
         .join("\n");
 }

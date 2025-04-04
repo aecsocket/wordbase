@@ -52,8 +52,8 @@ pub fn is_kana(c: char) -> bool {
 
 /// Converts katakana characters to hiragana characters.
 ///
-/// This function converts katakana characters in the input string to their hiragana
-/// equivalents. Characters that are not katakana are left unchanged.
+/// This function converts katakana characters in the input string to their
+/// hiragana equivalents. Characters that are not katakana are left unchanged.
 ///
 /// # Examples
 ///
@@ -79,20 +79,23 @@ pub fn kana_to_hiragana(s: &str) -> String {
 
 /// Splits a Japanese term into segments with optional furigana readings.
 ///
-/// For a given Japanese term and its reading, this function returns a vector of pairs
-/// where each pair consists of:
+/// For a given Japanese term and its reading, this function returns a vector of
+/// pairs where each pair consists of:
 /// - A segment of the original term
 /// - The furigana reading for that segment (empty string for kana segments)
 ///
-/// The function intelligently matches kanji segments with their corresponding readings
-/// by using kana segments as anchors.
+/// The function intelligently matches kanji segments with their corresponding
+/// readings by using kana segments as anchors.
 ///
 /// # Examples
 ///
 /// ```
 /// # use wordbase_engine::lang::jpn::furigana_parts;
 /// assert_eq!(furigana_parts("日本", "にほん"), [("日本", "にほん")]);
-/// assert_eq!(furigana_parts("食べる", "たべる"), [("食", "た"), ("べる", "")]);
+/// assert_eq!(
+///     furigana_parts("食べる", "たべる"),
+///     [("食", "た"), ("べる", "")]
+/// );
 /// assert_eq!(
 ///     furigana_parts("取り扱い説明書", "とりあつかいせつめいしょ"),
 ///     [

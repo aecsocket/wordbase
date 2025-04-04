@@ -48,37 +48,39 @@ pub fn render_records<H: BuildHasher>(
     html! {
         @for (term, info) in &terms.0 {
             .term-group {
-                .term {
-                    (render_term(term))
-                }
+                .term-meta {
+                    .term {
+                        (render_term(term))
+                    }
 
-                .pitch-group {
-                    @for (_, pitch) in &info.pitches {
-                        .pitch {
-                            (render_pitch(term, pitch))
+                    .pitch-group {
+                        @for (_, pitch) in &info.pitches {
+                            .pitch {
+                                (render_pitch(term, pitch))
+                            }
+                        }
+                    }
+
+                    .frequency-group {
+                        @for &(source, frequency) in &info.frequencies {
+                            .frequency {
+                                (render_frequency(dictionaries, source, frequency))
+                            }
+                        }
+                    }
+
+                    .audio-group {
+                        @for (_, audio) in &info.audio {
+                            .audio {
+                                (render_audio(audio))
+                            }
                         }
                     }
                 }
 
-                .frequency-group {
-                    @for &(source, frequency) in &info.frequencies {
-                        .frequency {
-                            (render_frequency(dictionaries, source, frequency))
-                        }
-                    }
-                }
-
-                .audio-group {
-                    @for (_, audio) in &info.audio {
-                        .audio {
-                            (render_audio(audio))
-                        }
-                    }
-                }
-
-                .source-glossaries-group {
+                .glossaries {
                     @for (&source, glossaries) in &info.glossaries {
-                        .glossaries {
+                        .one-source {
                             (render_glossaries(dictionaries, source, glossaries))
                         }
                     }

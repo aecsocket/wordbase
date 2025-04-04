@@ -1,9 +1,9 @@
-use anyhow::{Result, bail};
-use futures::future::LocalBoxFuture;
-use gtk4::prelude::GtkWindowExt;
-use relm4::adw;
-
-use super::WindowFilter;
+use {
+    super::WindowFilter,
+    anyhow::{Result, bail},
+    futures::future::LocalBoxFuture,
+    relm4::adw,
+};
 
 pub struct Platform;
 
@@ -16,14 +16,17 @@ impl Platform {
 }
 
 impl super::Platform for Platform {
-    fn init_overlay(&self, window: &adw::Window) -> LocalBoxFuture<Result<()>> {
-        window.present();
-        Box::pin(async move { Ok(()) })
+    fn init_overlay(&self, _overlay: &adw::Window) -> LocalBoxFuture<Result<()>> {
+        Box::pin(async move { bail!("unsupported") })
     }
 
-    fn move_to_window(
+    fn init_popup(&self, _popup: &adw::Window) -> LocalBoxFuture<Result<()>> {
+        Box::pin(async move { bail!("unsupported") })
+    }
+
+    fn move_popup_to_window(
         &self,
-        _window: &adw::Window,
+        _popup: &adw::Window,
         _target: WindowFilter,
         _offset: (i32, i32),
     ) -> LocalBoxFuture<Result<()>> {
