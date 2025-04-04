@@ -26,7 +26,7 @@ use {
     tokio::{sync::mpsc, task::JoinSet},
     tracing::debug,
     wordbase::{
-        DictionaryId, DictionaryKind, DictionaryMeta, FrequencyValue, NonEmptyString, Term,
+        DictionaryId, DictionaryKind, DictionaryMeta, FrequencyValue, NormString, Term,
         dict::yomitan::{Frequency, Glossary, GlossaryTag, Pitch, structured},
     },
 };
@@ -210,7 +210,7 @@ async fn continue_import(
     let records_done = AtomicUsize::new(0);
     let notify_inserted = || {
         let records_done = records_done.fetch_add(1, atomic::Ordering::SeqCst) + 1;
-        if records_done % 1000 == 0 {
+        if records_done % 2000 == 0 {
             let progress = (records_done as f64) / (records_len as f64);
             _ = send_progress.try_send(progress.mul_add(0.5, 0.5));
         }
@@ -351,6 +351,14 @@ async fn import_term(
     let record_id = insert_record(tx, source, &record, scratch)
         .await
         .context("failed to insert record")?;
+    insert_frequency(
+        tx,
+        source,
+        &term,
+        FrequencyValue::Occurrence(term_data.score),
+    )
+    .await
+    .context("failed to insert frequency record")?;
     insert_term_record(tx, source, record_id, &term)
         .await
         .context("failed to insert term record")?;
@@ -381,7 +389,7 @@ async fn import_term_meta(
     term_meta: schema::TermMeta,
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
-    let headword = NonEmptyString::new(term_meta.expression);
+    let headword = NormString::new(term_meta.expression);
     match term_meta.data {
         schema::TermMetaData::Frequency(frequency) => {
             let frequency_mode = index.frequency_mode.context(
@@ -452,7 +460,7 @@ fn to_frequency_and_reading(
         schema::TermMetaFrequency::WithReading { reading, frequency } => (Some(reading), frequency),
     };
 
-    let rank_from = |n: u64| match frequency_mode {
+    let rank_from = |n: i64| match frequency_mode {
         schema::FrequencyMode::OccurrenceBased => FrequencyValue::Occurrence(n),
         schema::FrequencyMode::RankBased => FrequencyValue::Rank(n),
     };
@@ -462,7 +470,7 @@ fn to_frequency_and_reading(
             rank: Some(rank_from(rank)),
             display: None,
         },
-        schema::GenericFrequencyData::String(rank) => rank.trim().parse::<u64>().map_or(
+        schema::GenericFrequencyData::String(rank) => rank.trim().parse::<i64>().map_or(
             Frequency {
                 rank: None,
                 display: Some(rank),

@@ -9,17 +9,27 @@ use {
     bytes::Bytes,
     derive_more::Deref,
     foldhash::{HashMap, HashMapExt},
-    futures::{AsyncRead, AsyncReadExt, StreamExt, future::BoxFuture, io::Cursor},
+    futures::{
+        AsyncBufRead, AsyncRead, AsyncReadExt, AsyncSeek, StreamExt, future::BoxFuture, io::Cursor,
+    },
     schema::{
         FORVO_PATH, JPOD_INDEX, JPOD_MEDIA, MARKER_PATHS, NHK16_AUDIO, NHK16_INDEX,
         SHINMEIKAI8_INDEX, SHINMEIKAI8_MEDIA,
     },
     serde::de::DeserializeOwned,
     sqlx::{Sqlite, Transaction},
+    std::{
+        pin::Pin,
+        sync::{
+            Arc,
+            atomic::{self, AtomicU64},
+        },
+        task::Poll,
+    },
     tokio::sync::mpsc,
     tracing::{debug, trace},
     wordbase::{
-        DictionaryId, DictionaryKind, DictionaryMeta, NonEmptyString, RecordType, Term,
+        DictionaryId, DictionaryKind, DictionaryMeta, NormString, RecordType, Term,
         dict::yomichan_audio::{Audio, AudioFormat, Forvo, Jpod, Nhk16, Shinmeikai8},
     },
 };
@@ -73,6 +83,63 @@ async fn validate(archive: Bytes) -> Result<()> {
     bail!("missing one of {MARKER_PATHS:?}");
 }
 
+struct CountCursor<T> {
+    inner: std::io::Cursor<T>,
+    position: Arc<AtomicU64>,
+}
+
+impl<T> CountCursor<T> {
+    pub fn new(inner: T) -> Self {
+        Self {
+            inner: std::io::Cursor::new(inner),
+            position: Arc::new(AtomicU64::new(0)),
+        }
+    }
+}
+
+impl<T: AsRef<[u8]> + Unpin> AsyncSeek for CountCursor<T> {
+    fn poll_seek(
+        mut self: Pin<&mut Self>,
+        _: &mut std::task::Context<'_>,
+        pos: std::io::SeekFrom,
+    ) -> Poll<std::io::Result<u64>> {
+        Poll::Ready(std::io::Seek::seek(&mut self.inner, pos))
+    }
+}
+
+impl<T: AsRef<[u8]> + Unpin> AsyncRead for CountCursor<T> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        _: &mut std::task::Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<std::io::Result<usize>> {
+        Poll::Ready(std::io::Read::read(&mut self.inner, buf))
+    }
+
+    fn poll_read_vectored(
+        mut self: Pin<&mut Self>,
+        _: &mut std::task::Context<'_>,
+        bufs: &mut [std::io::IoSliceMut<'_>],
+    ) -> Poll<std::io::Result<usize>> {
+        Poll::Ready(std::io::Read::read_vectored(&mut self.inner, bufs))
+    }
+}
+
+impl<T: AsRef<[u8]> + Unpin> AsyncBufRead for CountCursor<T> {
+    fn poll_fill_buf(
+        self: Pin<&mut Self>,
+        _: &mut std::task::Context<'_>,
+    ) -> Poll<std::io::Result<&[u8]>> {
+        Poll::Ready(std::io::BufRead::fill_buf(&mut self.get_mut().inner))
+    }
+
+    fn consume(mut self: Pin<&mut Self>, amt: usize) {
+        std::io::BufRead::consume(&mut self.inner, amt);
+        self.position
+            .store(self.inner.position(), atomic::Ordering::SeqCst);
+    }
+}
+
 async fn import(
     engine: &Engine,
     archive: Bytes,
@@ -92,7 +159,12 @@ async fn import(
     let mut jpod_rev_index = None::<RevIndex<GenericInfo>>;
     let mut nhk16_rev_index = None::<RevIndex<Nhk16Info>>;
     let mut shinmeikai8_rev_index = None::<RevIndex<GenericInfo>>;
-    let mut entries = async_tar::Archive::new(XzDecoder::new(Cursor::new(&archive)))
+
+    let archive_len = archive.len();
+    let cursor = CountCursor::new(&archive);
+    let cursor_pos = cursor.position.clone();
+
+    let mut entries = async_tar::Archive::new(XzDecoder::new(cursor))
         .entries()
         .context("failed to read archive entries")?;
     let mut num_entries = 0usize;
@@ -131,6 +203,11 @@ async fn import(
         .with_context(|| format!("failed to process `{path}`"))?;
 
         num_entries += 1;
+        if num_entries % 2000 == 0 {
+            let progress =
+                (cursor_pos.load(atomic::Ordering::SeqCst) as f64) / (archive_len as f64);
+            _ = send_progress.try_send(progress * 0.5);
+        }
     }
     debug!("{num_entries} total entries");
 
@@ -210,9 +287,9 @@ async fn import(
         .with_context(|| format!("failed to process `{path}`"))?;
 
         entries_done += 1;
-        if entries_done % 1000 == 0 {
+        if entries_done % 2000 == 0 {
             let progress = (entries_done as f64) / (num_entries as f64);
-            _ = send_progress.try_send(progress);
+            _ = send_progress.try_send(progress.mul_add(0.5, 0.5));
         }
     }
 
@@ -243,7 +320,7 @@ where
 #[derive(Debug, Default)]
 struct GenericInfo {
     term: Option<Term>,
-    pitch_pattern: Option<NonEmptyString>,
+    pitch_pattern: Option<NormString>,
     pitch_number: Option<u64>,
 }
 
@@ -262,8 +339,8 @@ impl TryFrom<schema::generic::Index> for RevIndex<GenericInfo> {
             }
         }
         for (path, info) in value.files {
-            let reading = info.kana_reading.and_then(NonEmptyString::new);
-            let pitch_pattern = info.pitch_pattern.and_then(NonEmptyString::new);
+            let reading = info.kana_reading.and_then(NormString::new);
+            let pitch_pattern = info.pitch_pattern.and_then(NormString::new);
             let pitch_number = info.pitch_number.and_then(|s| s.parse::<u64>().ok());
 
             let entry = for_path.entry(path).or_default();
@@ -299,11 +376,11 @@ impl TryFrom<schema::nhk16::Index> for RevIndex<Nhk16Info> {
     fn try_from(value: schema::nhk16::Index) -> Result<Self, Self::Error> {
         let mut for_path = HashMap::<String, Nhk16Info>::new();
         for entry in value.0 {
-            let reading = NonEmptyString::new(entry.kana);
+            let reading = NormString::new(entry.kana);
             let terms = entry
                 .kanji
                 .into_iter()
-                .filter_map(NonEmptyString::new)
+                .filter_map(NormString::new)
                 .filter_map(|headword| Term::new(headword, reading.clone()))
                 .collect::<Vec<_>>();
 

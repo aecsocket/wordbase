@@ -8,7 +8,6 @@ use {
         dictionary::{DictionaryKind, load_dictionary_from_kind},
         mode::Mode,
         segmenter::Segmenter,
-        token::Token,
         tokenizer::Tokenizer,
     },
     std::borrow::Cow,

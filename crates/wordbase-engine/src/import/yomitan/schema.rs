@@ -177,10 +177,10 @@ pub enum TermMetaFrequency {
 #[serde(untagged, deny_unknown_fields)]
 pub enum GenericFrequencyData {
     String(String),
-    Number(u64),
+    Number(i64),
     #[serde(rename_all = "camelCase")]
     Complex {
-        value: u64,
+        value: i64,
         display_value: Option<String>,
     },
 }

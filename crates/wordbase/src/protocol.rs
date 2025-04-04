@@ -49,8 +49,12 @@ pub struct RecordLookup {
     pub term: Term,
     /// [`Record`] that was found.
     pub record: Record,
-    /// [`FrequencyValue`] of the associated record.
-    pub frequency: Option<FrequencyValue>,
+    /// [`FrequencyValue`] of the record, as found in the current profile's
+    /// sorting dictionary.
+    pub profile_sorting_frequency: Option<FrequencyValue>,
+    /// [`FrequencyValue`] of the record, as found in [`RecordLookup::source`]'s
+    /// frequency information.
+    pub source_sorting_frequency: Option<FrequencyValue>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

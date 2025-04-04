@@ -32,8 +32,10 @@ impl Engine {
                     record.data,
                     term_record.headword,
                     term_record.reading,
-                    frequency.mode AS 'frequency_mode?',
-                    frequency.value AS 'frequency_value?'
+                    profile_frequency.mode AS 'profile_frequency_mode?',
+                    profile_frequency.value AS 'profile_frequency_value?',
+                    source_frequency.mode AS 'source_frequency_mode?',
+                    source_frequency.value AS 'source_frequency_value?'
                 FROM record
                 INNER JOIN dictionary ON record.source = dictionary.id
 
@@ -48,15 +50,22 @@ impl Engine {
                     AND (term_record.headword = $1 OR term_record.reading = $1)
                 )
 
-                -- join on frequency information, for the `ORDER BY` below
-                LEFT JOIN frequency ON (
+                -- join on profile-global frequency information, for the `ORDER BY` below
+                LEFT JOIN frequency profile_frequency ON (
                     -- only use frequency info from the currently selected sorting dict in this profile
-                    frequency.source = (
+                    profile_frequency.source = (
                         SELECT sorting_dictionary FROM profile
                         WHERE id = config.current_profile
                     )
-                    AND frequency.headword = term_record.headword
-                    AND frequency.reading = term_record.reading
+                    AND profile_frequency.headword = term_record.headword
+                    AND profile_frequency.reading = term_record.reading
+                )
+
+                -- join on frequency information for this source
+                LEFT JOIN frequency source_frequency ON (
+                    source_frequency.source = record.source
+                    AND source_frequency.headword = term_record.headword
+                    AND source_frequency.reading = term_record.reading
                 )
 
                 -- only include records for the given record kinds
@@ -65,16 +74,23 @@ impl Engine {
                 ORDER BY
                     -- user-specified dictionary sorting position always takes priority
                     dictionary.position,
+                    -- put entries without an explicit frequency value last
                     CASE
-                        -- put entries without an explicit frequency value last
-                        WHEN frequency.mode IS NULL THEN 1
+                        WHEN profile_frequency.mode IS NULL THEN 1
                         ELSE 0
                     END,
+                    -- sort by profile-global frequency info
                     CASE
                         -- frequency rank
-                        WHEN frequency.mode = 0 THEN  frequency.value
+                        WHEN profile_frequency.mode = 0 THEN  profile_frequency.value
                         -- frequency occurrence
-                        WHEN frequency.mode = 1 THEN -frequency.value
+                        WHEN profile_frequency.mode = 1 THEN -profile_frequency.value
+                        ELSE 0
+                    END,
+                    -- sort by source-specific frequency info
+                    CASE
+                        WHEN source_frequency.mode = 0 THEN  source_frequency.value
+                        WHEN source_frequency.mode = 1 THEN -source_frequency.value
                         ELSE 0
                     END",
                 lemma,
@@ -115,14 +131,14 @@ impl Engine {
                     term: Term::new(record.headword, record.reading)
                         .context("fetched empty term")?,
                     record: for_kinds!(deserialize_record),
-                    frequency: match (
-                        record.frequency_mode,
-                        record.frequency_value.map(u64::try_from),
-                    ) {
-                        (Some(0), Some(Ok(value))) => Some(FrequencyValue::Rank(value)),
-                        (Some(1), Some(Ok(value))) => Some(FrequencyValue::Occurrence(value)),
-                        _ => None,
-                    },
+                    profile_sorting_frequency: to_frequency_value(
+                        record.profile_frequency_mode,
+                        record.profile_frequency_value,
+                    ),
+                    source_sorting_frequency: to_frequency_value(
+                        record.source_frequency_mode,
+                        record.source_frequency_value,
+                    ),
                 })
             });
 
@@ -159,5 +175,13 @@ impl Engine {
                     })
             })
             .right_stream()
+    }
+}
+
+fn to_frequency_value(mode: Option<i64>, value: Option<i64>) -> Option<FrequencyValue> {
+    match (mode, value) {
+        (Some(0), Some(value)) => Some(FrequencyValue::Rank(value)),
+        (Some(1), Some(value)) => Some(FrequencyValue::Occurrence(value)),
+        _ => None,
     }
 }

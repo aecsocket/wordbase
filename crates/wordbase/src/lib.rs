@@ -173,14 +173,14 @@ pub struct DictionaryId(pub i64);
 #[serde(untagged, deny_unknown_fields)]
 pub enum Term {
     Full {
-        headword: NonEmptyString,
-        reading: NonEmptyString,
+        headword: NormString,
+        reading: NormString,
     },
     Headword {
-        headword: NonEmptyString,
+        headword: NormString,
     },
     Reading {
-        reading: NonEmptyString,
+        reading: NormString,
     },
 }
 
@@ -209,7 +209,7 @@ impl Term {
     }
 
     #[must_use]
-    pub fn headword(&self) -> Option<&NonEmptyString> {
+    pub fn headword(&self) -> Option<&NormString> {
         match self {
             Self::Full { headword, .. } | Self::Headword { headword } => Some(headword),
             Self::Reading { .. } => None,
@@ -217,7 +217,7 @@ impl Term {
     }
 
     #[must_use]
-    pub fn reading(&self) -> Option<&NonEmptyString> {
+    pub fn reading(&self) -> Option<&NormString> {
         match self {
             Self::Full { reading, .. } | Self::Reading { reading } => Some(reading),
             Self::Headword { .. } => None,
@@ -225,7 +225,7 @@ impl Term {
     }
 
     #[must_use]
-    pub fn headword_mut(&mut self) -> Option<&mut NonEmptyString> {
+    pub fn headword_mut(&mut self) -> Option<&mut NormString> {
         match self {
             Self::Full { headword, .. } | Self::Headword { headword } => Some(headword),
             Self::Reading { .. } => None,
@@ -233,21 +233,21 @@ impl Term {
     }
 
     #[must_use]
-    pub fn reading_mut(&mut self) -> Option<&mut NonEmptyString> {
+    pub fn reading_mut(&mut self) -> Option<&mut NormString> {
         match self {
             Self::Full { reading, .. } | Self::Reading { reading } => Some(reading),
             Self::Headword { .. } => None,
         }
     }
 
-    pub fn set_headword(&mut self, new: NonEmptyString) -> Option<NonEmptyString> {
+    pub fn set_headword(&mut self, new: NormString) -> Option<NormString> {
         match self {
             Self::Full { headword, .. } | Self::Headword { headword } => {
                 Some(mem::replace(headword, new))
             }
             Self::Reading { reading } => {
                 // CORRECTNESS: this non-empty string will never be accessed
-                let reading = mem::replace(reading, NonEmptyString::new_unchecked(String::new()));
+                let reading = mem::replace(reading, NormString::new_unchecked(String::new()));
                 *self = Self::Full {
                     headword: new,
                     reading,
@@ -257,14 +257,14 @@ impl Term {
         }
     }
 
-    pub fn set_reading(&mut self, new: NonEmptyString) -> Option<NonEmptyString> {
+    pub fn set_reading(&mut self, new: NormString) -> Option<NormString> {
         match self {
             Self::Full { reading, .. } | Self::Reading { reading } => {
                 Some(mem::replace(reading, new))
             }
             Self::Headword { headword } => {
                 // CORRECTNESS: this non-empty string will never be accessed
-                let headword = mem::replace(headword, NonEmptyString::new_unchecked(String::new()));
+                let headword = mem::replace(headword, NormString::new_unchecked(String::new()));
                 *self = Self::Full {
                     headword,
                     reading: new,
@@ -275,7 +275,7 @@ impl Term {
     }
 
     #[must_use]
-    pub fn take_headword(self) -> Option<NonEmptyString> {
+    pub fn take_headword(self) -> Option<NormString> {
         match self {
             Self::Full { headword, .. } | Self::Headword { headword } => Some(headword),
             Self::Reading { .. } => None,
@@ -283,7 +283,7 @@ impl Term {
     }
 
     #[must_use]
-    pub fn take_reading(self) -> Option<NonEmptyString> {
+    pub fn take_reading(self) -> Option<NormString> {
         match self {
             Self::Full { reading, .. } | Self::Reading { reading } => Some(reading),
             Self::Headword { .. } => None,
@@ -293,13 +293,13 @@ impl Term {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FrequencyValue {
-    Rank(u64),
-    Occurrence(u64),
+    Rank(i64),
+    Occurrence(i64),
 }
 
 impl FrequencyValue {
     #[must_use]
-    pub const fn value(self) -> u64 {
+    pub const fn value(self) -> i64 {
         let (Self::Rank(n) | Self::Occurrence(n)) = self;
         n
     }
@@ -344,16 +344,21 @@ pub struct ProfileMeta {
 pub struct ProfileId(pub i64);
 
 #[derive(Display, Clone, PartialEq, Eq, Hash, Deref, Serialize)]
-pub struct NonEmptyString(String);
+pub struct NormString(String);
 
-impl NonEmptyString {
+impl NormString {
     #[must_use]
     pub fn new(string: impl Into<String>) -> Option<Self> {
-        let string = string.into();
-        if string.trim().is_empty() {
-            None
-        } else {
+        let string: String = string.into();
+        let trimmed = string.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+
+        if trimmed == string {
             Some(Self(string))
+        } else {
+            Some(Self(trimmed.to_string()))
         }
     }
 
@@ -368,13 +373,13 @@ impl NonEmptyString {
     }
 }
 
-impl Debug for NonEmptyString {
+impl Debug for NormString {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.0.fmt(f)
     }
 }
 
-impl<'de> Deserialize<'de> for NonEmptyString {
+impl<'de> Deserialize<'de> for NormString {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -382,7 +387,7 @@ impl<'de> Deserialize<'de> for NonEmptyString {
         struct Visitor;
 
         impl serde::de::Visitor<'_> for Visitor {
-            type Value = NonEmptyString;
+            type Value = NormString;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 write!(formatter, "non-empty string")
@@ -392,14 +397,14 @@ impl<'de> Deserialize<'de> for NonEmptyString {
             where
                 E: serde::de::Error,
             {
-                NonEmptyString::new(v).ok_or_else(|| E::custom("string must be non-empty"))
+                NormString::new(v).ok_or_else(|| E::custom("string must be non-empty"))
             }
 
             fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
-                NonEmptyString::new(v).ok_or_else(|| E::custom("string must be non-empty"))
+                NormString::new(v).ok_or_else(|| E::custom("string must be non-empty"))
             }
         }
 
@@ -411,17 +416,17 @@ impl<'de> Deserialize<'de> for NonEmptyString {
 pub trait TermPart: Sized {
     type IntoTerm;
 
-    fn try_into_non_empty_string(self) -> Option<NonEmptyString>;
+    fn try_into_non_empty_string(self) -> Option<NormString>;
 
     fn into_term_with_headword(self) -> Self::IntoTerm;
 
     fn into_term_with_reading(self) -> Self::IntoTerm;
 }
 
-impl TermPart for NonEmptyString {
+impl TermPart for NormString {
     type IntoTerm = Term;
 
-    fn try_into_non_empty_string(self) -> Option<NonEmptyString> {
+    fn try_into_non_empty_string(self) -> Option<NormString> {
         Some(self)
     }
 
@@ -434,10 +439,10 @@ impl TermPart for NonEmptyString {
     }
 }
 
-impl TermPart for Option<NonEmptyString> {
+impl TermPart for Option<NormString> {
     type IntoTerm = Option<Term>;
 
-    fn try_into_non_empty_string(self) -> Option<NonEmptyString> {
+    fn try_into_non_empty_string(self) -> Option<NormString> {
         self
     }
 
@@ -453,23 +458,23 @@ impl TermPart for Option<NonEmptyString> {
 impl TermPart for String {
     type IntoTerm = Option<Term>;
 
-    fn try_into_non_empty_string(self) -> Option<NonEmptyString> {
-        NonEmptyString::new(self)
+    fn try_into_non_empty_string(self) -> Option<NormString> {
+        NormString::new(self)
     }
 
     fn into_term_with_headword(self) -> Self::IntoTerm {
-        NonEmptyString::new(self).into_term_with_headword()
+        NormString::new(self).into_term_with_headword()
     }
 
     fn into_term_with_reading(self) -> Self::IntoTerm {
-        NonEmptyString::new(self).into_term_with_reading()
+        NormString::new(self).into_term_with_reading()
     }
 }
 
 impl TermPart for Option<String> {
     type IntoTerm = Option<Term>;
 
-    fn try_into_non_empty_string(self) -> Option<NonEmptyString> {
+    fn try_into_non_empty_string(self) -> Option<NormString> {
         self.and_then(TermPart::try_into_non_empty_string)
     }
 
@@ -485,16 +490,16 @@ impl TermPart for Option<String> {
 impl TermPart for &str {
     type IntoTerm = Option<Term>;
 
-    fn try_into_non_empty_string(self) -> Option<NonEmptyString> {
-        NonEmptyString::new(self)
+    fn try_into_non_empty_string(self) -> Option<NormString> {
+        NormString::new(self)
     }
 
     fn into_term_with_headword(self) -> Self::IntoTerm {
-        NonEmptyString::new(self).map(|headword| Term::Headword { headword })
+        NormString::new(self).map(|headword| Term::Headword { headword })
     }
 
     fn into_term_with_reading(self) -> Self::IntoTerm {
-        NonEmptyString::new(self).map(|reading| Term::Reading { reading })
+        NormString::new(self).map(|reading| Term::Reading { reading })
     }
 }
 
@@ -506,7 +511,7 @@ mod tests {
     fn term_api() {
         const TEST: &str = "test";
 
-        let test = NonEmptyString::new(TEST).unwrap();
+        let test = NormString::new(TEST).unwrap();
 
         assert_eq!(Term::from_headword(""), None);
         assert_eq!(

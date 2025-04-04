@@ -1,5 +1,5 @@
 use {
-    crate::NonEmptyString,
+    crate::NormString,
     bytes::Bytes,
     serde::{Deserialize, Serialize},
 };
@@ -35,11 +35,11 @@ pub struct Nhk16 {
 pub struct Shinmeikai8 {
     pub audio: Audio,
     pub pitch_number: Option<u64>,
-    pub pitch_pattern: Option<NonEmptyString>,
+    pub pitch_pattern: Option<NormString>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Furigana {
-    pub character: NonEmptyString,
-    pub reading: NonEmptyString,
+    pub character: NormString,
+    pub reading: NormString,
 }

@@ -14,7 +14,7 @@ use {
         prelude::*,
         view,
     },
-    std::sync::Arc,
+    std::{cell::Cell, rc::Rc, sync::Arc, time::Duration},
     tracing::warn,
     wordbase::{PopupAnchor, WindowFilter},
 };
@@ -104,22 +104,30 @@ impl AsyncComponent for Popup {
         _sender: AsyncComponentSender<Self>,
         root: &Self::Root,
     ) {
-        root.set_visible(true);
         _ = self
             .record_view
             .sender()
             .send(RecordViewMsg::Records(request.records));
 
         // TODO compute it
+        let target_window = request.target_window;
         let origin = request.origin;
 
-        if let Err(err) = self
-            .platform
-            .move_popup_to_window(root, request.target_window, origin)
-            .await
-        {
-            warn!("Failed to move popup to target window: {err:?}");
-        }
+        let root = root.clone();
+        let platform = self.platform.clone();
+        glib::timeout_add_local_once(Duration::from_millis(1), move || {
+            let root = root.clone();
+            let platform = platform.clone();
+            let target_window = target_window.clone();
+            glib::spawn_future_local(async move {
+                if let Err(err) = platform
+                    .move_popup_to_window(&root, target_window, origin)
+                    .await
+                {
+                    warn!("Failed to move popup to target window: {err:?}");
+                }
+            });
+        });
     }
 }
 
