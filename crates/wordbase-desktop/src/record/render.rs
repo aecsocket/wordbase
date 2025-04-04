@@ -31,10 +31,10 @@ pub struct RecordRenderConfig {
 
 #[derive(Debug)]
 pub enum RecordRenderMsg {
-    SetDefaultTheme(Arc<Theme>),
-    SetCustomTheme(Option<Arc<Theme>>),
-    SetDictionaries(Dictionaries),
-    SetRecords(Vec<RecordLookup>),
+    DefaultTheme(Arc<Theme>),
+    CustomTheme(Option<Arc<Theme>>),
+    Dictionaries(Dictionaries),
+    Records(Vec<RecordLookup>),
 }
 
 #[derive(Debug)]
@@ -85,19 +85,19 @@ impl SimpleComponent for RecordRender {
 
     fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
         match message {
-            RecordRenderMsg::SetDefaultTheme(theme) => {
+            RecordRenderMsg::DefaultTheme(theme) => {
                 self.default_theme = theme;
                 self.update_web_view();
             }
-            RecordRenderMsg::SetCustomTheme(theme) => {
+            RecordRenderMsg::CustomTheme(theme) => {
                 self.custom_theme = theme;
                 self.update_web_view();
             }
-            RecordRenderMsg::SetDictionaries(dictionaries) => {
+            RecordRenderMsg::Dictionaries(dictionaries) => {
                 self.dictionaries = dictionaries;
                 self.update_web_view();
             }
-            RecordRenderMsg::SetRecords(records) => {
+            RecordRenderMsg::Records(records) => {
                 self.records = records;
                 self.update_web_view();
             }

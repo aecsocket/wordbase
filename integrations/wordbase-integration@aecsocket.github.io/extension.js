@@ -197,58 +197,22 @@ class IntegrationService {
         });
 
         parent_window.connect("workspace-changed", (__) => {
-            if (!overlay_window.is_alive || !overlay_window.is_alive()) {
-                return;
-            }
-
-            // TODO: how to make this instant?
-            // GLib.timeout_add(0, 50, () => {
             const workspace = parent_window.get_workspace();
-            // if (workspace) {
             overlay_window.change_workspace(workspace);
-            // }
-            // return false;
-            // });
         });
         overlay_window.connect("workspace-changed", (__) => {
             const workspace = parent_window.get_workspace();
-            if (workspace) {
-                overlay_window.change_workspace(workspace);
-            }
+            overlay_window.change_workspace(workspace);
         });
 
         parent_window.connect("focus", (__) => {
-            if (!overlay_window.is_alive || !overlay_window.is_alive()) {
-                return;
-            }
-
-            // TODO: how to make this instant?
-            // GLib.timeout_add(0, 50, () => {
-            // if (overlay_window.is_alive()) {
             overlay_window.raise();
-            // }
-            // return false;
-            // });
         });
         parent_window.connect("raised", (__) => {
-            if (!overlay_window.is_alive || !overlay_window.is_alive()) {
-                return;
-            }
-
-            // TODO: how to make this instant?
-            // GLib.timeout_add(0, 50, () => {
-            // if (overlay_window.is_alive()) {
             overlay_window.raise();
-            // }
-            // return false;
-            // });
         });
 
         parent_actor.connect("destroy", (__) => {
-            if (!overlay_window.is_alive || !overlay_window.is_alive()) {
-                return;
-            }
-
             // TODO: don't kill, but send a signal to the overlay window somehow
             overlay_window.kill();
         });

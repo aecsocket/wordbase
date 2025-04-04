@@ -31,7 +31,7 @@ pub struct RecordViewConfig {
 
 #[derive(Debug)]
 pub enum RecordViewMsg {
-    SetDictionaries(Dictionaries),
+    Dictionaries(Dictionaries),
     Lookup(Lookup),
 }
 
@@ -81,7 +81,7 @@ impl AsyncComponent for RecordView {
                 loop {
                     let default_theme = recv_default_theme_changed.recv().await.ok()?;
                     render_sender
-                        .send(RecordRenderMsg::SetDefaultTheme(default_theme))
+                        .send(RecordRenderMsg::DefaultTheme(default_theme))
                         .ok()?;
                 }
             }
@@ -105,12 +105,12 @@ impl AsyncComponent for RecordView {
         _root: &Self::Root,
     ) {
         match message {
-            RecordViewMsg::SetDictionaries(dictionaries) => {
+            RecordViewMsg::Dictionaries(dictionaries) => {
                 self.dictionaries = dictionaries.clone();
                 _ = self
                     .render
                     .sender()
-                    .send(RecordRenderMsg::SetDictionaries(dictionaries));
+                    .send(RecordRenderMsg::Dictionaries(dictionaries));
             }
             RecordViewMsg::Lookup(lookup) => {
                 let records = match self.engine.lookup(&lookup, RecordKind::ALL).await {
@@ -124,10 +124,7 @@ impl AsyncComponent for RecordView {
                     return;
                 }
 
-                _ = self
-                    .render
-                    .sender()
-                    .send(RecordRenderMsg::SetRecords(records));
+                _ = self.render.sender().send(RecordRenderMsg::Records(records));
 
                 // TODO
                 let bytes_scanned = lookup.context.len() - lookup.cursor;
