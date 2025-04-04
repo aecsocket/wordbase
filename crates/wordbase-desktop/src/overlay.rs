@@ -66,10 +66,9 @@ async fn handle(
         sentence,
     }: TexthookerSentence,
 ) -> Result<()> {
-    match overlays.entry(process_path.clone()) {
-        Entry::Occupied(entry) => {
-            _ = entry.get().sender().send(OverlayMsg::Sentence { sentence });
-        }
+    let overlay = match overlays.entry(process_path.clone()) {
+        Entry::Occupied(entry) => entry.into_mut(),
+
         Entry::Vacant(entry) => {
             info!("Creating overlay for new process {process_path:?}");
 
@@ -80,16 +79,16 @@ async fn handle(
                     engine: engine.clone(),
                     popup: popup.clone(),
                     process_path,
-                    sentence,
                 },
             )
             .await
             .context("failed to create overlay window")?
             .detach();
 
-            entry.insert(overlay);
+            entry.insert(overlay)
         }
-    }
+    };
+    _ = overlay.sender().send(OverlayMsg::Sentence { sentence });
     Ok(())
 }
 
@@ -109,7 +108,7 @@ async fn connector(
 struct Overlay {
     engine: Engine,
     popup: relm4::Sender<AppPopupRequest>,
-    sentence: String,
+    sentence: gtk::Label,
 }
 
 #[derive(Debug)]
@@ -117,13 +116,12 @@ struct OverlayConfig {
     engine: Engine,
     popup: relm4::Sender<AppPopupRequest>,
     process_path: String,
-    sentence: String,
 }
 
 #[derive(Debug)]
 enum OverlayMsg {
     Sentence { sentence: String },
-    Scan { lookup: Lookup, origin: (i32, i32) },
+    ScanSentence { byte_index_i32: i32 },
 }
 
 #[relm4::component(pub, async)]
@@ -156,7 +154,7 @@ impl AsyncComponent for Overlay {
                 set_hexpand: true,
                 set_vexpand: true,
 
-                #[name(sentence_label)]
+                #[name(sentence)]
                 gtk::Label {
                     set_margin_start: 16,
                     set_margin_end: 16,
@@ -171,9 +169,6 @@ impl AsyncComponent for Overlay {
                     set_wrap: true,
                     set_selectable: true,
                     add_css_class: classes::BODY,
-
-                    #[watch]
-                    set_text: &model.sentence,
                 },
             },
         }
@@ -184,14 +179,14 @@ impl AsyncComponent for Overlay {
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
+        let widgets = view_output!();
         let model = Self {
             engine: init.engine,
-            sentence: init.sentence,
             popup: init.popup,
+            sentence: widgets.sentence.clone(),
         };
-        let widgets = view_output!();
         setup_root_opacity_animation(&root);
-        setup_sentence_scan(&root, &widgets.sentence_label, &sender);
+        setup_sentence_scan(&widgets.sentence, &sender);
         AsyncComponentParts { model, widgets }
     }
 
@@ -203,15 +198,55 @@ impl AsyncComponent for Overlay {
     ) {
         match message {
             OverlayMsg::Sentence { sentence } => {
-                self.sentence = sentence;
+                self.sentence.set_text(&sentence);
             }
-            OverlayMsg::Scan { lookup, origin } => {
-                let Ok(records) = self.engine.lookup(&lookup, SUPPORTED_RECORD_KINDS).await else {
+            OverlayMsg::ScanSentence { byte_index_i32 } => {
+                let text = &self.sentence.text();
+                let Ok(byte_index) = usize::try_from(byte_index_i32) else {
+                    return;
+                };
+                let Some((before, _)) = text.split_at_checked(byte_index) else {
+                    return;
+                };
+                let char_index = before.chars().count();
+                let Ok(char_index_i32) = i32::try_from(char_index) else {
+                    return;
+                };
+
+                let char_rect = self.sentence.layout().index_to_pos(byte_index_i32);
+                let (char_rel_x, char_rel_y) = (
+                    // anchor to bottom-right of character
+                    (char_rect.x() + char_rect.width()) as f32 / pango::SCALE as f32,
+                    (char_rect.y() + char_rect.height()) as f32 / pango::SCALE as f32,
+                );
+                let abs_point = self
+                    .sentence
+                    .compute_point(root, &graphene::Point::new(char_rel_x, char_rel_y))
+                    .expect("`sentence` and `root` should share a common ancestor");
+
+                // TODO variable offset
+                #[expect(clippy::cast_possible_truncation, reason = "no other way to convert")]
+                let origin = (abs_point.x() as i32 + 16, abs_point.y() as i32 + 16);
+
+                let Ok(records) = self
+                    .engine
+                    .lookup(
+                        &Lookup {
+                            // TODO: add some scrollback to context
+                            context: text.to_string(),
+                            cursor: byte_index,
+                        },
+                        SUPPORTED_RECORD_KINDS,
+                    )
+                    .await
+                else {
                     return;
                 };
                 if records.is_empty() {
                     return;
                 }
+
+                self.sentence.select_region(char_index_i32, -1);
 
                 _ = self.popup.send(AppPopupRequest {
                     target_window: WindowFilter {
@@ -259,15 +294,10 @@ fn setup_root_opacity_animation(root: &adw::Window) {
     animation.play();
 }
 
-fn setup_sentence_scan(
-    root: &adw::Window,
-    label: &gtk::Label,
-    sender: &AsyncComponentSender<Overlay>,
-) {
+fn setup_sentence_scan(label: &gtk::Label, sender: &AsyncComponentSender<Overlay>) {
     let controller = gtk::EventControllerMotion::new();
     label.add_controller(controller.clone());
 
-    let root = root.clone();
     let label = label.clone();
     let sender = sender.clone();
     let last_scan_byte_index = Arc::new(AtomicI32::new(-1));
@@ -289,31 +319,8 @@ fn setup_sentence_scan(
             // we're scanning the same character as in the last motion event
             return;
         }
-        let Ok(byte_index) = usize::try_from(byte_index_i32) else {
-            return;
-        };
-
-        let text = &label.text();
-        let lookup = Lookup {
-            // TODO: add some scrollback to context
-            context: text.to_string(),
-            cursor: byte_index,
-        };
-
-        let ch_rect = label.layout().index_to_pos(byte_index_i32);
-        let (ch_rel_x, ch_rel_y) = (
-            // anchor to bottom-right of character
-            (ch_rect.x() + ch_rect.width()) as f32 / pango::SCALE as f32,
-            (ch_rect.y() + ch_rect.height()) as f32 / pango::SCALE as f32,
-        );
-
-        let abs_point = label
-            .compute_point(&root, &graphene::Point::new(ch_rel_x, ch_rel_y))
-            .expect("`label` and `root` should share a common ancestor");
-        #[expect(clippy::cast_possible_truncation, reason = "no other way to convert")]
-        let origin = (abs_point.x() as i32 + 16, abs_point.y() as i32 + 16);
         _ = sender
             .input_sender()
-            .send(OverlayMsg::Scan { lookup, origin });
+            .send(OverlayMsg::ScanSentence { byte_index_i32 });
     });
 }

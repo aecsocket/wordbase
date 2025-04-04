@@ -15,7 +15,7 @@ use {
     platform::Platform,
     record::view::{RecordView, RecordViewConfig, RecordViewMsg},
     relm4::{
-        adw::{self, prelude::*},
+        adw::{self, gio, prelude::*},
         loading_widgets::LoadingWidgets,
         prelude::*,
         view,
@@ -41,7 +41,8 @@ fn main() {
     glib::log_set_default_handler(glib::rust_log_handler);
 
     let app = adw::Application::builder().application_id(APP_ID).build();
-    RelmApp::from_app(app.clone()).run_async::<App>(app);
+    let settings = gio::Settings::new(APP_ID);
+    RelmApp::from_app(app.clone()).run_async::<App>(AppConfig { app, settings });
 }
 
 type Dictionaries = HashMap<DictionaryId, Dictionary>;
@@ -53,13 +54,19 @@ struct App {
 }
 
 #[derive(Debug)]
+struct AppConfig {
+    app: adw::Application,
+    settings: gio::Settings,
+}
+
+#[derive(Debug)]
 enum AppMsg {
     Lookup { query: String },
 }
 
 #[relm4::component(async)]
 impl AsyncComponent for App {
-    type Init = adw::Application;
+    type Init = AppConfig;
     type Input = AppMsg;
     type Output = ();
     type CommandOutput = ();
@@ -100,11 +107,11 @@ impl AsyncComponent for App {
     }
 
     async fn init(
-        app: Self::Init,
+        init: Self::Init,
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
-        let init = init(app).await.unwrap();
+        let init = init_app(init).await.unwrap();
         let record_view = RecordView::builder()
             .launch(RecordViewConfig {
                 engine: init.engine.clone(),
@@ -147,7 +154,7 @@ struct AppInit {
     dictionaries: Arc<Dictionaries>,
 }
 
-async fn init(app: adw::Application) -> Result<AppInit> {
+async fn init_app(AppConfig { app, settings }: AppConfig) -> Result<AppInit> {
     let platform = Arc::<dyn Platform>::from(
         platform::default()
             .await
@@ -188,6 +195,12 @@ async fn init(app: adw::Application) -> Result<AppInit> {
     .await?
     .detach();
     popup.detach_runtime();
+    settings
+        .bind("popup-width", popup.widget(), "default-width")
+        .build();
+    settings
+        .bind("popup-height", popup.widget(), "default-height")
+        .build();
 
     // overlay
     let (send_sentence, recv_sentence) = mpsc::channel(CHANNEL_BUF_CAP);

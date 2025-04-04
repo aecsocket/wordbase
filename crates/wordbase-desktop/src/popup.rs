@@ -67,8 +67,8 @@ impl AsyncComponent for Popup {
             #[local]
             root {
                 set_title: Some("Wordbase Popup"),
-                set_default_width: 180,
-                set_default_height: 100,
+                set_width_request: 180,
+                set_height_request: 100,
                 set_hide_on_close: true,
 
                 #[name(spinner)]
@@ -94,7 +94,7 @@ impl AsyncComponent for Popup {
             record_view: RecordView::builder().launch(init.record_view).detach(),
         };
         let widgets = view_output!();
-        hide_on_leave(&root);
+        hide_on_lost_focus(&root);
         AsyncComponentParts { model, widgets }
     }
 
@@ -123,11 +123,13 @@ impl AsyncComponent for Popup {
     }
 }
 
-fn hide_on_leave(root: &adw::Window) {
-    let controller = gtk::EventControllerMotion::new();
-    root.add_controller(controller.clone());
+fn hide_on_lost_focus(root: &adw::Window) {
     let root = root.clone();
-    controller.connect_leave(move |_| {
-        root.set_visible(false);
+
+    // todo
+    root.connect_is_active_notify(move |root| {
+        if !root.is_active() {
+            root.set_visible(false);
+        }
     });
 }
