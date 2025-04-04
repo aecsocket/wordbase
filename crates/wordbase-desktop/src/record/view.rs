@@ -7,7 +7,7 @@ use {
     futures::never::Never,
     relm4::prelude::*,
     std::sync::Arc,
-    tokio::task::JoinHandle,
+    tokio_util::task::AbortOnDropHandle,
     wordbase::Lookup,
     wordbase_engine::Engine,
 };
@@ -17,13 +17,7 @@ pub struct RecordView {
     engine: Engine,
     dictionaries: Arc<Dictionaries>,
     render: Controller<RecordRender>,
-    recv_default_theme_task: JoinHandle<()>,
-}
-
-impl Drop for RecordView {
-    fn drop(&mut self) {
-        self.recv_default_theme_task.abort();
-    }
+    recv_default_theme_task: AbortOnDropHandle<()>,
 }
 
 #[derive(Debug)]
@@ -91,7 +85,7 @@ impl AsyncComponent for RecordView {
             engine: config.engine,
             dictionaries: config.dictionaries,
             render,
-            recv_default_theme_task,
+            recv_default_theme_task: AbortOnDropHandle::new(recv_default_theme_task),
         };
         let widgets = view_output!();
         AsyncComponentParts { model, widgets }

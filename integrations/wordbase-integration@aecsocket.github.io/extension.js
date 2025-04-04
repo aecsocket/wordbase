@@ -46,10 +46,12 @@ export default class WordbaseIntegrationExtension extends Extension {
  * @param {string} name
  */
 function on_bus_acquired(ext, conn, name) {
+    const service = new IntegrationService();
     ext._service_export = Gio.DBusExportedObject.wrapJSObject(
         INTERFACE,
-        new IntegrationService(),
+        service,
     );
+    service._impl = ext._service_export;
     ext._service_export.export(conn, INTERFACE_NAME);
 
     console.log(
@@ -86,7 +88,7 @@ const INTERFACE = `
             <arg direction="in" type="s" name="title"/>
             <arg direction="out" type="t" name="id"/>
         </method>
-        <method name="AffixToWindow">
+        <method name="OverlayOnWindow">
             <arg direction="in" type="t" name="parent_id"/>
             <arg direction="in" type="t" name="overlay_id"/>
         </method>
@@ -98,10 +100,16 @@ const INTERFACE = `
             <arg direction="in" type="i" name="offset_x"/>
             <arg direction="in" type="i" name="offset_y"/>
         </method>
+        <signal name="CloseOverlay">
+            <arg type="t" name="overlay_id"/>
+        </signal>
     </interface>
 </node>`;
 
 class IntegrationService {
+    /** @type {Gio.DBusExportedObject} */
+    _impl;
+
     /**
      * @returns {number}
      */
@@ -138,7 +146,7 @@ class IntegrationService {
      * @param {number} parent_id
      * @param {number} overlay_id
      */
-    AffixToWindow(parent_id, overlay_id) {
+    OverlayOnWindow(parent_id, overlay_id) {
         const parent_actor = global
             .get_window_actors()
             .find((window) => window.meta_window.get_id() === parent_id);
@@ -198,11 +206,15 @@ class IntegrationService {
 
         parent_window.connect("workspace-changed", (__) => {
             const workspace = parent_window.get_workspace();
-            overlay_window.change_workspace(workspace);
+            if (workspace) {
+                overlay_window.change_workspace(workspace);
+            }
         });
         overlay_window.connect("workspace-changed", (__) => {
             const workspace = parent_window.get_workspace();
-            overlay_window.change_workspace(workspace);
+            if (workspace) {
+                overlay_window.change_workspace(workspace);
+            }
         });
 
         parent_window.connect("focus", (__) => {
@@ -213,8 +225,13 @@ class IntegrationService {
         });
 
         parent_actor.connect("destroy", (__) => {
-            // TODO: don't kill, but send a signal to the overlay window somehow
-            overlay_window.kill();
+            console.log(
+                `"${overlay_window.title} destroyed, closing ${overlay_id}"`,
+            );
+            this._impl.emit_signal(
+                "CloseOverlay",
+                new GLib.Variant("(t)", [overlay_id]),
+            );
         });
 
         console.log(

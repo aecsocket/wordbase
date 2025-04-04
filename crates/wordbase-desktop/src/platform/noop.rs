@@ -1,7 +1,11 @@
 use {
-    super::WindowFilter,
+    super::{OverlayId, WindowFilter},
     anyhow::{Result, bail},
-    futures::future::LocalBoxFuture,
+    futures::{
+        StreamExt,
+        future::LocalBoxFuture,
+        stream::{self, BoxStream},
+    },
     relm4::adw,
 };
 
@@ -17,7 +21,7 @@ impl Platform {
 }
 
 impl super::Platform for Platform {
-    fn init_overlay(&self, _overlay: &adw::Window) -> LocalBoxFuture<Result<()>> {
+    fn init_overlay(&self, _overlay: &adw::Window) -> LocalBoxFuture<Result<OverlayId>> {
         Box::pin(async move { bail!("unsupported") })
     }
 
@@ -32,5 +36,9 @@ impl super::Platform for Platform {
         _offset: (i32, i32),
     ) -> LocalBoxFuture<Result<()>> {
         Box::pin(async move { bail!("unsupported") })
+    }
+
+    fn overlays_closed(&self) -> LocalBoxFuture<Result<BoxStream<Result<OverlayId>>>> {
+        Box::pin(async move { Ok(stream::empty().boxed()) })
     }
 }

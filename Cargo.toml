@@ -83,6 +83,7 @@ sqlx                 = { version = "0.8" }
 tokio                = { version = "1.43" }
 tokio-stream         = { version = "0.1" }
 tokio-tungstenite    = { version = "0.26" }
+tokio-util           = { version = "0.7" }
 tracing              = { version = "0.1" }
 tracing-subscriber   = { version = "0.3" }
 unicode-segmentation = { version = "1.12" }

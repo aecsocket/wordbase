@@ -209,13 +209,20 @@ async fn init_app(AppConfig { app, settings }: AppConfig) -> Result<AppInit> {
         .await
         .context("failed to start texthooker task")?;
     tokio::spawn(texthooker_task);
-    glib::spawn_future_local(overlay::run(
-        app,
-        platform,
-        engine.clone(),
-        recv_sentence,
-        popup.sender().clone(),
-    ));
+    glib::spawn_future_local({
+        let engine = engine.clone();
+        async move {
+            overlay::run(
+                app,
+                platform,
+                engine.clone(),
+                recv_sentence,
+                popup.sender().clone(),
+            )
+            .await
+            .expect("overlay task error")
+        }
+    });
     // forward pull texthooker events to overlay
     tokio::spawn(async move {
         let _: Option<Never> = async move {

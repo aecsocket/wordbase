@@ -1,6 +1,7 @@
 use {
+    super::OverlayId,
     anyhow::{Context, Result, bail},
-    futures::future::LocalBoxFuture,
+    futures::{StreamExt, future::LocalBoxFuture, stream::BoxStream},
     relm4::adw::{self, prelude::*},
     wordbase::WindowFilter,
 };
@@ -29,7 +30,7 @@ impl Platform {
 }
 
 impl super::Platform for Platform {
-    fn init_overlay(&self, overlay: &adw::Window) -> LocalBoxFuture<Result<()>> {
+    fn init_overlay(&self, overlay: &adw::Window) -> LocalBoxFuture<Result<OverlayId>> {
         let overlay = overlay.clone();
         Box::pin(async move {
             let focused_window = self
@@ -43,10 +44,11 @@ impl super::Platform for Platform {
 
             let window_id = get_window_id(&self.integration, &overlay).await?;
             self.integration
-                .affix_to_window(focused_window, window_id)
+                .overlay_on_window(focused_window, window_id)
                 .await
-                .context("failed to affix overlay to focused window")?;
-            Ok(())
+                .context("failed to overlay on focused window")?;
+
+            Ok(OverlayId(window_id))
         })
     }
 
@@ -81,6 +83,18 @@ impl super::Platform for Platform {
             Ok(())
         })
     }
+
+    fn overlays_closed(&self) -> LocalBoxFuture<Result<BoxStream<Result<OverlayId>>>> {
+        Box::pin(async move {
+            let stream = self.integration.receive_close_overlay().await?;
+            Ok(stream
+                .map(|signal| {
+                    let overlay_id = signal.args()?.overlay_id;
+                    anyhow::Ok(OverlayId(overlay_id))
+                })
+                .boxed())
+        })
+    }
 }
 
 async fn get_window_id(integration: &IntegrationProxy<'_>, window: &adw::Window) -> Result<u64> {
@@ -106,7 +120,7 @@ trait Integration {
 
     async fn get_app_window_id(&self, title: &str) -> zbus::Result<u64>;
 
-    async fn affix_to_window(&self, parent: u64, child_id: u64) -> zbus::Result<()>;
+    async fn overlay_on_window(&self, parent_id: u64, overlay_id: u64) -> zbus::Result<()>;
 
     async fn move_to_window(
         &self,
@@ -117,4 +131,7 @@ trait Integration {
         offset_x: i32,
         offset_y: i32,
     ) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    fn close_overlay(&self, overlay_id: u64) -> zbus::Result<()>;
 }
