@@ -7,7 +7,7 @@ use {
     },
     anyhow::{Context, Result},
     foldhash::{HashMap, HashMapExt},
-    futures::never::Never,
+    futures::{TryStreamExt, never::Never},
     relm4::{
         adw::{
             self,
@@ -28,7 +28,7 @@ use {
     },
     tokio::sync::mpsc,
     tracing::{info, trace, warn},
-    wordbase::{Lookup, PopupAnchor, TexthookerSentence, WindowFilter},
+    wordbase::{PopupAnchor, TexthookerSentence, WindowFilter},
     wordbase_engine::Engine,
 };
 
@@ -225,7 +225,7 @@ impl AsyncComponent for Overlay {
                 let Ok(byte_index) = usize::try_from(byte_index_i32) else {
                     return;
                 };
-                let Some((before, _)) = text.split_at_checked(byte_index) else {
+                let Some((before, after)) = text.split_at_checked(byte_index) else {
                     return;
                 };
                 let char_index = before.chars().count();
@@ -251,13 +251,12 @@ impl AsyncComponent for Overlay {
                 let Ok(records) = self
                     .engine
                     .lookup(
-                        &Lookup {
-                            // TODO: add some scrollback to context
-                            context: text.to_string(),
-                            cursor: byte_index,
-                        },
+                        // TODO: add some scrollback to context
+                        text,
+                        byte_index,
                         SUPPORTED_RECORD_KINDS,
                     )
+                    .try_collect::<Vec<_>>()
                     .await
                 else {
                     return;
@@ -266,7 +265,18 @@ impl AsyncComponent for Overlay {
                     return;
                 }
 
-                self.sentence.select_region(char_index_i32, -1);
+                let bytes_scanned = records
+                    .iter()
+                    .map(|record| record.bytes_scanned)
+                    .max()
+                    .unwrap_or_default();
+                let chars_scanned_i32 = after
+                    .get(..bytes_scanned)
+                    .map(|s| s.chars().count())
+                    .and_then(|n| i32::try_from(n).ok())
+                    .unwrap_or_default();
+                self.sentence
+                    .select_region(char_index_i32, char_index_i32 + chars_scanned_i32);
 
                 _ = self.popup.send(AppPopupRequest {
                     target_window: WindowFilter {

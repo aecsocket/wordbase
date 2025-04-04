@@ -1,18 +1,18 @@
 use {
-    crate::{lang, lookup::LemmaLookup},
+    crate::lang,
     base64::{Engine, prelude::BASE64_STANDARD},
     derive_more::{Deref, DerefMut},
     maud::{Markup, html},
     std::{collections::HashMap, fmt::Write as _, hash::BuildHasher},
     wordbase::{
-        Dictionary, DictionaryId, Record, Term,
+        Dictionary, DictionaryId, Record, RecordLookup, Term,
         dict::{self, yomichan_audio::AudioFormat},
     },
 };
 
 pub fn render_records<H: BuildHasher>(
     dictionaries: &HashMap<DictionaryId, Dictionary, H>,
-    records: &[LemmaLookup],
+    records: &[RecordLookup],
 ) -> Markup {
     let mut terms = Terms::default();
     for record in records {
@@ -236,11 +236,6 @@ fn render_audio(record: &Audio) -> Markup {
     html! {
         button onclick=(on_click) {
             "Play Audio " (name)
-        }
-
-        select name="foo" {
-            option value="jpod" { "JPod" }
-            option value="nhk16" { "Nhk16" }
         }
     }
 }

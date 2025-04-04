@@ -7,20 +7,12 @@ use {
     wordbase::{DictionaryId, FrequencyValue, Record, RecordKind, RecordLookup, Term, for_kinds},
 };
 
-#[derive(Debug, Clone)]
-pub struct LemmaLookup {
-    pub source: DictionaryId,
-    pub term: Term,
-    pub record: Record,
-    pub frequency: Option<FrequencyValue>,
-}
-
 impl Engine {
     pub fn lookup_lemma(
         &self,
         lemma: impl AsRef<str>,
         record_kinds: &[impl Borrow<RecordKind>],
-    ) -> impl Stream<Item = Result<LemmaLookup>> {
+    ) -> impl Stream<Item = Result<RecordLookup>> {
         stream::once(async move {
             let lemma = lemma.as_ref();
             // we do a hack where we turn `record_kinds` into a JSON array of ints
@@ -117,7 +109,8 @@ impl Engine {
                     }
                 }}}}
 
-                Ok(LemmaLookup {
+                Ok(RecordLookup {
+                    bytes_scanned: lemma.len(),
                     source: DictionaryId(record.source),
                     term: Term::new(record.headword, record.reading)
                         .context("fetched empty term")?,
@@ -134,16 +127,16 @@ impl Engine {
             });
 
             match result.try_collect::<Vec<_>>().await {
-                Ok(results) => stream::iter(results.into_iter().map(anyhow::Ok)).boxed(),
-                Err(err) => stream::once(async move { Err(err) }).boxed(),
+                Ok(results) => stream::iter(results.into_iter().map(anyhow::Ok)).left_stream(),
+                Err(err) => stream::once(async move { Err(err) }).right_stream(),
             }
         })
         .flatten()
     }
 
-    pub fn lookup(
-        &self,
-        context: &str,
+    pub fn lookup<'a>(
+        &'a self,
+        context: &'a str,
         cursor: usize,
         record_kinds: &[impl Borrow<RecordKind>],
     ) -> impl Stream<Item = Result<RecordLookup>> {
@@ -156,19 +149,15 @@ impl Engine {
         };
 
         self.deinflect(query)
-            .map(move |lemma| {
-                let bytes_scanned = lemma.len();
-                self.lookup_lemma(lemma, record_kinds).map(move |result| {
-                    result.map(|lookup| RecordLookup {
-                        bytes_scanned,
-                        source: lookup.source,
-                        term: lookup.term,
-                        record: lookup.record,
-                        frequency: lookup.frequency,
+            .flat_map(|deinflection| {
+                self.lookup_lemma(deinflection.lemma, record_kinds)
+                    .map(move |result| {
+                        result.map(|record| RecordLookup {
+                            bytes_scanned: deinflection.scan_len,
+                            ..record
+                        })
                     })
-                })
             })
-            .flatten()
             .right_stream()
     }
 }

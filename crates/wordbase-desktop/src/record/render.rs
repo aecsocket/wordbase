@@ -8,8 +8,8 @@ use {
     std::sync::Arc,
     tracing::{debug, info, warn},
     webkit6::prelude::*,
-    wordbase::RecordKind,
-    wordbase_engine::{html, lookup::LemmaLookup},
+    wordbase::{RecordKind, RecordLookup},
+    wordbase_engine::html,
 };
 
 #[derive(Debug)]
@@ -21,7 +21,7 @@ pub struct RecordRender {
     records: Arc<Records>,
 }
 
-pub type Records = Vec<LemmaLookup>;
+pub type Records = Vec<RecordLookup>;
 
 pub const SUPPORTED_RECORD_KINDS: &[RecordKind] = RecordKind::ALL;
 

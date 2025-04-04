@@ -11,6 +11,7 @@ use {
         token::Token,
         tokenizer::Tokenizer,
     },
+    std::borrow::Cow,
 };
 
 #[derive(derive_more::Debug)]
@@ -30,35 +31,51 @@ impl Deinflectors {
 }
 
 impl Engine {
-    pub fn deinflect(&self, text: &str) -> impl Stream<Item = String> {
+    pub fn deinflect<'a>(&'a self, text: &'a str) -> impl Stream<Item = Deinflection<'a>> {
         stream::empty()
             .chain(identity(&self.deinflectors, text))
             .chain(lindera(&self.deinflectors, text))
     }
 }
 
-fn identity(_deinflectors: &Deinflectors, text: &str) -> impl Stream<Item = String> {
-    stream::once(async move { text.to_owned() })
+#[derive(Debug, Clone)]
+pub struct Deinflection<'a> {
+    pub lemma: Cow<'a, str>,
+    pub scan_len: usize,
 }
 
-fn lindera(deinflectors: &Deinflectors, text: &str) -> impl Stream<Item = String> {
-    fn lemma_of<'a>(token: &'a mut Token) -> Option<&'a str> {
-        token.get_detail(7)
-    }
+fn identity<'a>(
+    _deinflectors: &'a Deinflectors,
+    text: &'a str,
+) -> impl Stream<Item = Deinflection<'a>> {
+    stream::once(async move {
+        Deinflection {
+            lemma: Cow::Borrowed(text),
+            scan_len: text.len(),
+        }
+    })
+}
 
-    let Ok(mut tokens) = deinflectors.tokenizer.tokenize(text) else {
-        return stream::empty::<String>().left_stream();
+fn lindera<'a>(
+    deinflectors: &'a Deinflectors,
+    text: &'a str,
+) -> impl Stream<Item = Deinflection<'a>> {
+    let Ok(tokens) = deinflectors.tokenizer.tokenize(text) else {
+        return stream::empty().left_stream();
     };
-    println!(
-        "{text:?} -> {:?}",
-        tokens.iter_mut().map(|t| lemma_of(t)).collect::<Vec<_>>()
-    );
     let Some(mut token) = tokens.into_iter().next() else {
         return stream::empty().left_stream();
     };
+    let Some(lemma) = token.get_detail(7) else {
+        return stream::empty().left_stream();
+    };
+    let lemma = lemma.to_owned();
 
-    let lemmas = lemma_of(&mut token)
-        .map(|lemma| vec![lemma.to_owned()])
-        .unwrap_or_default();
-    stream::iter(lemmas).right_stream()
+    stream::once(async move {
+        Deinflection {
+            lemma: Cow::Owned(lemma),
+            scan_len: token.byte_end.saturating_sub(token.byte_start),
+        }
+    })
+    .right_stream()
 }

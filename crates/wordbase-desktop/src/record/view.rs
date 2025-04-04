@@ -30,8 +30,8 @@ pub enum RecordViewMsg {
     Dictionaries(Arc<Dictionaries>),
     Records(Arc<Records>),
     #[doc(hidden)]
-    LemmaLookup {
-        lemma: String,
+    Lookup {
+        query: String,
     },
 }
 
@@ -62,9 +62,7 @@ impl AsyncComponent for RecordView {
                 records: Arc::<Records>::default(),
             })
             .forward(sender.input_sender(), |resp| match resp {
-                RecordRenderResponse::RequestLookup { query } => {
-                    RecordViewMsg::LemmaLookup { lemma: query }
-                }
+                RecordRenderResponse::RequestLookup { query } => RecordViewMsg::Lookup { query },
             });
 
         let mut recv_default_theme_changed = theme::recv_default_changed().await;
@@ -109,10 +107,10 @@ impl AsyncComponent for RecordView {
             RecordViewMsg::Records(records) => {
                 _ = self.render.sender().send(RecordRenderMsg::Records(records));
             }
-            RecordViewMsg::LemmaLookup { lemma } => {
+            RecordViewMsg::Lookup { query } => {
                 let Ok(records) = self
                     .engine
-                    .lookup_lemma(&lemma, SUPPORTED_RECORD_KINDS)
+                    .lookup(&query, 0, SUPPORTED_RECORD_KINDS)
                     .try_collect::<Vec<_>>()
                     .await
                 else {

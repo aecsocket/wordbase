@@ -436,9 +436,15 @@ async fn dictionary_rm(engine: Engine, id: i64) -> Result<()> {
 }
 
 async fn deinflect(engine: Engine, text: String) -> Result<()> {
-    let mut lemmas = engine.deinflect(&text).boxed();
-    while let Some(lemma) = lemmas.next().await {
-        println!("{lemma:?}");
+    let mut deinflections = engine.deinflect(&text).boxed();
+    while let Some(deinflection) = deinflections.next().await {
+        let scan_len = deinflection.scan_len;
+        let text_part = text.get(..scan_len).map_or_else(
+            || format!("(invalid scan len {scan_len})"),
+            ToOwned::to_owned,
+        );
+        let lemma = deinflection.lemma;
+        println!("{text_part:?} -> {:?}", &*lemma);
     }
     Ok(())
 }

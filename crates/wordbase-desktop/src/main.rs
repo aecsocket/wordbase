@@ -24,7 +24,7 @@ use {
     tokio::{fs, sync::mpsc},
     tracing::{info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
-    wordbase::{Dictionary, DictionaryId, Lookup},
+    wordbase::{Dictionary, DictionaryId},
     wordbase_engine::{Engine, texthook::TexthookerEvent},
 };
 
@@ -145,10 +145,7 @@ impl AsyncComponent for App {
                 _ = self
                     .record_view
                     .sender()
-                    .send(RecordViewMsg::Lookup(Lookup {
-                        context: query,
-                        cursor: 0,
-                    }));
+                    .send(RecordViewMsg::Lookup { query });
             }
         }
     }
