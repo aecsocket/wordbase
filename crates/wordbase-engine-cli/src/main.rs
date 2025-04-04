@@ -5,11 +5,12 @@ use {
     ascii_table::AsciiTable,
     bytes::Bytes,
     directories::ProjectDirs,
+    futures::StreamExt,
     std::{collections::HashMap, path::PathBuf, time::Instant},
     tokio::{fs, sync::oneshot},
     tracing::{info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
-    wordbase::{DictionaryId, Lookup, ProfileId, ProfileMeta, RecordKind},
+    wordbase::{DictionaryId, ProfileId, ProfileMeta, RecordKind},
     wordbase_engine::{Engine, import::ImportStarted, texthook::TexthookerEvent},
 };
 
@@ -435,37 +436,14 @@ async fn dictionary_rm(engine: Engine, id: i64) -> Result<()> {
 }
 
 async fn deinflect(engine: Engine, text: String) -> Result<()> {
-    let lemmas = engine.deinflect(&text).await?;
-    println!("{text:?}:");
-    for lemma in lemmas {
-        println!("  - {lemma:?}");
-    }
-    Ok(())
+    todo!();
 }
 
 async fn lookup(engine: Engine, text: String) -> Result<()> {
-    let records = engine
-        .lookup(
-            &Lookup {
-                context: text,
-                cursor: 0,
-            },
-            RecordKind::ALL,
-        )
-        .await?;
-    println!("{records:#?}");
-
-    // let lemmas = engine
-    //     .deinflect(&text)
-    //     .await
-    //     .context("failed to deinflect text")?;
-
-    // for lemma in lemmas {
-    //     println!("{lemma:?}:");
-    //     let records = engine.lookup_lemma(&lemma, RecordKind::ALL).await?;
-    //     println!("{records:#?}");
-    //     println!();
-    // }
+    let mut records = engine.lookup(&text, 0, RecordKind::ALL).await?;
+    while let Some(record) = records.next().await {
+        println!("{record:#?}");
+    }
 
     Ok(())
 }

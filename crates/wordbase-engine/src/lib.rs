@@ -8,7 +8,7 @@ mod dictionary;
 pub mod html;
 pub mod import;
 pub mod lang;
-mod lookup;
+pub mod lookup;
 mod profile;
 pub mod texthook;
 

@@ -4775,19 +4775,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wordbase-server"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "futures",
- "tokio",
- "tokio-tungstenite",
- "tracing",
- "wordbase",
- "wordbase-engine",
-]
-
-[[package]]
 name = "write16"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

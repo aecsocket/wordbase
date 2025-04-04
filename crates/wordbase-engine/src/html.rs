@@ -219,10 +219,10 @@ fn render_audio(record: &Audio) -> Markup {
         Audio::Forvo(dict::yomichan_audio::Forvo { audio, username }) => {
             (format!("Forvo {username}"), audio)
         }
-        Audio::Jpod(dict::yomichan_audio::Jpod { audio }) => (format!("JPod"), audio),
-        Audio::Nhk16(dict::yomichan_audio::Nhk16 { audio }) => (format!("Nhk16"), audio),
+        Audio::Jpod(dict::yomichan_audio::Jpod { audio }) => ("JPod".into(), audio),
+        Audio::Nhk16(dict::yomichan_audio::Nhk16 { audio }) => ("Nhk16".into(), audio),
         Audio::Shinmeikai8(dict::yomichan_audio::Shinmeikai8 { audio, .. }) => {
-            (format!("Shinmeikai8"), audio)
+            ("Shinmeikai8".into(), audio)
         }
     };
 
@@ -236,6 +236,11 @@ fn render_audio(record: &Audio) -> Markup {
     html! {
         button onclick=(on_click) {
             "Play Audio " (name)
+        }
+
+        select name="foo" {
+            option value="jpod" { "JPod" }
+            option value="nhk16" { "Nhk16" }
         }
     }
 }
