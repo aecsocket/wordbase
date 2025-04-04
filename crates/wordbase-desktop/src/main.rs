@@ -76,8 +76,7 @@ impl AsyncComponent for App {
             #[local]
             root {
                 set_title: Some("Wordbase"),
-                set_default_width: 480,
-                set_default_height: 600,
+                set_hide_on_close: true,
 
                 #[name(spinner)]
                 adw::Spinner {}
@@ -111,6 +110,13 @@ impl AsyncComponent for App {
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
+        init.settings
+            .bind("manager-width", &root, "default-width")
+            .build();
+        init.settings
+            .bind("manager-height", &root, "default-height")
+            .build();
+
         let init = init_app(init).await.unwrap();
         let record_view = RecordView::builder()
             .launch(RecordViewConfig {

@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <schemalist>
   <schema id="io.github.aecsocket.Wordbase" path="/io/github/aecsocket/Wordbase/">
+    <key name="manager-width" type="i">
+      <default>480</default>
+      <summary>Manager window width</summary>
+    </key>
+    <key name="manager-height" type="i">
+      <default>600</default>
+      <summary>Manager window height</summary>
+    </key>
     <key name="popup-width" type="i">
       <default>360</default>
       <summary>Popup dictionary window width</summary>

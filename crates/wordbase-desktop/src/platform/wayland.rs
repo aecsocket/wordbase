@@ -1,8 +1,11 @@
 use {
-    super::OverlayId,
+    super::OverlayGuard,
+    crate::CHANNEL_BUF_CAP,
     anyhow::{Context, Result, bail},
-    futures::{StreamExt, future::LocalBoxFuture, stream::BoxStream},
+    futures::{StreamExt, future::LocalBoxFuture},
     relm4::adw::{self, prelude::*},
+    tokio::sync::broadcast,
+    tokio_util::task::AbortOnDropHandle,
     wordbase::WindowFilter,
 };
 
@@ -15,6 +18,8 @@ implementation notes:
 #[derive(Debug)]
 pub struct Platform {
     integration: IntegrationProxy<'static>,
+    _overlay_closed_task: AbortOnDropHandle<()>,
+    recv_overlay_closed: broadcast::Receiver<u64>,
 }
 
 impl Platform {
@@ -25,12 +30,40 @@ impl Platform {
         let integration = IntegrationProxy::new(&dbus)
             .await
             .context("failed to create integration dbus proxy")?;
-        Ok(Self { integration })
+
+        let (send_overlay_closed, recv_overlay_closed) = broadcast::channel(CHANNEL_BUF_CAP);
+        let mut overlay_closed_stream = integration
+            .receive_close_overlay()
+            .await
+            .context("failed to start receiving close overlay requests")?;
+        let overlay_closed_task = AbortOnDropHandle::new(tokio::spawn(async move {
+            while let Some(signal) = overlay_closed_stream.next().await {
+                if let Ok(args) = signal.args() {
+                    _ = send_overlay_closed.send(args.overlay_id);
+                }
+            }
+        }));
+
+        Ok(Self {
+            integration,
+            _overlay_closed_task: overlay_closed_task,
+            recv_overlay_closed,
+        })
     }
 }
 
 impl super::Platform for Platform {
-    fn init_overlay(&self, overlay: &adw::Window) -> LocalBoxFuture<Result<OverlayId>> {
+    fn init_overlay(&self, overlay: &adw::Window) -> LocalBoxFuture<Result<OverlayGuard>> {
+        struct GuardImpl {
+            close_on_request_task: glib::JoinHandle<()>,
+        }
+
+        impl Drop for GuardImpl {
+            fn drop(&mut self) {
+                self.close_on_request_task.abort();
+            }
+        }
+
         let overlay = overlay.clone();
         Box::pin(async move {
             let focused_window = self
@@ -48,7 +81,18 @@ impl super::Platform for Platform {
                 .await
                 .context("failed to overlay on focused window")?;
 
-            Ok(OverlayId(window_id))
+            let overlay = overlay.clone();
+            let mut recv_overlay_closed = self.recv_overlay_closed.resubscribe();
+            let close_on_request_task = glib::spawn_future_local(async move {
+                while let Ok(overlay_id) = recv_overlay_closed.recv().await {
+                    if overlay_id == window_id {
+                        overlay.close();
+                    }
+                }
+            });
+            Ok(Box::new(GuardImpl {
+                close_on_request_task,
+            }) as OverlayGuard)
         })
     }
 
@@ -81,18 +125,6 @@ impl super::Platform for Platform {
                 .await
                 .context("failed to request to move popup window")?;
             Ok(())
-        })
-    }
-
-    fn overlays_closed(&self) -> LocalBoxFuture<Result<BoxStream<Result<OverlayId>>>> {
-        Box::pin(async move {
-            let stream = self.integration.receive_close_overlay().await?;
-            Ok(stream
-                .map(|signal| {
-                    let overlay_id = signal.args()?.overlay_id;
-                    anyhow::Ok(OverlayId(overlay_id))
-                })
-                .boxed())
         })
     }
 }

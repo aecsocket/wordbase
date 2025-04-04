@@ -1,20 +1,19 @@
 use {
     crate::{
         APP_ID,
-        platform::{OverlayId, Platform},
+        platform::{OverlayGuard, Platform},
         popup::AppPopupRequest,
         record::render::SUPPORTED_RECORD_KINDS,
     },
     anyhow::{Context, Result},
     foldhash::{HashMap, HashMapExt},
-    futures::{StreamExt, never::Never},
+    futures::never::Never,
     relm4::{
         adw::{
             self,
             gtk::{graphene, pango},
             prelude::*,
         },
-        component::AsyncConnector,
         css::classes,
         loading_widgets::LoadingWidgets,
         prelude::*,
@@ -40,11 +39,8 @@ pub async fn run(
     mut recv_sentence: mpsc::Receiver<TexthookerSentence>,
     popup: relm4::Sender<AppPopupRequest>,
 ) -> Result<Never> {
-    let mut overlays = Overlays::new();
-    let mut overlays_closed = platform
-        .overlays_closed()
-        .await
-        .context("failed to get overlays closed stream")?;
+    let mut overlays = HashMap::<String, OverlayState>::new();
+    let (send_closed, mut recv_closed) = mpsc::unbounded_channel::<String>();
 
     loop {
         tokio::select! {
@@ -55,70 +51,77 @@ pub async fn run(
                     event.process_path, event.sentence
                 );
 
-                if let Err(err) = handle(&app, &*platform, &engine, &popup, &mut overlays, event).await {
+                if let Err(err) = handle(
+                    &app,
+                    &*platform,
+                    &engine,
+                    &popup,
+                    &mut overlays,
+                    &send_closed,
+                    event,
+                )
+                .await {
                     warn!("Failed to handle new sentence event: {err:?}");
                 }
             }
-            Some(closed) = overlays_closed.next() => {
-                let closed = closed.context("failed to get overlay closed event")?;
-                info!("Closing overlay {closed:?}");
-                overlays.retain(|_, (overlay, overlay_id)| {
-                    if *overlay_id != closed {
-                        return true;
-                    }
-                    overlay.widget().close();
-                    false
-                });
+            Some(process_path) = recv_closed.recv() => {
+                info!("Overlay window {process_path:?} closed, removing");
+                overlays.remove(&process_path);
             }
         }
     }
 }
 
-type Overlays = HashMap<String, (AsyncController<Overlay>, OverlayId)>;
+struct OverlayState {
+    _guard: OverlayGuard,
+    controller: AsyncController<Overlay>,
+}
 
 async fn handle(
     app: &adw::Application,
     platform: &dyn Platform,
     engine: &Engine,
     popup: &relm4::Sender<AppPopupRequest>,
-    overlays: &mut Overlays,
+    overlays: &mut HashMap<String, OverlayState>,
+    send_closed: &mpsc::UnboundedSender<String>,
     TexthookerSentence {
         process_path,
         sentence,
     }: TexthookerSentence,
 ) -> Result<()> {
-    let (overlay, _) = match overlays.entry(process_path.clone()) {
+    let OverlayState { controller, .. } = match overlays.entry(process_path.clone()) {
         Entry::Occupied(entry) => entry.into_mut(),
         Entry::Vacant(entry) => {
-            let (overlay, overlay_id) = connector(
-                app,
-                platform,
-                OverlayConfig {
-                    engine: engine.clone(),
-                    popup: popup.clone(),
-                    process_path: process_path.clone(),
-                },
-            )
-            .await
-            .context("failed to create overlay window")?;
-            info!("Created overlay for new process {process_path:?} with ID {overlay_id:?}");
-            entry.insert((overlay.detach(), overlay_id))
+            let overlay = Overlay::builder().launch(OverlayConfig {
+                engine: engine.clone(),
+                popup: popup.clone(),
+                process_path: process_path.clone(),
+            });
+            let window = overlay.widget();
+            app.add_window(window);
+            let guard = platform
+                .init_overlay(window)
+                .await
+                .context("failed to create overlay window")?;
+
+            window.connect_close_request({
+                let send_closed = send_closed.clone();
+                let process_path = process_path.clone();
+                move |_| {
+                    _ = send_closed.send(process_path.clone());
+                    glib::Propagation::Proceed
+                }
+            });
+
+            info!("Created overlay for new process {process_path:?}");
+            entry.insert(OverlayState {
+                controller: overlay.detach(),
+                _guard: guard,
+            })
         }
     };
-    _ = overlay.sender().send(OverlayMsg::Sentence { sentence });
+    _ = controller.sender().send(OverlayMsg::Sentence { sentence });
     Ok(())
-}
-
-async fn connector(
-    app: &adw::Application,
-    platform: &dyn Platform,
-    config: OverlayConfig,
-) -> Result<(AsyncConnector<Overlay>, OverlayId)> {
-    let connector = Overlay::builder().launch(config);
-    let window = connector.widget();
-    app.add_window(window);
-    let overlay_id = platform.init_overlay(window).await?;
-    Ok((connector, overlay_id))
 }
 
 #[derive(Debug)]
