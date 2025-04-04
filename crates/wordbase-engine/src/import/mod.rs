@@ -232,7 +232,6 @@ async fn insert_frequency(
         FrequencyValue::Rank(n) => (0, n),
         FrequencyValue::Occurrence(n) => (1, n),
     };
-    let value = i64::try_from(value).unwrap_or(i64::MAX);
     sqlx::query!(
         "INSERT OR IGNORE INTO frequency (source, headword, reading, mode, value)
         VALUES ($1, $2, $3, $4, $5)",

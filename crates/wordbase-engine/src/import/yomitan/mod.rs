@@ -205,7 +205,7 @@ async fn continue_import(
     }
 
     let mut all_tags = tag_bank.into_iter().map(to_term_tag).collect::<Vec<_>>();
-    all_tags.sort_by(|tag_a, tag_b| tag_b.name.len().cmp(&tag_a.name.len()));
+    all_tags.sort_by_key(|tag| tag.name.len());
 
     let records_done = AtomicUsize::new(0);
     let notify_inserted = || {

@@ -260,7 +260,7 @@ fn render_glossaries<H: BuildHasher>(
 
 fn render_glossary(glossary: &dict::yomitan::Glossary) -> Markup {
     let mut tags = glossary.tags.iter().collect::<Vec<_>>();
-    tags.sort_by(|tag_a, tag_b| tag_a.order.cmp(&tag_b.order));
+    tags.sort_by_key(|tag| tag.order);
 
     html! {
         @for tag in tags {
