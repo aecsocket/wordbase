@@ -7,7 +7,7 @@ use {
     },
     anyhow::{Context, Result},
     foldhash::{HashMap, HashMapExt},
-    futures::{TryStreamExt, never::Never},
+    futures::never::Never,
     relm4::{
         adw::{
             self,
@@ -256,7 +256,6 @@ impl AsyncComponent for Overlay {
                         byte_index,
                         SUPPORTED_RECORD_KINDS,
                     )
-                    .try_collect::<Vec<_>>()
                     .await
                 else {
                     return;

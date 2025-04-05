@@ -4,7 +4,7 @@ use {
         SUPPORTED_RECORD_KINDS,
     },
     crate::{Dictionaries, theme},
-    futures::{TryStreamExt, never::Never},
+    futures::never::Never,
     relm4::prelude::*,
     std::sync::Arc,
     tokio_util::task::AbortOnDropHandle,
@@ -108,11 +108,7 @@ impl AsyncComponent for RecordView {
                 _ = self.render.sender().send(RecordRenderMsg::Records(records));
             }
             RecordViewMsg::Lookup { query } => {
-                let Ok(records) = self
-                    .engine
-                    .lookup(&query, 0, SUPPORTED_RECORD_KINDS)
-                    .try_collect::<Vec<_>>()
-                    .await
+                let Ok(records) = self.engine.lookup(&query, 0, SUPPORTED_RECORD_KINDS).await
                 else {
                     return;
                 };

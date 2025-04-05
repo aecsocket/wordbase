@@ -8,13 +8,13 @@ use {
     },
     anyhow::Result,
     relm4::{
-        adw::{self, prelude::*},
+        adw::{self, gdk, prelude::*},
         component::AsyncConnector,
         loading_widgets::LoadingWidgets,
         prelude::*,
         view,
     },
-    std::{cell::Cell, rc::Rc, sync::Arc, time::Duration},
+    std::{sync::Arc, time::Duration},
     tracing::warn,
     wordbase::{PopupAnchor, WindowFilter},
 };
@@ -115,7 +115,7 @@ impl AsyncComponent for Popup {
 
         let root = root.clone();
         let platform = self.platform.clone();
-        glib::timeout_add_local_once(Duration::from_millis(1), move || {
+        glib::timeout_add_local_once(SMALL_DELAY, move || {
             let root = root.clone();
             let platform = platform.clone();
             let target_window = target_window.clone();
@@ -134,10 +134,33 @@ impl AsyncComponent for Popup {
 fn hide_on_lost_focus(root: &adw::Window) {
     let root = root.clone();
 
-    // todo
+    // This shit is so ass.
+    // Under Wayland, when you start dragging a window (either move or resize),
+    // it loses focus (`window.has_focus()`). There's no way to listen for
+    // drag start/end events, so we don't know if we've lost focus because the
+    // user actually clicked off, or because we're now dragging the window.
+    // So to differentiate between the two, we check the *TopLevel's* focused
+    // state instead, which stays true if the window is being dragged.
+    // Also, we need to do it not *right now*, but a bit later, because the
+    // focus state may not have been updated yet.
     root.connect_is_active_notify(move |root| {
-        if !root.is_active() {
-            root.set_visible(false);
-        }
+        let root = root.clone();
+        glib::timeout_add_local_once(SMALL_DELAY, move || {
+            if !has_logical_focus(&root) {
+                root.set_visible(false);
+            }
+        });
     });
 }
+
+fn has_logical_focus(window: &adw::Window) -> bool {
+    window
+        .surface()
+        .and_then(|surface| surface.downcast::<gdk::Toplevel>().ok())
+        .map_or_else(
+            || window.has_focus(),
+            |toplevel| toplevel.state().contains(gdk::ToplevelState::FOCUSED),
+        )
+}
+
+const SMALL_DELAY: Duration = Duration::from_millis(5);

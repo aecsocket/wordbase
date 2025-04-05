@@ -5,7 +5,6 @@ use {
     ascii_table::AsciiTable,
     bytes::Bytes,
     directories::ProjectDirs,
-    futures::StreamExt,
     std::{collections::HashMap, path::PathBuf, time::Instant},
     tokio::{fs, sync::oneshot},
     tracing::{info, level_filters::LevelFilter},
@@ -436,8 +435,7 @@ async fn dictionary_rm(engine: Engine, id: i64) -> Result<()> {
 }
 
 async fn deinflect(engine: Engine, text: String) -> Result<()> {
-    let mut deinflections = engine.deinflect(&text).boxed();
-    while let Some(deinflection) = deinflections.next().await {
+    for deinflection in engine.deinflect(&text).await {
         let scan_len = deinflection.scan_len;
         let text_part = text.get(..scan_len).map_or_else(
             || format!("(invalid scan len {scan_len})"),
@@ -450,9 +448,8 @@ async fn deinflect(engine: Engine, text: String) -> Result<()> {
 }
 
 async fn lookup(engine: Engine, text: String) -> Result<()> {
-    let mut records = engine.lookup(&text, 0, RecordKind::ALL).boxed();
-    while let Some(record) = records.next().await {
-        println!("{record:#?}");
+    for result in engine.lookup(&text, 0, RecordKind::ALL).await? {
+        println!("{result:#?}");
     }
     Ok(())
 }

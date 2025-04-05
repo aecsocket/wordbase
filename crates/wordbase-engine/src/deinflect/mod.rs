@@ -30,17 +30,14 @@ impl Deinflectors {
 }
 
 impl Engine {
-    pub fn deinflect<'a>(&'a self, text: &'a str) -> impl Stream<Item = Deinflection<'a>> {
+    pub async fn deinflect<'a>(&'a self, text: &'a str) -> Vec<Deinflection<'a>> {
         let all = stream::empty()
             .chain(identity(&self.deinflectors, text))
             .chain(lindera(&self.deinflectors, text));
 
-        stream::once(async move {
-            let mut all = all.collect::<Vec<_>>().await;
-            all.dedup_by(|a, b| a.lemma == b.lemma);
-            stream::iter(all)
-        })
-        .flatten()
+        let mut all = all.collect::<Vec<_>>().await;
+        all.dedup_by(|a, b| a.lemma == b.lemma);
+        all
     }
 }
 

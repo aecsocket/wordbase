@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS dictionary (
-    id          INTEGER PRIMARY KEY,
+    id          INTEGER NOT NULL PRIMARY KEY,
     meta        TEXT    NOT NULL CHECK (json_valid(meta)),
     position    INTEGER NOT NULL
 );
@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS dictionary (
 --
 
 CREATE TABLE IF NOT EXISTS profile (
-    id                  INTEGER PRIMARY KEY,
+    id                  INTEGER NOT NULL PRIMARY KEY,
     meta                TEXT    NOT NULL CHECK (json_valid(meta)),
     sorting_dictionary  INTEGER REFERENCES dictionary(id)
 );
@@ -45,7 +45,7 @@ CREATE INDEX IF NOT EXISTS profile_enabled_dictionary_idx ON profile_enabled_dic
 --
 
 CREATE TABLE IF NOT EXISTS config (
-    id                      INTEGER PRIMARY KEY CHECK (id = 1),
+    id                      INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
     max_db_connections      INTEGER NOT NULL DEFAULT 8,
     max_concurrent_imports  INTEGER NOT NULL DEFAULT 4,
     current_profile         INTEGER NOT NULL DEFAULT 1 REFERENCES profile(id),
@@ -72,7 +72,7 @@ END;
 --
 
 CREATE TABLE IF NOT EXISTS record (
-    id          INTEGER PRIMARY KEY,
+    id          INTEGER NOT NULL PRIMARY KEY,
     source      INTEGER NOT NULL REFERENCES dictionary(id) ON DELETE CASCADE,
     kind        INTEGER NOT NULL,
     data        BLOB    NOT NULL

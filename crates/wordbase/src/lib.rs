@@ -108,6 +108,9 @@ impl RecordType for dict::$dict_path::$record_kind {
 }}}
 for_kinds!(define_types);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct RecordId(pub i64);
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Dictionary {

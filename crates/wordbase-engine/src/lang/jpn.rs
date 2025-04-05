@@ -139,14 +139,25 @@ pub fn furigana_parts<'a>(headword: &'a str, mut reading: &'a str) -> Vec<(&'a s
 
         Some(if part.is_kana {
             // "り" doesn't need furigana to tell you it's "り"
+            // make sure to also advance the reading forward for future iterations
+            // e.g. headword = "お茶", reading = "おちゃ"
+            //      -> set reading to "ちゃ"
+            if let Some(rem) = reading.strip_prefix(part.text) {
+                reading = rem;
+            }
             (part.text, "")
         } else if let Some(peek) = headword_parts.peek() {
+            // the next part must be a kana, so we split our reading in half,
+            // at that kana's position
+            //
             // let's say we're on "取"
             // we peek the next part "り"
             // and try to find the next occurrence of "り" in `reading`
-            // so everything in `reading` up to that "り"
-            // is a part of the reading of "取"
-            if let Some((this_part_reading, rem)) = reading.split_once(peek.text) {
+            // so everything in `reading` up to that "り" is a part of the reading of "取"
+            // and "り" and everything after that is the remainder of the reading
+            debug_assert!(peek.is_kana);
+            if let Some(split_pos) = reading.find(peek.text) {
+                let (this_part_reading, rem) = reading.split_at(split_pos);
                 reading = rem;
                 (part.text, this_part_reading)
             } else {
@@ -256,6 +267,10 @@ mod tests {
                 ("い", ""),
                 ("説明書", "せつめいしょ")
             ]
+        );
+        assert_eq!(
+            super::furigana_parts("お茶", "おちゃ"),
+            [("お", ""), ("茶", "ちゃ")]
         );
     }
 

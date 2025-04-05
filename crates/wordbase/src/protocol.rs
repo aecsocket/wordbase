@@ -1,5 +1,5 @@
 use {
-    crate::{DictionaryId, FrequencyValue, Record, RecordKind, Term},
+    crate::{DictionaryId, FrequencyValue, Record, RecordId, RecordKind, Term},
     serde::{Deserialize, Serialize},
 };
 
@@ -39,7 +39,7 @@ pub struct Lookup {
 
 /// Single record returned in response to a [`Lookup`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RecordLookup {
+pub struct LookupResult {
     /// How far along [`Lookup::context`] the engine scanned to find the
     /// [`Term`] in this record.
     pub bytes_scanned: usize,
@@ -47,6 +47,8 @@ pub struct RecordLookup {
     pub source: DictionaryId,
     /// [`Term`] that this record is for.
     pub term: Term,
+    /// ID of the [`Record`] that was found.
+    pub record_id: RecordId,
     /// [`Record`] that was found.
     pub record: Record,
     /// [`FrequencyValue`] of the record, as found in the current profile's
