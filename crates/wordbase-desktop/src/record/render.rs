@@ -16,7 +16,6 @@ use {
 pub struct RecordRender {
     default_theme: Arc<Theme>,
     custom_theme: Option<Arc<Theme>>,
-    web_view: webkit6::WebView,
     dictionaries: Arc<Dictionaries>,
     records: Arc<Records>,
 }
@@ -47,10 +46,11 @@ pub enum RecordRenderResponse {
 }
 
 #[relm4::component(pub)]
-impl SimpleComponent for RecordRender {
+impl Component for RecordRender {
     type Init = RecordRenderConfig;
     type Input = RecordRenderMsg;
     type Output = RecordRenderResponse;
+    type CommandOutput = ();
 
     view! {
         webkit6::WebView {
@@ -79,38 +79,38 @@ impl SimpleComponent for RecordRender {
         let model = Self {
             default_theme: init.default_theme,
             custom_theme: init.custom_theme,
-            web_view: root.clone(),
             dictionaries: init.dictionaries,
             records: init.records,
         };
         let widgets = view_output!();
+        model.update_web_view(&root);
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
+    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>, root: &Self::Root) {
         match message {
             RecordRenderMsg::DefaultTheme(theme) => {
                 self.default_theme = theme;
-                self.update_web_view();
+                self.update_web_view(root);
             }
             RecordRenderMsg::CustomTheme(theme) => {
                 self.custom_theme = theme;
-                self.update_web_view();
+                self.update_web_view(root);
             }
             RecordRenderMsg::Dictionaries(dictionaries) => {
                 self.dictionaries = dictionaries;
-                self.update_web_view();
+                self.update_web_view(root);
             }
             RecordRenderMsg::Records(records) => {
                 self.records = records;
-                self.update_web_view();
+                self.update_web_view(root);
             }
         }
     }
 }
 
 impl RecordRender {
-    fn update_web_view(&self) {
+    fn update_web_view(&self, web_view: &webkit6::WebView) {
         let records_html = html::render_records(&self.dictionaries, &self.records);
         let full_html = html! {
             style {
@@ -125,7 +125,7 @@ impl RecordRender {
                 (records_html)
             }
         };
-        self.web_view.load_html(&full_html.0, None);
+        web_view.load_html(&full_html.0, None);
     }
 }
 

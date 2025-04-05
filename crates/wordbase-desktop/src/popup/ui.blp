@@ -18,10 +18,15 @@ template $Popup: Adw.Window {
       valign: end;
       opacity: 0.8;
 
-      Adw.SplitButton settings {
+      Adw.SplitButton profiles_button {
         icon-name: "settings-symbolic";
-        halign: end;
+        tooltip-text: _("Open Settings");
+        dropdown-tooltip: _("Change Profile");
+        direction: up;
+        menu-model: profiles_menu;
       }
     }
   }
 }
+
+menu profiles_menu {}

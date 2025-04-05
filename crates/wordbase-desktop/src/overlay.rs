@@ -2,7 +2,7 @@ use {
     crate::{
         APP_ID,
         platform::{OverlayGuard, Platform},
-        popup::AppPopupRequest,
+        popup::PopupMsg,
         record::render::SUPPORTED_RECORD_KINDS,
     },
     anyhow::{Context, Result},
@@ -37,7 +37,7 @@ pub async fn run(
     platform: Arc<dyn Platform>,
     engine: Engine,
     mut recv_sentence: mpsc::Receiver<TexthookerSentence>,
-    popup: relm4::Sender<AppPopupRequest>,
+    to_popup: relm4::Sender<PopupMsg>,
 ) -> Result<Never> {
     let mut overlays = HashMap::<String, OverlayState>::new();
     let (send_closed, mut recv_closed) = mpsc::unbounded_channel::<String>();
@@ -55,7 +55,7 @@ pub async fn run(
                     &app,
                     &*platform,
                     &engine,
-                    &popup,
+                    &to_popup,
                     &mut overlays,
                     &send_closed,
                     event,
@@ -83,7 +83,7 @@ async fn handle(
     app: &adw::Application,
     platform: &dyn Platform,
     engine: &Engine,
-    popup: &relm4::Sender<AppPopupRequest>,
+    to_popup: &relm4::Sender<PopupMsg>,
     overlays: &mut HashMap<String, OverlayState>,
     send_closed: &mpsc::UnboundedSender<String>,
     TexthookerSentence {
@@ -96,7 +96,7 @@ async fn handle(
         Entry::Vacant(entry) => {
             let overlay = Overlay::builder().launch(OverlayConfig {
                 engine: engine.clone(),
-                popup: popup.clone(),
+                to_popup: to_popup.clone(),
                 process_path: process_path.clone(),
             });
             let window = overlay.widget();
@@ -129,14 +129,14 @@ async fn handle(
 #[derive(Debug)]
 struct Overlay {
     engine: Engine,
-    popup: relm4::Sender<AppPopupRequest>,
+    to_popup: relm4::Sender<PopupMsg>,
     sentence: gtk::Label,
 }
 
 #[derive(Debug)]
 struct OverlayConfig {
     engine: Engine,
-    popup: relm4::Sender<AppPopupRequest>,
+    to_popup: relm4::Sender<PopupMsg>,
     process_path: String,
 }
 
@@ -204,7 +204,7 @@ impl AsyncComponent for Overlay {
         let widgets = view_output!();
         let model = Self {
             engine: init.engine,
-            popup: init.popup,
+            to_popup: init.to_popup,
             sentence: widgets.sentence.clone(),
         };
         setup_root_opacity_animation(&root);
@@ -282,7 +282,7 @@ impl AsyncComponent for Overlay {
                 self.sentence
                     .select_region(char_index_i32, char_index_i32 + chars_scanned_i32);
 
-                _ = self.popup.send(AppPopupRequest {
+                _ = self.to_popup.send(PopupMsg::Request {
                     target_window: WindowFilter {
                         id: None,
                         title: root.title().map(|s| s.to_string()),

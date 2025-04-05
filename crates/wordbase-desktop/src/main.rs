@@ -35,11 +35,15 @@ use {
     tokio::{fs, sync::mpsc},
     tracing::{info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
-    wordbase::{Dictionary, DictionaryId},
+    wordbase::{Dictionary, DictionaryId, Profile, ProfileId},
     wordbase_engine::{Engine, texthook::TexthookerEvent},
 };
 
 const APP_ID: &str = "io.github.aecsocket.Wordbase";
+
+fn gettext(s: &str) -> &str {
+    s
+}
 
 fn main() {
     tracing_subscriber::fmt()
@@ -53,11 +57,19 @@ fn main() {
     relm4_icons::initialize_icons(icon_names::GRESOURCE_BYTES, icon_names::RESOURCE_PREFIX);
 
     let app = adw::Application::builder().application_id(APP_ID).build();
+    app.add_action(&gio::SimpleAction::new_stateful(
+        "profile",
+        Some(glib::VariantTy::STRING),
+        &"1".into(),
+    ));
+
     let settings = gio::Settings::new(APP_ID);
     RelmApp::from_app(app.clone()).run_async::<App>(AppConfig { app, settings });
 }
 
 type Dictionaries = HashMap<DictionaryId, Dictionary>;
+
+type SharedProfiles = Arc<HashMap<ProfileId, Profile>>;
 
 #[derive(Debug)]
 struct App {
@@ -216,15 +228,25 @@ async fn init_app(
         engine
             .dictionaries()
             .await
-            .context("failed to fetch initial dictionaries")?
+            .context("failed to fetch dictionaries")?
             .into_iter()
             .map(|dict| (dict.id, dict))
+            .collect(),
+    );
+    let profiles = SharedProfiles::new(
+        engine
+            .profiles()
+            .await
+            .context("failed to fetch profiles")?
+            .into_iter()
+            .map(|profile| (profile.id, profile))
             .collect(),
     );
 
     let mut popup = popup::connector(
         &app,
         &platform,
+        profiles,
         RecordViewConfig {
             engine: engine.clone(),
             dictionaries: dictionaries.clone(),

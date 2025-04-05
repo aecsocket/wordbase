@@ -1,4 +1,4 @@
-use relm4::adw::{self, glib, gtk, subclass::prelude::*};
+use relm4::adw::{self, gio, glib, gtk, subclass::prelude::*};
 
 mod imp {
     use super::*;
@@ -9,7 +9,9 @@ mod imp {
         #[template_child]
         pub content: TemplateChild<gtk::Overlay>,
         #[template_child]
-        pub settings: TemplateChild<adw::SplitButton>,
+        pub profiles_button: TemplateChild<adw::SplitButton>,
+        #[template_child]
+        pub profiles_menu: TemplateChild<gio::Menu>,
     }
 
     #[glib::object_subclass]
@@ -49,7 +51,12 @@ impl Popup {
     }
 
     #[must_use]
-    pub fn settings(&self) -> adw::SplitButton {
-        self.imp().settings.get()
+    pub fn profiles_button(&self) -> adw::SplitButton {
+        self.imp().profiles_button.get()
+    }
+
+    #[must_use]
+    pub fn profiles_menu(&self) -> gio::Menu {
+        self.imp().profiles_menu.get()
     }
 }

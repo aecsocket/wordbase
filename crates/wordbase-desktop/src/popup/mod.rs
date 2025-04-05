@@ -2,6 +2,7 @@ mod ui;
 
 use {
     crate::{
+        SharedProfiles, gettext,
         platform::Platform,
         record::{
             render::Records,
@@ -24,10 +25,12 @@ use {
 pub async fn connector(
     app: &adw::Application,
     platform: &Arc<dyn Platform>,
+    profiles: SharedProfiles,
     record_view: RecordViewConfig,
 ) -> Result<AsyncConnector<Popup>> {
     let connector = Popup::builder().launch(PopupConfig {
         platform: platform.clone(),
+        profiles,
         record_view,
     });
     let window = connector.widget();
@@ -40,21 +43,26 @@ pub async fn connector(
 #[derive(Debug)]
 pub struct Popup {
     platform: Arc<dyn Platform>,
+    profiles: SharedProfiles,
     record_view: AsyncController<RecordView>,
 }
 
 #[derive(Debug)]
 pub struct PopupConfig {
     platform: Arc<dyn Platform>,
+    profiles: SharedProfiles,
     record_view: RecordViewConfig,
 }
 
-#[derive(Debug, Clone)]
-pub struct AppPopupRequest {
-    pub target_window: WindowFilter,
-    pub origin: (i32, i32),
-    pub anchor: PopupAnchor,
-    pub records: Arc<Records>,
+#[derive(Debug)]
+pub enum PopupMsg {
+    Profiles(SharedProfiles),
+    Request {
+        target_window: WindowFilter,
+        origin: (i32, i32),
+        anchor: PopupAnchor,
+        records: Arc<Records>,
+    },
 }
 
 #[derive(Debug)]
@@ -64,11 +72,11 @@ pub enum PopupResponse {
 
 impl AsyncComponent for Popup {
     type Init = PopupConfig;
-    type Input = AppPopupRequest;
+    type Input = PopupMsg;
     type Output = PopupResponse;
     type CommandOutput = ();
     type Root = ui::Popup;
-    type Widgets = ();
+    type Widgets = ui::Popup;
 
     fn init_root() -> Self::Root {
         ui::Popup::new()
@@ -93,40 +101,67 @@ impl AsyncComponent for Popup {
     ) -> AsyncComponentParts<Self> {
         let model = Self {
             platform: init.platform,
+            profiles: init.profiles,
             record_view: RecordView::builder().launch(init.record_view).detach(),
         };
         root.content().set_child(Some(model.record_view.widget()));
-        root.settings().connect_clicked(move |_| {
+        root.profiles_button().connect_clicked(move |_| {
             _ = sender.output(PopupResponse::OpenSettings);
         });
-
         hide_on_lost_focus(root.upcast_ref());
-        AsyncComponentParts { model, widgets: () }
+        AsyncComponentParts {
+            model,
+            widgets: root,
+        }
+    }
+
+    fn update_view(&self, widgets: &mut Self::Widgets, _sender: AsyncComponentSender<Self>) {
+        widgets.profiles_menu().remove_all();
+        for (profile_id, profile) in self.profiles.iter() {
+            let label = profile
+                .meta
+                .name
+                .as_deref()
+                .unwrap_or_else(|| gettext("Default Profile"));
+            widgets
+                .profiles_menu()
+                .append(Some(label), Some(&format!("app.profile::{}", profile_id.0)));
+        }
     }
 
     async fn update(
         &mut self,
-        request: Self::Input,
+        message: Self::Input,
         _sender: AsyncComponentSender<Self>,
         root: &Self::Root,
     ) {
-        _ = self
-            .record_view
-            .sender()
-            .send(RecordViewMsg::Records(request.records));
+        match message {
+            PopupMsg::Profiles(profiles) => {
+                self.profiles = profiles;
+            }
+            PopupMsg::Request {
+                target_window,
+                origin,
+                anchor,
+                records,
+            } => {
+                _ = self
+                    .record_view
+                    .sender()
+                    .send(RecordViewMsg::Records(records));
 
-        // TODO compute it
-        let target_window = request.target_window;
-        let origin = request.origin;
+                // TODO compute real origin
 
-        let root = root.clone();
-        let platform = self.platform.clone();
-        root.set_visible(true);
-        if let Err(err) = platform
-            .move_popup_to_window(root.upcast_ref(), target_window, origin)
-            .await
-        {
-            warn!("Failed to move popup to target window: {err:?}");
+                let root = root.clone();
+                let platform = self.platform.clone();
+                root.set_visible(true);
+                if let Err(err) = platform
+                    .move_popup_to_window(root.upcast_ref(), target_window, origin)
+                    .await
+                {
+                    warn!("Failed to move popup to target window: {err:?}");
+                }
+            }
         }
     }
 }
