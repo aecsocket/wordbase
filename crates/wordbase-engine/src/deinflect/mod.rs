@@ -63,22 +63,42 @@ fn lindera<'a>(
     deinflectors: &'a Deinflectors,
     text: &'a str,
 ) -> impl Stream<Item = Deinflection<'a>> {
-    let Ok(tokens) = deinflectors.tokenizer.tokenize(text) else {
+    // _lindera_debug(deinflectors, text);
+    let Ok(mut tokens) = deinflectors.tokenizer.tokenize(text) else {
         return stream::empty().left_stream();
     };
-    let Some(mut token) = tokens.into_iter().next() else {
-        return stream::empty().left_stream();
-    };
-    let Some(lemma) = token.get_detail(7) else {
-        return stream::empty().left_stream();
-    };
-    let lemma = lemma.to_owned();
 
-    stream::once(async move {
-        Deinflection {
-            lemma: Cow::Owned(lemma),
-            scan_len: token.byte_end.saturating_sub(token.byte_start),
-        }
-    })
-    .right_stream()
+    let lemmas = (1..=TOKEN_LOOKAHEAD).rev().filter_map(move |up_to| {
+        let tokens = tokens.get_mut(..up_to)?;
+        let full_lemma = tokens
+            .iter_mut()
+            .map(|token| token.get_detail(DETAIL_LEMMA))
+            .collect::<Option<Vec<_>>>()?
+            .join("");
+
+        Some(Deinflection {
+            lemma: Cow::Owned(full_lemma),
+            scan_len: tokens.last()?.byte_end,
+        })
+    });
+
+    stream::iter(lemmas).right_stream()
 }
+
+fn _lindera_debug<'a>(deinflectors: &'a Deinflectors, text: &'a str) {
+    let tokens = deinflectors.tokenizer.tokenize(text).unwrap();
+    println!("TOKENS:");
+    for mut token in tokens {
+        println!("- {}", token.text);
+        println!("  {}", token.details().join(", "));
+    }
+    println!("------");
+}
+
+fn pos_is_end_of_word(pos: &str) -> bool {
+    pos == "名詞" || pos == "動詞" || pos == "形容詞"
+}
+
+const DETAIL_LEMMA: usize = 8;
+
+const TOKEN_LOOKAHEAD: usize = 4;
