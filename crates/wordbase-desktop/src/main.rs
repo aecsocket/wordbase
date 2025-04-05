@@ -74,6 +74,7 @@ struct AppConfig {
 #[derive(Debug)]
 enum AppMsg {
     Quit,
+    Show,
     Lookup { query: String },
 }
 
@@ -140,7 +141,7 @@ impl AsyncComponent for App {
             .bind("manager-height", &root, "default-height")
             .build();
 
-        let init = init_app(init).await.unwrap();
+        let init = init_app(init, &sender).await.unwrap();
         let record_view = RecordView::builder()
             .launch(RecordViewConfig {
                 engine: init.engine.clone(),
@@ -162,10 +163,15 @@ impl AsyncComponent for App {
         &mut self,
         message: Self::Input,
         _sender: AsyncComponentSender<Self>,
-        _root: &Self::Root,
+        root: &Self::Root,
     ) {
         match message {
-            AppMsg::Quit => self.app.quit(),
+            AppMsg::Quit => {
+                self.app.quit();
+            }
+            AppMsg::Show => {
+                root.present();
+            }
             AppMsg::Lookup { query } => {
                 _ = self
                     .record_view
@@ -182,7 +188,10 @@ struct AppInit {
     dictionaries: Arc<Dictionaries>,
 }
 
-async fn init_app(AppConfig { app, settings }: AppConfig) -> Result<AppInit> {
+async fn init_app(
+    AppConfig { app, settings }: AppConfig,
+    sender: &AsyncComponentSender<App>,
+) -> Result<AppInit> {
     let platform = Arc::<dyn Platform>::from(
         platform::default()
             .await
@@ -219,6 +228,7 @@ async fn init_app(AppConfig { app, settings }: AppConfig) -> Result<AppInit> {
             engine: engine.clone(),
             dictionaries: dictionaries.clone(),
         },
+        sender.input_sender().clone(),
     )
     .await?
     .detach();

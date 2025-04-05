@@ -106,6 +106,17 @@ const INTERFACE = `
     </interface>
 </node>`;
 
+// TODO: this is what happens when you use C
+// you get constant segfaults for no reason
+// fuckkkkkk
+// i commented out the `move_frame` calls for now
+// https://gitlab.gnome.org/GNOME/mutter/-/issues/1600
+// https://gitlab.gnome.org/GNOME/mutter/-/blob/main/src/wayland/meta-window-wayland.c?ref_type=heads
+//
+// It happens sometimes when you add an overlay to a window, and then move the parent window.
+// Specifically when I spawned an overlay on top of my fullscreen browser, then start dragging
+// the browser window, mutter crashes
+
 class IntegrationService {
     /** @type {Gio.DBusExportedObject} */
     _impl;
@@ -185,7 +196,7 @@ class IntegrationService {
 
             overlay_window.focus(global.get_current_time());
             overlay_window.raise();
-            overlay_window.move_frame(false, parent_rect.x, parent_rect.y);
+            // overlay_window.move_frame(false, parent_rect.x, parent_rect.y);
             if (parent_window.is_fullscreen()) {
                 overlay_window.make_above();
             }
@@ -217,7 +228,7 @@ class IntegrationService {
                 overlay_now_x + parent_delta_x,
                 overlay_now_y + parent_delta_y,
             ];
-            overlay_window.move_frame(false, overlay_new_x, overlay_new_y);
+            // overlay_window.move_frame(false, overlay_new_x, overlay_new_y);
         });
 
         parent_window.connect("workspace-changed", (__) => {
@@ -330,7 +341,7 @@ class IntegrationService {
         const to_rect = to_window.get_frame_rect();
         const [moved_x, moved_y] = [to_rect.x + offset_x, to_rect.y + offset_y];
 
-        // when we call `move_frame`, if we've *just* shown and presented the window
+        // when we move the window, if we've *just* shown and presented the window
         // (made it visible on the GTK side), then it might not be ready to move to
         // its new position yet
         //
@@ -339,7 +350,7 @@ class IntegrationService {
         // - after (or if) it's shown (presented and ready to move)
         //
         // if the window doesn't end up `shown` soon, then we won't do the 2nd move
-        moved_window.move_frame(false, moved_x, moved_y);
+        // moved_window.move_frame(false, moved_x, moved_y);
         let handler_id = null;
         handler_id = moved_window.connect("shown", (__) => {
             if (!handler_id) {
@@ -348,7 +359,7 @@ class IntegrationService {
             moved_window.disconnect(handler_id);
             handler_id = null;
 
-            moved_window.move_frame(false, moved_x, moved_y);
+            // moved_window.move_frame(false, moved_x, moved_y);
             // even though we've just raised the popup window, it's not guaranteed
             // to be on top if we're in a fullscreen window
             // so we force it to be always on top

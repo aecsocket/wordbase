@@ -2,6 +2,7 @@ mod ui;
 
 use {
     crate::{
+        AppMsg,
         platform::Platform,
         record::{
             render::Records,
@@ -25,10 +26,12 @@ pub async fn connector(
     app: &adw::Application,
     platform: &Arc<dyn Platform>,
     record_view: RecordViewConfig,
+    to_manager: relm4::Sender<AppMsg>,
 ) -> Result<AsyncConnector<Popup>> {
     let connector = Popup::builder().launch(PopupConfig {
         platform: platform.clone(),
         record_view,
+        to_manager,
     });
     let window = connector.widget();
     app.add_window(window);
@@ -47,6 +50,7 @@ pub struct Popup {
 pub struct PopupConfig {
     platform: Arc<dyn Platform>,
     record_view: RecordViewConfig,
+    to_manager: relm4::Sender<AppMsg>,
 }
 
 #[derive(Debug, Clone)]
@@ -91,6 +95,10 @@ impl AsyncComponent for Popup {
             record_view: RecordView::builder().launch(init.record_view).detach(),
         };
         root.content().set_child(Some(model.record_view.widget()));
+        root.settings().connect_clicked(move |_| {
+            _ = init.to_manager.send(AppMsg::Show);
+        });
+
         hide_on_lost_focus(root.upcast_ref());
         AsyncComponentParts { model, widgets: () }
     }
