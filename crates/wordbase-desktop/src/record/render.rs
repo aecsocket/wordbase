@@ -1,8 +1,5 @@
 use {
-    crate::{
-        SharedDictionaries,
-        theme::{SharedTheme, Theme},
-    },
+    crate::theme::Theme,
     maud::html,
     relm4::{
         adw::{gdk, prelude::*},
@@ -11,19 +8,17 @@ use {
     std::sync::Arc,
     tracing::{debug, info, warn},
     webkit6::prelude::*,
-    wordbase::{LookupResult, RecordKind},
-    wordbase_engine::html,
+    wordbase::{RecordKind, RecordLookup},
+    wordbase_engine::{dictionary::SharedDictionaries, html},
 };
 
 #[derive(Debug)]
 pub struct RecordRender {
-    default_theme: SharedTheme,
-    custom_theme: Option<SharedTheme>,
+    default_theme: Arc<Theme>,
+    custom_theme: Option<Arc<Theme>>,
     dictionaries: SharedDictionaries,
-    records: SharedRecords,
+    records: Arc<Vec<RecordLookup>>,
 }
-
-pub type SharedRecords = Arc<Vec<LookupResult>>;
 
 pub const SUPPORTED_RECORD_KINDS: &[RecordKind] = RecordKind::ALL;
 
@@ -32,7 +27,7 @@ pub struct RecordRenderConfig {
     pub default_theme: Arc<Theme>,
     pub custom_theme: Option<Arc<Theme>>,
     pub dictionaries: SharedDictionaries,
-    pub records: SharedRecords,
+    pub records: Arc<Vec<RecordLookup>>,
 }
 
 #[derive(Debug)]
@@ -40,7 +35,7 @@ pub enum RecordRenderMsg {
     DefaultTheme(Arc<Theme>),
     CustomTheme(Option<Arc<Theme>>),
     Dictionaries(SharedDictionaries),
-    Records(SharedRecords),
+    Records(Arc<Vec<RecordLookup>>),
 }
 
 #[derive(Debug)]
@@ -114,7 +109,8 @@ impl Component for RecordRender {
 
 impl RecordRender {
     fn update_web_view(&self, web_view: &webkit6::WebView) {
-        let records_html = html::render_records(&self.dictionaries, &self.records);
+        let dictionaries = self.dictionaries.load();
+        let records_html = html::render_records(&dictionaries.by_id, &self.records);
         let full_html = html! {
             style {
                 (self.default_theme.style)

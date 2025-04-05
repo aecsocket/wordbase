@@ -6,7 +6,7 @@ use {
     itertools::Itertools,
     std::borrow::Borrow,
     wordbase::{
-        DictionaryId, FrequencyValue, LookupResult, Record, RecordId, RecordKind, Term, for_kinds,
+        DictionaryId, FrequencyValue, RecordLookup, Record, RecordId, RecordKind, Term, for_kinds,
     },
 };
 
@@ -15,7 +15,7 @@ impl Engine {
         &self,
         lemma: impl AsRef<str> + Send + Sync,
         record_kinds: &[impl Borrow<RecordKind> + Send + Sync],
-    ) -> Result<Vec<LookupResult>> {
+    ) -> Result<Vec<RecordLookup>> {
         let lemma = lemma.as_ref();
         // we do a hack where we turn `record_kinds` into a JSON array of ints
         // because SQLite doesn't support placeholders of tuples or arrays
@@ -128,7 +128,7 @@ impl Engine {
                     }
                 }}}}
 
-                Ok(LookupResult {
+                Ok(RecordLookup {
                     bytes_scanned: lemma.len(),
                     source: DictionaryId(record.source),
                     term: Term::new(record.headword, record.reading)
@@ -153,7 +153,7 @@ impl Engine {
         context: &'a str,
         cursor: usize,
         record_kinds: &[impl Borrow<RecordKind> + Send + Sync],
-    ) -> Result<Vec<LookupResult>> {
+    ) -> Result<Vec<RecordLookup>> {
         // TODO: languages with words separated by e.g. spaces need a different strategy
         let (_, query) = context
             .split_at_checked(cursor)
@@ -165,7 +165,7 @@ impl Engine {
         for deinflection in self.deinflect(query).await {
             for result in self.lookup_lemma(&deinflection.lemma, record_kinds).await? {
                 if seen_record_ids.insert(result.record_id) {
-                    records.push(LookupResult {
+                    records.push(RecordLookup {
                         bytes_scanned: deinflection.scan_len,
                         ..result
                     });

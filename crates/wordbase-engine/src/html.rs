@@ -5,14 +5,14 @@ use {
     maud::{Markup, html},
     std::{collections::HashMap, fmt::Write as _, hash::BuildHasher},
     wordbase::{
-        Dictionary, DictionaryId, LookupResult, Record, Term,
+        Dictionary, DictionaryId, RecordLookup, Record, Term,
         dict::{self, yomichan_audio::AudioFormat},
     },
 };
 
 pub fn render_records<H: BuildHasher>(
     dictionaries: &HashMap<DictionaryId, Dictionary, H>,
-    records: &[LookupResult],
+    records: &[RecordLookup],
 ) -> Markup {
     let mut terms = Terms::default();
     for record in records {

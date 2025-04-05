@@ -19,19 +19,17 @@ pub struct Theme {
     pub style: String,
 }
 
-pub type SharedTheme = Arc<Theme>;
-
-pub async fn default() -> SharedTheme {
+pub async fn default() -> Arc<Theme> {
     default_watcher().await.current.clone()
 }
 
-pub async fn recv_default_changed() -> broadcast::Receiver<SharedTheme> {
+pub async fn recv_default_changed() -> broadcast::Receiver<Arc<Theme>> {
     default_watcher().await.recv_theme.resubscribe()
 }
 
 struct DefaultThemeWatcher {
-    current: SharedTheme,
-    recv_theme: broadcast::Receiver<SharedTheme>,
+    current: Arc<Theme>,
+    recv_theme: broadcast::Receiver<Arc<Theme>>,
     _file_watcher: Option<notify::RecommendedWatcher>,
 }
 

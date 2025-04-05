@@ -1,34 +1,28 @@
 use {
     super::render::{
         RecordRender, RecordRenderConfig, RecordRenderMsg, RecordRenderResponse,
-        SUPPORTED_RECORD_KINDS, SharedRecords,
+        SUPPORTED_RECORD_KINDS,
     },
-    crate::{SharedDictionaries, theme},
+    crate::theme,
     futures::never::Never,
     relm4::prelude::*,
     std::sync::Arc,
     tokio_util::task::AbortOnDropHandle,
+    wordbase::RecordLookup,
     wordbase_engine::Engine,
 };
 
 #[derive(Debug)]
 pub struct RecordView {
     engine: Engine,
-    dictionaries: SharedDictionaries,
     render: Controller<RecordRender>,
     recv_default_theme_task: AbortOnDropHandle<()>,
 }
 
 #[derive(Debug)]
-pub struct RecordViewConfig {
-    pub engine: Engine,
-    pub dictionaries: SharedDictionaries,
-}
-
-#[derive(Debug)]
 pub enum RecordViewMsg {
-    Dictionaries(SharedDictionaries),
-    Records(SharedRecords),
+    SyncDictionaries,
+    Records(Arc<Vec<RecordLookup>>),
     #[doc(hidden)]
     Lookup {
         query: String,
@@ -37,7 +31,7 @@ pub enum RecordViewMsg {
 
 #[relm4::component(pub, async)]
 impl AsyncComponent for RecordView {
-    type Init = RecordViewConfig;
+    type Init = Engine;
     type Input = RecordViewMsg;
     type Output = ();
     type CommandOutput = ();
@@ -49,7 +43,7 @@ impl AsyncComponent for RecordView {
     }
 
     async fn init(
-        config: Self::Init,
+        engine: Self::Init,
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
@@ -58,8 +52,8 @@ impl AsyncComponent for RecordView {
             .launch(RecordRenderConfig {
                 default_theme,
                 custom_theme: None,
-                dictionaries: config.dictionaries.clone(),
-                records: SharedRecords::default(),
+                dictionaries: engine.dictionaries.clone(),
+                records: Arc::new(Vec::new()),
             })
             .forward(sender.input_sender(), |resp| match resp {
                 RecordRenderResponse::RequestLookup { query } => RecordViewMsg::Lookup { query },
@@ -81,8 +75,7 @@ impl AsyncComponent for RecordView {
         });
 
         let model = Self {
-            engine: config.engine,
-            dictionaries: config.dictionaries,
+            engine,
             render,
             recv_default_theme_task: AbortOnDropHandle::new(recv_default_theme_task),
         };
@@ -97,12 +90,10 @@ impl AsyncComponent for RecordView {
         _root: &Self::Root,
     ) {
         match message {
-            RecordViewMsg::Dictionaries(dictionaries) => {
-                self.dictionaries = dictionaries.clone();
-                _ = self
-                    .render
-                    .sender()
-                    .send(RecordRenderMsg::Dictionaries(dictionaries));
+            RecordViewMsg::SyncDictionaries => {
+                _ = self.render.sender().send(RecordRenderMsg::Dictionaries(
+                    self.engine.dictionaries.clone(),
+                ));
             }
             RecordViewMsg::Records(records) => {
                 _ = self.render.sender().send(RecordRenderMsg::Records(records));

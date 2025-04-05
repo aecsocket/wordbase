@@ -2,12 +2,9 @@ mod ui;
 
 use {
     crate::{
-        ACTION_PROFILE, SharedProfiles, gettext,
+        ACTION_PROFILE, gettext,
         platform::Platform,
-        record::{
-            render::SharedRecords,
-            view::{RecordView, RecordViewConfig, RecordViewMsg},
-        },
+        record::view::{RecordView, RecordViewMsg},
     },
     anyhow::Result,
     relm4::{
@@ -19,19 +16,18 @@ use {
     },
     std::sync::Arc,
     tracing::warn,
-    wordbase::{PopupAnchor, WindowFilter},
+    wordbase::{PopupAnchor, RecordLookup, WindowFilter},
+    wordbase_engine::Engine,
 };
 
 pub async fn connector(
     app: &adw::Application,
     platform: &Arc<dyn Platform>,
-    profiles: SharedProfiles,
-    record_view: RecordViewConfig,
+    engine: Engine,
 ) -> Result<AsyncConnector<Popup>> {
     let connector = Popup::builder().launch(PopupConfig {
         platform: platform.clone(),
-        profiles,
-        record_view,
+        engine,
     });
     let window = connector.widget();
     app.add_window(window);
@@ -43,25 +39,24 @@ pub async fn connector(
 #[derive(Debug)]
 pub struct Popup {
     platform: Arc<dyn Platform>,
-    profiles: SharedProfiles,
+    engine: Engine,
     record_view: AsyncController<RecordView>,
 }
 
 #[derive(Debug)]
 pub struct PopupConfig {
     platform: Arc<dyn Platform>,
-    profiles: SharedProfiles,
-    record_view: RecordViewConfig,
+    engine: Engine,
 }
 
 #[derive(Debug)]
 pub enum PopupMsg {
-    SyncProfiles(SharedProfiles),
+    SyncProfiles,
     Request {
         target_window: WindowFilter,
         origin: (i32, i32),
         anchor: PopupAnchor,
-        records: SharedRecords,
+        records: Arc<Vec<RecordLookup>>,
     },
 }
 
@@ -101,8 +96,8 @@ impl AsyncComponent for Popup {
     ) -> AsyncComponentParts<Self> {
         let model = Self {
             platform: init.platform,
-            profiles: init.profiles,
-            record_view: RecordView::builder().launch(init.record_view).detach(),
+            engine: init.engine.clone(),
+            record_view: RecordView::builder().launch(init.engine).detach(),
         };
         root.content().set_child(Some(model.record_view.widget()));
         root.profiles_button().connect_clicked(move |_| {
@@ -117,7 +112,8 @@ impl AsyncComponent for Popup {
 
     fn update_view(&self, widgets: &mut Self::Widgets, _sender: AsyncComponentSender<Self>) {
         widgets.profiles_menu().remove_all();
-        for (profile_id, profile) in self.profiles.iter() {
+        let profiles = self.engine.profiles.load();
+        for (profile_id, profile) in profiles.by_id.iter() {
             let label = profile
                 .meta
                 .name
@@ -137,8 +133,8 @@ impl AsyncComponent for Popup {
         root: &Self::Root,
     ) {
         match message {
-            PopupMsg::SyncProfiles(profiles) => {
-                self.profiles = profiles;
+            PopupMsg::SyncProfiles => {
+                // todo?
             }
             PopupMsg::Request {
                 target_window,

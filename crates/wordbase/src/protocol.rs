@@ -39,7 +39,7 @@ pub struct Lookup {
 
 /// Single record returned in response to a [`Lookup`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LookupResult {
+pub struct RecordLookup {
     /// How far along [`Lookup::context`] the engine scanned to find the
     /// [`Term`] in this record.
     pub bytes_scanned: usize,

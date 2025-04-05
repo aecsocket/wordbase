@@ -19,11 +19,10 @@ mod icon_names {
 use {
     anyhow::{Context, Result},
     directories::ProjectDirs,
-    foldhash::HashMap,
     futures::never::Never,
     platform::Platform,
     popup::PopupResponse,
-    record::view::{RecordView, RecordViewConfig, RecordViewMsg},
+    record::view::{RecordView, RecordViewMsg},
     relm4::{
         adw::{self, gio, prelude::*},
         css::classes,
@@ -35,7 +34,7 @@ use {
     tokio::{fs, sync::mpsc},
     tracing::{error, info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
-    wordbase::{Dictionary, DictionaryId, Profile, ProfileId},
+    wordbase::ProfileId,
     wordbase_engine::{Engine, texthook::TexthookerEvent},
 };
 
@@ -62,10 +61,6 @@ fn main() {
     let settings = gio::Settings::new(APP_ID);
     RelmApp::from_app(app.clone()).run_async::<App>(AppConfig { app, settings });
 }
-
-type SharedDictionaries = Arc<HashMap<DictionaryId, Dictionary>>;
-
-type SharedProfiles = Arc<HashMap<ProfileId, Profile>>;
 
 #[derive(Debug)]
 struct App {
@@ -152,12 +147,7 @@ impl AsyncComponent for App {
             .build();
 
         let init = init_app(init, &sender).await.unwrap();
-        let record_view = RecordView::builder()
-            .launch(RecordViewConfig {
-                engine: init.engine.clone(),
-                dictionaries: init.dictionaries,
-            })
-            .detach();
+        let record_view = RecordView::builder().launch(init.engine.clone()).detach();
 
         let model = Self {
             app,
@@ -199,7 +189,6 @@ impl AsyncComponent for App {
 #[derive(Debug)]
 struct AppInit {
     engine: Engine,
-    dictionaries: SharedDictionaries,
 }
 
 async fn init_app(
@@ -225,29 +214,14 @@ async fn init_app(
         .await
         .context("failed to create engine")?;
 
-    let dictionaries = fetch_dictionaries(&engine)
-        .await
-        .context("failed to fetch dictionaries")?;
-    let profiles = fetch_profiles(&engine)
-        .await
-        .context("failed to fetch profiles")?;
-
     // actions
-    setup_profile_action(&app, engine.clone(), sender).await?;
+    setup_profile_action(&app, engine.clone(), sender);
 
-    let mut popup = popup::connector(
-        &app,
-        &platform,
-        profiles,
-        RecordViewConfig {
-            engine: engine.clone(),
-            dictionaries: dictionaries.clone(),
-        },
-    )
-    .await?
-    .forward(sender.input_sender(), |resp| match resp {
-        PopupResponse::OpenSettings => AppMsg::Present,
-    });
+    let mut popup = popup::connector(&app, &platform, engine.clone())
+        .await?
+        .forward(sender.input_sender(), |resp| match resp {
+            PopupResponse::OpenSettings => AppMsg::Present,
+        });
     popup.detach_runtime();
     settings
         .bind("popup-width", popup.widget(), "default-width")
@@ -291,25 +265,19 @@ async fn init_app(
     });
     // TODO: forward server sentence events to overlay
 
-    Ok(AppInit {
-        engine,
-        dictionaries,
-    })
+    Ok(AppInit { engine })
 }
 
-async fn setup_profile_action(
+fn setup_profile_action(
     app: &adw::Application,
     engine: Engine,
     sender: &AsyncComponentSender<App>,
-) -> Result<()> {
-    let current_profile = engine
-        .current_profile()
-        .await
-        .context("failed to fetch current profile ID")?;
+) {
+    let profiles = engine.profiles.load();
     let to_app = sender.input_sender().clone();
     let action = gio::ActionEntry::builder(ACTION_PROFILE)
         .parameter_type(Some(glib::VariantTy::STRING))
-        .state(format!("{}", current_profile.0).to_variant())
+        .state(format!("{}", profiles.current_id.0).to_variant())
         .activate(move |_, action, param| {
             let profile_id = param
                 .expect("activation should have parameter")
@@ -332,29 +300,6 @@ async fn setup_profile_action(
         })
         .build();
     app.add_action_entries([action]);
-    Ok(())
 }
 
 const CHANNEL_BUF_CAP: usize = 4;
-
-async fn fetch_dictionaries(engine: &Engine) -> Result<SharedDictionaries> {
-    Ok(SharedDictionaries::new(
-        engine
-            .fetch_dictionaries()
-            .await?
-            .into_iter()
-            .map(|dict| (dict.id, dict))
-            .collect(),
-    ))
-}
-
-async fn fetch_profiles(engine: &Engine) -> Result<SharedProfiles> {
-    Ok(SharedProfiles::new(
-        engine
-            .profiles()
-            .await?
-            .into_iter()
-            .map(|profile| (profile.id, profile))
-            .collect(),
-    ))
-}
