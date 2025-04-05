@@ -14,7 +14,7 @@ use {
         prelude::*,
         view,
     },
-    std::{sync::Arc, time::Duration},
+    std::sync::Arc,
     tracing::warn,
     wordbase::{PopupAnchor, WindowFilter},
 };
@@ -115,19 +115,13 @@ impl AsyncComponent for Popup {
 
         let root = root.clone();
         let platform = self.platform.clone();
-        glib::timeout_add_local_once(SMALL_DELAY, move || {
-            let root = root.clone();
-            let platform = platform.clone();
-            let target_window = target_window.clone();
-            glib::spawn_future_local(async move {
-                if let Err(err) = platform
-                    .move_popup_to_window(&root, target_window, origin)
-                    .await
-                {
-                    warn!("Failed to move popup to target window: {err:?}");
-                }
-            });
-        });
+        root.set_visible(true);
+        if let Err(err) = platform
+            .move_popup_to_window(&root, target_window, origin)
+            .await
+        {
+            warn!("Failed to move popup to target window: {err:?}");
+        }
     }
 }
 
@@ -141,26 +135,16 @@ fn hide_on_lost_focus(root: &adw::Window) {
     // user actually clicked off, or because we're now dragging the window.
     // So to differentiate between the two, we check the *TopLevel's* focused
     // state instead, which stays true if the window is being dragged.
-    // Also, we need to do it not *right now*, but a bit later, because the
-    // focus state may not have been updated yet.
-    root.connect_is_active_notify(move |root| {
-        let root = root.clone();
-        glib::timeout_add_local_once(SMALL_DELAY, move || {
-            if !has_logical_focus(&root) {
-                root.set_visible(false);
-            }
-        });
+
+    let toplevel = root
+        .surface()
+        .expect("window does not have surface")
+        .downcast::<gdk::Toplevel>()
+        .expect("window surface is not a `gdk::Toplevel`");
+
+    toplevel.connect_state_notify(move |toplevel| {
+        if !toplevel.state().contains(gdk::ToplevelState::FOCUSED) {
+            root.set_visible(false);
+        }
     });
 }
-
-fn has_logical_focus(window: &adw::Window) -> bool {
-    window
-        .surface()
-        .and_then(|surface| surface.downcast::<gdk::Toplevel>().ok())
-        .map_or_else(
-            || window.has_focus(),
-            |toplevel| toplevel.state().contains(gdk::ToplevelState::FOCUSED),
-        )
-}
-
-const SMALL_DELAY: Duration = Duration::from_millis(5);

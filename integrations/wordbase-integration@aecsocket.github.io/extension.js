@@ -289,12 +289,34 @@ class IntegrationService {
             );
             return;
         }
+
+        // move the window
+
         const to_actor = to_actors[0];
         const to_window = to_actor.meta_window;
         const to_rect = to_window.get_frame_rect();
         const [moved_x, moved_y] = [to_rect.x + offset_x, to_rect.y + offset_y];
         moved_window.raise();
+
+        // when we call `move_frame`, if we've *just* shown and presented the window
+        // (made it visible on the GTK side), then it might not be ready to move to
+        // its new position yet
+        //
+        // to get around this, we move it 2 times:
+        // - right now
+        // - after (or if) it's shown (presented and ready to move)
+        //
+        // if the window doesn't end up `shown` soon, then we won't do the 2nd move
         moved_window.move_frame(false, moved_x, moved_y);
+        let handler_id = -1;
+        handler_id = moved_window.connect("shown", (__) => {
+            moved_window.disconnect(handler_id);
+            moved_window.move_frame(false, moved_x, moved_y);
+        });
+        GLib.timeout_add(0, 100, () => {
+            moved_window.disconnect(handler_id);
+            false;
+        });
     }
 }
 
