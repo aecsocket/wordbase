@@ -3,7 +3,7 @@ use {
         RecordRender, RecordRenderConfig, RecordRenderMsg, RecordRenderResponse,
         SUPPORTED_RECORD_KINDS, SharedRecords,
     },
-    crate::{Dictionaries, theme},
+    crate::{SharedDictionaries, theme},
     futures::never::Never,
     relm4::prelude::*,
     std::sync::Arc,
@@ -14,7 +14,7 @@ use {
 #[derive(Debug)]
 pub struct RecordView {
     engine: Engine,
-    dictionaries: Arc<Dictionaries>,
+    dictionaries: SharedDictionaries,
     render: Controller<RecordRender>,
     recv_default_theme_task: AbortOnDropHandle<()>,
 }
@@ -22,12 +22,12 @@ pub struct RecordView {
 #[derive(Debug)]
 pub struct RecordViewConfig {
     pub engine: Engine,
-    pub dictionaries: Arc<Dictionaries>,
+    pub dictionaries: SharedDictionaries,
 }
 
 #[derive(Debug)]
 pub enum RecordViewMsg {
-    Dictionaries(Arc<Dictionaries>),
+    Dictionaries(SharedDictionaries),
     Records(SharedRecords),
     #[doc(hidden)]
     Lookup {

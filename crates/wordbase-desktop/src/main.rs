@@ -63,7 +63,7 @@ fn main() {
     RelmApp::from_app(app.clone()).run_async::<App>(AppConfig { app, settings });
 }
 
-type Dictionaries = HashMap<DictionaryId, Dictionary>;
+type SharedDictionaries = Arc<HashMap<DictionaryId, Dictionary>>;
 
 type SharedProfiles = Arc<HashMap<ProfileId, Profile>>;
 
@@ -199,7 +199,7 @@ impl AsyncComponent for App {
 #[derive(Debug)]
 struct AppInit {
     engine: Engine,
-    dictionaries: Arc<Dictionaries>,
+    dictionaries: SharedDictionaries,
 }
 
 async fn init_app(
@@ -225,24 +225,12 @@ async fn init_app(
         .await
         .context("failed to create engine")?;
 
-    let dictionaries = Arc::<Dictionaries>::new(
-        engine
-            .dictionaries()
-            .await
-            .context("failed to fetch dictionaries")?
-            .into_iter()
-            .map(|dict| (dict.id, dict))
-            .collect(),
-    );
-    let profiles = SharedProfiles::new(
-        engine
-            .profiles()
-            .await
-            .context("failed to fetch profiles")?
-            .into_iter()
-            .map(|profile| (profile.id, profile))
-            .collect(),
-    );
+    let dictionaries = fetch_dictionaries(&engine)
+        .await
+        .context("failed to fetch dictionaries")?;
+    let profiles = fetch_profiles(&engine)
+        .await
+        .context("failed to fetch profiles")?;
 
     // actions
     setup_profile_action(&app, engine.clone(), sender).await?;
@@ -349,13 +337,24 @@ async fn setup_profile_action(
 
 const CHANNEL_BUF_CAP: usize = 4;
 
+async fn fetch_dictionaries(engine: &Engine) -> Result<SharedDictionaries> {
+    Ok(SharedDictionaries::new(
+        engine
+            .dictionaries()
+            .await?
+            .into_iter()
+            .map(|dict| (dict.id, dict))
+            .collect(),
+    ))
+}
+
 async fn fetch_profiles(engine: &Engine) -> Result<SharedProfiles> {
-    Ok(Arc::new(
+    Ok(SharedProfiles::new(
         engine
             .profiles()
             .await?
             .into_iter()
             .map(|profile| (profile.id, profile))
-            .collect::<HashMap<_, _>>(),
+            .collect(),
     ))
 }

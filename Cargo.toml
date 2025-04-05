@@ -40,6 +40,7 @@ wordbase-engine = { path = "crates/wordbase-engine" }
 
 ankiconnect          = { version = "0.2" }
 anyhow               = { version = "1.0" }
+arc-swap             = { version = "1.7" }
 ascii_table          = { version = "4.0" }
 async-compression    = { version = "0.4" }
 async-tar            = { version = "0.5" }

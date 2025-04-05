@@ -1,5 +1,8 @@
 use {
-    crate::{Dictionaries, theme::Theme},
+    crate::{
+        SharedDictionaries,
+        theme::{SharedTheme, Theme},
+    },
     maud::html,
     relm4::{
         adw::{gdk, prelude::*},
@@ -14,9 +17,9 @@ use {
 
 #[derive(Debug)]
 pub struct RecordRender {
-    default_theme: Arc<Theme>,
-    custom_theme: Option<Arc<Theme>>,
-    dictionaries: Arc<Dictionaries>,
+    default_theme: SharedTheme,
+    custom_theme: Option<SharedTheme>,
+    dictionaries: SharedDictionaries,
     records: SharedRecords,
 }
 
@@ -28,7 +31,7 @@ pub const SUPPORTED_RECORD_KINDS: &[RecordKind] = RecordKind::ALL;
 pub struct RecordRenderConfig {
     pub default_theme: Arc<Theme>,
     pub custom_theme: Option<Arc<Theme>>,
-    pub dictionaries: Arc<Dictionaries>,
+    pub dictionaries: SharedDictionaries,
     pub records: SharedRecords,
 }
 
@@ -36,7 +39,7 @@ pub struct RecordRenderConfig {
 pub enum RecordRenderMsg {
     DefaultTheme(Arc<Theme>),
     CustomTheme(Option<Arc<Theme>>),
-    Dictionaries(Arc<Dictionaries>),
+    Dictionaries(SharedDictionaries),
     Records(SharedRecords),
 }
 
