@@ -47,6 +47,11 @@
       "type": "bind",
       "source": "${localEnv:HOME}/.local/share/gnome-shell/extensions/",
       "target": "/workspaces/gnome-shell-extensions"
+    },
+    {
+      "type": "bind",
+      "source": "${localEnv:HOME}/.local/share/glib-2.0/schemas/",
+      "target": "/home/dev/.local/share/glib-2.0/schemas"
     }
   ],
   "customizations": {

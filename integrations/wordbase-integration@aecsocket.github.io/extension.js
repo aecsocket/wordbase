@@ -92,7 +92,7 @@ const INTERFACE = `
             <arg direction="in" type="t" name="parent_id"/>
             <arg direction="in" type="t" name="overlay_id"/>
         </method>
-        <method name="MoveToWindow">
+        <method name="MovePopupToWindow">
             <arg direction="in" type="t" name="moved_id"/>
             <arg direction="in" type="t" name="to_id"/>
             <arg direction="in" type="s" name="to_title"/>
@@ -175,6 +175,7 @@ class IntegrationService {
         // actual logic
 
         const parent_rect = parent_window.get_frame_rect();
+        overlay_window.raise();
         overlay_window.move_frame(false, parent_rect.x, parent_rect.y);
 
         let [parent_last_x, parent_last_y] = [
@@ -224,6 +225,17 @@ class IntegrationService {
             overlay_window.raise();
         });
 
+        if (parent_window.is_fullscreen()) {
+            overlay_window.make_above();
+        }
+        parent_window.connect("notify::fullscreen", (__) => {
+            if (parent_window.is_fullscreen()) {
+                overlay_window.make_above();
+            } else {
+                overlay_window.unmake_above();
+            }
+        });
+
         parent_actor.connect("destroy", (__) => {
             console.log(
                 `"${overlay_window.title} destroyed, closing ${overlay_id}"`,
@@ -247,7 +259,14 @@ class IntegrationService {
      * @param {number} offset_x
      * @param {number} offset_y
      */
-    MoveToWindow(moved_id, to_id, to_title, to_wm_class, offset_x, offset_y) {
+    MovePopupToWindow(
+        moved_id,
+        to_id,
+        to_title,
+        to_wm_class,
+        offset_x,
+        offset_y,
+    ) {
         // find moved window
 
         const moved_actor = global
@@ -292,11 +311,11 @@ class IntegrationService {
 
         // move the window
 
+        moved_window.raise();
         const to_actor = to_actors[0];
         const to_window = to_actor.meta_window;
         const to_rect = to_window.get_frame_rect();
         const [moved_x, moved_y] = [to_rect.x + offset_x, to_rect.y + offset_y];
-        moved_window.raise();
 
         // when we call `move_frame`, if we've *just* shown and presented the window
         // (made it visible on the GTK side), then it might not be ready to move to
@@ -308,14 +327,30 @@ class IntegrationService {
         //
         // if the window doesn't end up `shown` soon, then we won't do the 2nd move
         moved_window.move_frame(false, moved_x, moved_y);
-        let handler_id = -1;
+        let handler_id = null;
         handler_id = moved_window.connect("shown", (__) => {
+            if (!handler_id) {
+                return;
+            }
             moved_window.disconnect(handler_id);
+            handler_id = null;
+
             moved_window.move_frame(false, moved_x, moved_y);
+            // even though we've just raised the popup window, it's not guaranteed
+            // to be on top if we're in a fullscreen window
+            // so we force it to be always on top
+            // this shouldn't impact the user experience, since as soon as the unfocus,
+            // the popup window will hide anyway
+            moved_window.make_above();
         });
         GLib.timeout_add(0, 100, () => {
+            if (!handler_id) {
+                return;
+            }
             moved_window.disconnect(handler_id);
-            false;
+            handler_id = null;
+
+            return false;
         });
     }
 }

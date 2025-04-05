@@ -12,6 +12,11 @@ TODO:
 - local audio server - SORTA DONE
 - ankiconnect
 
+quick test problems:
+- clicking off the overlay box, then it updates the sentence, and I start hovering back on - it doesn't immediately show popup box until I hover over a different word and back
+- when the app goes full screen, the overlay should appear at the top
+- dictionary popup should always appear above
+
 audio server:
 - i query たべなかった
 - i get the term "食べる (たべる)"

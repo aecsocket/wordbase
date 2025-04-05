@@ -114,7 +114,7 @@ impl super::Platform for Platform {
         Box::pin(async move {
             let popup_window_id = get_window_id(&self.integration, &popup).await?;
             self.integration
-                .move_to_window(
+                .move_popup_to_window(
                     popup_window_id,
                     to.id.unwrap_or_default(),
                     to.title.as_deref().unwrap_or_default(),
@@ -154,7 +154,7 @@ trait Integration {
 
     async fn overlay_on_window(&self, parent_id: u64, overlay_id: u64) -> zbus::Result<()>;
 
-    async fn move_to_window(
+    async fn move_popup_to_window(
         &self,
         moved_id: u64,
         to_id: u64,

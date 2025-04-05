@@ -16,6 +16,7 @@ use {
     record::view::{RecordView, RecordViewConfig, RecordViewMsg},
     relm4::{
         adw::{self, gio, prelude::*},
+        css::classes,
         loading_widgets::LoadingWidgets,
         prelude::*,
         view,
@@ -49,6 +50,7 @@ type Dictionaries = HashMap<DictionaryId, Dictionary>;
 
 #[derive(Debug)]
 struct App {
+    app: adw::Application,
     engine: Engine,
     record_view: AsyncController<RecordView>,
 }
@@ -61,6 +63,7 @@ struct AppConfig {
 
 #[derive(Debug)]
 enum AppMsg {
+    Quit,
     Lookup { query: String },
 }
 
@@ -94,8 +97,17 @@ impl AsyncComponent for App {
                     #[name(search_entry)]
                     set_title_widget = &gtk::SearchEntry {
                         set_hexpand: true,
-                        connect_search_changed => move |widget| {
+                        connect_search_changed[sender] => move |widget| {
                             sender.input(AppMsg::Lookup { query: widget.text().into() });
+                        },
+                    },
+
+                    pack_start = &gtk::Button {
+                        add_css_class: classes::FLAT,
+                        set_widget_name: "Quit",
+                        set_icon_name: "window-close-symbolic",
+                        connect_clicked[sender] => move |_| {
+                            sender.input(AppMsg::Quit);
                         },
                     },
                 },
@@ -110,6 +122,7 @@ impl AsyncComponent for App {
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
+        let app = init.app.clone();
         init.settings
             .bind("manager-width", &root, "default-width")
             .build();
@@ -126,6 +139,7 @@ impl AsyncComponent for App {
             .detach();
 
         let model = Self {
+            app,
             engine: init.engine,
             record_view,
         };
@@ -141,6 +155,7 @@ impl AsyncComponent for App {
         _root: &Self::Root,
     ) {
         match message {
+            AppMsg::Quit => self.app.quit(),
             AppMsg::Lookup { query } => {
                 _ = self
                     .record_view

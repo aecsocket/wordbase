@@ -3,13 +3,13 @@
 
 // pub mod anki;
 mod db;
-mod deinflect;
-mod dictionary;
+pub mod deinflect;
+pub mod dictionary;
 pub mod html;
 pub mod import;
 pub mod lang;
 pub mod lookup;
-mod profile;
+pub mod profile;
 pub mod texthook;
 
 use anyhow::Context;
