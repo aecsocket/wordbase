@@ -172,11 +172,26 @@ class IntegrationService {
             );
         }
 
-        // actual logic
+        // init logic
 
         const parent_rect = parent_window.get_frame_rect();
-        overlay_window.raise();
-        overlay_window.move_frame(false, parent_rect.x, parent_rect.y);
+        let handler_id = null;
+        handler_id = overlay_window.connect("shown", (__) => {
+            if (!handler_id) {
+                return;
+            }
+            overlay_window.disconnect(handler_id);
+            handler_id = null;
+
+            overlay_window.focus(global.get_current_time());
+            overlay_window.raise();
+            overlay_window.move_frame(false, parent_rect.x, parent_rect.y);
+            if (parent_window.is_fullscreen()) {
+                overlay_window.make_above();
+            }
+        });
+
+        // actual logic
 
         let [parent_last_x, parent_last_y] = [
             parent_window.get_frame_rect().x,
@@ -225,9 +240,6 @@ class IntegrationService {
             overlay_window.raise();
         });
 
-        if (parent_window.is_fullscreen()) {
-            overlay_window.make_above();
-        }
         parent_window.connect("notify::fullscreen", (__) => {
             if (parent_window.is_fullscreen()) {
                 overlay_window.make_above();
@@ -238,7 +250,7 @@ class IntegrationService {
 
         parent_actor.connect("destroy", (__) => {
             console.log(
-                `"${overlay_window.title} destroyed, closing ${overlay_id}"`,
+                `"${overlay_window.title}" destroyed, closing ${overlay_id}`,
             );
             this._impl.emit_signal(
                 "CloseOverlay",
@@ -311,6 +323,7 @@ class IntegrationService {
 
         // move the window
 
+        moved_window.focus(global.get_current_time());
         moved_window.raise();
         const to_actor = to_actors[0];
         const to_window = to_actor.meta_window;
