@@ -22,6 +22,7 @@ use {
     foldhash::HashMap,
     futures::never::Never,
     platform::Platform,
+    popup::PopupResponse,
     record::view::{RecordView, RecordViewConfig, RecordViewMsg},
     relm4::{
         adw::{self, gio, prelude::*},
@@ -74,7 +75,7 @@ struct AppConfig {
 #[derive(Debug)]
 enum AppMsg {
     Quit,
-    Show,
+    Present,
     Lookup { query: String },
 }
 
@@ -169,7 +170,7 @@ impl AsyncComponent for App {
             AppMsg::Quit => {
                 self.app.quit();
             }
-            AppMsg::Show => {
+            AppMsg::Present => {
                 root.present();
             }
             AppMsg::Lookup { query } => {
@@ -228,10 +229,11 @@ async fn init_app(
             engine: engine.clone(),
             dictionaries: dictionaries.clone(),
         },
-        sender.input_sender().clone(),
     )
     .await?
-    .detach();
+    .forward(sender.input_sender(), |resp| match resp {
+        PopupResponse::OpenSettings => AppMsg::Present,
+    });
     popup.detach_runtime();
     settings
         .bind("popup-width", popup.widget(), "default-width")

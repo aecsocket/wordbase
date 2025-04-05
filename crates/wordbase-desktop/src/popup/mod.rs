@@ -2,7 +2,6 @@ mod ui;
 
 use {
     crate::{
-        AppMsg,
         platform::Platform,
         record::{
             render::Records,
@@ -26,12 +25,10 @@ pub async fn connector(
     app: &adw::Application,
     platform: &Arc<dyn Platform>,
     record_view: RecordViewConfig,
-    to_manager: relm4::Sender<AppMsg>,
 ) -> Result<AsyncConnector<Popup>> {
     let connector = Popup::builder().launch(PopupConfig {
         platform: platform.clone(),
         record_view,
-        to_manager,
     });
     let window = connector.widget();
     app.add_window(window);
@@ -50,7 +47,6 @@ pub struct Popup {
 pub struct PopupConfig {
     platform: Arc<dyn Platform>,
     record_view: RecordViewConfig,
-    to_manager: relm4::Sender<AppMsg>,
 }
 
 #[derive(Debug, Clone)]
@@ -61,10 +57,15 @@ pub struct AppPopupRequest {
     pub records: Arc<Records>,
 }
 
+#[derive(Debug)]
+pub enum PopupResponse {
+    OpenSettings,
+}
+
 impl AsyncComponent for Popup {
     type Init = PopupConfig;
     type Input = AppPopupRequest;
-    type Output = ();
+    type Output = PopupResponse;
     type CommandOutput = ();
     type Root = ui::Popup;
     type Widgets = ();
@@ -88,7 +89,7 @@ impl AsyncComponent for Popup {
     async fn init(
         init: Self::Init,
         root: Self::Root,
-        _sender: AsyncComponentSender<Self>,
+        sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
         let model = Self {
             platform: init.platform,
@@ -96,7 +97,7 @@ impl AsyncComponent for Popup {
         };
         root.content().set_child(Some(model.record_view.widget()));
         root.settings().connect_clicked(move |_| {
-            _ = init.to_manager.send(AppMsg::Show);
+            _ = sender.output(PopupResponse::OpenSettings);
         });
 
         hide_on_lost_focus(root.upcast_ref());
