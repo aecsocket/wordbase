@@ -72,6 +72,8 @@ pub async fn run(
     }
 }
 
+const POPUP_OFFSET: (i32, i32) = (0, 10);
+
 struct OverlayState {
     _guard: OverlayGuard,
     controller: AsyncController<Overlay>,
@@ -246,7 +248,10 @@ impl AsyncComponent for Overlay {
 
                 // TODO variable offset
                 #[expect(clippy::cast_possible_truncation, reason = "no other way to convert")]
-                let origin = (abs_point.x() as i32 + 16, abs_point.y() as i32 + 16);
+                let origin = (
+                    abs_point.x() as i32 + POPUP_OFFSET.0,
+                    abs_point.y() as i32 + POPUP_OFFSET.1,
+                );
 
                 let Ok(records) = self
                     .engine

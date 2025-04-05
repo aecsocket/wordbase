@@ -68,25 +68,88 @@ fn lindera<'a>(
         return stream::empty().left_stream();
     };
 
-    let lemmas = (1..=TOKEN_LOOKAHEAD).rev().filter_map(move |up_to| {
-        let tokens = tokens.get_mut(..up_to)?;
-        let full_lemma = tokens
-            .iter_mut()
-            .map(|token| token.get_detail(DETAIL_LEMMA))
-            .collect::<Option<Vec<_>>>()?
-            .join("");
+    // in text like "東京大学", lindera tokenizes it as "東京" and "大学"
+    // our dictionary will have an entry for "東京", but we also want to check
+    // if there's an entry for "東京大学"
+    // to do this, we turn the first `TOKEN_LOOKAHEAD` tokens into a lemma,
+    // then turn the first `TOKEN_LOOKAHEAD - 1` into another lemma, etc.
+    let lemmas = (1..=TOKEN_LOOKAHEAD)
+        .rev()
+        .filter_map(move |up_to| {
+            let lookahead = tokens.get_mut(..up_to)?;
 
-        Some(Deinflection {
-            lemma: Cow::Owned(full_lemma),
-            scan_len: tokens.last()?.byte_end,
+            // each slice of tokens actually turns into 2 lemmas:
+            // - the result of joining the conjugation form of each token together
+            // - the result of joining the lemma of each token together
+            //
+            // in UniDic, for a word like "食べる":
+            //   conj form = 食べる (good)
+            //       lemma = たべる (bad)
+            // for a word like "東京":
+            //   conj form = トウキョウ (bad)
+            //       lemma = 東京 (good)
+            //
+            // so we need to do a lookup for both
+            let conj_form = lookahead
+                .iter_mut()
+                .map(|token| token.get_detail(DETAIL_CONJUGATION_FORM))
+                .collect::<Option<Vec<_>>>()?
+                .join("");
+
+            let full_lemma = lookahead
+                .iter_mut()
+                .map(|token| token.get_detail(DETAIL_LEMMA))
+                .collect::<Option<Vec<_>>>()?
+                .join("");
+
+            // now we try to find where the last token ends
+            // we go through all tokens after the last one, and find the last one
+            // where the part of speech is no longer a "continuation" (e.g. an auxiliary verb),
+            // then we use that last continuation token's end position as the end of the word.
+            // this is a naive approach, but I don't know how to do it better.
+            let last_token_end = lookahead.last()?.byte_end;
+            let scan_len = tokens
+                .iter_mut()
+                .skip(up_to)
+                .filter_map(|token| {
+                    let byte_end = token.byte_end;
+                    token
+                        .get_detail(DETAIL_PART_OF_SPEECH)
+                        .map(|pos| (pos, byte_end))
+                })
+                .take_while(|(pos, _)| pos_is_continuation(pos))
+                .map(|(_, byte_end)| byte_end)
+                .last()
+                .unwrap_or(last_token_end);
+
+            Some([
+                Deinflection {
+                    lemma: Cow::Owned(conj_form),
+                    scan_len,
+                },
+                Deinflection {
+                    lemma: Cow::Owned(full_lemma),
+                    scan_len,
+                },
+            ])
         })
-    });
+        .flatten();
 
     stream::iter(lemmas).right_stream()
 }
 
+fn pos_is_continuation(pos: &str) -> bool {
+    matches!(
+        pos,
+        "助動詞" // auxiliary verb
+    )
+}
+
 fn _lindera_debug<'a>(deinflectors: &'a Deinflectors, text: &'a str) {
-    let tokens = deinflectors.tokenizer.tokenize(text).unwrap();
+    let tokens = deinflectors
+        .tokenizer
+        .tokenize(text)
+        .expect("should be able to tokenize text");
     println!("TOKENS:");
     for mut token in tokens {
         println!("- {}", token.text);
@@ -95,10 +158,8 @@ fn _lindera_debug<'a>(deinflectors: &'a Deinflectors, text: &'a str) {
     println!("------");
 }
 
-fn pos_is_end_of_word(pos: &str) -> bool {
-    pos == "名詞" || pos == "動詞" || pos == "形容詞"
-}
-
+const DETAIL_PART_OF_SPEECH: usize = 0;
+const DETAIL_CONJUGATION_FORM: usize = 7;
 const DETAIL_LEMMA: usize = 8;
 
-const TOKEN_LOOKAHEAD: usize = 4;
+const TOKEN_LOOKAHEAD: usize = 8;
