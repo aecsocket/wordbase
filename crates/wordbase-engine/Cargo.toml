@@ -21,6 +21,7 @@ all-features = true
 wordbase = { workspace = true, features = ["render-html"] }
 
 anyhow               = { workspace = true }
+arc-swap             = { workspace = true }
 async-compression    = { workspace = true, features = ["futures-io", "xz"] }
 async-tar            = { workspace = true }
 async_zip            = { workspace = true, features = ["deflate"] }

@@ -340,7 +340,7 @@ const CHANNEL_BUF_CAP: usize = 4;
 async fn fetch_dictionaries(engine: &Engine) -> Result<SharedDictionaries> {
     Ok(SharedDictionaries::new(
         engine
-            .dictionaries()
+            .fetch_dictionaries()
             .await?
             .into_iter()
             .map(|dict| (dict.id, dict))

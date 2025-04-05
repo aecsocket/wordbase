@@ -5,7 +5,7 @@ use {
     ascii_table::AsciiTable,
     bytes::Bytes,
     directories::ProjectDirs,
-    std::{collections::HashMap, path::PathBuf, time::Instant},
+    std::{path::PathBuf, time::Instant},
     tokio::{fs, sync::oneshot},
     tracing::{info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
@@ -166,121 +166,122 @@ async fn main() -> Result<()> {
     match args.command {
         Command::Profile {
             command: ProfileCommand::Ls,
-        } => profile_ls(engine).await?,
+        } => {
+            profile_ls(&engine);
+        }
         Command::Profile {
             command: ProfileCommand::New { name },
-        } => profile_new(engine, name).await?,
+        } => profile_new(&engine, name).await?,
         Command::Profile {
             command:
                 ProfileCommand::Set {
                     profile_id,
                     command: ProfileSetCommand::Current,
                 },
-        } => profile_set_current(engine, profile_id).await?,
+        } => profile_set_current(&engine, profile_id).await?,
         Command::Profile {
             command:
                 ProfileCommand::Set {
                     profile_id,
                     command: ProfileSetCommand::SortingDictionary { dictionary_id },
                 },
-        } => profile_set_sorting_dictionary(engine, profile_id, dictionary_id).await?,
+        } => profile_set_sorting_dictionary(&engine, profile_id, dictionary_id).await?,
         Command::Profile {
             command: ProfileCommand::Rm { id },
-        } => profile_rm(engine, id).await?,
+        } => profile_rm(&engine, id).await?,
         Command::Dictionary {
             command: DictionaryCommand::Ls,
-        } => dictionary_ls(engine).await?,
+        } => dictionary_ls(&engine),
         Command::Dictionary {
             command: DictionaryCommand::Info { id },
-        } => dictionary_info(engine, id).await?,
+        } => dictionary_info(&engine, id)?,
         Command::Dictionary {
             command: DictionaryCommand::Import { path },
-        } => dictionary_import(engine, path).await?,
+        } => dictionary_import(&engine, path).await?,
         Command::Dictionary {
             command: DictionaryCommand::Enable { id },
-        } => dictionary_enable(engine, id).await?,
+        } => dictionary_enable(&engine, id).await?,
         Command::Dictionary {
             command: DictionaryCommand::Disable { id },
-        } => dictionary_disable(engine, id).await?,
+        } => dictionary_disable(&engine, id).await?,
         Command::Dictionary {
             command: DictionaryCommand::Position { id, position },
-        } => dictionary_position(engine, id, position).await?,
+        } => dictionary_position(&engine, id, position).await?,
         Command::Dictionary {
             command: DictionaryCommand::Rm { id },
-        } => dictionary_rm(engine, id).await?,
-        Command::Deinflect { text } => deinflect(engine, text).await?,
-        Command::Lookup { text } => lookup(engine, text).await?,
+        } => dictionary_rm(&engine, id).await?,
+        Command::Deinflect { text } => deinflect(&engine, text).await?,
+        Command::Lookup { text } => lookup(&engine, text).await?,
         Command::Texthooker {
             command: TexthookerCommand::GetUrl,
-        } => {
-            texthooker_get_url(engine).await?;
-        }
+        } => texthooker_get_url(&engine).await?,
         Command::Texthooker {
             command: TexthookerCommand::SetUrl { url },
-        } => {
-            texthooker_set_url(engine, url).await?;
-        }
+        } => texthooker_set_url(&engine, url).await?,
         Command::Texthooker {
             command: TexthookerCommand::Watch,
-        } => {
-            texthooker_watch(engine).await?;
-        }
+        } => texthooker_watch(&engine).await?,
     }
 
     Ok(())
 }
 
-async fn profile_ls(engine: Engine) -> Result<()> {
+fn profile_ls(engine: &Engine) {
     let mut table = AsciiTable::default();
     table.column(1).set_header("ID");
     table.column(2).set_header("Name");
     table.column(3).set_header("Sorting Dict");
     table.column(4).set_header("Dictionaries");
 
-    let current_profile_id = engine.current_profile().await?;
-    let dictionaries = engine
-        .dictionaries()
-        .await?
-        .into_iter()
-        .map(|dictionary| (dictionary.id, dictionary))
-        .collect::<HashMap<_, _>>();
-    let data = engine
-        .profiles()
-        .await?
-        .into_iter()
+    let dicts = engine.dictionaries.load();
+    let name_of_dict = |dict_id: DictionaryId| {
+        dicts
+            .by_id
+            .get(&dict_id)
+            .map_or_else(|| "?".into(), |dict| dict.meta.name.clone())
+    };
+
+    let profiles = engine.profiles.load();
+
+    let data = profiles
+        .by_id
+        .values()
         .map(|profile| {
             let num_dictionaries = profile.enabled_dictionaries.len();
             let enabled_dictionaries = profile
                 .enabled_dictionaries
-                .into_iter()
-                .filter_map(|dict| dictionaries.get(&dict).map(|dict| dict.meta.name.as_ref()))
+                .iter()
+                .map(|dict| name_of_dict(*dict))
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            let selected = if profile.id == current_profile_id {
+            let selected = if profile.id == profiles.current_id {
                 "✔"
             } else {
                 ""
             };
             let sorting_dictionary = profile
                 .sorting_dictionary
-                .and_then(|dict| dictionaries.get(&dict).map(|dict| dict.meta.name.clone()))
+                .map(name_of_dict)
                 .unwrap_or_default();
 
             vec![
                 selected.to_string(),
                 format!("{}", profile.id.0),
-                profile.meta.name.unwrap_or_else(|| "(default)".into()),
+                profile
+                    .meta
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| "(default)".into()),
                 sorting_dictionary,
                 format!("({num_dictionaries}) {enabled_dictionaries}"),
             ]
         })
         .collect::<Vec<_>>();
     table.print(&data);
-    Ok(())
 }
 
-async fn profile_new(engine: Engine, name: String) -> Result<()> {
+async fn profile_new(engine: &Engine, name: String) -> Result<()> {
     let new_id = engine
         .insert_profile(ProfileMeta {
             name: Some(name),
@@ -291,14 +292,14 @@ async fn profile_new(engine: Engine, name: String) -> Result<()> {
     Ok(())
 }
 
-async fn profile_set_current(engine: Engine, profile_id: i64) -> Result<()> {
+async fn profile_set_current(engine: &Engine, profile_id: i64) -> Result<()> {
     let profile_id = ProfileId(profile_id);
     engine.set_current_profile(profile_id).await?;
     Ok(())
 }
 
 async fn profile_set_sorting_dictionary(
-    engine: Engine,
+    engine: &Engine,
     profile_id: i64,
     dictionary_id: Option<i64>,
 ) -> Result<()> {
@@ -310,40 +311,43 @@ async fn profile_set_sorting_dictionary(
     Ok(())
 }
 
-async fn profile_rm(engine: Engine, id: i64) -> Result<()> {
+async fn profile_rm(engine: &Engine, id: i64) -> Result<()> {
     let id = ProfileId(id);
     engine.remove_profile(id).await?;
     Ok(())
 }
 
-async fn dictionary_ls(engine: Engine) -> Result<()> {
+fn dictionary_ls(engine: &Engine) {
     let mut table = AsciiTable::default();
     table.column(1).set_header("Pos");
     table.column(2).set_header("ID");
     table.column(3).set_header("Name");
     table.column(4).set_header("Version");
 
-    let data = engine
-        .dictionaries()
-        .await?
-        .into_iter()
-        .map(|dictionary| {
+    let dictionaries = engine.dictionaries.load();
+    let data = dictionaries
+        .by_id
+        .values()
+        .map(|dict| {
             vec![
-                (if dictionary.enabled { "✔" } else { "" }).to_string(),
-                format!("{}", dictionary.position),
-                format!("{}", dictionary.id.0),
-                dictionary.meta.name,
-                dictionary.meta.version.unwrap_or_default(),
+                (if dict.enabled { "✔" } else { "" }).to_string(),
+                format!("{}", dict.position),
+                format!("{}", dict.id.0),
+                dict.meta.name.clone(),
+                dict.meta.version.clone().unwrap_or_default(),
             ]
         })
         .collect::<Vec<_>>();
     table.print(&data);
-    Ok(())
 }
 
-async fn dictionary_info(engine: Engine, id: i64) -> Result<()> {
+fn dictionary_info(engine: &Engine, id: i64) -> Result<()> {
     let id = DictionaryId(id);
-    let dictionary = engine.dictionary(id).await?;
+    let dictionaries = engine.dictionaries.load();
+    let dictionary = dictionaries
+        .by_id
+        .get(&id)
+        .context("no dictionary with this ID")?;
     println!(
         "{:?} version {:?}",
         dictionary.meta.name, dictionary.meta.version
@@ -359,11 +363,11 @@ async fn dictionary_info(engine: Engine, id: i64) -> Result<()> {
         dictionary.position
     );
 
-    if let Some(url) = dictionary.meta.url {
+    if let Some(url) = &dictionary.meta.url {
         println!("  URL: {url}");
     }
 
-    if let Some(description) = dictionary.meta.description {
+    if let Some(description) = &dictionary.meta.description {
         if !description.trim().is_empty() {
             println!();
             println!("--- Description ---");
@@ -374,7 +378,7 @@ async fn dictionary_info(engine: Engine, id: i64) -> Result<()> {
     Ok(())
 }
 
-async fn dictionary_import(engine: Engine, path: PathBuf) -> Result<()> {
+async fn dictionary_import(engine: &Engine, path: PathBuf) -> Result<()> {
     let start = Instant::now();
 
     let data = fs::read(path)
@@ -383,8 +387,10 @@ async fn dictionary_import(engine: Engine, path: PathBuf) -> Result<()> {
         .context("failed to read dictionary file into memory")?;
 
     let (send_tracker, recv_tracker) = oneshot::channel::<ImportStarted>();
-    let import_task =
-        tokio::spawn(async move { engine.import_dictionary(data, send_tracker).await });
+    let import_task = tokio::spawn({
+        let engine = engine.clone();
+        async move { engine.import_dictionary(data, send_tracker).await }
+    });
     let tracker_task = async move {
         let Ok(mut tracker) = recv_tracker.await else {
             return;
@@ -410,31 +416,31 @@ async fn dictionary_import(engine: Engine, path: PathBuf) -> Result<()> {
     Ok(())
 }
 
-async fn dictionary_enable(engine: Engine, id: i64) -> Result<()> {
+async fn dictionary_enable(engine: &Engine, id: i64) -> Result<()> {
     let id = DictionaryId(id);
     engine.enable_dictionary(id).await?;
     Ok(())
 }
 
-async fn dictionary_disable(engine: Engine, id: i64) -> Result<()> {
+async fn dictionary_disable(engine: &Engine, id: i64) -> Result<()> {
     let id = DictionaryId(id);
     engine.disable_dictionary(id).await?;
     Ok(())
 }
 
-async fn dictionary_position(engine: Engine, id: i64, position: i64) -> Result<()> {
+async fn dictionary_position(engine: &Engine, id: i64, position: i64) -> Result<()> {
     let id = DictionaryId(id);
     engine.set_dictionary_position(id, position).await?;
     Ok(())
 }
 
-async fn dictionary_rm(engine: Engine, id: i64) -> Result<()> {
+async fn dictionary_rm(engine: &Engine, id: i64) -> Result<()> {
     let id = DictionaryId(id);
     engine.remove_dictionary(id).await?;
     Ok(())
 }
 
-async fn deinflect(engine: Engine, text: String) -> Result<()> {
+async fn deinflect(engine: &Engine, text: String) -> Result<()> {
     for deinflection in engine.deinflect(&text).await {
         let scan_len = deinflection.scan_len;
         let text_part = text.get(..scan_len).map_or_else(
@@ -447,25 +453,25 @@ async fn deinflect(engine: Engine, text: String) -> Result<()> {
     Ok(())
 }
 
-async fn lookup(engine: Engine, text: String) -> Result<()> {
+async fn lookup(engine: &Engine, text: String) -> Result<()> {
     for result in engine.lookup(&text, 0, RecordKind::ALL).await? {
         println!("{result:#?}");
     }
     Ok(())
 }
 
-async fn texthooker_get_url(engine: Engine) -> Result<()> {
+async fn texthooker_get_url(engine: &Engine) -> Result<()> {
     let url = engine.texthooker_url().await?;
     println!("{url}");
     Ok(())
 }
 
-async fn texthooker_set_url(engine: Engine, url: String) -> Result<()> {
+async fn texthooker_set_url(engine: &Engine, url: String) -> Result<()> {
     engine.set_texthooker_url(url).await?;
     Ok(())
 }
 
-async fn texthooker_watch(engine: Engine) -> Result<()> {
+async fn texthooker_watch(engine: &Engine) -> Result<()> {
     let (texthooker_task, mut recv_event) = engine.texthooker_task().await?;
     tokio::spawn(async move {
         texthooker_task.await.expect("texthooker error");
