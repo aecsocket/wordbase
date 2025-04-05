@@ -1,5 +1,5 @@
 use {
-    crate::Engine,
+    crate::{Engine, Event},
     anyhow::{Context, Result, bail},
     arc_swap::ArcSwap,
     derive_more::{Display, Error},
@@ -43,6 +43,7 @@ impl Engine {
                 .await
                 .context("failed to sync profiles")?,
         ));
+        _ = self.send_event.send(Event::SyncProfiles);
         Ok(())
     }
 

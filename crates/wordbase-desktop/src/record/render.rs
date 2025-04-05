@@ -9,14 +9,14 @@ use {
     tracing::{debug, info, warn},
     webkit6::prelude::*,
     wordbase::{RecordKind, RecordLookup},
-    wordbase_engine::{dictionary::SharedDictionaries, html},
+    wordbase_engine::{dictionary::Dictionaries, html},
 };
 
 #[derive(Debug)]
 pub struct RecordRender {
     default_theme: Arc<Theme>,
     custom_theme: Option<Arc<Theme>>,
-    dictionaries: SharedDictionaries,
+    dictionaries: Arc<Dictionaries>,
     records: Arc<Vec<RecordLookup>>,
 }
 
@@ -26,7 +26,7 @@ pub const SUPPORTED_RECORD_KINDS: &[RecordKind] = RecordKind::ALL;
 pub struct RecordRenderConfig {
     pub default_theme: Arc<Theme>,
     pub custom_theme: Option<Arc<Theme>>,
-    pub dictionaries: SharedDictionaries,
+    pub dictionaries: Arc<Dictionaries>,
     pub records: Arc<Vec<RecordLookup>>,
 }
 
@@ -34,8 +34,10 @@ pub struct RecordRenderConfig {
 pub enum RecordRenderMsg {
     DefaultTheme(Arc<Theme>),
     CustomTheme(Option<Arc<Theme>>),
-    Dictionaries(SharedDictionaries),
-    Records(Arc<Vec<RecordLookup>>),
+    Render {
+        dictionaries: Arc<Dictionaries>,
+        records: Arc<Vec<RecordLookup>>,
+    },
 }
 
 #[derive(Debug)]
@@ -81,36 +83,38 @@ impl Component for RecordRender {
             records: init.records,
         };
         let widgets = view_output!();
-        model.update_web_view(&root);
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>, root: &Self::Root) {
+    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>, _root: &Self::Root) {
         match message {
             RecordRenderMsg::DefaultTheme(theme) => {
                 self.default_theme = theme;
-                self.update_web_view(root);
             }
             RecordRenderMsg::CustomTheme(theme) => {
                 self.custom_theme = theme;
-                self.update_web_view(root);
             }
-            RecordRenderMsg::Dictionaries(dictionaries) => {
+            RecordRenderMsg::Render {
+                dictionaries,
+                records,
+            } => {
                 self.dictionaries = dictionaries;
-                self.update_web_view(root);
-            }
-            RecordRenderMsg::Records(records) => {
                 self.records = records;
-                self.update_web_view(root);
             }
         }
     }
-}
 
-impl RecordRender {
-    fn update_web_view(&self, web_view: &webkit6::WebView) {
-        let dictionaries = self.dictionaries.load();
-        let records_html = html::render_records(&dictionaries.by_id, &self.records);
+    fn update_with_view(
+        &mut self,
+        widgets: &mut Self::Widgets,
+        message: Self::Input,
+        sender: ComponentSender<Self>,
+        root: &Self::Root,
+    ) {
+        self.update(message, sender.clone(), root);
+        self.update_view(widgets, sender);
+
+        let records_html = html::render_records(&self.dictionaries.by_id, &self.records);
         let full_html = html! {
             style {
                 (self.default_theme.style)
@@ -124,7 +128,7 @@ impl RecordRender {
                 (records_html)
             }
         };
-        web_view.load_html(&full_html.0, None);
+        root.load_html(&full_html.0, None);
     }
 }
 

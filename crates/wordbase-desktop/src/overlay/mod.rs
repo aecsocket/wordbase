@@ -1,9 +1,9 @@
+mod ui;
+
 use {
     crate::{
-        APP_ID,
+        APP_ID, AppMsg, CHANNEL_BUF_CAP,
         platform::{OverlayGuard, Platform},
-        popup::PopupMsg,
-        record::render::SUPPORTED_RECORD_KINDS,
     },
     anyhow::{Context, Result},
     foldhash::{HashMap, HashMapExt},
@@ -28,7 +28,7 @@ use {
     },
     tokio::sync::mpsc,
     tracing::{info, trace, warn},
-    wordbase::{PopupAnchor, TexthookerSentence, WindowFilter},
+    wordbase::{Lookup, PopupAnchor, PopupRequest, TexthookerSentence, WindowFilter},
     wordbase_engine::Engine,
 };
 
@@ -37,7 +37,7 @@ pub async fn run(
     platform: Arc<dyn Platform>,
     engine: Engine,
     mut recv_sentence: mpsc::Receiver<TexthookerSentence>,
-    to_popup: relm4::Sender<PopupMsg>,
+    to_app: relm4::Sender<AppMsg>,
 ) -> Result<Never> {
     let mut overlays = HashMap::<String, OverlayState>::new();
     let (send_closed, mut recv_closed) = mpsc::unbounded_channel::<String>();
@@ -55,7 +55,7 @@ pub async fn run(
                     &app,
                     &*platform,
                     &engine,
-                    &to_popup,
+                    &to_app,
                     &mut overlays,
                     &send_closed,
                     event,
@@ -83,7 +83,7 @@ async fn handle(
     app: &adw::Application,
     platform: &dyn Platform,
     engine: &Engine,
-    to_popup: &relm4::Sender<PopupMsg>,
+    to_app: &relm4::Sender<AppMsg>,
     overlays: &mut HashMap<String, OverlayState>,
     send_closed: &mpsc::UnboundedSender<String>,
     TexthookerSentence {
@@ -96,7 +96,7 @@ async fn handle(
         Entry::Vacant(entry) => {
             let overlay = Overlay::builder().launch(OverlayConfig {
                 engine: engine.clone(),
-                to_popup: to_popup.clone(),
+                to_app: to_app.clone(),
                 process_path: process_path.clone(),
             });
             let window = overlay.widget();
@@ -129,14 +129,14 @@ async fn handle(
 #[derive(Debug)]
 struct Overlay {
     engine: Engine,
-    to_popup: relm4::Sender<PopupMsg>,
+    to_app: relm4::Sender<AppMsg>,
     sentence: gtk::Label,
 }
 
 #[derive(Debug)]
 struct OverlayConfig {
     engine: Engine,
-    to_popup: relm4::Sender<PopupMsg>,
+    to_app: relm4::Sender<AppMsg>,
     process_path: String,
 }
 
@@ -204,7 +204,7 @@ impl AsyncComponent for Overlay {
         let widgets = view_output!();
         let model = Self {
             engine: init.engine,
-            to_popup: init.to_popup,
+            to_app: init.to_app,
             sentence: widgets.sentence.clone(),
         };
         setup_root_opacity_animation(&root);
@@ -253,21 +253,23 @@ impl AsyncComponent for Overlay {
                     abs_point.y() as i32 + POPUP_OFFSET.1,
                 );
 
-                let Ok(records) = self
-                    .engine
-                    .lookup(
-                        // TODO: add some scrollback to context
-                        text,
-                        byte_index,
-                        SUPPORTED_RECORD_KINDS,
-                    )
-                    .await
-                else {
-                    return;
-                };
-                if records.is_empty() {
-                    return;
-                }
+                let (send_result, recv_result) = mpsc::channel(CHANNEL_BUF_CAP);
+                _ = self.to_app.send(AppMsg::Popup {
+                    request: PopupRequest {
+                        target_window: WindowFilter {
+                            id: None,
+                            title: root.title().map(|s| s.to_string()),
+                            wm_class: Some(APP_ID.to_owned()),
+                        },
+                        origin,
+                        anchor: PopupAnchor::TopLeft,
+                        lookup: Lookup {
+                            context: text.to_string(),
+                            cursor: byte_index,
+                        },
+                    },
+                    send_result,
+                });
 
                 let bytes_scanned = records
                     .iter()
@@ -281,17 +283,6 @@ impl AsyncComponent for Overlay {
                     .unwrap_or_default();
                 self.sentence
                     .select_region(char_index_i32, char_index_i32 + chars_scanned_i32);
-
-                _ = self.to_popup.send(PopupMsg::Request {
-                    target_window: WindowFilter {
-                        id: None,
-                        title: root.title().map(|s| s.to_string()),
-                        wm_class: Some(APP_ID.to_owned()),
-                    },
-                    origin,
-                    anchor: PopupAnchor::TopLeft,
-                    records: Arc::new(records),
-                });
             }
         }
     }

@@ -15,6 +15,7 @@ pub mod texthook;
 use arc_swap::ArcSwap;
 use dictionary::{Dictionaries, SharedDictionaries};
 use profile::{Profiles, SharedProfiles};
+use tokio::sync::broadcast;
 pub use wordbase;
 use {
     anyhow::{Context, Result},
@@ -33,15 +34,23 @@ pub struct Engine(Arc<Inner>);
 pub struct Inner {
     pub dictionaries: SharedDictionaries,
     pub profiles: SharedProfiles,
+    send_event: broadcast::Sender<Event>,
     imports: Imports,
     deinflectors: Deinflectors,
     texthookers: Texthookers,
     db: Pool<Sqlite>,
 }
 
+#[derive(Debug, Clone)]
+pub enum Event {
+    SyncDictionaries,
+    SyncProfiles,
+}
+
 impl Engine {
     pub async fn new(db_path: impl AsRef<Path>) -> Result<Self> {
         let db = db::setup(db_path.as_ref()).await?;
+        let (send_event, _) = broadcast::channel(CHANNEL_BUF_CAP);
         let engine = Self(Arc::new(Inner {
             dictionaries: SharedDictionaries::new(ArcSwap::from_pointee(
                 Dictionaries::fetch(&db)
@@ -53,12 +62,18 @@ impl Engine {
                     .await
                     .context("failed to fetch initial profiles")?,
             )),
+            send_event,
             imports: Imports::new(),
             deinflectors: Deinflectors::new().context("failed to create deinflectors")?,
             texthookers: Texthookers::new(),
             db,
         }));
         Ok(engine)
+    }
+
+    #[must_use]
+    pub fn recv_event(&self) -> broadcast::Receiver<Event> {
+        self.send_event.subscribe()
     }
 }
 

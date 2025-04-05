@@ -4,7 +4,7 @@ use {
     crate::{
         ACTION_PROFILE, gettext,
         platform::Platform,
-        record::view::{RecordView, RecordViewMsg},
+        record::view::{RecordView, RecordViewMsg, RecordViewResponse},
     },
     anyhow::Result,
     relm4::{
@@ -16,7 +16,7 @@ use {
     },
     std::sync::Arc,
     tracing::warn,
-    wordbase::{PopupAnchor, RecordLookup, WindowFilter},
+    wordbase::{PopupRequest, WindowFilter},
     wordbase_engine::Engine,
 };
 
@@ -41,6 +41,7 @@ pub struct Popup {
     platform: Arc<dyn Platform>,
     engine: Engine,
     record_view: AsyncController<RecordView>,
+    next_move_op: Option<(WindowFilter, (i32, i32))>,
 }
 
 #[derive(Debug)]
@@ -51,18 +52,16 @@ pub struct PopupConfig {
 
 #[derive(Debug)]
 pub enum PopupMsg {
-    SyncProfiles,
-    Request {
-        target_window: WindowFilter,
-        origin: (i32, i32),
-        anchor: PopupAnchor,
-        records: Arc<Vec<RecordLookup>>,
-    },
+    Request(PopupRequest),
+    #[doc(hidden)]
+    View(RecordViewResponse),
 }
 
 #[derive(Debug)]
 pub enum PopupResponse {
+    Hidden,
     OpenSettings,
+    View(RecordViewResponse),
 }
 
 impl AsyncComponent for Popup {
@@ -97,8 +96,19 @@ impl AsyncComponent for Popup {
         let model = Self {
             platform: init.platform,
             engine: init.engine.clone(),
-            record_view: RecordView::builder().launch(init.engine).detach(),
+            record_view: RecordView::builder()
+                .launch(init.engine)
+                .forward(sender.input_sender(), |resp| PopupMsg::View(resp)),
+            next_move_op: None,
         };
+        root.connect_visible_notify({
+            let sender = sender.clone();
+            move |root| {
+                if !root.is_visible() {
+                    sender.output(PopupResponse::Hidden);
+                }
+            }
+        });
         root.content().set_child(Some(model.record_view.widget()));
         root.profiles_button().connect_clicked(move |_| {
             _ = sender.output(PopupResponse::OpenSettings);
@@ -129,35 +139,35 @@ impl AsyncComponent for Popup {
     async fn update(
         &mut self,
         message: Self::Input,
-        _sender: AsyncComponentSender<Self>,
+        sender: AsyncComponentSender<Self>,
         root: &Self::Root,
     ) {
         match message {
-            PopupMsg::SyncProfiles => {
-                // todo?
-            }
-            PopupMsg::Request {
-                target_window,
-                origin,
-                anchor,
-                records,
-            } => {
+            PopupMsg::Request(request) => {
+                // TODO compute real origin
+                let origin = request.origin;
+                self.next_move_op = Some((request.target_window, origin));
+
                 _ = self
                     .record_view
                     .sender()
-                    .send(RecordViewMsg::Records(records));
-
-                // TODO compute real origin
-
-                let root = root.clone();
-                let platform = self.platform.clone();
-                root.set_visible(true);
-                if let Err(err) = platform
-                    .move_popup_to_window(root.upcast_ref(), target_window, origin)
-                    .await
-                {
-                    warn!("Failed to move popup to target window: {err:?}");
+                    .send(RecordViewMsg::Lookup(request.lookup));
+            }
+            PopupMsg::View(resp) => {
+                if let Some((target_window, origin)) = self.next_move_op.take() {
+                    if !resp.records.is_empty() {
+                        root.present();
+                        if let Err(err) = self
+                            .platform
+                            .move_popup_to_window(root.upcast_ref(), target_window, origin)
+                            .await
+                        {
+                            warn!("Failed to move popup to target window: {err:?}");
+                        }
+                    }
                 }
+
+                sender.output(PopupResponse::View(resp));
             }
         }
     }

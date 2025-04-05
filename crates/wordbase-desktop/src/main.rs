@@ -21,8 +21,8 @@ use {
     directories::ProjectDirs,
     futures::never::Never,
     platform::Platform,
-    popup::PopupResponse,
-    record::view::{RecordView, RecordViewMsg},
+    popup::{Popup, PopupMsg, PopupResponse},
+    record::view::{RecordView, RecordViewMsg, RecordViewResponse},
     relm4::{
         adw::{self, gio, prelude::*},
         css::classes,
@@ -34,7 +34,7 @@ use {
     tokio::{fs, sync::mpsc},
     tracing::{error, info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
-    wordbase::ProfileId,
+    wordbase::{Lookup, PopupRequest, ProfileId},
     wordbase_engine::{Engine, texthook::TexthookerEvent},
 };
 
@@ -67,6 +67,8 @@ struct App {
     app: adw::Application,
     engine: Engine,
     record_view: AsyncController<RecordView>,
+    popup: AsyncController<Popup>,
+    last_popup_send_result: Option<mpsc::Sender<RecordViewResponse>>,
 }
 
 #[derive(Debug)]
@@ -79,8 +81,17 @@ struct AppConfig {
 enum AppMsg {
     Quit,
     Present,
-    SyncProfiles,
-    Lookup { query: String },
+    Lookup {
+        query: String,
+    },
+    Popup {
+        request: PopupRequest,
+        send_result: mpsc::Sender<RecordViewResponse>,
+    },
+    #[doc(hidden)]
+    PopupHidden,
+    #[doc(hidden)]
+    PopupViewResponse(RecordViewResponse),
 }
 
 #[relm4::component(async)]
@@ -153,6 +164,8 @@ impl AsyncComponent for App {
             app,
             engine: init.engine,
             record_view,
+            popup: init.popup,
+            last_popup_send_result: None,
         };
         let widgets = view_output!();
         widgets.search_entry.grab_focus();
@@ -172,15 +185,29 @@ impl AsyncComponent for App {
             AppMsg::Present => {
                 root.present();
             }
-            AppMsg::SyncProfiles => {
-
-                // TODO forward to popups
-            }
             AppMsg::Lookup { query } => {
                 _ = self
                     .record_view
                     .sender()
-                    .send(RecordViewMsg::Lookup { query });
+                    .send(RecordViewMsg::Lookup(Lookup {
+                        context: query,
+                        cursor: 0,
+                    }));
+            }
+            AppMsg::Popup {
+                request,
+                send_result,
+            } => {
+                _ = self.popup.sender().send(PopupMsg::Request(request));
+                self.last_popup_send_result = Some(send_result);
+            }
+            AppMsg::PopupHidden => {
+                self.last_popup_send_result = None;
+            }
+            AppMsg::PopupViewResponse(resp) => {
+                if let Some(send_result) = &self.last_popup_send_result {
+                    _ = send_result.send(resp).await;
+                }
             }
         }
     }
@@ -189,6 +216,7 @@ impl AsyncComponent for App {
 #[derive(Debug)]
 struct AppInit {
     engine: Engine,
+    popup: AsyncController<Popup>,
 }
 
 async fn init_app(
@@ -215,14 +243,15 @@ async fn init_app(
         .context("failed to create engine")?;
 
     // actions
-    setup_profile_action(&app, engine.clone(), sender);
+    setup_profile_action(&app, engine.clone());
 
-    let mut popup = popup::connector(&app, &platform, engine.clone())
+    let popup = popup::connector(&app, &platform, engine.clone())
         .await?
         .forward(sender.input_sender(), |resp| match resp {
+            PopupResponse::Hidden => AppMsg::PopupHidden,
             PopupResponse::OpenSettings => AppMsg::Present,
+            PopupResponse::View(resp) => AppMsg::PopupViewResponse(resp),
         });
-    popup.detach_runtime();
     settings
         .bind("popup-width", popup.widget(), "default-width")
         .build();
@@ -239,16 +268,11 @@ async fn init_app(
     tokio::spawn(texthooker_task);
     glib::spawn_future_local({
         let engine = engine.clone();
+        let to_app = sender.input_sender().clone();
         async move {
-            overlay::run(
-                app,
-                platform,
-                engine.clone(),
-                recv_sentence,
-                popup.sender().clone(),
-            )
-            .await
-            .expect("overlay task error")
+            overlay::run(app, platform, engine.clone(), recv_sentence, to_app)
+                .await
+                .expect("overlay task error")
         }
     });
     // forward pull texthooker events to overlay
@@ -265,16 +289,11 @@ async fn init_app(
     });
     // TODO: forward server sentence events to overlay
 
-    Ok(AppInit { engine })
+    Ok(AppInit { engine, popup })
 }
 
-fn setup_profile_action(
-    app: &adw::Application,
-    engine: Engine,
-    sender: &AsyncComponentSender<App>,
-) {
+fn setup_profile_action(app: &adw::Application, engine: Engine) {
     let profiles = engine.profiles.load();
-    let to_app = sender.input_sender().clone();
     let action = gio::ActionEntry::builder(ACTION_PROFILE)
         .parameter_type(Some(glib::VariantTy::STRING))
         .state(format!("{}", profiles.current_id.0).to_variant())
@@ -288,14 +307,11 @@ fn setup_profile_action(
             action.set_state(&format!("{profile_id}").into());
 
             let engine = engine.clone();
-            let to_app = to_app.clone();
             glib::spawn_future_local(async move {
                 if let Err(err) = engine.set_current_profile(ProfileId(profile_id)).await {
                     // todo: app-level notif toast and error handling
                     error!("Failed to set current profile: {err:?}");
                 }
-
-                _ = to_app.send(AppMsg::SyncProfiles);
             });
         })
         .build();

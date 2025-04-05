@@ -3,12 +3,10 @@ use {
         RecordRender, RecordRenderConfig, RecordRenderMsg, RecordRenderResponse,
         SUPPORTED_RECORD_KINDS,
     },
-    crate::theme,
-    futures::never::Never,
+    crate::theme::{self, Theme},
     relm4::prelude::*,
     std::sync::Arc,
-    tokio_util::task::AbortOnDropHandle,
-    wordbase::RecordLookup,
+    wordbase::{Lookup, RecordLookup},
     wordbase_engine::Engine,
 };
 
@@ -16,25 +14,33 @@ use {
 pub struct RecordView {
     engine: Engine,
     render: Controller<RecordRender>,
-    recv_default_theme_task: AbortOnDropHandle<()>,
+    lookup: Option<Lookup>,
 }
 
 #[derive(Debug)]
 pub enum RecordViewMsg {
-    SyncDictionaries,
-    Records(Arc<Vec<RecordLookup>>),
+    Lookup(Lookup),
     #[doc(hidden)]
-    Lookup {
-        query: String,
-    },
+    DoLookup,
+}
+
+#[derive(Debug)]
+pub struct RecordViewResponse {
+    pub records: Arc<Vec<RecordLookup>>,
+}
+
+#[derive(Debug)]
+enum RecordCommandMsg {
+    ReLookup,
+    DefaultTheme(Arc<Theme>),
 }
 
 #[relm4::component(pub, async)]
 impl AsyncComponent for RecordView {
     type Init = Engine;
     type Input = RecordViewMsg;
-    type Output = ();
-    type CommandOutput = ();
+    type Output = RecordViewResponse;
+    type CommandOutput = RecordCommandMsg;
 
     view! {
         adw::Bin {
@@ -52,62 +58,96 @@ impl AsyncComponent for RecordView {
             .launch(RecordRenderConfig {
                 default_theme,
                 custom_theme: None,
-                dictionaries: engine.dictionaries.clone(),
-                records: Arc::new(Vec::new()),
+                dictionaries: Arc::default(),
+                records: Arc::default(),
             })
             .forward(sender.input_sender(), |resp| match resp {
-                RecordRenderResponse::RequestLookup { query } => RecordViewMsg::Lookup { query },
+                RecordRenderResponse::RequestLookup { query } => RecordViewMsg::Lookup(Lookup {
+                    context: query,
+                    cursor: 0,
+                }),
             });
 
         let mut recv_default_theme_changed = theme::recv_default_changed().await;
-        let render_sender = render.sender().clone();
-        let recv_default_theme_task = tokio::spawn(async move {
-            // TODO: is there a better way to do this?
-            let _: Option<Never> = async move {
-                loop {
-                    let default_theme = recv_default_theme_changed.recv().await.ok()?;
-                    render_sender
-                        .send(RecordRenderMsg::DefaultTheme(default_theme))
-                        .ok()?;
-                }
-            }
-            .await;
+        sender.command(|out, shutdown| {
+            shutdown
+                .register(async move {
+                    while let Ok(default_theme) = recv_default_theme_changed.recv().await {
+                        _ = out.send(RecordCommandMsg::DefaultTheme(default_theme));
+                    }
+                })
+                .drop_on_shutdown()
+        });
+
+        let mut recv_event = engine.recv_event();
+        sender.command(|out, shutdown| {
+            shutdown
+                .register(async move {
+                    while let Ok(_) = recv_event.recv().await {
+                        _ = out.send(RecordCommandMsg::ReLookup);
+                    }
+                })
+                .drop_on_shutdown()
         });
 
         let model = Self {
             engine,
             render,
-            recv_default_theme_task: AbortOnDropHandle::new(recv_default_theme_task),
+            lookup: None,
         };
         let widgets = view_output!();
         AsyncComponentParts { model, widgets }
     }
 
-    async fn update(
+    async fn update_cmd(
         &mut self,
-        message: Self::Input,
-        _sender: AsyncComponentSender<Self>,
+        message: Self::CommandOutput,
+        sender: AsyncComponentSender<Self>,
         _root: &Self::Root,
     ) {
         match message {
-            RecordViewMsg::SyncDictionaries => {
-                _ = self.render.sender().send(RecordRenderMsg::Dictionaries(
-                    self.engine.dictionaries.clone(),
-                ));
+            RecordCommandMsg::ReLookup => {
+                sender.input(RecordViewMsg::DoLookup);
             }
-            RecordViewMsg::Records(records) => {
-                _ = self.render.sender().send(RecordRenderMsg::Records(records));
+            RecordCommandMsg::DefaultTheme(theme) => {
+                _ = self
+                    .render
+                    .sender()
+                    .send(RecordRenderMsg::DefaultTheme(theme));
             }
-            RecordViewMsg::Lookup { query } => {
-                let Ok(records) = self.engine.lookup(&query, 0, SUPPORTED_RECORD_KINDS).await
+        }
+    }
+
+    async fn update(
+        &mut self,
+        message: Self::Input,
+        sender: AsyncComponentSender<Self>,
+        _root: &Self::Root,
+    ) {
+        match message {
+            RecordViewMsg::Lookup(lookup) => {
+                self.lookup = Some(lookup);
+                sender.input(RecordViewMsg::DoLookup);
+            }
+            RecordViewMsg::DoLookup => {
+                let Some(lookup) = &self.lookup else {
+                    return;
+                };
+                let Ok(records) = self
+                    .engine
+                    .lookup(&lookup.context, lookup.cursor, SUPPORTED_RECORD_KINDS)
+                    .await
                 else {
                     return;
                 };
 
-                _ = self
-                    .render
-                    .sender()
-                    .send(RecordRenderMsg::Records(Arc::new(records)));
+                let records = Arc::new(records);
+                let dictionaries = self.engine.dictionaries.load();
+                _ = self.render.sender().send(RecordRenderMsg::Render {
+                    dictionaries: dictionaries.clone(),
+                    records: records.clone(),
+                });
+                sender.output(RecordViewResponse { records });
             }
         }
     }

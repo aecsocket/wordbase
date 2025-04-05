@@ -1,5 +1,5 @@
 use {
-    crate::Engine,
+    crate::{Engine, Event},
     anyhow::{Context, Result, bail},
     arc_swap::ArcSwap,
     derive_more::{Display, Error},
@@ -13,7 +13,7 @@ use {
 
 pub type SharedDictionaries = Arc<ArcSwap<Dictionaries>>;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Dictionaries {
     pub by_id: HashMap<DictionaryId, Dictionary>,
 }
@@ -37,6 +37,7 @@ impl Engine {
                 .await
                 .context("failed to sync dictionaries")?,
         ));
+        _ = self.send_event.send(Event::SyncDictionaries);
         Ok(())
     }
 

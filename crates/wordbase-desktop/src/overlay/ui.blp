@@ -1,0 +1,25 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $Overlay: Adw.Bin {
+  Overlay content {
+    [overlay]
+    Box {
+      margin-start: 16;
+      margin-end: 16;
+      margin-top: 16;
+      margin-bottom: 16;
+      orientation: vertical;
+      spacing: 8;
+      halign: end;
+      valign: end;
+
+      Button settings {
+        icon-name: "settings-symbolic";
+        tooltip-text: _("Settings");
+
+        styles ["circular"]
+      }
+    }
+  }
+}
