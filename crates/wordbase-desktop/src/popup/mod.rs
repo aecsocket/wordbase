@@ -2,10 +2,10 @@ mod ui;
 
 use {
     crate::{
-        SharedProfiles, gettext,
+        ACTION_PROFILE, SharedProfiles, gettext,
         platform::Platform,
         record::{
-            render::Records,
+            render::SharedRecords,
             view::{RecordView, RecordViewConfig, RecordViewMsg},
         },
     },
@@ -56,12 +56,12 @@ pub struct PopupConfig {
 
 #[derive(Debug)]
 pub enum PopupMsg {
-    Profiles(SharedProfiles),
+    SyncProfiles(SharedProfiles),
     Request {
         target_window: WindowFilter,
         origin: (i32, i32),
         anchor: PopupAnchor,
-        records: Arc<Records>,
+        records: SharedRecords,
     },
 }
 
@@ -123,9 +123,10 @@ impl AsyncComponent for Popup {
                 .name
                 .as_deref()
                 .unwrap_or_else(|| gettext("Default Profile"));
-            widgets
-                .profiles_menu()
-                .append(Some(label), Some(&format!("app.profile::{}", profile_id.0)));
+            widgets.profiles_menu().append(
+                Some(label),
+                Some(&format!("app.{ACTION_PROFILE}::{}", profile_id.0)),
+            );
         }
     }
 
@@ -136,7 +137,7 @@ impl AsyncComponent for Popup {
         root: &Self::Root,
     ) {
         match message {
-            PopupMsg::Profiles(profiles) => {
+            PopupMsg::SyncProfiles(profiles) => {
                 self.profiles = profiles;
             }
             PopupMsg::Request {

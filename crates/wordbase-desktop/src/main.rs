@@ -33,13 +33,15 @@ use {
     },
     std::sync::Arc,
     tokio::{fs, sync::mpsc},
-    tracing::{info, level_filters::LevelFilter},
+    tracing::{error, info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
     wordbase::{Dictionary, DictionaryId, Profile, ProfileId},
     wordbase_engine::{Engine, texthook::TexthookerEvent},
 };
 
 const APP_ID: &str = "io.github.aecsocket.Wordbase";
+
+const ACTION_PROFILE: &str = "profile";
 
 fn gettext(s: &str) -> &str {
     s
@@ -57,12 +59,6 @@ fn main() {
     relm4_icons::initialize_icons(icon_names::GRESOURCE_BYTES, icon_names::RESOURCE_PREFIX);
 
     let app = adw::Application::builder().application_id(APP_ID).build();
-    app.add_action(&gio::SimpleAction::new_stateful(
-        "profile",
-        Some(glib::VariantTy::STRING),
-        &"1".into(),
-    ));
-
     let settings = gio::Settings::new(APP_ID);
     RelmApp::from_app(app.clone()).run_async::<App>(AppConfig { app, settings });
 }
@@ -88,6 +84,7 @@ struct AppConfig {
 enum AppMsg {
     Quit,
     Present,
+    SyncProfiles,
     Lookup { query: String },
 }
 
@@ -185,6 +182,10 @@ impl AsyncComponent for App {
             AppMsg::Present => {
                 root.present();
             }
+            AppMsg::SyncProfiles => {
+
+                // TODO forward to popups
+            }
             AppMsg::Lookup { query } => {
                 _ = self
                     .record_view
@@ -242,6 +243,9 @@ async fn init_app(
             .map(|profile| (profile.id, profile))
             .collect(),
     );
+
+    // actions
+    setup_profile_action(&app, engine.clone(), sender).await?;
 
     let mut popup = popup::connector(
         &app,
@@ -305,4 +309,53 @@ async fn init_app(
     })
 }
 
+async fn setup_profile_action(
+    app: &adw::Application,
+    engine: Engine,
+    sender: &AsyncComponentSender<App>,
+) -> Result<()> {
+    let current_profile = engine
+        .current_profile()
+        .await
+        .context("failed to fetch current profile ID")?;
+    let to_app = sender.input_sender().clone();
+    let action = gio::ActionEntry::builder(ACTION_PROFILE)
+        .parameter_type(Some(glib::VariantTy::STRING))
+        .state(format!("{}", current_profile.0).to_variant())
+        .activate(move |_, action, param| {
+            let profile_id = param
+                .expect("activation should have parameter")
+                .get::<String>()
+                .expect("parameter should be a string")
+                .parse::<i64>()
+                .expect("parameter should be a valid integer");
+            action.set_state(&format!("{profile_id}").into());
+
+            let engine = engine.clone();
+            let to_app = to_app.clone();
+            glib::spawn_future_local(async move {
+                if let Err(err) = engine.set_current_profile(ProfileId(profile_id)).await {
+                    // todo: app-level notif toast and error handling
+                    error!("Failed to set current profile: {err:?}");
+                }
+
+                _ = to_app.send(AppMsg::SyncProfiles);
+            });
+        })
+        .build();
+    app.add_action_entries([action]);
+    Ok(())
+}
+
 const CHANNEL_BUF_CAP: usize = 4;
+
+async fn fetch_profiles(engine: &Engine) -> Result<SharedProfiles> {
+    Ok(Arc::new(
+        engine
+            .profiles()
+            .await?
+            .into_iter()
+            .map(|profile| (profile.id, profile))
+            .collect::<HashMap<_, _>>(),
+    ))
+}

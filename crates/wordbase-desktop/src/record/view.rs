@@ -1,7 +1,7 @@
 use {
     super::render::{
-        RecordRender, RecordRenderConfig, RecordRenderMsg, RecordRenderResponse, Records,
-        SUPPORTED_RECORD_KINDS,
+        RecordRender, RecordRenderConfig, RecordRenderMsg, RecordRenderResponse,
+        SUPPORTED_RECORD_KINDS, SharedRecords,
     },
     crate::{Dictionaries, theme},
     futures::never::Never,
@@ -28,7 +28,7 @@ pub struct RecordViewConfig {
 #[derive(Debug)]
 pub enum RecordViewMsg {
     Dictionaries(Arc<Dictionaries>),
-    Records(Arc<Records>),
+    Records(SharedRecords),
     #[doc(hidden)]
     Lookup {
         query: String,
@@ -59,7 +59,7 @@ impl AsyncComponent for RecordView {
                 default_theme,
                 custom_theme: None,
                 dictionaries: config.dictionaries.clone(),
-                records: Arc::<Records>::default(),
+                records: SharedRecords::default(),
             })
             .forward(sender.input_sender(), |resp| match resp {
                 RecordRenderResponse::RequestLookup { query } => RecordViewMsg::Lookup { query },

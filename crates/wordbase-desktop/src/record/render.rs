@@ -17,10 +17,10 @@ pub struct RecordRender {
     default_theme: Arc<Theme>,
     custom_theme: Option<Arc<Theme>>,
     dictionaries: Arc<Dictionaries>,
-    records: Arc<Records>,
+    records: SharedRecords,
 }
 
-pub type Records = Vec<LookupResult>;
+pub type SharedRecords = Arc<Vec<LookupResult>>;
 
 pub const SUPPORTED_RECORD_KINDS: &[RecordKind] = RecordKind::ALL;
 
@@ -29,7 +29,7 @@ pub struct RecordRenderConfig {
     pub default_theme: Arc<Theme>,
     pub custom_theme: Option<Arc<Theme>>,
     pub dictionaries: Arc<Dictionaries>,
-    pub records: Arc<Records>,
+    pub records: SharedRecords,
 }
 
 #[derive(Debug)]
@@ -37,7 +37,7 @@ pub enum RecordRenderMsg {
     DefaultTheme(Arc<Theme>),
     CustomTheme(Option<Arc<Theme>>),
     Dictionaries(Arc<Dictionaries>),
-    Records(Arc<Records>),
+    Records(SharedRecords),
 }
 
 #[derive(Debug)]
