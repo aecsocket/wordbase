@@ -1,3 +1,5 @@
+mod ui;
+
 use {
     crate::{
         platform::Platform,
@@ -30,7 +32,7 @@ pub async fn connector(
     });
     let window = connector.widget();
     app.add_window(window);
-    platform.init_popup(window).await?;
+    platform.init_popup(window.upcast_ref()).await?;
     window.set_visible(false);
     Ok(connector)
 }
@@ -55,33 +57,28 @@ pub struct AppPopupRequest {
     pub records: Arc<Records>,
 }
 
-#[relm4::component(pub, async)]
 impl AsyncComponent for Popup {
     type Init = PopupConfig;
     type Input = AppPopupRequest;
     type Output = ();
     type CommandOutput = ();
+    type Root = ui::Popup;
+    type Widgets = ();
+
+    fn init_root() -> Self::Root {
+        ui::Popup::new()
+    }
 
     fn init_loading_widgets(root: Self::Root) -> Option<LoadingWidgets> {
+        let content = root.content();
         view! {
             #[local]
-            root {
-                set_title: Some("Wordbase Popup"),
-                set_width_request: 180,
-                set_height_request: 100,
-                set_hide_on_close: true,
-
+            content {
                 #[name(spinner)]
                 adw::Spinner {}
             }
         }
-        Some(LoadingWidgets::new(root, spinner))
-    }
-
-    view! {
-        adw::Window {
-            model.record_view.widget(),
-        }
+        Some(LoadingWidgets::new(content, spinner))
     }
 
     async fn init(
@@ -93,9 +90,9 @@ impl AsyncComponent for Popup {
             platform: init.platform,
             record_view: RecordView::builder().launch(init.record_view).detach(),
         };
-        let widgets = view_output!();
-        hide_on_lost_focus(&root);
-        AsyncComponentParts { model, widgets }
+        root.content().set_child(Some(model.record_view.widget()));
+        hide_on_lost_focus(root.upcast_ref());
+        AsyncComponentParts { model, widgets: () }
     }
 
     async fn update(
@@ -117,7 +114,7 @@ impl AsyncComponent for Popup {
         let platform = self.platform.clone();
         root.set_visible(true);
         if let Err(err) = platform
-            .move_popup_to_window(&root, target_window, origin)
+            .move_popup_to_window(root.upcast_ref(), target_window, origin)
             .await
         {
             warn!("Failed to move popup to target window: {err:?}");
@@ -125,9 +122,7 @@ impl AsyncComponent for Popup {
     }
 }
 
-fn hide_on_lost_focus(root: &adw::Window) {
-    let root = root.clone();
-
+fn hide_on_lost_focus(root: &gtk::Window) {
     // This shit is so ass.
     // Under Wayland, when you start dragging a window (either move or resize),
     // it loses focus (`window.has_focus()`). There's no way to listen for
@@ -142,6 +137,7 @@ fn hide_on_lost_focus(root: &adw::Window) {
         .downcast::<gdk::Toplevel>()
         .expect("window surface is not a `gdk::Toplevel`");
 
+    let root = root.clone();
     toplevel.connect_state_notify(move |toplevel| {
         if !toplevel.state().contains(gdk::ToplevelState::FOCUSED) {
             root.set_visible(false);

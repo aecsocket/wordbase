@@ -8,7 +8,7 @@ use {
     std::sync::Arc,
     tracing::{debug, info, warn},
     webkit6::prelude::*,
-    wordbase::{RecordKind, LookupResult},
+    wordbase::{LookupResult, RecordKind},
     wordbase_engine::html,
 };
 

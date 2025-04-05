@@ -12,11 +12,10 @@ pub mod lookup;
 pub mod profile;
 pub mod texthook;
 
-use anyhow::Context;
-use deinflect::Deinflectors;
 pub use wordbase;
 use {
-    anyhow::Result,
+    anyhow::{Context, Result},
+    deinflect::Deinflectors,
     derive_more::{Deref, DerefMut},
     import::Imports,
     sqlx::{Pool, Sqlite},

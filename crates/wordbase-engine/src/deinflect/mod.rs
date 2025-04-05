@@ -104,9 +104,10 @@ fn lindera<'a>(
 
             // now we try to find where the last token ends
             // we go through all tokens after the last one, and find the last one
-            // where the part of speech is no longer a "continuation" (e.g. an auxiliary verb),
-            // then we use that last continuation token's end position as the end of the word.
-            // this is a naive approach, but I don't know how to do it better.
+            // where the part of speech is no longer a "continuation" (e.g. an auxiliary
+            // verb), then we use that last continuation token's end position as
+            // the end of the word. this is a naive approach, but I don't know
+            // how to do it better.
             let last_token_end = lookahead.last()?.byte_end;
             let scan_len = tokens
                 .iter_mut()

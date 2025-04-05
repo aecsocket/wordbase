@@ -1541,6 +1541,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "gvdb"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5469af05ff2285b41c9e79a2c7f825cb59dff3b22791befe1aec0c8ab987791"
+dependencies = [
+ "flate2",
+ "quick-xml",
+ "serde",
+ "serde_json",
+ "walkdir",
+ "zerocopy 0.7.35",
+ "zvariant 4.2.0",
+]
+
+[[package]]
 name = "h2"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2696,7 +2711,7 @@ version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9"
 dependencies = [
- "zerocopy",
+ "zerocopy 0.8.24",
 ]
 
 [[package]]
@@ -2727,6 +2742,16 @@ dependencies = [
  "quote",
  "syn",
  "version_check",
+]
+
+[[package]]
+name = "quick-xml"
+version = "0.36.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7649a7b4df05aed9ea7ec6f628c67c9953a43869b8bc50929569b2999d443fe"
+dependencies = [
+ "memchr",
+ "serde",
 ]
 
 [[package]]
@@ -2763,7 +2788,7 @@ checksum = "3779b94aeb87e8bd4e834cee3650289ee9e0d5677f976ecdb6d219e5f4f6cd94"
 dependencies = [
  "rand_chacha 0.9.0",
  "rand_core 0.9.3",
- "zerocopy",
+ "zerocopy 0.8.24",
 ]
 
 [[package]]
@@ -2931,6 +2956,26 @@ name = "relm4-css"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d3b924557df1cddc687b60b313c4b76620fdbf0e463afa4b29f67193ccf37f9"
+
+[[package]]
+name = "relm4-icons"
+version = "0.10.0-beta.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "929f301d6723d8d1fa443d764b3a1d864b287d3cb0beb889500b39cf714d5e81"
+dependencies = [
+ "gtk4",
+]
+
+[[package]]
+name = "relm4-icons-build"
+version = "0.10.0-beta.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11ffa92b81d7b55dc115e5c8555df3e585a8aec3648862e821da81a0ce0cebd3"
+dependencies = [
+ "gvdb",
+ "serde",
+ "toml",
+]
 
 [[package]]
 name = "relm4-macros"
@@ -4708,6 +4753,8 @@ dependencies = [
  "rand 0.9.0",
  "relm4",
  "relm4-components",
+ "relm4-icons",
+ "relm4-icons-build",
  "rmp-serde",
  "serde",
  "serde_json",
@@ -4896,7 +4943,7 @@ dependencies = [
  "xdg-home",
  "zbus_macros",
  "zbus_names",
- "zvariant",
+ "zvariant 5.4.0",
 ]
 
 [[package]]
@@ -4910,8 +4957,8 @@ dependencies = [
  "quote",
  "syn",
  "zbus_names",
- "zvariant",
- "zvariant_utils",
+ "zvariant 5.4.0",
+ "zvariant_utils 3.2.0",
 ]
 
 [[package]]
@@ -4923,7 +4970,17 @@ dependencies = [
  "serde",
  "static_assertions",
  "winnow",
- "zvariant",
+ "zvariant 5.4.0",
+]
+
+[[package]]
+name = "zerocopy"
+version = "0.7.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b9b4fd18abc82b8136838da5d50bae7bdea537c574d8dc1a34ed098d6c166f0"
+dependencies = [
+ "byteorder",
+ "zerocopy-derive 0.7.35",
 ]
 
 [[package]]
@@ -4932,7 +4989,18 @@ version = "0.8.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2586fea28e186957ef732a5f8b3be2da217d65c5969d4b1e17f973ebbe876879"
 dependencies = [
- "zerocopy-derive",
+ "zerocopy-derive 0.8.24",
+]
+
+[[package]]
+name = "zerocopy-derive"
+version = "0.7.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa4f8080344d4671fb4e831a13ad1e68092748387dfc4f55e356242fae12ce3e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -4997,6 +5065,18 @@ dependencies = [
 
 [[package]]
 name = "zvariant"
+version = "4.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2084290ab9a1c471c38fc524945837734fbf124487e105daec2bb57fd48c81fe"
+dependencies = [
+ "endi",
+ "serde",
+ "static_assertions",
+ "zvariant_derive 4.2.0",
+]
+
+[[package]]
+name = "zvariant"
 version = "5.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2df9ee044893fcffbdc25de30546edef3e32341466811ca18421e3cd6c5a3ac"
@@ -5006,8 +5086,21 @@ dependencies = [
  "serde",
  "static_assertions",
  "winnow",
- "zvariant_derive",
- "zvariant_utils",
+ "zvariant_derive 5.4.0",
+ "zvariant_utils 3.2.0",
+]
+
+[[package]]
+name = "zvariant_derive"
+version = "4.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73e2ba546bda683a90652bac4a279bc146adad1386f25379cf73200d2002c449"
+dependencies = [
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn",
+ "zvariant_utils 2.1.0",
 ]
 
 [[package]]
@@ -5020,7 +5113,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
- "zvariant_utils",
+ "zvariant_utils 3.2.0",
+]
+
+[[package]]
+name = "zvariant_utils"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c51bcff7cc3dbb5055396bcf774748c3dab426b4b8659046963523cee4808340"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

@@ -1,11 +1,20 @@
 #![doc = include_str!("../README.md")]
 #![allow(clippy::future_not_send, reason = "`gtk` types aren't `Send`")]
+#![allow(clippy::wildcard_imports, reason = "used for `imp` modules")]
+#![allow(
+    clippy::new_without_default,
+    reason = "`gtk` doesn't follow this convention"
+)]
 
 mod overlay;
 mod platform;
 mod popup;
 mod record;
 mod theme;
+
+mod icon_names {
+    include!(concat!(env!("OUT_DIR"), "/icon_names.rs"));
+}
 
 use {
     anyhow::{Context, Result},
@@ -40,6 +49,7 @@ fn main() {
         )
         .init();
     glib::log_set_default_handler(glib::rust_log_handler);
+    relm4_icons::initialize_icons(icon_names::GRESOURCE_BYTES, icon_names::RESOURCE_PREFIX);
 
     let app = adw::Application::builder().application_id(APP_ID).build();
     let settings = gio::Settings::new(APP_ID);

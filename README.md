@@ -1,6 +1,13 @@
 # Features
 
+what's missing in the engine?
+- anki integration
+- non-Japanese support
+- more dictionary formats support
+
 TODO:
+- overlay settings: font size, overlay opacity, lookup mode (hover, hold shift, hold ctrl, hold alt)
+- good gnome integration - DONE
 - Better stylesheet
 - AnkiConnect
 - Optional AI integration
@@ -166,6 +173,7 @@ This is a GTK/Adwaita app which runs on the desktop, and runs `wordbase-engine` 
 - running and persisting an engine instance
 - rendering dictionary contents, and allowing users to search all dictionaries
 - showing a user-friendly GUI to manage the engine
+- spawning an overlay window when a texthooker is connected
 - allowing importing dictionary files via XDG desktop portals
 - providing the DBus service over the app's known name
 - running a WebSocket server (requires extra Flatpak permissions)

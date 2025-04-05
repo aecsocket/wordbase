@@ -5,7 +5,7 @@ use {
     maud::{Markup, html},
     std::{collections::HashMap, fmt::Write as _, hash::BuildHasher},
     wordbase::{
-        Dictionary, DictionaryId, Record, LookupResult, Term,
+        Dictionary, DictionaryId, LookupResult, Record, Term,
         dict::{self, yomichan_audio::AudioFormat},
     },
 };

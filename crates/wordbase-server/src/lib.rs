@@ -1,10 +1,6 @@
 #![doc = include_str!("../README.md")]
 
-use std::net::SocketAddr;
-
-use anyhow::Result;
-use futures::never::Never;
-use wordbase_engine::Engine;
+use {anyhow::Result, futures::never::Never, std::net::SocketAddr, wordbase_engine::Engine};
 
 #[derive(Debug, Clone)]
 pub struct Config {
