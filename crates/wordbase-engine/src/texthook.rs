@@ -1,24 +1,73 @@
 use {
-    crate::{CHANNEL_BUF_CAP, Engine},
+    crate::{CHANNEL_BUF_CAP, Engine, Event},
     anyhow::{Context, Result},
+    arc_swap::ArcSwap,
     futures::{StreamExt, never::Never},
-    std::time::Duration,
+    sqlx::{Pool, Sqlite},
+    std::{
+        sync::{
+            Arc,
+            atomic::{self, AtomicU8},
+        },
+        time::Duration,
+    },
     tokio::{
         net::TcpStream,
         sync::{broadcast, mpsc},
         time,
     },
     tokio_tungstenite::{MaybeTlsStream, WebSocketStream},
-    tracing::{info, trace},
+    tokio_util::task::AbortOnDropHandle,
+    tracing::{debug, info, trace},
     wordbase::TexthookerSentence,
 };
 
+#[derive(Debug)]
+pub struct Texthookers {
+    url: Arc<ArcSwap<String>>,
+    connected: Arc<AtomicU8>,
+    send_new_url: mpsc::Sender<()>,
+    _task: AbortOnDropHandle<Never>,
+}
+
+impl Texthookers {
+    pub(super) async fn new(
+        db: &Pool<Sqlite>,
+        send_event: broadcast::Sender<Event>,
+    ) -> Result<Self> {
+        let url = sqlx::query!("SELECT texthooker_url FROM config")
+            .fetch_one(db)
+            .await
+            .context("failed to fetch initial URL")?
+            .texthooker_url;
+        let url = Arc::new(ArcSwap::from_pointee(url));
+        let connected = Arc::new(AtomicU8::new(0));
+
+        let (send_new_url, recv_new_url) = mpsc::channel(CHANNEL_BUF_CAP);
+        let task = AbortOnDropHandle::new(tokio::spawn(run(
+            send_event,
+            url.clone(),
+            connected.clone(),
+            recv_new_url,
+        )));
+        Ok(Self {
+            url,
+            connected,
+            send_new_url,
+            _task: task,
+        })
+    }
+}
+
 impl Engine {
-    pub async fn texthooker_url(&self) -> Result<String> {
-        let record = sqlx::query!("SELECT texthooker_url FROM config")
-            .fetch_one(&self.db)
-            .await?;
-        Ok(record.texthooker_url)
+    #[must_use]
+    pub fn texthooker_url(&self) -> Arc<String> {
+        self.texthookers.url.load().clone()
+    }
+
+    #[must_use]
+    pub fn texthooker_connected(&self) -> bool {
+        self.texthookers.connected.load(atomic::Ordering::SeqCst) == 1
     }
 
     pub async fn set_texthooker_url(&self, url: impl Into<String>) -> Result<()> {
@@ -26,65 +75,36 @@ impl Engine {
         sqlx::query!("UPDATE config SET texthooker_url = $1", url)
             .execute(&self.db)
             .await?;
-        _ = self.texthookers.send_new_url.send(url);
+        self.texthookers.url.store(Arc::new(url));
+        _ = self.texthookers.send_new_url.send(()).await;
         Ok(())
     }
-
-    pub async fn texthooker_task(
-        &self,
-    ) -> Result<(
-        impl Future<Output = Result<Never>> + use<>,
-        mpsc::Receiver<TexthookerEvent>,
-    )> {
-        let initial_url = self
-            .texthooker_url()
-            .await
-            .context("failed to fetch initial texthooker URL")?;
-        let (send_event, recv_event) = mpsc::channel(CHANNEL_BUF_CAP);
-        let recv_new_url = self.texthookers.send_new_url.subscribe();
-        Ok((run(initial_url, send_event, recv_new_url), recv_event))
-    }
 }
 
-#[derive(Debug)]
-pub enum TexthookerEvent {
-    Connected,
-    Disconnected { reason: anyhow::Error },
-    Replaced,
-    Sentence(TexthookerSentence),
-}
-
-#[derive(Debug)]
-pub(super) struct Texthookers {
-    send_new_url: broadcast::Sender<String>,
-}
-
-impl Texthookers {
-    pub fn new() -> Self {
-        let (send_new_url, _) = broadcast::channel(CHANNEL_BUF_CAP);
-        Self { send_new_url }
-    }
-}
-
-async fn run(
-    initial_url: String,
-    send_event: mpsc::Sender<TexthookerEvent>,
-    mut recv_new_url: broadcast::Receiver<String>,
-) -> Result<Never> {
-    let mut current_task = tokio::spawn(handle_url(send_event.clone(), initial_url));
+pub(super) async fn run(
+    send_event: broadcast::Sender<Event>,
+    url: Arc<ArcSwap<String>>,
+    connected: Arc<AtomicU8>,
+    mut recv_new_url: mpsc::Receiver<()>,
+) -> Never {
+    let mut current_task = handle_url(&send_event, url.load().clone(), connected.clone());
     loop {
-        let new_url = recv_new_url
-            .recv()
-            .await
-            .context("new URL channel closed")?;
+        tokio::select! {
+            _ = current_task => {},
+            Some(()) = recv_new_url.recv() => {},
+        };
 
-        current_task.abort();
-        send_event.send(TexthookerEvent::Replaced).await?;
-        current_task = tokio::spawn(handle_url(send_event.clone(), new_url));
+        connected.store(0, atomic::Ordering::SeqCst);
+        _ = send_event.send(Event::PullTexthookerDisconnected);
+        current_task = handle_url(&send_event, url.load().clone(), connected.clone());
     }
 }
 
-async fn handle_url(send_event: mpsc::Sender<TexthookerEvent>, url: String) -> Result<Never> {
+async fn handle_url(
+    send_event: &broadcast::Sender<Event>,
+    url: Arc<String>,
+    connected: Arc<AtomicU8>,
+) -> ! {
     const RECONNECT_INTERVAL: Duration = Duration::from_secs(1);
 
     if url.trim().is_empty() {
@@ -92,9 +112,9 @@ async fn handle_url(send_event: mpsc::Sender<TexthookerEvent>, url: String) -> R
         std::future::pending::<()>().await;
     }
 
-    info!("Connecting to {url:?}");
+    debug!("Connecting to {url:?}");
     loop {
-        let stream = match tokio_tungstenite::connect_async(&url).await {
+        let stream = match tokio_tungstenite::connect_async(&*url).await {
             Ok((stream, _)) => stream,
             Err(err) => {
                 trace!("Failed to connect: {err:?}");
@@ -104,17 +124,19 @@ async fn handle_url(send_event: mpsc::Sender<TexthookerEvent>, url: String) -> R
         };
 
         info!("Connected to {url:?}");
-        send_event.send(TexthookerEvent::Connected).await?;
-        let Err(reason) = handle_stream(&send_event, stream).await;
-        info!("Disconnected: {reason:?}");
-        send_event
-            .send(TexthookerEvent::Disconnected { reason })
-            .await?;
+        connected.store(1, atomic::Ordering::SeqCst);
+        _ = send_event.send(Event::PullTexthookerConnected);
+
+        let Err(err) = handle_stream(send_event, stream).await;
+
+        info!("Disconnected: {err:?}");
+        connected.store(0, atomic::Ordering::SeqCst);
+        _ = send_event.send(Event::PullTexthookerDisconnected);
     }
 }
 
 async fn handle_stream(
-    send_event: &mpsc::Sender<TexthookerEvent>,
+    send_event: &broadcast::Sender<Event>,
     mut stream: WebSocketStream<MaybeTlsStream<TcpStream>>,
 ) -> Result<Never> {
     loop {
@@ -126,6 +148,6 @@ async fn handle_stream(
             .into_data();
         let sentence = serde_json::from_slice::<TexthookerSentence>(&message)
             .context("failed to deserialize message as hook sentence")?;
-        send_event.send(TexthookerEvent::Sentence(sentence)).await?;
+        _ = send_event.send(Event::TexthookerSentence(sentence));
     }
 }

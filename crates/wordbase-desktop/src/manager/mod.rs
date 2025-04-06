@@ -4,8 +4,9 @@ use relm4::{
     loading_widgets::LoadingWidgets,
     prelude::*,
 };
+use tracing::info;
 use wordbase::Lookup;
-use wordbase_engine::Engine;
+use wordbase_engine::{Engine, Event};
 
 use crate::{
     gettext,
@@ -18,9 +19,10 @@ mod ui;
 
 #[derive(Debug)]
 pub struct Manager {
-    engine: Engine,
     toasts: adw::ToastOverlay,
     record_view: AsyncController<RecordView>,
+    texthooker_connected: bool,
+    engine: Engine,
 }
 
 #[derive(Debug)]
@@ -37,11 +39,19 @@ pub enum ManagerMsg {
     Error { title: String, err: anyhow::Error },
 }
 
+#[derive(Debug)]
+pub enum ManagerCommandMsg {
+    #[doc(hidden)]
+    TexthookerConnected,
+    #[doc(hidden)]
+    TexthookerDisconnected,
+}
+
 impl AsyncComponent for Manager {
     type Init = (Engine, gio::Settings);
     type Input = ManagerMsg;
     type Output = ();
-    type CommandOutput = ();
+    type CommandOutput = ManagerCommandMsg;
     type Root = ui::Manager;
     type Widgets = ui::Manager;
 
@@ -119,12 +129,39 @@ impl AsyncComponent for Manager {
             move |_| sender.input(ManagerMsg::SetAnkiConnectConfig),
         ));
 
-        root.texthooker_url()
-            .set_text(&engine.texthooker_url().await.unwrap_or_default());
+        root.texthooker_url().set_text(&engine.texthooker_url());
         root.texthooker_url().connect_changed(clone!(
             #[strong]
             sender,
             move |entry| sender.input(ManagerMsg::SetTexthookerUrl(entry.text().into())),
+        ));
+        sender.command(clone!(
+            #[strong]
+            engine,
+            move |out, shutdown| {
+                shutdown
+                    .register(async move {
+                        _ = out.send(if engine.texthooker_connected() {
+                            ManagerCommandMsg::TexthookerConnected
+                        } else {
+                            ManagerCommandMsg::TexthookerDisconnected
+                        });
+
+                        let mut recv_event = engine.recv_event();
+                        while let Ok(event) = recv_event.recv().await {
+                            match event {
+                                Event::PullTexthookerConnected => {
+                                    _ = out.send(ManagerCommandMsg::TexthookerConnected);
+                                }
+                                Event::PullTexthookerDisconnected => {
+                                    _ = out.send(ManagerCommandMsg::TexthookerDisconnected);
+                                }
+                                _ => {}
+                            }
+                        }
+                    })
+                    .drop_on_shutdown()
+            }
         ));
 
         root.search_entry().connect_search_changed(clone!(
@@ -137,9 +174,10 @@ impl AsyncComponent for Manager {
         root.search_view().set_content(Some(record_view.widget()));
 
         let model = Self {
-            engine,
             toasts: root.toast_overlay(),
             record_view,
+            texthooker_connected: engine.texthooker_connected(),
+            engine,
         };
         AsyncComponentParts {
             model,
@@ -147,11 +185,20 @@ impl AsyncComponent for Manager {
         }
     }
 
+    fn update_view(&self, widgets: &mut Self::Widgets, _sender: AsyncComponentSender<Self>) {
+        widgets
+            .texthooker_connected()
+            .set_visible(self.texthooker_connected);
+        widgets
+            .texthooker_disconnected()
+            .set_visible(!self.texthooker_connected);
+    }
+
     async fn update(
         &mut self,
         message: Self::Input,
         sender: AsyncComponentSender<Self>,
-        root: &Self::Root,
+        _root: &Self::Root,
     ) {
         match message {
             ManagerMsg::ImportDictionaries(files) => {
@@ -159,7 +206,8 @@ impl AsyncComponent for Manager {
             }
             ManagerMsg::SetAnkiConnectConfig => {}
             ManagerMsg::SetTexthookerUrl(url) => {
-                if let Err(err) = self.engine.set_texthooker_url(url).await {
+                if let Err(err) = self.engine.set_texthooker_url(&url).await {
+                    info!("Set texthooker URL to {url:?}");
                     sender.input(ManagerMsg::Error {
                         title: gettext("Failed to set texthooker URL").into(),
                         err,
@@ -184,6 +232,22 @@ impl AsyncComponent for Manager {
                     todo!();
                 });
                 self.toasts.add_toast(toast);
+            }
+        }
+    }
+
+    async fn update_cmd(
+        &mut self,
+        message: Self::CommandOutput,
+        _sender: AsyncComponentSender<Self>,
+        _root: &Self::Root,
+    ) {
+        match message {
+            ManagerCommandMsg::TexthookerConnected => {
+                self.texthooker_connected = true;
+            }
+            ManagerCommandMsg::TexthookerDisconnected => {
+                self.texthooker_connected = false;
             }
         }
     }

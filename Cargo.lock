@@ -4806,6 +4806,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-tungstenite",
+ "tokio-util",
  "tracing",
  "unicode-segmentation",
  "wordbase",

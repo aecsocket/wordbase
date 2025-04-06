@@ -37,7 +37,7 @@ use {
     tracing::{error, info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
     wordbase::{Lookup, PopupRequest, ProfileId},
-    wordbase_engine::{Engine, texthook::TexthookerEvent},
+    wordbase_engine::Engine,
 };
 
 const APP_ID: &str = "io.github.aecsocket.Wordbase";
@@ -269,33 +269,33 @@ async fn init_app(
         .build();
 
     // overlay
-    let (send_sentence, recv_sentence) = mpsc::channel(CHANNEL_BUF_CAP);
-    let (texthooker_task, mut recv_texthooker_event) = engine
-        .texthooker_task()
-        .await
-        .context("failed to start texthooker task")?;
-    tokio::spawn(texthooker_task);
-    glib::spawn_future_local({
-        let engine = engine.clone();
-        let to_app = sender.input_sender().clone();
-        async move {
-            overlay::run(app, platform, engine.clone(), recv_sentence, to_app)
-                .await
-                .expect("overlay task error")
-        }
-    });
-    // forward pull texthooker events to overlay
-    tokio::spawn(async move {
-        let _: Option<Never> = async move {
-            loop {
-                let texthooker_event = recv_texthooker_event.recv().await?;
-                if let TexthookerEvent::Sentence(sentence) = texthooker_event {
-                    send_sentence.send(sentence).await.ok()?;
-                }
-            }
-        }
-        .await;
-    });
+    // let (send_sentence, recv_sentence) = mpsc::channel(CHANNEL_BUF_CAP);
+    // let (texthooker_task, mut recv_texthooker_event) = engine
+    //     .texthooker_task()
+    //     .await
+    //     .context("failed to start texthooker task")?;
+    // tokio::spawn(texthooker_task);
+    // glib::spawn_future_local({
+    //     let engine = engine.clone();
+    //     let to_app = sender.input_sender().clone();
+    //     async move {
+    //         overlay::run(app, platform, engine.clone(), recv_sentence, to_app)
+    //             .await
+    //             .expect("overlay task error")
+    //     }
+    // });
+    // // forward pull texthooker events to overlay
+    // tokio::spawn(async move {
+    //     let _: Option<Never> = async move {
+    //         loop {
+    //             let texthooker_event = recv_texthooker_event.recv().await?;
+    //             if let TexthookerEvent::Sentence(sentence) = texthooker_event {
+    //                 send_sentence.send(sentence).await.ok()?;
+    //             }
+    //         }
+    //     }
+    //     .await;
+    // });
     // TODO: forward server sentence events to overlay
 
     Ok(AppInit { engine, popup })

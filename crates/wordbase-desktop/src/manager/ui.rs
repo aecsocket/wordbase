@@ -33,6 +33,10 @@ mod imp {
         #[template_child]
         pub texthooker_url: TemplateChild<adw::EntryRow>,
         #[template_child]
+        pub texthooker_connected: TemplateChild<gtk::Widget>,
+        #[template_child]
+        pub texthooker_disconnected: TemplateChild<gtk::Widget>,
+        #[template_child]
         pub search_entry: TemplateChild<gtk::SearchEntry>,
         #[template_child]
         pub search_sidebar_toggle: TemplateChild<gtk::ToggleButton>,
@@ -134,6 +138,16 @@ impl Manager {
     #[must_use]
     pub fn texthooker_url(&self) -> adw::EntryRow {
         self.imp().texthooker_url.get()
+    }
+
+    #[must_use]
+    pub fn texthooker_connected(&self) -> gtk::Widget {
+        self.imp().texthooker_connected.get()
+    }
+
+    #[must_use]
+    pub fn texthooker_disconnected(&self) -> gtk::Widget {
+        self.imp().texthooker_disconnected.get()
     }
 
     #[must_use]

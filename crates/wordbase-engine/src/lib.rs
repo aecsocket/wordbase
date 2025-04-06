@@ -17,6 +17,7 @@ use dictionary::{Dictionaries, SharedDictionaries};
 use profile::{Profiles, SharedProfiles};
 use tokio::sync::broadcast;
 pub use wordbase;
+use wordbase::TexthookerSentence;
 use {
     anyhow::{Context, Result},
     deinflect::Deinflectors,
@@ -34,10 +35,10 @@ pub struct Engine(Arc<Inner>);
 pub struct Inner {
     pub dictionaries: SharedDictionaries,
     pub profiles: SharedProfiles,
-    send_event: broadcast::Sender<Event>,
+    pub texthookers: Texthookers,
     imports: Imports,
     deinflectors: Deinflectors,
-    texthookers: Texthookers,
+    send_event: broadcast::Sender<Event>,
     db: Pool<Sqlite>,
 }
 
@@ -45,6 +46,9 @@ pub struct Inner {
 pub enum Event {
     SyncDictionaries,
     SyncProfiles,
+    PullTexthookerConnected,
+    PullTexthookerDisconnected,
+    TexthookerSentence(TexthookerSentence),
 }
 
 impl Engine {
@@ -62,10 +66,12 @@ impl Engine {
                     .await
                     .context("failed to fetch initial profiles")?,
             )),
-            send_event,
+            texthookers: Texthookers::new(&db, send_event.clone())
+                .await
+                .context("failed to create texthooker listener")?,
             imports: Imports::new(),
             deinflectors: Deinflectors::new().context("failed to create deinflectors")?,
-            texthookers: Texthookers::new(),
+            send_event,
             db,
         }));
         Ok(engine)

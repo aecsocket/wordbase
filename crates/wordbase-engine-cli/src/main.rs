@@ -10,7 +10,7 @@ use {
     tracing::{info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
     wordbase::{DictionaryId, ProfileId, ProfileMeta, RecordKind},
-    wordbase_engine::{Engine, import::ImportStarted, texthook::TexthookerEvent},
+    wordbase_engine::{Engine, Event, import::ImportStarted},
 };
 
 #[derive(Debug, clap::Parser)]
@@ -214,7 +214,7 @@ async fn main() -> Result<()> {
         Command::Lookup { text } => lookup(&engine, text).await?,
         Command::Texthooker {
             command: TexthookerCommand::GetUrl,
-        } => texthooker_get_url(&engine).await?,
+        } => texthooker_get_url(&engine),
         Command::Texthooker {
             command: TexthookerCommand::SetUrl { url },
         } => texthooker_set_url(&engine, url).await?,
@@ -460,10 +460,9 @@ async fn lookup(engine: &Engine, text: String) -> Result<()> {
     Ok(())
 }
 
-async fn texthooker_get_url(engine: &Engine) -> Result<()> {
-    let url = engine.texthooker_url().await?;
+fn texthooker_get_url(engine: &Engine) {
+    let url = engine.texthooker_url();
     println!("{url}");
-    Ok(())
 }
 
 async fn texthooker_set_url(engine: &Engine, url: String) -> Result<()> {
@@ -472,27 +471,21 @@ async fn texthooker_set_url(engine: &Engine, url: String) -> Result<()> {
 }
 
 async fn texthooker_watch(engine: &Engine) -> Result<()> {
-    let (texthooker_task, mut recv_event) = engine.texthooker_task().await?;
-    tokio::spawn(async move {
-        texthooker_task.await.expect("texthooker error");
-    });
-
     println!("Watching for texthooker sentences");
+    let mut recv_event = engine.recv_event();
     loop {
         let event = recv_event.recv().await.context("event channel closed")?;
         match event {
-            TexthookerEvent::Connected => {
+            Event::PullTexthookerConnected => {
                 println!("Connected");
             }
-            TexthookerEvent::Disconnected { reason } => {
-                println!("Disconnected: {reason:?}");
+            Event::PullTexthookerDisconnected => {
+                println!("Disconnected");
             }
-            TexthookerEvent::Replaced => {
-                println!("Replaced");
-            }
-            TexthookerEvent::Sentence(sentence) => {
+            Event::TexthookerSentence(sentence) => {
                 println!("{sentence:?}");
             }
+            _ => {}
         }
     }
 }

@@ -6,6 +6,12 @@ fn main() {
         Some("io.github.aecsocket.Wordbase"),
         None,
         None::<&str>,
-        ["settings", "library", "larger-brush", "chain-link-loose"],
+        [
+            "settings",
+            "library",
+            "larger-brush",
+            "check-plain",
+            "chain-link-loose",
+        ],
     );
 }
