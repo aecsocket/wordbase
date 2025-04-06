@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <schemalist>
+  <enum id="io.github.aecsocket.Wordbase.scan-trigger">
+    <value nick="hover" value="0"/>
+    <value nick="click" value="1"/>
+    <value nick="shift" value="2"/>
+    <value nick="ctrl" value="3"/>
+    <value nick="alt" value="4"/>
+  </enum>
   <schema id="io.github.aecsocket.Wordbase" path="/io/github/aecsocket/Wordbase/">
     <key name="manager-width" type="i">
       <default>480</default>
@@ -16,6 +23,22 @@
     <key name="popup-height" type="i">
       <default>200</default>
       <summary>Popup dictionary window height</summary>
+    </key>
+    <key name="overlay-idle-opacity" type="d">
+      <default>0.5</default>
+      <summary>Overlay window opacity when the cursor is not inside the window</summary>
+    </key>
+    <key name="overlay-hover-opacity" type="d">
+      <default>0.95</default>
+      <summary>Overlay window opacity when the cursor is inside the window</summary>
+    </key>
+    <key name="overlay-font-size" type="d">
+      <default>12</default>
+      <summary>Font size of text in the overlay window</summary>
+    </key>
+    <key name="overlay-scan-trigger" enum="io.github.aecsocket.Wordbase.scan-trigger">
+      <default>"hover"</default>
+      <summary>How to trigger a word scan in the overlay window</summary>
     </key>
   </schema>
 </schemalist>

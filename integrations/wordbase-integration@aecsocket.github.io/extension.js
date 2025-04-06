@@ -203,12 +203,23 @@ class IntegrationService {
         });
 
         // actual logic
+        // note: for each `parent_window.connect` here (1),
+        // we MUST also add a `overlay_window.connect("destroy")`
+        // which cleans up that (1)
+        // we do that using `parent_connect`
+        const parent_connect = (id, callback) => {
+            const handler_id = parent_window.connect(id, callback);
+            overlay_actor.connect("destroy", (__) => {
+                parent_window.disconnect(handler_id);
+            });
+        };
 
+        // make the overlay follow the parent's position
         let [parent_last_x, parent_last_y] = [
             parent_window.get_frame_rect().x,
             parent_window.get_frame_rect().y,
         ];
-        parent_window.connect("position-changed", (__) => {
+        parent_connect("position-changed", (__) => {
             const [parent_now_x, parent_now_y] = [
                 parent_window.get_frame_rect().x,
                 parent_window.get_frame_rect().y,
@@ -231,7 +242,8 @@ class IntegrationService {
             // overlay_window.move_frame(false, overlay_new_x, overlay_new_y);
         });
 
-        parent_window.connect("workspace-changed", (__) => {
+        // make the overlay follow the parent's workspace
+        parent_connect("workspace-changed", (__) => {
             const workspace = parent_window.get_workspace();
             if (workspace) {
                 overlay_window.change_workspace(workspace);
@@ -244,14 +256,14 @@ class IntegrationService {
             }
         });
 
-        parent_window.connect("focus", (__) => {
+        parent_connect("focus", (__) => {
             overlay_window.raise();
         });
-        parent_window.connect("raised", (__) => {
+        parent_connect("raised", (__) => {
             overlay_window.raise();
         });
 
-        parent_window.connect("notify::fullscreen", (__) => {
+        parent_connect("notify::fullscreen", (__) => {
             if (parent_window.is_fullscreen()) {
                 overlay_window.make_above();
             } else {
@@ -259,7 +271,7 @@ class IntegrationService {
             }
         });
 
-        parent_actor.connect("destroy", (__) => {
+        parent_connect("destroy", (__) => {
             console.log(
                 `"${overlay_window.title}" destroyed, closing ${overlay_id}`,
             );

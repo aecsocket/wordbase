@@ -207,6 +207,11 @@ impl AsyncComponent for Overlay {
             to_app: init.to_app,
             sentence: widgets.sentence.clone(),
         };
+
+        // let desc = pango::FontDescription::new();
+        // desc.set_size(size);
+        // widgets.sentence.pango_context().set_font_description(desc);
+
         setup_root_opacity_animation(&root);
         setup_sentence_scan(&widgets.sentence, &sender);
         AsyncComponentParts { model, widgets }
@@ -271,18 +276,18 @@ impl AsyncComponent for Overlay {
                     send_result,
                 });
 
-                let bytes_scanned = records
-                    .iter()
-                    .map(|record| record.bytes_scanned)
-                    .max()
-                    .unwrap_or_default();
-                let chars_scanned_i32 = after
-                    .get(..bytes_scanned)
-                    .map(|s| s.chars().count())
-                    .and_then(|n| i32::try_from(n).ok())
-                    .unwrap_or_default();
-                self.sentence
-                    .select_region(char_index_i32, char_index_i32 + chars_scanned_i32);
+                // let bytes_scanned = records
+                //     .iter()
+                //     .map(|record| record.bytes_scanned)
+                //     .max()
+                //     .unwrap_or_default();
+                // let chars_scanned_i32 = after
+                //     .get(..bytes_scanned)
+                //     .map(|s| s.chars().count())
+                //     .and_then(|n| i32::try_from(n).ok())
+                //     .unwrap_or_default();
+                // self.sentence
+                //     .select_region(char_index_i32, char_index_i32 + chars_scanned_i32);
             }
         }
     }

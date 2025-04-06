@@ -30,7 +30,8 @@ pub struct RecordViewResponse {
 }
 
 #[derive(Debug)]
-enum RecordCommandMsg {
+#[doc(hidden)]
+pub enum RecordCommandMsg {
     ReLookup,
     DefaultTheme(Arc<Theme>),
 }
