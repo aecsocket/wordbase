@@ -1,63 +1,210 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $DictionaryRow: Adw.ExpanderRow {
-  [prefix]
-  Adw.Bin enabled_bin {
-    visible: false;
+template $Manager: Adw.Window {
+  width-request: 360;
+  height-request: 200;
 
-    CheckButton enabled {
-      halign: center;
-      valign: center;
+  Adw.Breakpoint {
+    condition ("max-width: 450sp")
+
+    setters {
+      search_split_view.collapsed: true;
     }
   }
 
-  [prefix]
-  Adw.Bin importing_bin {
-    visible: false;
+  Adw.ToastOverlay toast_overlay {
+    Adw.NavigationView {
+      Adw.NavigationPage {
+        tag: "overview";
+        title: _("Overview");
 
-    Adw.Spinner {
-      halign: center;
-      valign: center;
-    }
-  }
+        Adw.ToolbarView {
+          [top]
+          Adw.HeaderBar header_bar {
+            Button {
+              icon-name: "system-search-symbolic";
+              action-name: "navigation.push";
+              action-target: "\"search\"";
+            }
 
-  [prefix]
-  Button import_error {
-    styles ["error", "flat"]
+            title-widget: DropDown current_profile {
+              model: profiles_model;
+              enable-search: true;
+            };
+          }
 
-    visible: false;
-    icon-name: "dialog-warning-symbolic";
-    valign: center;
-  }
+          Adw.PreferencesPage {
+            Adw.PreferencesGroup {
+              title: _("Dictionaries");
 
-  [suffix]
-  ProgressBar progress {
-    visible: false;
-    valign: center;
-  }
+              ListBox dictionaries {
+                styles [
+                  "boxed-list",
+                ]
 
-  Box {
-    orientation: horizontal;
-    spacing: 8;
-    halign: end;
-    margin-top: 4;
-    margin-bottom: 4;
-    margin-end: 4;
-    margin-start: 4;
+                Adw.ButtonRow import_dictionary {
+                  title: _("Import");
+                  start-icon-name: "list-add-symbolic";
 
-    Button visit_website {
-      label: _("Visit Website");
-    }
+                  styles [
+                    "suggested-action",
+                  ]
+                }
+              }
+            }
 
-    Button delete {
-      styles ["destructive-action"]
+            Adw.PreferencesGroup {
+              Adw.ComboRow {
+                title: _("Sorting Dictionary");
+                model: profiles_model;
+              }
+            }
 
-      label: _("Delete");
+            Adw.PreferencesGroup themes {
+              title: _("Themes");
+
+              Adw.ButtonRow import_theme {
+                title: _("Import");
+                start-icon-name: "list-add-symbolic";
+              }
+            }
+
+            Adw.PreferencesGroup {
+              title: _("AnkiConnect");
+
+              [header-suffix]
+              Box {
+                spacing: 8;
+
+                Button ankiconnect_connected {
+                  valign: center;
+                  icon-name: "check-plain-symbolic";
+
+                  styles ["success", "flat"]
+                }
+
+                [header-suffix]
+                Button ankiconnect_disconnected {
+                  valign: center;
+                  icon-name: "dialog-warning-symbolic";
+
+                  styles ["error", "flat"]
+                }
+              }
+
+              Adw.EntryRow ankiconnect_server_url {
+                title: _("Server URL");
+              }
+
+              Adw.PasswordEntryRow ankiconnect_api_key {
+                title: _("API Key");
+              }
+            }
+
+            Adw.PreferencesGroup {
+              title: _("Advanced");
+
+              Adw.EntryRow {
+                title: _("Texthooker URL");
+                text: "ws://127.0.0.1:9001";
+              }
+
+              Adw.SpinRow {
+                title: _("Max Concurrent Imports");
+              }
+            }
+          }
+        }
+      }
+
+      Adw.NavigationPage {
+        tag: "search";
+        title: _("Search");
+
+        Adw.ToolbarView {
+          top-bar-style: raised;
+
+          [top]
+          Adw.HeaderBar {
+            title-widget: SearchEntry search_entry {
+              hexpand: true;
+            };
+
+            ToggleButton search_sidebar_toggle {
+              icon-name: "sidebar-show-symbolic";
+            }
+          }
+
+          Adw.OverlaySplitView search_split_view {
+            show-sidebar: bind search_sidebar_toggle.active bidirectional;
+
+            sidebar: Adw.ToolbarView {
+
+              [top]
+              DropDown {
+                margin-start: 8;
+                margin-end: 8;
+                margin-bottom: 8;
+                margin-top: 8;
+                model: profiles_model;
+                enable-search: true;
+              }
+
+              [bottom]
+              Adw.ViewSwitcherBar {
+                stack: search_sidebar_stack;
+                reveal: true;
+              }
+
+              Adw.ViewStack search_sidebar_stack {
+                Adw.ViewStackPage {
+                  name: "dictionaries";
+                  title: _("Dictionaries");
+                  icon-name: "library-symbolic";
+
+                  child: Label {
+                    label: "dictionaries";
+                  };
+                }
+
+                Adw.ViewStackPage {
+                  name: "themes";
+                  title: _("Themes");
+                  icon-name: "larger-brush-symbolic";
+
+                  child: Label {
+                    label: "themes";
+                  };
+                }
+              }
+            };
+
+            content: Adw.Bin search_content {};
+          }
+        }
+      }
     }
   }
 }
 
-SizeGroup {
-  widgets [ enabled_bin, importing_bin, import_error ]
+StringList profiles_model {
+  strings [
+    _("Foo"),
+    _("Bar"),
+    _("Baz"),
+  ]
+}
+
+
+StringList dictionaries_model {
+  strings [
+    _("Foo"),
+    _("Bar"),
+    _("Baz"),
+  ]
+}
+
+FileDialog import_dictionary_dialog {
+  title: _("Pick Dictionary");
 }

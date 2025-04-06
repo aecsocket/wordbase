@@ -96,12 +96,8 @@ impl super::Platform for Platform {
         })
     }
 
-    fn init_popup(&self, popup: &adw::Window) -> LocalBoxFuture<Result<()>> {
-        let popup = popup.clone();
-        Box::pin(async move {
-            popup.present();
-            Ok(())
-        })
+    fn init_popup(&self, _popup: &adw::Window) -> LocalBoxFuture<Result<()>> {
+        Box::pin(async move { Ok(()) })
     }
 
     fn move_popup_to_window(

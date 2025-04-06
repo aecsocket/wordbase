@@ -9,7 +9,7 @@ mod imp {
         #[template_child]
         pub content: TemplateChild<gtk::Overlay>,
         #[template_child]
-        pub profiles_button: TemplateChild<adw::SplitButton>,
+        pub manager_profiles: TemplateChild<adw::SplitButton>,
         #[template_child]
         pub profiles_menu: TemplateChild<gio::Menu>,
     }
@@ -51,8 +51,8 @@ impl Popup {
     }
 
     #[must_use]
-    pub fn profiles_button(&self) -> adw::SplitButton {
-        self.imp().profiles_button.get()
+    pub fn manager_profiles(&self) -> adw::SplitButton {
+        self.imp().manager_profiles.get()
     }
 
     #[must_use]

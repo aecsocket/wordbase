@@ -1,8 +1,5 @@
 use {
-    super::render::{
-        RecordRender, RecordRenderConfig, RecordRenderMsg, RecordRenderResponse,
-        SUPPORTED_RECORD_KINDS,
-    },
+    super::render::{RecordRender, RecordRenderMsg, RecordRenderResponse, SUPPORTED_RECORD_KINDS},
     crate::theme::{self, Theme},
     relm4::prelude::*,
     std::sync::Arc,
@@ -56,7 +53,7 @@ impl AsyncComponent for RecordView {
     ) -> AsyncComponentParts<Self> {
         let default_theme = theme::default().await;
         let render = RecordRender::builder()
-            .launch(RecordRenderConfig {
+            .launch(RecordRender {
                 default_theme,
                 custom_theme: None,
                 dictionaries: Arc::default(),

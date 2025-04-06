@@ -14,21 +14,13 @@ use {
 
 #[derive(Debug)]
 pub struct RecordRender {
-    default_theme: Arc<Theme>,
-    custom_theme: Option<Arc<Theme>>,
-    dictionaries: Arc<Dictionaries>,
-    records: Arc<Vec<RecordLookup>>,
-}
-
-pub const SUPPORTED_RECORD_KINDS: &[RecordKind] = RecordKind::ALL;
-
-#[derive(Debug)]
-pub struct RecordRenderConfig {
     pub default_theme: Arc<Theme>,
     pub custom_theme: Option<Arc<Theme>>,
     pub dictionaries: Arc<Dictionaries>,
     pub records: Arc<Vec<RecordLookup>>,
 }
+
+pub const SUPPORTED_RECORD_KINDS: &[RecordKind] = RecordKind::ALL;
 
 #[derive(Debug)]
 pub enum RecordRenderMsg {
@@ -47,7 +39,7 @@ pub enum RecordRenderResponse {
 
 #[relm4::component(pub)]
 impl Component for RecordRender {
-    type Init = RecordRenderConfig;
+    type Init = Self;
     type Input = RecordRenderMsg;
     type Output = RecordRenderResponse;
     type CommandOutput = ();

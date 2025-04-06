@@ -1,4 +1,4 @@
-use adw::{glib, gtk, subclass::prelude::*};
+use relm4::adw::{self, glib, gtk, subclass::prelude::*};
 
 mod imp {
     use super::*;

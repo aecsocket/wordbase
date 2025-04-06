@@ -1,4 +1,4 @@
-use adw::{glib, gtk, subclass::prelude::*};
+use relm4::adw::{self, glib, gtk, subclass::prelude::*};
 
 mod imp {
     use super::*;
@@ -16,6 +16,8 @@ mod imp {
         pub import_error: TemplateChild<gtk::Button>,
         #[template_child]
         pub progress: TemplateChild<gtk::ProgressBar>,
+        #[template_child]
+        pub meta_display: TemplateChild<gtk::Grid>,
         #[template_child]
         pub visit_website: TemplateChild<gtk::Button>,
         #[template_child]
@@ -77,6 +79,11 @@ impl DictionaryRow {
     #[must_use]
     pub fn progress(&self) -> gtk::ProgressBar {
         self.imp().progress.get()
+    }
+
+    #[must_use]
+    pub fn meta_display(&self) -> gtk::Grid {
+        self.imp().meta_display.get()
     }
 
     #[must_use]

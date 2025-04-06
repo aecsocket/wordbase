@@ -16,6 +16,11 @@
       <default>600</default>
       <summary>Manager window height</summary>
     </key>
+    <key name="manager-search-sidebar-open" type="b">
+      <default>false</default>
+      <summary>Whether the search sidebar is open in the manager window's search page</summary>
+    </key>
+
     <key name="popup-width" type="i">
       <default>360</default>
       <summary>Popup dictionary window width</summary>
@@ -24,6 +29,7 @@
       <default>200</default>
       <summary>Popup dictionary window height</summary>
     </key>
+
     <key name="overlay-idle-opacity" type="d">
       <default>0.5</default>
       <summary>Overlay window opacity when the cursor is not inside the window</summary>

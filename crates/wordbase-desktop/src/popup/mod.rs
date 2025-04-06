@@ -7,6 +7,7 @@ use {
         record::view::{RecordView, RecordViewMsg, RecordViewResponse},
     },
     anyhow::Result,
+    glib::clone,
     relm4::{
         adw::{self, gdk, prelude::*},
         component::AsyncConnector,
@@ -32,7 +33,6 @@ pub async fn connector(
     let window = connector.widget();
     app.add_window(window);
     platform.init_popup(window.upcast_ref()).await?;
-    window.set_visible(false);
     Ok(connector)
 }
 
@@ -77,15 +77,15 @@ impl AsyncComponent for Popup {
     }
 
     fn init_loading_widgets(root: Self::Root) -> Option<LoadingWidgets> {
-        let content = root.content();
+        let root = root.upcast::<gtk::Window>();
         view! {
             #[local]
-            content {
+            root {
                 #[name(spinner)]
                 adw::Spinner {}
             }
         }
-        Some(LoadingWidgets::new(content, spinner))
+        Some(LoadingWidgets::new(root, spinner))
     }
 
     async fn init(
@@ -110,10 +110,12 @@ impl AsyncComponent for Popup {
             }
         });
         root.content().set_child(Some(model.record_view.widget()));
-        root.profiles_button().connect_clicked(move |_| {
+        root.manager_profiles().connect_clicked(move |_| {
             _ = sender.output(PopupResponse::OpenSettings);
         });
+        root.present();
         hide_on_lost_focus(root.upcast_ref());
+        root.set_visible(false);
         AsyncComponentParts {
             model,
             widgets: root,
@@ -188,10 +190,13 @@ fn hide_on_lost_focus(root: &gtk::Window) {
         .downcast::<gdk::Toplevel>()
         .expect("window surface is not a `gdk::Toplevel`");
 
-    let root = root.clone();
-    toplevel.connect_state_notify(move |toplevel| {
-        if !toplevel.state().contains(gdk::ToplevelState::FOCUSED) {
-            root.set_visible(false);
+    toplevel.connect_state_notify(clone!(
+        #[strong]
+        root,
+        move |toplevel| {
+            if !toplevel.state().contains(gdk::ToplevelState::FOCUSED) {
+                root.set_visible(false);
+            }
         }
-    });
+    ));
 }

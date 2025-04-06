@@ -9,7 +9,7 @@ template $Manager: Adw.Window {
     condition ("max-width: 450sp")
 
     setters {
-      search_split_view.collapsed: true;
+      search_view.collapsed: true;
     }
   }
 
@@ -73,12 +73,30 @@ template $Manager: Adw.Window {
             Adw.PreferencesGroup {
               title: _("AnkiConnect");
 
-              Adw.EntryRow {
-                title: _("Server URL");
-                text: "http://127.0.0.1:8765";
+              [header-suffix]
+              Box {
+                spacing: 8;
+
+                Button ankiconnect_connected {
+                  tooltip-text: _("AnkiConnect connected");
+                  icon-name: "chain-link-loose-symbolic";
+
+                  styles ["success", "flat"]
+                }
+
+                Button ankiconnect_disconnected {
+                  tooltip-text: _("AnkiConnect disconnected");
+                  icon-name: "chain-link-loose-symbolic";
+
+                  styles ["dimmed", "flat"]
+                }
               }
 
-              Adw.PasswordEntryRow {
+              Adw.EntryRow ankiconnect_server_url {
+                title: _("Server URL");
+              }
+
+              Adw.PasswordEntryRow ankiconnect_api_key {
                 title: _("API Key");
               }
             }
@@ -86,13 +104,26 @@ template $Manager: Adw.Window {
             Adw.PreferencesGroup {
               title: _("Advanced");
 
-              Adw.EntryRow {
+              Adw.EntryRow texthooker_url {
                 title: _("Texthooker URL");
-                text: "ws://127.0.0.1:9001";
-              }
 
-              Adw.SpinRow {
-                title: _("Max Concurrent Imports");
+                [suffix]
+                Button texthooker_connected {
+                  valign: center;
+                  tooltip-text: _("Texthooker connected");
+                  icon-name: "chain-link-loose-symbolic";
+
+                  styles ["success", "flat"]
+                }
+
+                [suffix]
+                Button texthooker_disconnected {
+                  valign: center;
+                  tooltip-text: _("Texthooker disconnected");
+                  icon-name: "chain-link-loose-symbolic";
+
+                  styles ["dimmed", "flat"]
+                }
               }
             }
           }
@@ -117,11 +148,10 @@ template $Manager: Adw.Window {
             }
           }
 
-          Adw.OverlaySplitView search_split_view {
+          Adw.OverlaySplitView search_view {
             show-sidebar: bind search_sidebar_toggle.active bidirectional;
 
             sidebar: Adw.ToolbarView {
-
               [top]
               DropDown {
                 margin-start: 8;
@@ -129,7 +159,6 @@ template $Manager: Adw.Window {
                 margin-bottom: 8;
                 margin-top: 8;
                 model: profiles_model;
-                enable-search: true;
               }
 
               [bottom]
@@ -152,7 +181,7 @@ template $Manager: Adw.Window {
                 Adw.ViewStackPage {
                   name: "themes";
                   title: _("Themes");
-                  icon-name: "preferences-desktop-appearance-symbolic";
+                  icon-name: "larger-brush-symbolic";
 
                   child: Label {
                     label: "themes";
@@ -160,8 +189,6 @@ template $Manager: Adw.Window {
                 }
               }
             };
-
-            content: Adw.Bin search_content {};
           }
         }
       }

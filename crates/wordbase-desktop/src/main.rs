@@ -6,6 +6,7 @@
     reason = "`gtk` doesn't follow this convention"
 )]
 
+mod manager;
 mod overlay;
 mod platform;
 mod popup;
@@ -20,6 +21,7 @@ use {
     anyhow::{Context, Result},
     directories::ProjectDirs,
     futures::never::Never,
+    manager::Manager,
     platform::Platform,
     popup::{Popup, PopupMsg, PopupResponse},
     record::view::{RecordView, RecordViewMsg, RecordViewResponse},
@@ -65,6 +67,7 @@ fn main() {
 #[derive(Debug)]
 struct App {
     app: adw::Application,
+    manager: AsyncController<Manager>,
     engine: Engine,
     record_view: AsyncController<RecordView>,
     popup: AsyncController<Popup>,
@@ -145,23 +148,29 @@ impl AsyncComponent for App {
     }
 
     async fn init(
-        init: Self::Init,
+        config: Self::Init,
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
-        let app = init.app.clone();
-        init.settings
+        let app = config.app.clone();
+        let settings = config.settings.clone();
+        settings
             .bind("manager-width", &root, "default-width")
             .build();
-        init.settings
+        settings
             .bind("manager-height", &root, "default-height")
             .build();
 
-        let init = init_app(init, &sender).await.unwrap();
+        let init = init_app(config, &sender).await.unwrap();
+        let manager = Manager::builder()
+            .launch((init.engine.clone(), settings.clone()))
+            .detach();
+        manager.widget().present();
         let record_view = RecordView::builder().launch(init.engine.clone()).detach();
 
         let model = Self {
             app,
+            manager,
             engine: init.engine,
             record_view,
             popup: init.popup,
