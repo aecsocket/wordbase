@@ -4,20 +4,20 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, gtk::CompositeTemplate)]
-    #[template(file = "src/manager/dictionary_row.blp")]
+    #[template(file = "src/manager/dictionary_row/ui.blp")]
     pub struct DictionaryRow {
         #[template_child]
-        pub enabled_bin: TemplateChild<adw::Bin>,
+        pub imported: TemplateChild<gtk::Box>,
         #[template_child]
         pub enabled: TemplateChild<gtk::CheckButton>,
         #[template_child]
-        pub importing_bin: TemplateChild<adw::Bin>,
+        pub importing: TemplateChild<adw::Bin>,
         #[template_child]
         pub import_error: TemplateChild<gtk::Button>,
         #[template_child]
         pub progress: TemplateChild<gtk::ProgressBar>,
         #[template_child]
-        pub meta_display: TemplateChild<gtk::Grid>,
+        pub meta_info: TemplateChild<gtk::Grid>,
         #[template_child]
         pub visit_website: TemplateChild<gtk::Button>,
         #[template_child]
@@ -57,8 +57,8 @@ impl DictionaryRow {
     }
 
     #[must_use]
-    pub fn enabled_bin(&self) -> adw::Bin {
-        self.imp().enabled_bin.get()
+    pub fn imported(&self) -> gtk::Box {
+        self.imp().imported.get()
     }
 
     #[must_use]
@@ -67,8 +67,8 @@ impl DictionaryRow {
     }
 
     #[must_use]
-    pub fn importing_bin(&self) -> adw::Bin {
-        self.imp().importing_bin.get()
+    pub fn importing(&self) -> adw::Bin {
+        self.imp().importing.get()
     }
 
     #[must_use]
@@ -82,8 +82,8 @@ impl DictionaryRow {
     }
 
     #[must_use]
-    pub fn meta_display(&self) -> gtk::Grid {
-        self.imp().meta_display.get()
+    pub fn meta_info(&self) -> gtk::Grid {
+        self.imp().meta_info.get()
     }
 
     #[must_use]

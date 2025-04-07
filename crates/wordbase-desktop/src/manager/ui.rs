@@ -13,7 +13,7 @@ mod imp {
         #[template_child]
         pub profiles_model: TemplateChild<gtk::StringList>,
         #[template_child]
-        pub dictionaries: TemplateChild<gtk::ListBox>,
+        pub dictionaries: TemplateChild<adw::PreferencesGroup>,
         #[template_child]
         pub import_dictionary: TemplateChild<adw::ButtonRow>,
         #[template_child]
@@ -91,7 +91,7 @@ impl Manager {
     }
 
     #[must_use]
-    pub fn dictionaries(&self) -> gtk::ListBox {
+    pub fn dictionaries(&self) -> adw::PreferencesGroup {
         self.imp().dictionaries.get()
     }
 

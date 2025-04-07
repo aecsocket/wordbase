@@ -1,11 +1,11 @@
+use dictionary_row::DictionaryRow;
 use glib::clone;
 use relm4::{
     adw::{gio, prelude::*},
-    loading_widgets::LoadingWidgets,
     prelude::*,
 };
-use tracing::info;
-use wordbase::Lookup;
+use tracing::{error, info};
+use wordbase::{DictionaryKind, DictionaryMeta, Lookup};
 use wordbase_engine::{Engine, Event};
 
 use crate::{
@@ -59,78 +59,93 @@ impl AsyncComponent for Manager {
         ui::Manager::new()
     }
 
-    fn init_loading_widgets(root: Self::Root) -> Option<LoadingWidgets> {
-        // let root = root.upcast::<gtk::Window>();
-        // view! {
-        //     #[local]
-        //     root {
-        //         #[name(spinner)]
-        //         adw::Spinner {}
-        //     }
-        // }
-        None
-        // Some(LoadingWidgets::new(root, spinner))
-    }
-
     async fn init(
         (engine, settings): Self::Init,
-        root: Self::Root,
+        widgets: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
         settings
-            .bind("manager-width", &root, "default-width")
+            .bind("manager-width", &widgets, "default-width")
             .build();
         settings
-            .bind("manager-height", &root, "default-height")
+            .bind("manager-height", &widgets, "default-height")
             .build();
         settings
             .bind(
                 "manager-search-sidebar-open",
-                &root.search_sidebar_toggle(),
+                &widgets.search_sidebar_toggle(),
                 "active",
             )
             .build();
 
-        root.import_dictionary().connect_activated(clone!(
+        let parent = widgets
+            .import_dictionary()
+            .parent()
+            .unwrap()
+            .downcast::<gtk::ListBox>()
+            .unwrap();
+
+        parent.append(
+            DictionaryRow::builder()
+                .launch(DictionaryRow::ImportingStart {
+                    file_path: "jitendex.zip".into(),
+                })
+                .detach()
+                .widget(),
+        );
+        parent.append(
+            DictionaryRow::builder()
+                .launch(DictionaryRow::Importing {
+                    meta: DictionaryMeta::new(DictionaryKind::YomichanAudio, "foo"),
+                    progress: 0.2,
+                })
+                .detach()
+                .widget(),
+        );
+
+        for dict in engine.dictionaries.load().by_id.values() {
+            let row = DictionaryRow::builder().launch(DictionaryRow::Imported(dict.clone()));
+            parent.append(row.widget());
+
+            // row.widget()
+            // .insert_before(&parent, Some(&widgets.import_dictionary()));
+        }
+
+        widgets.import_dictionary().connect_activated(clone!(
             #[strong]
-            root,
+            widgets,
             #[strong]
             sender,
             move |_| {
-                root.import_dictionary_dialog().open_multiple(
-                    Some(&root),
+                widgets.import_dictionary_dialog().open_multiple(
+                    Some(&widgets),
                     None::<&gio::Cancellable>,
                     clone!(
                         #[strong]
                         sender,
                         move |result| {
-                            sender.input(match result {
-                                Ok(files) => ManagerMsg::ImportDictionaries(files),
-                                Err(err) => ManagerMsg::Error {
-                                    title: gettext("Failed to select dictionaries to import")
-                                        .into(),
-                                    err: err.into(),
-                                },
-                            });
+                            if let Ok(files) = result {
+                                sender.input(ManagerMsg::ImportDictionaries(files));
+                            }
                         }
                     ),
                 );
             },
         ));
 
-        root.ankiconnect_server_url().connect_changed(clone!(
+        widgets.ankiconnect_server_url().connect_changed(clone!(
             #[strong]
             sender,
             move |_| sender.input(ManagerMsg::SetAnkiConnectConfig),
         ));
-        root.ankiconnect_api_key().connect_changed(clone!(
+        widgets.ankiconnect_api_key().connect_changed(clone!(
             #[strong]
             sender,
             move |_| sender.input(ManagerMsg::SetAnkiConnectConfig),
         ));
 
-        root.texthooker_url().set_text(&engine.texthooker_url());
-        root.texthooker_url().connect_changed(clone!(
+        widgets.texthooker_url().set_text(&engine.texthooker_url());
+        widgets.texthooker_url().connect_changed(clone!(
             #[strong]
             sender,
             move |entry| sender.input(ManagerMsg::SetTexthookerUrl(entry.text().into())),
@@ -164,25 +179,24 @@ impl AsyncComponent for Manager {
             }
         ));
 
-        root.search_entry().connect_search_changed(clone!(
+        widgets.search_entry().connect_search_changed(clone!(
             #[strong]
             sender,
             move |entry| sender.input(ManagerMsg::Search(entry.text().into())),
         ));
 
         let record_view = RecordView::builder().launch(engine.clone()).detach();
-        root.search_view().set_content(Some(record_view.widget()));
+        widgets
+            .search_view()
+            .set_content(Some(record_view.widget()));
 
         let model = Self {
-            toasts: root.toast_overlay(),
+            toasts: widgets.toast_overlay(),
             record_view,
             texthooker_connected: engine.texthooker_connected(),
             engine,
         };
-        AsyncComponentParts {
-            model,
-            widgets: root,
-        }
+        AsyncComponentParts { model, widgets }
     }
 
     fn update_view(&self, widgets: &mut Self::Widgets, _sender: AsyncComponentSender<Self>) {
@@ -224,13 +238,8 @@ impl AsyncComponent for Manager {
                     }));
             }
             ManagerMsg::Error { title, err } => {
-                let toast = adw::Toast::builder()
-                    .title(title)
-                    .button_label(gettext("Details"))
-                    .build();
-                toast.connect_button_clicked(move |_| {
-                    todo!();
-                });
+                error!("{title}: {err:?}");
+                let toast = adw::Toast::builder().title(title).build();
                 self.toasts.add_toast(toast);
             }
         }

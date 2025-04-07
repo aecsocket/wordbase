@@ -3,15 +3,15 @@ use {
     base64::{Engine, prelude::BASE64_STANDARD},
     derive_more::{Deref, DerefMut},
     maud::{Markup, html},
-    std::{collections::HashMap, fmt::Write as _, hash::BuildHasher},
+    std::fmt::Write as _,
     wordbase::{
-        Dictionary, DictionaryId, RecordLookup, Record, Term,
+        Dictionary, DictionaryId, Record, RecordLookup, Term,
         dict::{self, yomichan_audio::AudioFormat},
     },
 };
 
-pub fn render_records<H: BuildHasher>(
-    dictionaries: &HashMap<DictionaryId, Dictionary, H>,
+pub fn render_records(
+    dictionaries: &IndexMap<DictionaryId, Dictionary>,
     records: &[RecordLookup],
 ) -> Markup {
     let mut terms = Terms::default();
@@ -193,8 +193,8 @@ fn render_pitch(term: &Term, pitch: &dict::yomitan::Pitch) -> Markup {
     }
 }
 
-fn render_frequency<H: BuildHasher>(
-    dictionaries: &HashMap<DictionaryId, Dictionary, H>,
+fn render_frequency(
+    dictionaries: &IndexMap<DictionaryId, Dictionary>,
     source: DictionaryId,
     frequency: &dict::yomitan::Frequency,
 ) -> Markup {
@@ -240,8 +240,8 @@ fn render_audio(record: &Audio) -> Markup {
     }
 }
 
-fn render_glossaries<H: BuildHasher>(
-    dictionaries: &HashMap<DictionaryId, Dictionary, H>,
+fn render_glossaries(
+    dictionaries: &IndexMap<DictionaryId, Dictionary>,
     source: DictionaryId,
     glossaries: &Glossaries,
 ) -> Markup {
@@ -279,10 +279,7 @@ fn render_glossary(glossary: &dict::yomitan::Glossary) -> Markup {
     }
 }
 
-fn name_of<H: BuildHasher>(
-    dictionaries: &HashMap<DictionaryId, Dictionary, H>,
-    dictionary_id: DictionaryId,
-) -> &str {
+fn name_of(dictionaries: &IndexMap<DictionaryId, Dictionary>, dictionary_id: DictionaryId) -> &str {
     dictionaries
         .get(&dictionary_id)
         .map_or("?", |dict| dict.meta.name.as_str())

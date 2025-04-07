@@ -1,9 +1,8 @@
 use {
-    crate::{Engine, Event},
+    crate::{Engine, Event, IndexMap},
     anyhow::{Context, Result, bail},
     arc_swap::ArcSwap,
     derive_more::{Display, Error},
-    foldhash::HashMap,
     futures::StreamExt,
     sqlx::{Pool, Sqlite},
     std::sync::Arc,
@@ -14,7 +13,7 @@ pub type SharedProfiles = Arc<ArcSwap<Profiles>>;
 
 #[derive(Debug)]
 pub struct Profiles {
-    pub by_id: HashMap<ProfileId, Profile>,
+    pub by_id: IndexMap<ProfileId, Profile>,
     pub current_id: ProfileId,
 }
 
@@ -25,7 +24,7 @@ impl Profiles {
             .context("failed to fetch profiles")?
             .into_iter()
             .map(|profile| (profile.id, profile))
-            .collect::<HashMap<_, _>>();
+            .collect();
         let current_id = ProfileId(
             sqlx::query_scalar!("SELECT current_profile FROM config")
                 .fetch_one(db)

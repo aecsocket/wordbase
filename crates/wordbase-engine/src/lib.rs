@@ -51,6 +51,8 @@ pub enum Event {
     TexthookerSentence(TexthookerSentence),
 }
 
+pub type IndexMap<K, V> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
+
 impl Engine {
     pub async fn new(db_path: impl AsRef<Path>) -> Result<Self> {
         let db = db::setup(db_path.as_ref()).await?;

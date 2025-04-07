@@ -35,22 +35,16 @@ template $Manager: Adw.Window {
           }
 
           Adw.PreferencesPage {
-            Adw.PreferencesGroup {
+            Adw.PreferencesGroup dictionaries {
               title: _("Dictionaries");
 
-              ListBox dictionaries {
+              Adw.ButtonRow import_dictionary {
+                title: _("Import");
+                start-icon-name: "list-add-symbolic";
+
                 styles [
-                  "boxed-list",
+                  "suggested-action",
                 ]
-
-                Adw.ButtonRow import_dictionary {
-                  title: _("Import");
-                  start-icon-name: "list-add-symbolic";
-
-                  styles [
-                    "suggested-action",
-                  ]
-                }
               }
             }
 

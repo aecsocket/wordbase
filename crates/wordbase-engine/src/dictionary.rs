@@ -1,9 +1,8 @@
 use {
-    crate::{Engine, Event},
+    crate::{Engine, Event, IndexMap},
     anyhow::{Context, Result, bail},
     arc_swap::ArcSwap,
     derive_more::{Display, Error},
-    foldhash::HashMap,
     futures::TryStreamExt,
     sqlx::{Pool, Sqlite},
     std::sync::Arc,
@@ -15,7 +14,7 @@ pub type SharedDictionaries = Arc<ArcSwap<Dictionaries>>;
 
 #[derive(Debug, Default)]
 pub struct Dictionaries {
-    pub by_id: HashMap<DictionaryId, Dictionary>,
+    pub by_id: IndexMap<DictionaryId, Dictionary>,
 }
 
 impl Dictionaries {
