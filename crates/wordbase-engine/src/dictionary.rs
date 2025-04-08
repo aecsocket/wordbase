@@ -1,7 +1,6 @@
 use {
-    crate::{Engine, Event, IndexMap},
+    crate::{Engine, Event, IndexMap, profile::Profiles},
     anyhow::{Context, Result, bail},
-    arc_swap::ArcSwap,
     derive_more::{Display, Error},
     futures::TryStreamExt,
     sqlx::{Pool, Sqlite},
@@ -10,29 +9,37 @@ use {
     wordbase::{Dictionary, DictionaryId, DictionaryMeta},
 };
 
-pub type SharedDictionaries = Arc<ArcSwap<Dictionaries>>;
-
 #[derive(Debug, Default)]
 pub struct Dictionaries {
     pub by_id: IndexMap<DictionaryId, Dictionary>,
+    pub sorting_id: Option<DictionaryId>,
 }
 
 impl Dictionaries {
-    pub(super) async fn fetch(db: &Pool<Sqlite>) -> Result<Self> {
+    pub(super) async fn fetch(db: &Pool<Sqlite>, profiles: &Profiles) -> Result<Self> {
         let by_id = fetch_owned(db)
             .await
             .context("failed to fetch dictionaries")?
             .into_iter()
             .map(|dict| (dict.id, dict))
             .collect();
-        Ok(Self { by_id })
+        let sorting_id = profiles
+            .by_id
+            .get(&profiles.current_id)
+            .and_then(|profile| profile.sorting_dictionary);
+        Ok(Self { by_id, sorting_id })
     }
 }
 
 impl Engine {
+    #[must_use]
+    pub fn dictionaries(&self) -> Arc<Dictionaries> {
+        self.dictionaries.load().clone()
+    }
+
     async fn sync_dictionaries(&self) -> Result<()> {
         self.dictionaries.store(Arc::new(
-            Dictionaries::fetch(&self.db)
+            Dictionaries::fetch(&self.db, &self.profiles.load())
                 .await
                 .context("failed to sync dictionaries")?,
         ));
@@ -83,6 +90,21 @@ impl Engine {
         }
 
         self.sync_dictionaries().await?;
+        Ok(())
+    }
+
+    pub async fn set_sorting_dictionary(&self, id: Option<DictionaryId>) -> Result<()> {
+        let id = id.map(|id| id.0);
+        sqlx::query!(
+            "UPDATE profile SET sorting_dictionary = $1
+            WHERE id = (SELECT current_profile FROM config)",
+            id,
+        )
+        .execute(&self.db)
+        .await?;
+
+        self.sync_dictionaries().await?;
+        self.sync_profiles().await?;
         Ok(())
     }
 

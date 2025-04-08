@@ -42,13 +42,17 @@ mod imp {
         pub search_sidebar_toggle: TemplateChild<gtk::ToggleButton>,
         #[template_child]
         pub search_view: TemplateChild<adw::OverlaySplitView>,
+        #[template_child]
+        pub search_dictionaries: TemplateChild<adw::Bin>,
+        #[template_child]
+        pub search_themes: TemplateChild<adw::Bin>,
     }
 
     #[glib::object_subclass]
     impl ObjectSubclass for Manager {
         const NAME: &str = "Manager";
         type Type = super::Manager;
-        type ParentType = adw::Window;
+        type ParentType = adw::BreakpointBin;
 
         fn class_init(klass: &mut Self::Class) {
             klass.bind_template();
@@ -61,12 +65,11 @@ mod imp {
 
     impl ObjectImpl for Manager {}
     impl WidgetImpl for Manager {}
-    impl WindowImpl for Manager {}
-    impl AdwWindowImpl for Manager {}
+    impl BreakpointBinImpl for Manager {}
 }
 
 glib::wrapper! {
-    pub struct Manager(ObjectSubclass<imp::Manager>) @extends gtk::Widget, gtk::Window, adw::Window;
+    pub struct Manager(ObjectSubclass<imp::Manager>) @extends gtk::Widget, adw::BreakpointBin;
 }
 
 impl Manager {
@@ -163,5 +166,15 @@ impl Manager {
     #[must_use]
     pub fn search_view(&self) -> adw::OverlaySplitView {
         self.imp().search_view.get()
+    }
+
+    #[must_use]
+    pub fn search_dictionaries(&self) -> adw::Bin {
+        self.imp().search_dictionaries.get()
+    }
+
+    #[must_use]
+    pub fn search_themes(&self) -> adw::Bin {
+        self.imp().search_themes.get()
     }
 }

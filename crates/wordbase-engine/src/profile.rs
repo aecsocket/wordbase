@@ -1,15 +1,12 @@
 use {
     crate::{Engine, Event, IndexMap},
     anyhow::{Context, Result, bail},
-    arc_swap::ArcSwap,
     derive_more::{Display, Error},
     futures::StreamExt,
     sqlx::{Pool, Sqlite},
     std::sync::Arc,
     wordbase::{DictionaryId, Profile, ProfileId, ProfileMeta},
 };
-
-pub type SharedProfiles = Arc<ArcSwap<Profiles>>;
 
 #[derive(Debug)]
 pub struct Profiles {
@@ -36,7 +33,12 @@ impl Profiles {
 }
 
 impl Engine {
-    async fn sync_profiles(&self) -> Result<()> {
+    #[must_use]
+    pub fn profiles(&self) -> Arc<Profiles> {
+        self.profiles.load().clone()
+    }
+
+    pub(crate) async fn sync_profiles(&self) -> Result<()> {
         self.profiles.store(Arc::new(
             Profiles::fetch(&self.db)
                 .await
@@ -82,24 +84,6 @@ impl Engine {
         sqlx::query!("UPDATE config SET current_profile = $1", id.0)
             .execute(&self.db)
             .await?;
-
-        self.sync_profiles().await?;
-        Ok(())
-    }
-
-    pub async fn set_profile_sorting_dictionary(
-        &self,
-        profile_id: ProfileId,
-        dictionary_id: Option<DictionaryId>,
-    ) -> Result<()> {
-        let dictionary_id = dictionary_id.map(|id| id.0);
-        sqlx::query!(
-            "UPDATE profile SET sorting_dictionary = $1 WHERE id = $2",
-            dictionary_id,
-            profile_id.0
-        )
-        .execute(&self.db)
-        .await?;
 
         self.sync_profiles().await?;
         Ok(())

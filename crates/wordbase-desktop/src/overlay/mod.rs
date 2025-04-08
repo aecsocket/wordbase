@@ -2,7 +2,7 @@ mod ui;
 
 use {
     crate::{
-        APP_ID, AppMsg, CHANNEL_BUF_CAP,
+        APP_ID, CHANNEL_BUF_CAP,
         platform::{OverlayGuard, Platform},
     },
     anyhow::{Context, Result},

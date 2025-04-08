@@ -79,11 +79,6 @@ enum ProfileCommand {
 enum ProfileSetCommand {
     /// Mark this profile as the current profile
     Current,
-    /// Set or unset the sorting dictionary
-    SortingDictionary {
-        /// Dictionary ID, or none to unset
-        dictionary_id: Option<i64>,
-    },
 }
 
 #[derive(Debug, clap::Parser)]
@@ -110,17 +105,31 @@ enum DictionaryCommand {
         /// Dictionary ID
         id: i64,
     },
-    /// Set the position of a dictionary in the ordering
-    Position {
-        /// Dictionary ID
-        id: i64,
-        /// New position
-        position: i64,
+    /// Modify the state of a dictionary
+    Set {
+        #[command(subcommand)]
+        command: DictionarySetCommand,
     },
     /// Delete a dictionary with the given ID
     Rm {
         /// Dictionary ID
         id: i64,
+    },
+}
+
+#[derive(Debug, clap::Parser)]
+enum DictionarySetCommand {
+    /// Set the sorting position of a dictionary
+    Position {
+        /// Dictionary ID
+        id: i64,
+        /// New dictionary position
+        position: i64,
+    },
+    /// Set which dictionary is used for sorting by term frequency
+    Sorting {
+        /// Dictionary ID, or none to unset
+        id: Option<i64>,
     },
 }
 
@@ -180,13 +189,6 @@ async fn main() -> Result<()> {
                 },
         } => profile_set_current(&engine, profile_id).await?,
         Command::Profile {
-            command:
-                ProfileCommand::Set {
-                    profile_id,
-                    command: ProfileSetCommand::SortingDictionary { dictionary_id },
-                },
-        } => profile_set_sorting_dictionary(&engine, profile_id, dictionary_id).await?,
-        Command::Profile {
             command: ProfileCommand::Rm { id },
         } => profile_rm(&engine, id).await?,
         Command::Dictionary {
@@ -205,8 +207,17 @@ async fn main() -> Result<()> {
             command: DictionaryCommand::Disable { id },
         } => dictionary_disable(&engine, id).await?,
         Command::Dictionary {
-            command: DictionaryCommand::Position { id, position },
-        } => dictionary_position(&engine, id, position).await?,
+            command:
+                DictionaryCommand::Set {
+                    command: DictionarySetCommand::Position { id, position },
+                },
+        } => dictionary_set_position(&engine, id, position).await?,
+        Command::Dictionary {
+            command:
+                DictionaryCommand::Set {
+                    command: DictionarySetCommand::Sorting { id },
+                },
+        } => dictionary_set_sorting(&engine, id).await?,
         Command::Dictionary {
             command: DictionaryCommand::Rm { id },
         } => dictionary_rm(&engine, id).await?,
@@ -233,7 +244,7 @@ fn profile_ls(engine: &Engine) {
     table.column(3).set_header("Sorting Dict");
     table.column(4).set_header("Dictionaries");
 
-    let dicts = engine.dictionaries.load();
+    let dicts = engine.dictionaries();
     let name_of_dict = |dict_id: DictionaryId| {
         dicts
             .by_id
@@ -241,7 +252,7 @@ fn profile_ls(engine: &Engine) {
             .map_or_else(|| "?".into(), |dict| dict.meta.name.clone())
     };
 
-    let profiles = engine.profiles.load();
+    let profiles = engine.profiles();
 
     let data = profiles
         .by_id
@@ -298,19 +309,6 @@ async fn profile_set_current(engine: &Engine, profile_id: i64) -> Result<()> {
     Ok(())
 }
 
-async fn profile_set_sorting_dictionary(
-    engine: &Engine,
-    profile_id: i64,
-    dictionary_id: Option<i64>,
-) -> Result<()> {
-    let profile_id = ProfileId(profile_id);
-    let dictionary_id = dictionary_id.map(DictionaryId);
-    engine
-        .set_profile_sorting_dictionary(profile_id, dictionary_id)
-        .await?;
-    Ok(())
-}
-
 async fn profile_rm(engine: &Engine, id: i64) -> Result<()> {
     let id = ProfileId(id);
     engine.remove_profile(id).await?;
@@ -319,17 +317,25 @@ async fn profile_rm(engine: &Engine, id: i64) -> Result<()> {
 
 fn dictionary_ls(engine: &Engine) {
     let mut table = AsciiTable::default();
-    table.column(1).set_header("Pos");
-    table.column(2).set_header("ID");
-    table.column(3).set_header("Name");
-    table.column(4).set_header("Version");
+    table.column(0).set_header("Sort");
+    table.column(1).set_header("On");
+    table.column(2).set_header("Pos");
+    table.column(3).set_header("ID");
+    table.column(4).set_header("Name");
+    table.column(5).set_header("Version");
 
-    let dictionaries = engine.dictionaries.load();
+    let dictionaries = engine.dictionaries();
     let data = dictionaries
         .by_id
         .values()
         .map(|dict| {
             vec![
+                (if dictionaries.sorting_id == Some(dict.id) {
+                    "✔"
+                } else {
+                    ""
+                })
+                .to_string(),
                 (if dict.enabled { "✔" } else { "" }).to_string(),
                 format!("{}", dict.position),
                 format!("{}", dict.id.0),
@@ -343,7 +349,7 @@ fn dictionary_ls(engine: &Engine) {
 
 fn dictionary_info(engine: &Engine, id: i64) -> Result<()> {
     let id = DictionaryId(id);
-    let dictionaries = engine.dictionaries.load();
+    let dictionaries = engine.dictionaries();
     let dictionary = dictionaries
         .by_id
         .get(&id)
@@ -428,9 +434,15 @@ async fn dictionary_disable(engine: &Engine, id: i64) -> Result<()> {
     Ok(())
 }
 
-async fn dictionary_position(engine: &Engine, id: i64, position: i64) -> Result<()> {
+async fn dictionary_set_position(engine: &Engine, id: i64, position: i64) -> Result<()> {
     let id = DictionaryId(id);
     engine.set_dictionary_position(id, position).await?;
+    Ok(())
+}
+
+async fn dictionary_set_sorting(engine: &Engine, id: Option<i64>) -> Result<()> {
+    let id = id.map(DictionaryId);
+    engine.set_sorting_dictionary(id).await?;
     Ok(())
 }
 

@@ -1,7 +1,7 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $Manager: Adw.Window {
+template $Manager: Adw.BreakpointBin {
   width-request: 360;
   height-request: 200;
 
@@ -9,7 +9,6 @@ template $Manager: Adw.Window {
     condition ("max-width: 450sp")
 
     setters {
-      search_view.collapsed: true;
     }
   }
 
@@ -144,6 +143,8 @@ template $Manager: Adw.Window {
 
           Adw.OverlaySplitView search_view {
             show-sidebar: bind search_sidebar_toggle.active bidirectional;
+            collapsed: true;
+            max-sidebar-width: 360;
 
             sidebar: Adw.ToolbarView {
               [top]
@@ -161,25 +162,28 @@ template $Manager: Adw.Window {
                 reveal: true;
               }
 
-              Adw.ViewStack search_sidebar_stack {
-                Adw.ViewStackPage {
-                  name: "dictionaries";
-                  title: _("Dictionaries");
-                  icon-name: "library-symbolic";
+              ScrolledWindow {
+                Adw.ViewStack search_sidebar_stack {
+                  margin-start: 8;
+                  margin-end: 8;
+                  margin-top: 8;
+                  margin-bottom: 8;
 
-                  child: Label {
-                    label: "dictionaries";
-                  };
-                }
+                  Adw.ViewStackPage {
+                    name: "dictionaries";
+                    title: _("Dictionaries");
+                    icon-name: "library-symbolic";
 
-                Adw.ViewStackPage {
-                  name: "themes";
-                  title: _("Themes");
-                  icon-name: "larger-brush-symbolic";
+                    child: Adw.Bin search_dictionaries {};
+                  }
 
-                  child: Label {
-                    label: "themes";
-                  };
+                  Adw.ViewStackPage {
+                    name: "themes";
+                    title: _("Themes");
+                    icon-name: "larger-brush-symbolic";
+
+                    child: Adw.Bin search_themes {};
+                  }
                 }
               }
             };

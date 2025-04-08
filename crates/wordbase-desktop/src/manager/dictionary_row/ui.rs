@@ -15,13 +15,17 @@ mod imp {
         #[template_child]
         pub import_error: TemplateChild<gtk::Button>,
         #[template_child]
+        pub is_sorting: TemplateChild<gtk::ToggleButton>,
+        #[template_child]
         pub progress: TemplateChild<gtk::ProgressBar>,
         #[template_child]
-        pub meta_info: TemplateChild<gtk::Grid>,
+        pub action_row: TemplateChild<adw::ActionRow>,
         #[template_child]
         pub visit_website: TemplateChild<gtk::Button>,
         #[template_child]
-        pub delete: TemplateChild<gtk::Button>,
+        pub remove: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub remove_dialog: TemplateChild<adw::AlertDialog>,
     }
 
     #[glib::object_subclass]
@@ -77,13 +81,18 @@ impl DictionaryRow {
     }
 
     #[must_use]
+    pub fn is_sorting(&self) -> gtk::ToggleButton {
+        self.imp().is_sorting.get()
+    }
+
+    #[must_use]
     pub fn progress(&self) -> gtk::ProgressBar {
         self.imp().progress.get()
     }
 
     #[must_use]
-    pub fn meta_info(&self) -> gtk::Grid {
-        self.imp().meta_info.get()
+    pub fn action_row(&self) -> adw::ActionRow {
+        self.imp().action_row.get()
     }
 
     #[must_use]
@@ -92,7 +101,12 @@ impl DictionaryRow {
     }
 
     #[must_use]
-    pub fn delete(&self) -> gtk::Button {
-        self.imp().delete.get()
+    pub fn remove(&self) -> gtk::Button {
+        self.imp().remove.get()
+    }
+
+    #[must_use]
+    pub fn remove_dialog(&self) -> adw::AlertDialog {
+        self.imp().remove_dialog.get()
     }
 }

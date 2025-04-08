@@ -140,9 +140,8 @@ impl AsyncComponent for RecordView {
                 };
 
                 let records = Arc::new(records);
-                let dictionaries = self.engine.dictionaries.load();
                 _ = self.render.sender().send(RecordRenderMsg::Render {
-                    dictionaries: dictionaries.clone(),
+                    dictionaries: self.engine.dictionaries(),
                     records: records.clone(),
                 });
                 sender.output(RecordViewResponse { records });

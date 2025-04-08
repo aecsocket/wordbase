@@ -67,7 +67,6 @@ lindera              = { version = "0.40.2" }
 maud                 = { version = "0.27" }
 mecab                = { version = "0.1.6" }
 notify               = { version = "8.0" }
-open                 = { version = "5.3" }
 paste                = { version = "1.0" }
 rand                 = { version = "0.9" }
 rayon                = { version = "1.10" }

@@ -13,8 +13,8 @@ pub mod profile;
 pub mod texthook;
 
 use arc_swap::ArcSwap;
-use dictionary::{Dictionaries, SharedDictionaries};
-use profile::{Profiles, SharedProfiles};
+use dictionary::Dictionaries;
+use profile::Profiles;
 use tokio::sync::broadcast;
 pub use wordbase;
 use wordbase::TexthookerSentence;
@@ -33,9 +33,9 @@ pub struct Engine(Arc<Inner>);
 
 #[derive(Debug)]
 pub struct Inner {
-    pub dictionaries: SharedDictionaries,
-    pub profiles: SharedProfiles,
-    pub texthookers: Texthookers,
+    profiles: ArcSwap<Profiles>,
+    dictionaries: ArcSwap<Dictionaries>,
+    texthookers: Texthookers,
     imports: Imports,
     deinflectors: Deinflectors,
     send_event: broadcast::Sender<Event>,
@@ -57,17 +57,16 @@ impl Engine {
     pub async fn new(db_path: impl AsRef<Path>) -> Result<Self> {
         let db = db::setup(db_path.as_ref()).await?;
         let (send_event, _) = broadcast::channel(CHANNEL_BUF_CAP);
+        let profiles = Profiles::fetch(&db)
+            .await
+            .context("failed to fetch initial profiles")?;
         let engine = Self(Arc::new(Inner {
-            dictionaries: SharedDictionaries::new(ArcSwap::from_pointee(
-                Dictionaries::fetch(&db)
+            dictionaries: ArcSwap::from_pointee(
+                Dictionaries::fetch(&db, &profiles)
                     .await
                     .context("failed to fetch initial dictionaries")?,
-            )),
-            profiles: SharedProfiles::new(ArcSwap::from_pointee(
-                Profiles::fetch(&db)
-                    .await
-                    .context("failed to fetch initial profiles")?,
-            )),
+            ),
+            profiles: ArcSwap::from_pointee(profiles),
             texthookers: Texthookers::new(&db, send_event.clone())
                 .await
                 .context("failed to create texthooker listener")?,

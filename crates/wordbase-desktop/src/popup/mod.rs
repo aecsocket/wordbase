@@ -2,14 +2,14 @@ mod ui;
 
 use {
     crate::{
-        ACTION_PROFILE, gettext,
+        ACTION_PROFILE, APP_ID, gettext,
         platform::Platform,
         record::view::{RecordView, RecordViewMsg, RecordViewResponse},
     },
     anyhow::Result,
     glib::clone,
     relm4::{
-        adw::{self, gdk, prelude::*},
+        adw::{self, gdk, gio, prelude::*},
         component::AsyncConnector,
         loading_widgets::LoadingWidgets,
         prelude::*,
@@ -22,16 +22,12 @@ use {
 };
 
 pub async fn connector(
-    app: &adw::Application,
     platform: &Arc<dyn Platform>,
     engine: Engine,
 ) -> Result<AsyncConnector<Popup>> {
-    let connector = Popup::builder().launch(PopupConfig {
-        platform: platform.clone(),
-        engine,
-    });
+    let connector = Popup::builder().launch((platform.clone(), engine));
     let window = connector.widget();
-    app.add_window(window);
+    relm4::main_application().add_window(window);
     platform.init_popup(window.upcast_ref()).await?;
     Ok(connector)
 }
@@ -39,15 +35,9 @@ pub async fn connector(
 #[derive(Debug)]
 pub struct Popup {
     platform: Arc<dyn Platform>,
-    engine: Engine,
     record_view: AsyncController<RecordView>,
-    next_move_op: Option<(WindowFilter, (i32, i32))>,
-}
-
-#[derive(Debug)]
-pub struct PopupConfig {
-    platform: Arc<dyn Platform>,
     engine: Engine,
+    next_move_op: Option<(WindowFilter, (i32, i32))>,
 }
 
 #[derive(Debug)]
@@ -65,7 +55,7 @@ pub enum PopupResponse {
 }
 
 impl AsyncComponent for Popup {
-    type Init = PopupConfig;
+    type Init = (Arc<dyn Platform>, Engine);
     type Input = PopupMsg;
     type Output = PopupResponse;
     type CommandOutput = ();
@@ -89,16 +79,22 @@ impl AsyncComponent for Popup {
     }
 
     async fn init(
-        init: Self::Init,
+        (platform, engine): Self::Init,
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
+        let settings = gio::Settings::new(APP_ID);
+        settings.bind("popup-width", &root, "default-width").build();
+        settings
+            .bind("popup-height", &root, "default-height")
+            .build();
+
         let model = Self {
-            platform: init.platform,
-            engine: init.engine.clone(),
+            platform,
             record_view: RecordView::builder()
-                .launch(init.engine)
+                .launch(engine.clone())
                 .forward(sender.input_sender(), |resp| PopupMsg::View(resp)),
+            engine,
             next_move_op: None,
         };
         root.connect_visible_notify({
@@ -124,8 +120,7 @@ impl AsyncComponent for Popup {
 
     fn update_view(&self, widgets: &mut Self::Widgets, _sender: AsyncComponentSender<Self>) {
         widgets.profiles_menu().remove_all();
-        let profiles = self.engine.profiles.load();
-        for (profile_id, profile) in profiles.by_id.iter() {
+        for (profile_id, profile) in self.engine.profiles().by_id.iter() {
             let label = profile
                 .meta
                 .name

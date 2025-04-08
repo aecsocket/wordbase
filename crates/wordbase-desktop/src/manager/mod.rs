@@ -1,124 +1,89 @@
-use dictionary_row::DictionaryRow;
+use foldhash::{HashMap, HashMapExt};
 use glib::clone;
 use relm4::{
     adw::{gio, prelude::*},
     prelude::*,
 };
-use tracing::{error, info};
-use wordbase::{DictionaryKind, DictionaryMeta, Lookup};
+use tracing::info;
+use wordbase::{DictionaryId, Lookup};
 use wordbase_engine::{Engine, Event};
 
 use crate::{
-    gettext,
+    APP_ID, gettext,
     record::view::{RecordView, RecordViewMsg},
 };
 
+mod dictionaries;
 mod dictionary_row;
-mod error_dialog;
 mod ui;
 
 #[derive(Debug)]
 pub struct Manager {
-    toasts: adw::ToastOverlay,
+    window: adw::Window,
     record_view: AsyncController<RecordView>,
     texthooker_connected: bool,
     engine: Engine,
+    overview_dictionaries: Controller<dictionaries::Model>,
+    search_dictionaries: Controller<dictionaries::Model>,
 }
 
 #[derive(Debug)]
+#[doc(hidden)]
 pub enum ManagerMsg {
-    #[doc(hidden)]
+    OverviewDictionaries(dictionaries::Msg),
+    SearchDictionaries(dictionaries::Msg),
     ImportDictionaries(gio::ListModel),
-    #[doc(hidden)]
     SetAnkiConnectConfig,
-    #[doc(hidden)]
     SetTexthookerUrl(String),
-    #[doc(hidden)]
     Search(String),
-    #[doc(hidden)]
-    Error { title: String, err: anyhow::Error },
+    Error(anyhow::Error),
 }
 
 #[derive(Debug)]
 pub enum ManagerCommandMsg {
-    #[doc(hidden)]
     TexthookerConnected,
-    #[doc(hidden)]
     TexthookerDisconnected,
 }
 
+#[derive(Debug)]
+pub struct Widgets {
+    root: ui::Manager,
+}
+
 impl AsyncComponent for Manager {
-    type Init = (Engine, gio::Settings);
+    type Init = (adw::Window, Engine);
     type Input = ManagerMsg;
     type Output = ();
     type CommandOutput = ManagerCommandMsg;
     type Root = ui::Manager;
-    type Widgets = ui::Manager;
+    type Widgets = Widgets;
 
     fn init_root() -> Self::Root {
         ui::Manager::new()
     }
 
     async fn init(
-        (engine, settings): Self::Init,
-        widgets: Self::Root,
+        (window, engine): Self::Init,
+        root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
-        settings
-            .bind("manager-width", &widgets, "default-width")
-            .build();
-        settings
-            .bind("manager-height", &widgets, "default-height")
-            .build();
+        let settings = gio::Settings::new(APP_ID);
         settings
             .bind(
                 "manager-search-sidebar-open",
-                &widgets.search_sidebar_toggle(),
+                &root.search_sidebar_toggle(),
                 "active",
             )
             .build();
 
-        let parent = widgets
-            .import_dictionary()
-            .parent()
-            .unwrap()
-            .downcast::<gtk::ListBox>()
-            .unwrap();
-
-        parent.append(
-            DictionaryRow::builder()
-                .launch(DictionaryRow::ImportingStart {
-                    file_path: "jitendex.zip".into(),
-                })
-                .detach()
-                .widget(),
-        );
-        parent.append(
-            DictionaryRow::builder()
-                .launch(DictionaryRow::Importing {
-                    meta: DictionaryMeta::new(DictionaryKind::YomichanAudio, "foo"),
-                    progress: 0.2,
-                })
-                .detach()
-                .widget(),
-        );
-
-        for dict in engine.dictionaries.load().by_id.values() {
-            let row = DictionaryRow::builder().launch(DictionaryRow::Imported(dict.clone()));
-            parent.append(row.widget());
-
-            // row.widget()
-            // .insert_before(&parent, Some(&widgets.import_dictionary()));
-        }
-
-        widgets.import_dictionary().connect_activated(clone!(
+        root.import_dictionary().connect_activated(clone!(
             #[strong]
-            widgets,
+            root,
             #[strong]
             sender,
             move |_| {
-                widgets.import_dictionary_dialog().open_multiple(
-                    Some(&widgets),
+                root.import_dictionary_dialog().open_multiple(
+                    None::<&gtk::Window>,
                     None::<&gio::Cancellable>,
                     clone!(
                         #[strong]
@@ -133,19 +98,19 @@ impl AsyncComponent for Manager {
             },
         ));
 
-        widgets.ankiconnect_server_url().connect_changed(clone!(
+        root.ankiconnect_server_url().connect_changed(clone!(
             #[strong]
             sender,
             move |_| sender.input(ManagerMsg::SetAnkiConnectConfig),
         ));
-        widgets.ankiconnect_api_key().connect_changed(clone!(
+        root.ankiconnect_api_key().connect_changed(clone!(
             #[strong]
             sender,
             move |_| sender.input(ManagerMsg::SetAnkiConnectConfig),
         ));
 
-        widgets.texthooker_url().set_text(&engine.texthooker_url());
-        widgets.texthooker_url().connect_changed(clone!(
+        root.texthooker_url().set_text(&engine.texthooker_url());
+        root.texthooker_url().connect_changed(clone!(
             #[strong]
             sender,
             move |entry| sender.input(ManagerMsg::SetTexthookerUrl(entry.text().into())),
@@ -156,12 +121,6 @@ impl AsyncComponent for Manager {
             move |out, shutdown| {
                 shutdown
                     .register(async move {
-                        _ = out.send(if engine.texthooker_connected() {
-                            ManagerCommandMsg::TexthookerConnected
-                        } else {
-                            ManagerCommandMsg::TexthookerDisconnected
-                        });
-
                         let mut recv_event = engine.recv_event();
                         while let Ok(event) = recv_event.recv().await {
                             match event {
@@ -179,32 +138,48 @@ impl AsyncComponent for Manager {
             }
         ));
 
-        widgets.search_entry().connect_search_changed(clone!(
+        root.search_entry().connect_search_changed(clone!(
             #[strong]
             sender,
             move |entry| sender.input(ManagerMsg::Search(entry.text().into())),
         ));
 
         let record_view = RecordView::builder().launch(engine.clone()).detach();
-        widgets
-            .search_view()
-            .set_content(Some(record_view.widget()));
+        root.search_view().set_content(Some(record_view.widget()));
 
         let model = Self {
-            toasts: widgets.toast_overlay(),
+            window: window.clone(),
             record_view,
             texthooker_connected: engine.texthooker_connected(),
-            engine,
+            engine: engine.clone(),
+            overview_dictionaries: dictionaries::Model::builder()
+                .launch((window.clone(), engine.dictionaries()))
+                .forward(sender.input_sender(), ManagerMsg::OverviewDictionaries),
+            search_dictionaries: dictionaries::Model::builder()
+                .launch((window.clone(), engine.dictionaries()))
+                .forward(sender.input_sender(), ManagerMsg::SearchDictionaries),
         };
+        let mut widgets = Widgets { root: root.clone() };
+
+        root.import_dictionary()
+            .parent()
+            .unwrap()
+            .downcast::<gtk::ListBox>()
+            .unwrap()
+            .insert(model.overview_dictionaries.widget(), 0);
+        root.search_dictionaries()
+            .set_child(Some(model.search_dictionaries.widget()));
+
+        model.update_view(&mut widgets, sender);
         AsyncComponentParts { model, widgets }
     }
 
-    fn update_view(&self, widgets: &mut Self::Widgets, _sender: AsyncComponentSender<Self>) {
-        widgets
-            .texthooker_connected()
+    fn update_view(&self, widgets: &mut Self::Widgets, sender: AsyncComponentSender<Self>) {
+        let root = &widgets.root;
+
+        root.texthooker_connected()
             .set_visible(self.texthooker_connected);
-        widgets
-            .texthooker_disconnected()
+        root.texthooker_disconnected()
             .set_visible(!self.texthooker_connected);
     }
 
@@ -218,14 +193,25 @@ impl AsyncComponent for Manager {
             ManagerMsg::ImportDictionaries(files) => {
                 todo!();
             }
+            ManagerMsg::OverviewDictionaries(msg) => {
+                _ = self.search_dictionaries.sender().send(msg.clone());
+                if let Err(err) = dictionaries::apply(msg, &self.engine).await {
+                    sender.input(ManagerMsg::Error(err));
+                }
+            }
+            ManagerMsg::SearchDictionaries(msg) => {
+                _ = self.overview_dictionaries.sender().send(msg.clone());
+                if let Err(err) = dictionaries::apply(msg, &self.engine).await {
+                    sender.input(ManagerMsg::Error(err));
+                }
+            }
             ManagerMsg::SetAnkiConnectConfig => {}
             ManagerMsg::SetTexthookerUrl(url) => {
                 if let Err(err) = self.engine.set_texthooker_url(&url).await {
                     info!("Set texthooker URL to {url:?}");
-                    sender.input(ManagerMsg::Error {
-                        title: gettext("Failed to set texthooker URL").into(),
-                        err,
-                    });
+                    sender.input(ManagerMsg::Error(
+                        err.context(gettext("Failed to set texthooker URL")),
+                    ));
                 }
             }
             ManagerMsg::Search(query) => {
@@ -237,12 +223,27 @@ impl AsyncComponent for Manager {
                         cursor: 0,
                     }));
             }
-            ManagerMsg::Error { title, err } => {
-                error!("{title}: {err:?}");
-                let toast = adw::Toast::builder().title(title).build();
-                self.toasts.add_toast(toast);
-            }
+            ManagerMsg::Error(_) => {}
         }
+    }
+
+    async fn update_with_view(
+        &mut self,
+        widgets: &mut Self::Widgets,
+        message: Self::Input,
+        sender: AsyncComponentSender<Self>,
+        root: &Self::Root,
+    ) {
+        match &message {
+            ManagerMsg::Error(err) => {
+                let toast = adw::Toast::builder().title(err.to_string()).build();
+                root.toast_overlay().add_toast(toast);
+            }
+            _ => {}
+        }
+
+        self.update(message, sender.clone(), root).await;
+        self.update_view(widgets, sender);
     }
 
     async fn update_cmd(

@@ -2,11 +2,11 @@ use {
     crate::theme::Theme,
     maud::html,
     relm4::{
-        adw::{gdk, prelude::*},
+        adw::{gdk, gio, prelude::*},
         prelude::*,
     },
     std::sync::Arc,
-    tracing::{debug, info, warn},
+    tracing::{debug, info},
     webkit6::prelude::*,
     wordbase::{RecordKind, RecordLookup},
     wordbase_engine::{dictionary::Dictionaries, html},
@@ -156,7 +156,5 @@ fn on_decide_policy(decision: &webkit6::PolicyDecision, sender: &ComponentSender
     }
 
     info!("Opening {uri:?} in browser");
-    if let Err(err) = open::that_detached(&uri) {
-        warn!("Failed to open {uri:?}: {err:?}");
-    }
+    gtk::UriLauncher::new(&uri).launch(None::<&gtk::Window>, None::<&gio::Cancellable>, |_| {});
 }

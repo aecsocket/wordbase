@@ -34,10 +34,8 @@ form_urlencoded    = { workspace = true }
 futures            = { workspace = true }
 glib               = { workspace = true, features = ["log"] }
 gtk4               = { workspace = true, features = ["gnome_47", "blueprint"] }
-open               = { workspace = true }
 rand               = { workspace = true }
 relm4              = { workspace = true, features = ["libadwaita", "gnome_47"] }
-relm4-components   = { workspace = true }
 relm4-icons        = { workspace = true }
 rmp-serde          = { workspace = true }
 serde              = { workspace = true, features = ["derive"] }
