@@ -12,6 +12,7 @@ fn main() {
             "larger-brush",
             "check-plain",
             "chain-link-loose",
+            "globe-alt2",
         ],
     );
 }

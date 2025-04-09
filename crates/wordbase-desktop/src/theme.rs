@@ -1,132 +1,143 @@
 use {
-    crate::CHANNEL_BUF_CAP,
+    crate::AppMsg,
     anyhow::{Context, Result},
+    derive_more::Deref,
+    foldhash::{HashMap, HashMapExt},
+    glib::clone,
     notify::{
         Watcher,
-        event::{DataChange, ModifyKind},
+        event::{CreateKind, ModifyKind, RemoveKind},
     },
     std::{
-        env,
-        path::{Path, PathBuf},
-        sync::{Arc, OnceLock},
+        path::Path,
+        sync::{Arc, LazyLock},
     },
-    tokio::{fs, sync::broadcast},
-    tracing::{info, warn},
+    tokio::fs,
+    tracing::warn,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Theme {
     pub style: String,
 }
 
-pub async fn default() -> Arc<Theme> {
-    default_watcher().await.current.clone()
-}
-
-pub async fn recv_default_changed() -> broadcast::Receiver<Arc<Theme>> {
-    default_watcher().await.recv_theme.resubscribe()
-}
-
-struct DefaultThemeWatcher {
-    current: Arc<Theme>,
-    recv_theme: broadcast::Receiver<Arc<Theme>>,
-    _file_watcher: Option<notify::RecommendedWatcher>,
-}
-
-const DEFAULT_THEME_PATH: &str = "default_theme.css";
-const DEFAULT_THEME_DATA: &str = include_str!("default_theme.css");
-static DEFAULT_THEME_WATCHER: OnceLock<DefaultThemeWatcher> = OnceLock::new();
-
-async fn default_watcher() -> &'static DefaultThemeWatcher {
-    if let Some(watcher) = DEFAULT_THEME_WATCHER.get() {
-        return watcher;
-    }
-
-    let (send_theme, recv_theme) = broadcast::channel(CHANNEL_BUF_CAP);
-    if let Some(default_theme_src_path) = default_theme_src_path() {
-        info!("Watching {default_theme_src_path:?} for changes");
-
-        // we're running from source, so the developer can hot reload the theme
-        let default_theme_src_path = Arc::<Path>::from(default_theme_src_path);
-        let file_watcher = create_default_theme_watcher(&default_theme_src_path, send_theme)
-            .unwrap_or_else(|err| {
-                warn!("Failed to create default theme file watcher: {err:?}");
-                None
-            });
-
-        let style = match fs::read_to_string(&default_theme_src_path).await {
-            Ok(style) => style,
-            Err(err) => {
-                warn!(
-                    "Failed to read default theme from source, falling back to hardcoded: {err:?}"
-                );
-                DEFAULT_THEME_DATA.to_owned()
-            }
-        };
-        let current = Theme { style };
-        DEFAULT_THEME_WATCHER.get_or_init(|| DefaultThemeWatcher {
-            current: Arc::new(current),
-            recv_theme,
-            _file_watcher: file_watcher,
-        })
-    } else {
-        let current = Theme {
-            style: DEFAULT_THEME_DATA.to_owned(),
-        };
-        DEFAULT_THEME_WATCHER.get_or_init(|| DefaultThemeWatcher {
-            current: Arc::new(current),
-            recv_theme,
-            _file_watcher: None,
-        })
-    }
-}
-
-fn default_theme_src_path() -> Option<PathBuf> {
-    env::var("CARGO_MANIFEST_DIR").ok().map(|manifest_path| {
-        Path::new(&manifest_path)
-            .join("src")
-            .join(DEFAULT_THEME_PATH)
+pub static DEFAULT_THEME: LazyLock<Arc<Theme>> = LazyLock::new(|| {
+    Arc::new(Theme {
+        style: include_str!("default_theme.css").to_string(),
     })
+});
+
+#[derive(Debug, Clone)]
+pub struct CustomTheme {
+    pub name: ThemeName,
+    pub theme: Arc<Theme>,
 }
 
-fn create_default_theme_watcher(
-    default_theme_src_path: &Arc<Path>,
-    send_theme: broadcast::Sender<Arc<Theme>>,
-) -> Result<Option<notify::RecommendedWatcher>> {
+impl CustomTheme {
+    pub async fn read_from(path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref();
+        let name = ThemeName::from_path(path).context("invalid theme name")?;
+        let style = fs::read_to_string(path)
+            .await
+            .context("failed to read theme file")?;
+        Ok(CustomTheme {
+            name: ThemeName(Arc::from(name.to_string())),
+            theme: Arc::new(Theme { style }),
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deref, Hash)]
+pub struct ThemeName(pub Arc<str>);
+
+impl ThemeName {
+    pub fn from_path(path: impl AsRef<Path>) -> Result<Self> {
+        let name = path
+            .as_ref()
+            .file_stem()
+            .context("file has no stem")?
+            .to_str()
+            .context("file name is not UTF-8")?;
+
+        Ok(ThemeName(Arc::from(name.to_string())))
+    }
+}
+
+pub async fn watch_themes(
+    data_dir: &Path,
+    sender: relm4::Sender<AppMsg>,
+) -> Result<(HashMap<ThemeName, CustomTheme>, notify::RecommendedWatcher)> {
+    let themes_dir = data_dir.join("themes");
+    fs::create_dir_all(&themes_dir)
+        .await
+        .context("failed to create themes directory")?;
+
     let tokio = tokio::runtime::Handle::current();
-    let mut watcher = notify::recommended_watcher({
-        let default_theme_src_path = default_theme_src_path.clone();
-        move |event: notify::Result<notify::Event>| {
-            let event = match event {
-                Ok(event) => event,
-                Err(err) => {
-                    warn!("Default theme file watcher error: {err:?}");
-                    return;
+    let mut watcher = notify::recommended_watcher(move |event| {
+        tokio.spawn(clone!(
+            #[strong]
+            sender,
+            async move {
+                if let Err(err) = on_file_watcher_event(event, sender).await {
+                    warn!("Theme file watcher error: {err:?}");
                 }
-            };
-
-            let notify::EventKind::Modify(ModifyKind::Data(DataChange::Any)) = event.kind else {
-                return;
-            };
-
-            let default_theme_src_path = default_theme_src_path.clone();
-            let send_theme = send_theme.clone();
-            tokio.spawn(async move {
-                let style = match fs::read_to_string(&default_theme_src_path).await {
-                    Ok(css) => css,
-                    Err(err) => {
-                        warn!("Failed to read default theme file: {err:?}");
-                        return;
-                    }
-                };
-                let theme = Arc::new(Theme { style });
-                _ = send_theme.send(theme);
-            });
-        }
+            }
+        ));
     })
-    .context("failed to create watcher")?;
+    .context("failed to create file watcher")?;
     watcher
-        .watch(default_theme_src_path, notify::RecursiveMode::NonRecursive)
-        .context("failed to start watching file")?;
-    Ok(Some(watcher))
+        .watch(&themes_dir, notify::RecursiveMode::NonRecursive)
+        .context("failed to start watching themes directory")?;
+
+    let mut initial_themes = HashMap::new();
+    let mut themes_dir = fs::read_dir(&themes_dir)
+        .await
+        .context("failed to fetch initial themes")?;
+    while let Some(theme) = themes_dir
+        .next_entry()
+        .await
+        .context("failed to read entry under themes directory")?
+    {
+        let is_file = theme.file_type().await.is_ok_and(|ty| ty.is_file());
+        if !is_file {
+            continue;
+        }
+
+        let path = theme.path();
+        let theme = CustomTheme::read_from(&path)
+            .await
+            .with_context(|| format!("failed to read `{path:?}`"))?;
+        initial_themes.insert(theme.name.clone(), theme);
+    }
+
+    Ok((initial_themes, watcher))
+}
+
+async fn on_file_watcher_event(
+    event: notify::Result<notify::Event>,
+    sender: relm4::Sender<AppMsg>,
+) -> Result<()> {
+    let event = event.context("file watch error")?;
+
+    match event.kind {
+        notify::EventKind::Create(CreateKind::File)
+        | notify::EventKind::Modify(ModifyKind::Any) => {
+            for path in event.paths {
+                let theme = CustomTheme::read_from(&path)
+                    .await
+                    .with_context(|| format!("failed to read theme `{path:?}`"))?;
+                sender.emit(AppMsg::ThemeInsert(theme));
+            }
+        }
+        notify::EventKind::Remove(RemoveKind::File) => {
+            for path in event.paths {
+                let name = ThemeName::from_path(&path)
+                    .with_context(|| format!("invalid theme name `{path:?}`"))?;
+                sender.emit(AppMsg::ThemeRemove(name));
+            }
+        }
+        _ => {}
+    }
+
+    Ok(())
 }

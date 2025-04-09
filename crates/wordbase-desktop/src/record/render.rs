@@ -1,5 +1,5 @@
 use {
-    crate::theme::Theme,
+    crate::theme::{DEFAULT_THEME, Theme},
     maud::html,
     relm4::{
         adw::{gdk, gio, prelude::*},
@@ -14,7 +14,6 @@ use {
 
 #[derive(Debug)]
 pub struct RecordRender {
-    pub default_theme: Arc<Theme>,
     pub custom_theme: Option<Arc<Theme>>,
     pub dictionaries: Arc<Dictionaries>,
     pub records: Arc<Vec<RecordLookup>>,
@@ -24,7 +23,6 @@ pub const SUPPORTED_RECORD_KINDS: &[RecordKind] = RecordKind::ALL;
 
 #[derive(Debug)]
 pub enum RecordRenderMsg {
-    DefaultTheme(Arc<Theme>),
     CustomTheme(Option<Arc<Theme>>),
     Render {
         dictionaries: Arc<Dictionaries>,
@@ -64,25 +62,16 @@ impl Component for RecordRender {
     }
 
     fn init(
-        init: Self::Init,
+        model: Self::Init,
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let model = Self {
-            default_theme: init.default_theme,
-            custom_theme: init.custom_theme,
-            dictionaries: init.dictionaries,
-            records: init.records,
-        };
         let widgets = view_output!();
         ComponentParts { model, widgets }
     }
 
     fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>, _root: &Self::Root) {
         match message {
-            RecordRenderMsg::DefaultTheme(theme) => {
-                self.default_theme = theme;
-            }
             RecordRenderMsg::CustomTheme(theme) => {
                 self.custom_theme = theme;
             }
@@ -109,7 +98,7 @@ impl Component for RecordRender {
         let records_html = html::render_records(&self.dictionaries.by_id, &self.records);
         let full_html = html! {
             style {
-                (self.default_theme.style)
+                (DEFAULT_THEME.style)
             }
 
             style {

@@ -16,7 +16,7 @@ mod imp {
 
     #[glib::object_subclass]
     impl ObjectSubclass for Popup {
-        const NAME: &str = "Popup";
+        const NAME: &str = "WdbPopup";
         type Type = super::Popup;
         type ParentType = adw::Window;
 

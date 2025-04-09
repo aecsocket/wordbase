@@ -1,17 +1,7 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $Manager: Adw.BreakpointBin {
-  width-request: 360;
-  height-request: 200;
-
-  Adw.Breakpoint {
-    condition ("max-width: 450sp")
-
-    setters {
-    }
-  }
-
+template $WdbManager: Adw.Bin {
   Adw.ToastOverlay toast_overlay {
     Adw.NavigationView {
       Adw.NavigationPage {
@@ -36,31 +26,10 @@ template $Manager: Adw.BreakpointBin {
           Adw.PreferencesPage {
             Adw.PreferencesGroup dictionaries {
               title: _("Dictionaries");
-
-              Adw.ButtonRow import_dictionary {
-                title: _("Import");
-                start-icon-name: "list-add-symbolic";
-
-                styles [
-                  "suggested-action",
-                ]
-              }
-            }
-
-            Adw.PreferencesGroup {
-              Adw.ComboRow {
-                title: _("Sorting Dictionary");
-                model: profiles_model;
-              }
             }
 
             Adw.PreferencesGroup themes {
               title: _("Themes");
-
-              Adw.ButtonRow import_theme {
-                title: _("Import");
-                start-icon-name: "list-add-symbolic";
-              }
             }
 
             Adw.PreferencesGroup {
@@ -136,8 +105,9 @@ template $Manager: Adw.BreakpointBin {
               hexpand: true;
             };
 
+            [end]
             ToggleButton search_sidebar_toggle {
-              icon-name: "sidebar-show-symbolic";
+              icon-name: "sidebar-show-right-symbolic";
             }
           }
 
@@ -145,6 +115,7 @@ template $Manager: Adw.BreakpointBin {
             show-sidebar: bind search_sidebar_toggle.active bidirectional;
             collapsed: true;
             max-sidebar-width: 360;
+            sidebar-position: end;
 
             sidebar: Adw.ToolbarView {
               [top]

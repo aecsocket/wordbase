@@ -1,7 +1,7 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $DictionaryRow: Adw.ExpanderRow {
+template $WdbDictionaryRow: Adw.ExpanderRow {
   [prefix]
   Box imported {
     orientation: horizontal;
@@ -16,7 +16,7 @@ template $DictionaryRow: Adw.ExpanderRow {
     CheckButton enabled {
       halign: center;
       valign: center;
-      tooltip-text: _("Dictionary enabled");
+      tooltip-text: _("Whether the dictionary is enabled, and will provide results in lookups");
     }
   }
 
@@ -25,7 +25,7 @@ template $DictionaryRow: Adw.ExpanderRow {
     Adw.Spinner {
       halign: center;
       valign: center;
-      tooltip-text: _("Importing");
+      tooltip-text: _("Dictionary is currently being imported");
     }
   }
 
@@ -33,18 +33,9 @@ template $DictionaryRow: Adw.ExpanderRow {
   Button import_error {
     icon-name: "dialog-warning-symbolic";
     valign: center;
-    tooltip-text: _("Failed to import");
+    tooltip-text: _("Failed to import this dictionary\nClick for details");
 
     styles ["error", "flat"]
-  }
-
-  [suffix]
-  ToggleButton is_sorting {
-    valign: center;
-    icon-name: "view-sort-descending-symbolic";
-    tooltip-text: _("Use as sorting dictionary");
-
-    styles ["flat"]
   }
 
   [suffix]
@@ -52,15 +43,32 @@ template $DictionaryRow: Adw.ExpanderRow {
     valign: center;
   }
 
+  [suffix]
+  Button is_sorting {
+    valign: center;
+    icon-name: "view-sort-descending-symbolic";
+    tooltip-text: _("This dictionary is used for sorting results by their word frequency\nClick to disable");
+
+    styles ["flat"]
+  }
+
   Adw.ActionRow action_row {
+    Button set_sorting {
+      valign: center;
+      icon-name: "view-sort-descending-symbolic";
+      tooltip-text: _("Use this dictionary for sorting results by their word frequency");
+    }
+
     Button visit_website {
       valign: center;
-      label: _("Visit Website");
+      icon-name: "globe-alt2-symbolic";
+      tooltip-text: _("Visit dictionary website");
     }
 
     Button remove {
       valign: center;
-      label: _("Remove");
+      icon-name: "user-trash-symbolic";
+      tooltip-text: _("Remove dictionary");
 
       styles ["destructive-action"]
     }

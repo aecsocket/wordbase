@@ -21,6 +21,7 @@ mod icon_names {
 use {
     anyhow::{Context, Result},
     directories::ProjectDirs,
+    foldhash::HashMap,
     manager::Manager,
     platform::Platform,
     popup::Popup,
@@ -31,6 +32,7 @@ use {
         view,
     },
     std::sync::Arc,
+    theme::{CustomTheme, ThemeName},
     tokio::fs,
     tracing::{error, info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
@@ -62,8 +64,15 @@ fn main() {
 
 #[derive(Debug)]
 struct App {
+    themes: HashMap<ThemeName, CustomTheme>,
+    _theme_watcher: notify::RecommendedWatcher,
     manager: AsyncController<Manager>,
     main_popup: Option<AsyncController<Popup>>,
+}
+
+enum AppMsg {
+    ThemeInsert(CustomTheme),
+    ThemeRemove(ThemeName),
 }
 
 #[relm4::component(async)]

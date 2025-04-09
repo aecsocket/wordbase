@@ -15,13 +15,7 @@ mod imp {
         #[template_child]
         pub dictionaries: TemplateChild<adw::PreferencesGroup>,
         #[template_child]
-        pub import_dictionary: TemplateChild<adw::ButtonRow>,
-        #[template_child]
-        pub import_dictionary_dialog: TemplateChild<gtk::FileDialog>,
-        #[template_child]
         pub themes: TemplateChild<adw::PreferencesGroup>,
-        #[template_child]
-        pub import_theme: TemplateChild<adw::ButtonRow>,
         #[template_child]
         pub ankiconnect_server_url: TemplateChild<adw::EntryRow>,
         #[template_child]
@@ -50,9 +44,9 @@ mod imp {
 
     #[glib::object_subclass]
     impl ObjectSubclass for Manager {
-        const NAME: &str = "Manager";
+        const NAME: &str = "WdbManager";
         type Type = super::Manager;
-        type ParentType = adw::BreakpointBin;
+        type ParentType = adw::Bin;
 
         fn class_init(klass: &mut Self::Class) {
             klass.bind_template();
@@ -65,11 +59,11 @@ mod imp {
 
     impl ObjectImpl for Manager {}
     impl WidgetImpl for Manager {}
-    impl BreakpointBinImpl for Manager {}
+    impl BinImpl for Manager {}
 }
 
 glib::wrapper! {
-    pub struct Manager(ObjectSubclass<imp::Manager>) @extends gtk::Widget, adw::BreakpointBin;
+    pub struct Manager(ObjectSubclass<imp::Manager>) @extends gtk::Widget, adw::Bin;
 }
 
 impl Manager {
@@ -99,23 +93,8 @@ impl Manager {
     }
 
     #[must_use]
-    pub fn import_dictionary(&self) -> adw::ButtonRow {
-        self.imp().import_dictionary.get()
-    }
-
-    #[must_use]
-    pub fn import_dictionary_dialog(&self) -> gtk::FileDialog {
-        self.imp().import_dictionary_dialog.get()
-    }
-
-    #[must_use]
     pub fn themes(&self) -> adw::PreferencesGroup {
         self.imp().themes.get()
-    }
-
-    #[must_use]
-    pub fn import_theme(&self) -> adw::ButtonRow {
-        self.imp().import_theme.get()
     }
 
     #[must_use]

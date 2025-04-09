@@ -15,11 +15,13 @@ mod imp {
         #[template_child]
         pub import_error: TemplateChild<gtk::Button>,
         #[template_child]
-        pub is_sorting: TemplateChild<gtk::ToggleButton>,
+        pub is_sorting: TemplateChild<gtk::Button>,
         #[template_child]
         pub progress: TemplateChild<gtk::ProgressBar>,
         #[template_child]
         pub action_row: TemplateChild<adw::ActionRow>,
+        #[template_child]
+        pub set_sorting: TemplateChild<gtk::Button>,
         #[template_child]
         pub visit_website: TemplateChild<gtk::Button>,
         #[template_child]
@@ -30,7 +32,7 @@ mod imp {
 
     #[glib::object_subclass]
     impl ObjectSubclass for DictionaryRow {
-        const NAME: &str = "DictionaryRow";
+        const NAME: &str = "WdbDictionaryRow";
         type Type = super::DictionaryRow;
         type ParentType = adw::ExpanderRow;
 
@@ -81,7 +83,7 @@ impl DictionaryRow {
     }
 
     #[must_use]
-    pub fn is_sorting(&self) -> gtk::ToggleButton {
+    pub fn is_sorting(&self) -> gtk::Button {
         self.imp().is_sorting.get()
     }
 
@@ -93,6 +95,11 @@ impl DictionaryRow {
     #[must_use]
     pub fn action_row(&self) -> adw::ActionRow {
         self.imp().action_row.get()
+    }
+
+    #[must_use]
+    pub fn set_sorting(&self) -> gtk::Button {
+        self.imp().set_sorting.get()
     }
 
     #[must_use]

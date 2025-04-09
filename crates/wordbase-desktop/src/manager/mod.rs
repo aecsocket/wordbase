@@ -15,6 +15,8 @@ use crate::{
 
 mod dictionaries;
 mod dictionary_row;
+mod theme_row;
+mod themes;
 mod ui;
 
 #[derive(Debug)]
@@ -25,13 +27,15 @@ pub struct Manager {
     engine: Engine,
     overview_dictionaries: Controller<dictionaries::Model>,
     search_dictionaries: Controller<dictionaries::Model>,
+    overview_themes: Controller<themes::Model>,
+    search_themes: Controller<themes::Model>,
 }
 
 #[derive(Debug)]
 #[doc(hidden)]
 pub enum ManagerMsg {
-    OverviewDictionaries(dictionaries::Msg),
-    SearchDictionaries(dictionaries::Msg),
+    OverviewDictionaries(dictionaries::Response),
+    SearchDictionaries(dictionaries::Response),
     ImportDictionaries(gio::ListModel),
     SetAnkiConnectConfig,
     SetTexthookerUrl(String),
@@ -75,28 +79,6 @@ impl AsyncComponent for Manager {
                 "active",
             )
             .build();
-
-        root.import_dictionary().connect_activated(clone!(
-            #[strong]
-            root,
-            #[strong]
-            sender,
-            move |_| {
-                root.import_dictionary_dialog().open_multiple(
-                    None::<&gtk::Window>,
-                    None::<&gio::Cancellable>,
-                    clone!(
-                        #[strong]
-                        sender,
-                        move |result| {
-                            if let Ok(files) = result {
-                                sender.input(ManagerMsg::ImportDictionaries(files));
-                            }
-                        }
-                    ),
-                );
-            },
-        ));
 
         root.ankiconnect_server_url().connect_changed(clone!(
             #[strong]
@@ -158,17 +140,19 @@ impl AsyncComponent for Manager {
             search_dictionaries: dictionaries::Model::builder()
                 .launch((window.clone(), engine.dictionaries()))
                 .forward(sender.input_sender(), ManagerMsg::SearchDictionaries),
+            overview_themes: themes::Model::builder().launch(window.clone()).detach(),
+            search_themes: themes::Model::builder().launch(window.clone()).detach(),
         };
         let mut widgets = Widgets { root: root.clone() };
 
-        root.import_dictionary()
-            .parent()
-            .unwrap()
-            .downcast::<gtk::ListBox>()
-            .unwrap()
-            .insert(model.overview_dictionaries.widget(), 0);
+        root.dictionaries()
+            .add(model.overview_dictionaries.widget());
         root.search_dictionaries()
             .set_child(Some(model.search_dictionaries.widget()));
+
+        root.themes().add(model.overview_themes.widget());
+        root.search_themes()
+            .set_child(Some(model.search_themes.widget()));
 
         model.update_view(&mut widgets, sender);
         AsyncComponentParts { model, widgets }
@@ -193,15 +177,15 @@ impl AsyncComponent for Manager {
             ManagerMsg::ImportDictionaries(files) => {
                 todo!();
             }
-            ManagerMsg::OverviewDictionaries(msg) => {
-                _ = self.search_dictionaries.sender().send(msg.clone());
-                if let Err(err) = dictionaries::apply(msg, &self.engine).await {
-                    sender.input(ManagerMsg::Error(err));
-                }
+            ManagerMsg::OverviewDictionaries(resp) => {
+                // _ = self.search_dictionaries.sender().send(msg.clone());
+                // if let Err(err) = dictionaries::apply(msg, &self.engine).await {
+                //     sender.input(ManagerMsg::Error(err));
+                // }
             }
-            ManagerMsg::SearchDictionaries(msg) => {
-                _ = self.overview_dictionaries.sender().send(msg.clone());
-                if let Err(err) = dictionaries::apply(msg, &self.engine).await {
+            ManagerMsg::SearchDictionaries(resp) => {
+                // _ = self.overview_dictionaries.sender().send(msg.clone());
+                if let Err(err) = dictionaries::apply(resp, &self.engine).await {
                     sender.input(ManagerMsg::Error(err));
                 }
             }

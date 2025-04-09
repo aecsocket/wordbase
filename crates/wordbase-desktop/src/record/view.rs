@@ -1,22 +1,26 @@
 use {
-    super::render::{RecordRender, RecordRenderMsg, RecordRenderResponse, SUPPORTED_RECORD_KINDS},
-    crate::theme::{self, Theme},
+    super::render,
     relm4::prelude::*,
     std::sync::Arc,
+    tokio::sync::mpsc,
     wordbase::{Lookup, RecordLookup},
-    wordbase_engine::Engine,
+    wordbase_engine::{Engine, Event},
 };
 
 #[derive(Debug)]
 pub struct RecordView {
     engine: Engine,
-    render: Controller<RecordRender>,
+    render: Controller<render::RecordRender>,
     lookup: Option<Lookup>,
 }
 
 #[derive(Debug)]
 pub enum RecordViewMsg {
-    Lookup(Lookup),
+    Lookup {
+        lookup: Lookup,
+        send_records: mpsc::Sender<Arc<Vec<RecordLookup>>>,
+    },
+    ReLookup,
     #[doc(hidden)]
     DoLookup,
 }
@@ -26,19 +30,12 @@ pub struct RecordViewResponse {
     pub records: Arc<Vec<RecordLookup>>,
 }
 
-#[derive(Debug)]
-#[doc(hidden)]
-pub enum RecordCommandMsg {
-    ReLookup,
-    DefaultTheme(Arc<Theme>),
-}
-
 #[relm4::component(pub, async)]
 impl AsyncComponent for RecordView {
     type Init = Engine;
     type Input = RecordViewMsg;
     type Output = RecordViewResponse;
-    type CommandOutput = RecordCommandMsg;
+    type CommandOutput = ();
 
     view! {
         adw::Bin {
@@ -51,10 +48,8 @@ impl AsyncComponent for RecordView {
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
-        let default_theme = theme::default().await;
-        let render = RecordRender::builder()
-            .launch(RecordRender {
-                default_theme,
+        let render = render::RecordRender::builder()
+            .launch(render::RecordRender {
                 custom_theme: None,
                 dictionaries: Arc::default(),
                 records: Arc::default(),
@@ -66,23 +61,14 @@ impl AsyncComponent for RecordView {
                 }),
             });
 
-        let mut recv_default_theme_changed = theme::recv_default_changed().await;
-        sender.command(|out, shutdown| {
-            shutdown
-                .register(async move {
-                    while let Ok(default_theme) = recv_default_theme_changed.recv().await {
-                        _ = out.send(RecordCommandMsg::DefaultTheme(default_theme));
-                    }
-                })
-                .drop_on_shutdown()
-        });
-
         let mut recv_event = engine.recv_event();
         sender.command(|out, shutdown| {
             shutdown
                 .register(async move {
-                    while let Ok(_) = recv_event.recv().await {
-                        _ = out.send(RecordCommandMsg::ReLookup);
+                    while let Ok(event) = recv_event.recv().await {
+                        if matches!(event, Event::SyncDictionaries | Event::SyncProfiles) {
+                            _ = out.send(RecordCommandMsg::ReLookup);
+                        }
                     }
                 })
                 .drop_on_shutdown()
@@ -106,12 +92,6 @@ impl AsyncComponent for RecordView {
         match message {
             RecordCommandMsg::ReLookup => {
                 sender.input(RecordViewMsg::DoLookup);
-            }
-            RecordCommandMsg::DefaultTheme(theme) => {
-                _ = self
-                    .render
-                    .sender()
-                    .send(RecordRenderMsg::DefaultTheme(theme));
             }
         }
     }
@@ -144,7 +124,7 @@ impl AsyncComponent for RecordView {
                     dictionaries: self.engine.dictionaries(),
                     records: records.clone(),
                 });
-                sender.output(RecordViewResponse { records });
+                _ = sender.output(RecordViewResponse { records });
             }
         }
     }

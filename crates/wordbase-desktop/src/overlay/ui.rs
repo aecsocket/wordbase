@@ -14,7 +14,7 @@ mod imp {
 
     #[glib::object_subclass]
     impl ObjectSubclass for Overlay {
-        const NAME: &str = "Overlay";
+        const NAME: &str = "WdbOverlay";
         type Type = super::Overlay;
         type ParentType = adw::Window;
 
