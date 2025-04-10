@@ -39,7 +39,7 @@
       <summary>Overlay window opacity when the cursor is inside the window</summary>
     </key>
     <key name="overlay-font-size" type="d">
-      <default>12</default>
+      <default>24</default>
       <summary>Font size of text in the overlay window</summary>
     </key>
     <key name="overlay-scan-trigger" enum="io.github.aecsocket.Wordbase.scan-trigger">

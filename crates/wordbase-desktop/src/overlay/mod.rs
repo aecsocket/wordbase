@@ -228,8 +228,6 @@ impl AsyncComponent for Overlay {
             _window_guard: window_guard,
             _font_size_signal_handler: font_size_signal_handler,
         };
-        model.set_font_size(&root);
-
         setup_sentence_scan(&root, &sender);
         AsyncComponentParts { model, widgets: () }
     }
@@ -244,9 +242,11 @@ impl AsyncComponent for Overlay {
         match message {
             OverlayMsg::Sentence(sentence) => {
                 root.sentence().set_text(&sentence);
+                // for some reason the label doesn't persist its font after new text is set
+                self.update_font(root);
             }
             OverlayMsg::FontSize => {
-                self.set_font_size(root);
+                self.update_font(root);
             }
             OverlayMsg::ScanSentence { byte_index_i32 } => {
                 let sentence = root.sentence();
@@ -309,7 +309,7 @@ impl AsyncComponent for Overlay {
 }
 
 impl Overlay {
-    fn set_font_size(&self, root: &ui::Overlay) {
+    fn update_font(&self, root: &ui::Overlay) {
         let mut font_desc = pango::FontDescription::new();
         let font_size = self.settings.double(OVERLAY_FONT_SIZE);
         let font_size_pango = (font_size * PANGO_SCALE as f64) as i32;
