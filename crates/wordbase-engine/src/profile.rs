@@ -5,7 +5,7 @@ use {
     futures::StreamExt,
     sqlx::{Pool, Sqlite},
     std::sync::Arc,
-    wordbase::{DictionaryId, Profile, ProfileId, ProfileMeta},
+    wordbase::{DictionaryId, Profile, ProfileConfig, ProfileId, ProfileMeta},
 };
 
 #[derive(Debug)]
@@ -48,20 +48,35 @@ impl Engine {
         Ok(())
     }
 
-    pub async fn insert_profile(&self, meta: ProfileMeta) -> Result<ProfileId> {
-        let current_id = self.profiles.load().current_id;
-        let meta_json = serde_json::to_string(&meta).context("failed to serialize profile meta")?;
+    pub async fn insert_profile(&self, meta: &ProfileMeta) -> Result<ProfileId> {
+        let profiles = self.profiles.load();
+        let current_id = profiles.current_id;
+        let current_profile = profiles
+            .by_id
+            .get(&current_id)
+            .context("no current profile")?;
+
+        let meta_json = serde_json::to_string(meta).context("failed to serialize profile meta")?;
+        let config_json =
+            serde_json::to_string(&current_profile.config).context("failed to serialize config")?;
+        let sorting_dictionary = current_profile.sorting_dictionary.map(|id| id.0);
 
         let mut tx = self
             .db
             .begin()
             .await
             .context("failed to begin transaction")?;
-        let new_id = sqlx::query!("INSERT INTO profile (meta) VALUES ($1)", meta_json)
-            .execute(&mut *tx)
-            .await
-            .context("failed to insert profile")?
-            .last_insert_rowid();
+        let new_id = sqlx::query!(
+            "INSERT INTO profile (meta, config, sorting_dictionary)
+            VALUES ($1, $2, $3)",
+            meta_json,
+            config_json,
+            sorting_dictionary
+        )
+        .execute(&mut *tx)
+        .await
+        .context("failed to insert profile")?
+        .last_insert_rowid();
         let new_id = ProfileId(new_id);
         sqlx::query!(
             "INSERT INTO profile_enabled_dictionary (profile, dictionary)
@@ -89,6 +104,34 @@ impl Engine {
         Ok(())
     }
 
+    pub async fn set_profile_meta(&self, id: ProfileId, meta: &ProfileMeta) -> Result<()> {
+        let meta_json = serde_json::to_string(&meta).context("failed to serialize profile meta")?;
+        sqlx::query!(
+            "UPDATE profile SET meta = $1 WHERE id = $2",
+            meta_json,
+            id.0
+        )
+        .execute(&self.db)
+        .await?;
+
+        self.sync_profiles().await?;
+        Ok(())
+    }
+
+    pub async fn set_profile_config(&self, id: ProfileId, config: &ProfileConfig) -> Result<()> {
+        let config_json = serde_json::to_string(config).context("failed to serialize config")?;
+        sqlx::query!(
+            "UPDATE profile SET config = $1 WHERE id = $2",
+            config_json,
+            id.0
+        )
+        .execute(&self.db)
+        .await?;
+
+        self.sync_profiles().await?;
+        Ok(())
+    }
+
     pub async fn remove_profile(&self, id: ProfileId) -> Result<()> {
         let result = sqlx::query!("DELETE FROM profile WHERE id = $1", id.0)
             .execute(&self.db)
@@ -107,9 +150,10 @@ async fn fetch_owned(db: &Pool<Sqlite>) -> Result<Vec<Profile>> {
 
     let mut records = sqlx::query!(
         "SELECT
-            id,
-            meta,
-            sorting_dictionary,
+            profile.id,
+            profile.meta,
+            profile.config,
+            profile.sorting_dictionary,
             ped.dictionary
         FROM profile
         LEFT JOIN profile_enabled_dictionary ped ON profile.id = ped.profile
@@ -127,9 +171,12 @@ async fn fetch_owned(db: &Pool<Sqlite>) -> Result<Vec<Profile>> {
                 let index = profiles.len();
                 let meta = serde_json::from_str::<ProfileMeta>(&record.meta)
                     .context("failed to deserialize profile meta")?;
+                let config = serde_json::from_str::<ProfileConfig>(&record.config)
+                    .context("failed to deserialize profile config")?;
                 profiles.push(Profile {
                     id,
                     meta,
+                    config,
                     enabled_dictionaries: Vec::new(),
                     sorting_dictionary: record.sorting_dictionary.map(DictionaryId),
                 });

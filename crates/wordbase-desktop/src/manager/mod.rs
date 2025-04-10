@@ -1,11 +1,10 @@
-use foldhash::{HashMap, HashMapExt};
 use glib::clone;
 use relm4::{
     adw::{gio, prelude::*},
     prelude::*,
 };
 use tracing::info;
-use wordbase::{DictionaryId, Lookup};
+use wordbase::Lookup;
 use wordbase_engine::{Engine, Event};
 
 use crate::{

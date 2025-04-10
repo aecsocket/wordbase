@@ -8,12 +8,13 @@ CREATE TABLE IF NOT EXISTS dictionary (
 
 CREATE TABLE IF NOT EXISTS profile (
     id                  INTEGER NOT NULL PRIMARY KEY,
-    meta                TEXT    NOT NULL CHECK (json_valid(meta)),
+    meta                TEXT    NOT NULL DEFAULT '{}' CHECK (json_valid(meta)),
+    config              TEXT    NOT NULL DEFAULT '{}' CHECK (json_valid(config)),
     sorting_dictionary  INTEGER REFERENCES dictionary(id)
 );
 
-INSERT INTO profile (meta)
-SELECT '{}'
+INSERT INTO profile (meta, config)
+SELECT '{}', '{}'
 WHERE NOT EXISTS (SELECT 1 FROM profile);
 
 CREATE TRIGGER IF NOT EXISTS assert_at_least_one_profile

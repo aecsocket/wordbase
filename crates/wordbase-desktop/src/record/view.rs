@@ -1,10 +1,10 @@
 use {
-    super::render,
+    super::render::{self, RecordRenderMsg, SUPPORTED_RECORD_KINDS},
+    crate::record::render::RecordRenderResponse,
     relm4::prelude::*,
     std::sync::Arc,
-    tokio::sync::mpsc,
     wordbase::{Lookup, RecordLookup},
-    wordbase_engine::{Engine, Event},
+    wordbase_engine::Engine,
 };
 
 #[derive(Debug)]
@@ -16,13 +16,8 @@ pub struct RecordView {
 
 #[derive(Debug)]
 pub enum RecordViewMsg {
-    Lookup {
-        lookup: Lookup,
-        send_records: mpsc::Sender<Arc<Vec<RecordLookup>>>,
-    },
+    Lookup(Lookup),
     ReLookup,
-    #[doc(hidden)]
-    DoLookup,
 }
 
 #[derive(Debug)]
@@ -61,19 +56,6 @@ impl AsyncComponent for RecordView {
                 }),
             });
 
-        let mut recv_event = engine.recv_event();
-        sender.command(|out, shutdown| {
-            shutdown
-                .register(async move {
-                    while let Ok(event) = recv_event.recv().await {
-                        if matches!(event, Event::SyncDictionaries | Event::SyncProfiles) {
-                            _ = out.send(RecordCommandMsg::ReLookup);
-                        }
-                    }
-                })
-                .drop_on_shutdown()
-        });
-
         let model = Self {
             engine,
             render,
@@ -81,19 +63,6 @@ impl AsyncComponent for RecordView {
         };
         let widgets = view_output!();
         AsyncComponentParts { model, widgets }
-    }
-
-    async fn update_cmd(
-        &mut self,
-        message: Self::CommandOutput,
-        sender: AsyncComponentSender<Self>,
-        _root: &Self::Root,
-    ) {
-        match message {
-            RecordCommandMsg::ReLookup => {
-                sender.input(RecordViewMsg::DoLookup);
-            }
-        }
     }
 
     async fn update(
@@ -105,9 +74,9 @@ impl AsyncComponent for RecordView {
         match message {
             RecordViewMsg::Lookup(lookup) => {
                 self.lookup = Some(lookup);
-                sender.input(RecordViewMsg::DoLookup);
+                sender.input(RecordViewMsg::ReLookup);
             }
-            RecordViewMsg::DoLookup => {
+            RecordViewMsg::ReLookup => {
                 let Some(lookup) = &self.lookup else {
                     return;
                 };

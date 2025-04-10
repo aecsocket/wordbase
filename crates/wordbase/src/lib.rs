@@ -4,6 +4,7 @@
 pub mod dict;
 
 mod protocol;
+use foldhash::HashMap;
 pub use protocol::*;
 use {
     derive_more::{Deref, Display, From},
@@ -325,6 +326,7 @@ pub struct Profile {
     ///
     /// [position]: Dictionary::position
     pub sorting_dictionary: Option<DictionaryId>,
+    pub config: ProfileConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -333,13 +335,21 @@ pub struct ProfileMeta {
     ///
     /// User-defined profiles will always have a name. If the name is missing,
     /// then this is the default profile made on startup.
-    pub name: Option<String>,
+    pub name: Option<NormString>,
     /// RGB accent color of the profile.
     ///
     /// This is purely aesthetic, but you can use this to style output for
     /// different profiles, and allow users to quickly differentiate between
     /// their profiles by color.
     pub accent_color: Option<[f32; 3]>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileConfig {
+    pub anki_deck: Option<NormString>,
+    pub anki_model: Option<NormString>,
+    #[serde(default)]
+    pub anki_model_fields: HashMap<NormString, NormString>,
 }
 
 /// Opaque and unique identifier for a single [`Profile`] in a database.

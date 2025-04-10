@@ -14,36 +14,7 @@ pub fn render_records(
     dictionaries: &IndexMap<DictionaryId, Dictionary>,
     records: &[RecordLookup],
 ) -> Markup {
-    let mut terms = Terms::default();
-    for record in records {
-        let source = record.source;
-        let info = terms.entry(record.term.clone()).or_default();
-
-        match &record.record {
-            Record::YomitanGlossary(glossary) => {
-                info.glossaries.entry(source).or_default().push(glossary);
-            }
-            Record::YomitanFrequency(frequency) => {
-                info.frequencies.push((source, frequency));
-            }
-            Record::YomitanPitch(pitch) => {
-                info.pitches.push((source, pitch));
-            }
-            Record::YomichanAudioForvo(audio) => {
-                info.audio.push((source, Audio::Forvo(audio)));
-            }
-            Record::YomichanAudioJpod(audio) => {
-                info.audio.push((source, Audio::Jpod(audio)));
-            }
-            Record::YomichanAudioNhk16(audio) => {
-                info.audio.push((source, Audio::Nhk16(audio)));
-            }
-            Record::YomichanAudioShinmeikai8(audio) => {
-                info.audio.push((source, Audio::Shinmeikai8(audio)));
-            }
-            _ => {}
-        }
-    }
+    let terms = make_terms(records);
 
     html! {
         @for (term, info) in &terms.0 {
@@ -90,31 +61,66 @@ pub fn render_records(
     }
 }
 
+pub fn make_terms(records: &[RecordLookup]) -> Terms {
+    let mut terms = Terms::default();
+    for record in records {
+        let source = record.source;
+        let info = terms.entry(record.term.clone()).or_default();
+
+        match &record.record {
+            Record::YomitanGlossary(glossary) => {
+                info.glossaries.entry(source).or_default().push(glossary);
+            }
+            Record::YomitanFrequency(frequency) => {
+                info.frequencies.push((source, frequency));
+            }
+            Record::YomitanPitch(pitch) => {
+                info.pitches.push((source, pitch));
+            }
+            Record::YomichanAudioForvo(audio) => {
+                info.audio.push((source, Audio::Forvo(audio)));
+            }
+            Record::YomichanAudioJpod(audio) => {
+                info.audio.push((source, Audio::Jpod(audio)));
+            }
+            Record::YomichanAudioNhk16(audio) => {
+                info.audio.push((source, Audio::Nhk16(audio)));
+            }
+            Record::YomichanAudioShinmeikai8(audio) => {
+                info.audio.push((source, Audio::Shinmeikai8(audio)));
+            }
+            _ => {}
+        }
+    }
+    terms
+}
+
 type IndexMap<K, V> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
 
 #[derive(Debug, Default, Deref, DerefMut)]
-struct Terms<'a>(IndexMap<Term, TermInfo<'a>>);
+pub struct Terms<'a>(IndexMap<Term, TermInfo<'a>>);
 
 #[derive(Debug, Default)]
-struct TermInfo<'a> {
-    glossaries: IndexMap<DictionaryId, Glossaries<'a>>,
-    frequencies: Vec<(DictionaryId, &'a dict::yomitan::Frequency)>,
-    pitches: Vec<(DictionaryId, &'a dict::yomitan::Pitch)>,
-    audio: Vec<(DictionaryId, Audio<'a>)>,
+pub struct TermInfo<'a> {
+    pub glossaries: IndexMap<DictionaryId, Glossaries<'a>>,
+    pub frequencies: Vec<(DictionaryId, &'a dict::yomitan::Frequency)>,
+    pub pitches: Vec<(DictionaryId, &'a dict::yomitan::Pitch)>,
+    pub audio: Vec<(DictionaryId, Audio<'a>)>,
 }
 
 #[derive(Debug, Default, Deref, DerefMut)]
-struct Glossaries<'a>(Vec<&'a dict::yomitan::Glossary>);
+pub struct Glossaries<'a>(pub Vec<&'a dict::yomitan::Glossary>);
 
 #[derive(Debug)]
-enum Audio<'a> {
+pub enum Audio<'a> {
     Forvo(&'a dict::yomichan_audio::Forvo),
     Jpod(&'a dict::yomichan_audio::Jpod),
     Nhk16(&'a dict::yomichan_audio::Nhk16),
     Shinmeikai8(&'a dict::yomichan_audio::Shinmeikai8),
 }
 
-fn render_term(term: &Term) -> Markup {
+#[must_use]
+pub fn render_term(term: &Term) -> Markup {
     match term {
         Term::Headword { headword } => html! {
             ruby {
@@ -145,7 +151,8 @@ fn render_term(term: &Term) -> Markup {
     }
 }
 
-fn render_pitch(term: &Term, pitch: &dict::yomitan::Pitch) -> Markup {
+#[must_use]
+pub fn render_pitch(term: &Term, pitch: &dict::yomitan::Pitch) -> Markup {
     let Some(reading) = term.reading() else {
         return html! {};
     };
@@ -193,7 +200,8 @@ fn render_pitch(term: &Term, pitch: &dict::yomitan::Pitch) -> Markup {
     }
 }
 
-fn render_frequency(
+#[must_use]
+pub fn render_frequency(
     dictionaries: &IndexMap<DictionaryId, Dictionary>,
     source: DictionaryId,
     frequency: &dict::yomitan::Frequency,
@@ -214,7 +222,8 @@ fn render_frequency(
     }
 }
 
-fn render_audio(record: &Audio) -> Markup {
+#[must_use]
+pub fn render_audio(record: &Audio) -> Markup {
     let (name, audio) = match record {
         Audio::Forvo(dict::yomichan_audio::Forvo { audio, username }) => {
             (format!("Forvo {username}"), audio)
@@ -240,7 +249,8 @@ fn render_audio(record: &Audio) -> Markup {
     }
 }
 
-fn render_glossaries(
+#[must_use]
+pub fn render_glossaries(
     dictionaries: &IndexMap<DictionaryId, Dictionary>,
     source: DictionaryId,
     glossaries: &Glossaries,
@@ -258,7 +268,8 @@ fn render_glossaries(
     }
 }
 
-fn render_glossary(glossary: &dict::yomitan::Glossary) -> Markup {
+#[must_use]
+pub fn render_glossary(glossary: &dict::yomitan::Glossary) -> Markup {
     let mut tags = glossary.tags.iter().collect::<Vec<_>>();
     tags.sort_by_key(|tag| tag.order);
 

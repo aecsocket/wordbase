@@ -1,8 +1,7 @@
-use std::collections::HashMap;
-
+use foldhash::HashMap;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-pub trait Request: Serialize {
+pub trait Request: Send + Sync + Serialize + 'static {
     type Response: DeserializeOwned;
 
     const ACTION: &str;
@@ -14,6 +13,7 @@ pub trait Request: Serialize {
 pub struct RequestWrapper<'r, R> {
     pub version: u32,
     pub action: &'r str,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub params: Option<&'r R>,
 }
 
@@ -27,6 +27,50 @@ impl Request for Version {
     const ACTION: &str = "version";
     const HAS_PARAMS: bool = false;
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeckNames;
+
+impl Request for DeckNames {
+    type Response = Vec<DeckName>;
+
+    const ACTION: &str = "deckNames";
+    const HAS_PARAMS: bool = false;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct DeckName(pub String);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelNames;
+
+impl Request for ModelNames {
+    type Response = Vec<ModelName>;
+
+    const ACTION: &str = "modelNames";
+    const HAS_PARAMS: bool = false;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ModelName(pub String);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelFieldNames {
+    pub model_name: ModelName,
+}
+
+impl Request for ModelFieldNames {
+    type Response = Vec<ModelFieldName>;
+
+    const ACTION: &str = "modelFieldNames";
+    const HAS_PARAMS: bool = true;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ModelFieldName(pub String);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -58,7 +102,9 @@ pub struct Note {
 #[serde(rename_all = "camelCase")]
 pub struct NoteOptions {
     pub allow_duplicate: bool,
-    pub duplicate_scope: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duplicate_scope: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub duplicate_scope_options: Option<DuplicateScopeOptions>,
 }
 

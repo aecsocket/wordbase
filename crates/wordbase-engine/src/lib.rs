@@ -1,7 +1,7 @@
 #![doc = include_str!("../README.md")]
 #![allow(missing_docs, clippy::missing_errors_doc)]
 
-// pub mod anki;
+pub mod anki;
 mod db;
 pub mod deinflect;
 pub mod dictionary;
@@ -12,6 +12,7 @@ pub mod lookup;
 pub mod profile;
 pub mod texthook;
 
+use anki::Anki;
 use arc_swap::ArcSwap;
 use dictionary::Dictionaries;
 use profile::Profiles;
@@ -38,6 +39,7 @@ pub struct Inner {
     texthookers: Texthookers,
     imports: Imports,
     deinflectors: Deinflectors,
+    anki: Anki,
     send_event: broadcast::Sender<Event>,
     db: Pool<Sqlite>,
 }
@@ -72,6 +74,7 @@ impl Engine {
                 .context("failed to create texthooker listener")?,
             imports: Imports::new(),
             deinflectors: Deinflectors::new().context("failed to create deinflectors")?,
+            anki: Anki::new().context("failed to create AnkiConnect integration")?,
             send_event,
             db,
         }));

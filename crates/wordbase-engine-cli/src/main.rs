@@ -9,7 +9,7 @@ use {
     tokio::{fs, sync::oneshot},
     tracing::{info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
-    wordbase::{DictionaryId, ProfileId, ProfileMeta, RecordKind},
+    wordbase::{DictionaryId, NormString, ProfileConfig, ProfileId, ProfileMeta, RecordKind},
     wordbase_engine::{Engine, Event, import::ImportStarted},
 };
 
@@ -79,6 +79,21 @@ enum ProfileCommand {
 enum ProfileSetCommand {
     /// Mark this profile as the current profile
     Current,
+    /// Set the name of a profile
+    Name {
+        /// New profile name, or none to unset
+        name: Option<String>,
+    },
+    /// Set which Anki deck a profile will add notes to
+    AnkiDeck {
+        /// Anki deck name
+        deck: Option<String>,
+    },
+    /// Set which Anki model is used for creating notes
+    AnkiModel {
+        /// Anki model name
+        model: Option<String>,
+    },
 }
 
 #[derive(Debug, clap::Parser)]
@@ -189,6 +204,27 @@ async fn main() -> Result<()> {
                 },
         } => profile_set_current(&engine, profile_id).await?,
         Command::Profile {
+            command:
+                ProfileCommand::Set {
+                    profile_id,
+                    command: ProfileSetCommand::Name { name },
+                },
+        } => profile_set_name(&engine, profile_id, name).await?,
+        Command::Profile {
+            command:
+                ProfileCommand::Set {
+                    profile_id,
+                    command: ProfileSetCommand::AnkiDeck { deck },
+                },
+        } => profile_set_anki_deck(&engine, profile_id, deck).await?,
+        Command::Profile {
+            command:
+                ProfileCommand::Set {
+                    profile_id,
+                    command: ProfileSetCommand::AnkiModel { model },
+                },
+        } => profile_set_anki_model(&engine, profile_id, model).await?,
+        Command::Profile {
             command: ProfileCommand::Rm { id },
         } => profile_rm(&engine, id).await?,
         Command::Dictionary {
@@ -242,7 +278,8 @@ fn profile_ls(engine: &Engine) {
     table.column(1).set_header("ID");
     table.column(2).set_header("Name");
     table.column(3).set_header("Sorting Dict");
-    table.column(4).set_header("Dictionaries");
+    table.column(4).set_header("Anki Deck");
+    table.column(5).set_header("Dictionaries");
 
     let dicts = engine.dictionaries();
     let name_of_dict = |dict_id: DictionaryId| {
@@ -282,9 +319,15 @@ fn profile_ls(engine: &Engine) {
                 profile
                     .meta
                     .name
-                    .clone()
-                    .unwrap_or_else(|| "(default)".into()),
+                    .as_ref()
+                    .map_or_else(|| "(default)".into(), |s| s.clone().into_inner()),
                 sorting_dictionary,
+                profile
+                    .config
+                    .anki_deck
+                    .as_ref()
+                    .map(|s| s.clone().into_inner())
+                    .unwrap_or_default(),
                 format!("({num_dictionaries}) {enabled_dictionaries}"),
             ]
         })
@@ -293,8 +336,9 @@ fn profile_ls(engine: &Engine) {
 }
 
 async fn profile_new(engine: &Engine, name: String) -> Result<()> {
+    let name = NormString::new(name).context("invalid profile name")?;
     let new_id = engine
-        .insert_profile(ProfileMeta {
+        .insert_profile(&ProfileMeta {
             name: Some(name),
             accent_color: None,
         })
@@ -306,6 +350,80 @@ async fn profile_new(engine: &Engine, name: String) -> Result<()> {
 async fn profile_set_current(engine: &Engine, profile_id: i64) -> Result<()> {
     let profile_id = ProfileId(profile_id);
     engine.set_current_profile(profile_id).await?;
+    Ok(())
+}
+
+async fn profile_set_name(engine: &Engine, profile_id: i64, name: Option<String>) -> Result<()> {
+    let name = name
+        .map(|s| NormString::new(s).context("invalid profile name"))
+        .transpose()?;
+    let profile_id = ProfileId(profile_id);
+    let profiles = engine.profiles();
+    let profile = profiles
+        .by_id
+        .get(&profile_id)
+        .context("no profile with this ID")?;
+    engine
+        .set_profile_meta(
+            profile_id,
+            &ProfileMeta {
+                name,
+                ..profile.meta.clone()
+            },
+        )
+        .await?;
+    Ok(())
+}
+
+async fn profile_set_anki_deck(
+    engine: &Engine,
+    profile_id: i64,
+    deck: Option<String>,
+) -> Result<()> {
+    let anki_deck = deck
+        .map(|s| NormString::new(s).context("invalid deck name"))
+        .transpose()?;
+    let profile_id = ProfileId(profile_id);
+    let profiles = engine.profiles();
+    let profile = profiles
+        .by_id
+        .get(&profile_id)
+        .context("no profile with this ID")?;
+    engine
+        .set_profile_config(
+            profile_id,
+            &ProfileConfig {
+                anki_deck,
+                ..profile.config.clone()
+            },
+        )
+        .await?;
+    Ok(())
+}
+
+async fn profile_set_anki_model(
+    engine: &Engine,
+    profile_id: i64,
+    model: Option<String>,
+) -> Result<()> {
+    let anki_model = model
+        .map(|s| NormString::new(s).context("invalid model name"))
+        .transpose()?;
+    let profile_id = ProfileId(profile_id);
+    let profiles = engine.profiles();
+    let profile = profiles
+        .by_id
+        .get(&profile_id)
+        .context("no profile with this ID")?;
+    engine
+        .set_profile_config(
+            profile_id,
+            &ProfileConfig {
+                anki_model,
+                ..profile.config.clone()
+            },
+        )
+        .await?;
     Ok(())
 }
 

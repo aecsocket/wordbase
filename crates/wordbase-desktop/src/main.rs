@@ -70,6 +70,7 @@ struct App {
     main_popup: Option<AsyncController<Popup>>,
 }
 
+#[derive(Debug)]
 enum AppMsg {
     ThemeInsert(CustomTheme),
     ThemeRemove(ThemeName),
@@ -78,7 +79,7 @@ enum AppMsg {
 #[relm4::component(async)]
 impl AsyncComponent for App {
     type Init = ();
-    type Input = ();
+    type Input = AppMsg;
     type Output = ();
     type CommandOutput = ();
 
@@ -109,17 +110,21 @@ impl AsyncComponent for App {
     async fn init(
         (): Self::Init,
         root: Self::Root,
-        _sender: AsyncComponentSender<Self>,
+        sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
         let platform = Arc::<dyn Platform>::from(
             platform::default()
                 .await
                 .expect("failed to create platform"),
         );
-        let engine = init_engine().await.expect("failed to initialize engine");
+        let (engine, initial_themes, theme_watcher) = init_engine(sender.input_sender().clone())
+            .await
+            .expect("failed to initialize engine");
         setup_profile_action(engine.clone());
 
         let model = Self {
+            themes: initial_themes,
+            _theme_watcher: theme_watcher,
             manager: Manager::builder()
                 .launch((root.clone(), engine.clone()))
                 .detach(),
@@ -136,7 +141,13 @@ impl AsyncComponent for App {
     }
 }
 
-async fn init_engine() -> Result<Engine> {
+async fn init_engine(
+    sender: relm4::Sender<AppMsg>,
+) -> Result<(
+    Engine,
+    HashMap<ThemeName, CustomTheme>,
+    notify::RecommendedWatcher,
+)> {
     let dirs = ProjectDirs::from("io.github", "aecsocket", "Wordbase")
         .context("failed to get default app directories")?;
     let data_path = dirs.data_dir();
@@ -150,7 +161,11 @@ async fn init_engine() -> Result<Engine> {
         .await
         .context("failed to create engine")?;
 
-    Ok(engine)
+    let (initial_themes, theme_watcher) = theme::watch_themes(data_path, sender)
+        .await
+        .context("failed to start watching theme files")?;
+
+    Ok((engine, initial_themes, theme_watcher))
 }
 
 fn setup_profile_action(engine: Engine) {

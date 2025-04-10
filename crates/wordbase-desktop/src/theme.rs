@@ -64,11 +64,11 @@ impl ThemeName {
 }
 
 pub async fn watch_themes(
-    data_dir: &Path,
+    data_path: &Path,
     sender: relm4::Sender<AppMsg>,
 ) -> Result<(HashMap<ThemeName, CustomTheme>, notify::RecommendedWatcher)> {
-    let themes_dir = data_dir.join("themes");
-    fs::create_dir_all(&themes_dir)
+    let themes_path = data_path.join("themes");
+    fs::create_dir_all(&themes_path)
         .await
         .context("failed to create themes directory")?;
 
@@ -86,11 +86,11 @@ pub async fn watch_themes(
     })
     .context("failed to create file watcher")?;
     watcher
-        .watch(&themes_dir, notify::RecursiveMode::NonRecursive)
+        .watch(&themes_path, notify::RecursiveMode::NonRecursive)
         .context("failed to start watching themes directory")?;
 
     let mut initial_themes = HashMap::new();
-    let mut themes_dir = fs::read_dir(&themes_dir)
+    let mut themes_dir = fs::read_dir(&themes_path)
         .await
         .context("failed to fetch initial themes")?;
     while let Some(theme) = themes_dir

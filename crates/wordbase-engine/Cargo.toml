@@ -37,7 +37,7 @@ maud                 = { workspace = true }
 paste                = { workspace = true }
 rayon                = { workspace = true }
 regex                = { workspace = true }
-reqwest              = { workspace = true, default-features = true }
+reqwest              = { workspace = true, default-features = true, features = ["json"] }
 rmp-serde            = { workspace = true }
 serde                = { workspace = true, features = ["derive"] }
 serde_json           = { workspace = true }

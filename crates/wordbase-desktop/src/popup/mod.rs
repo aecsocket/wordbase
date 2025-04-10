@@ -124,7 +124,8 @@ impl AsyncComponent for Popup {
             let label = profile
                 .meta
                 .name
-                .as_deref()
+                .as_ref()
+                .map(|s| s.as_str())
                 .unwrap_or_else(|| gettext("Default Profile"));
             widgets.profiles_menu().append(
                 Some(label),
