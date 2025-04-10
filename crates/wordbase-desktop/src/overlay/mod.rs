@@ -4,6 +4,7 @@ use {
     crate::{APP_ID, SignalHandler, platform::Platform, popup, record_view},
     foldhash::{HashMap, HashMapExt},
     glib::clone,
+    gtk4::pango::ffi::PANGO_SCALE,
     relm4::{
         adw::{
             self, gio,
@@ -174,6 +175,38 @@ impl AsyncComponent for Overlay {
             }
         ));
 
+        settings
+            .bind(OVERLAY_FONT_SIZE, &root.font_size(), "value")
+            .build();
+
+        let default_opacity_idle = settings
+            .default_value(OVERLAY_OPACITY_IDLE)
+            .expect("should have default value")
+            .get::<f64>()
+            .expect("should be double");
+        root.opacity_idle_scale().add_mark(
+            default_opacity_idle,
+            gtk::PositionType::Bottom,
+            Some(&format!("{:.0}%", default_opacity_idle * 100.0)),
+        );
+        settings
+            .bind(OVERLAY_OPACITY_IDLE, &root.opacity_idle(), "value")
+            .build();
+
+        let default_opacity_hover = settings
+            .default_value(OVERLAY_OPACITY_HOVER)
+            .expect("should have default value")
+            .get::<f64>()
+            .expect("should be double");
+        root.opacity_hover_scale().add_mark(
+            default_opacity_hover,
+            gtk::PositionType::Bottom,
+            Some(&format!("{:.0}%", default_opacity_hover * 100.0)),
+        );
+        settings
+            .bind(OVERLAY_OPACITY_HOVER, &root.opacity_hover(), "value")
+            .build();
+
         let font_size_signal_handler = SignalHandler::new(&settings, |it| {
             it.connect_changed(
                 Some(OVERLAY_FONT_SIZE),
@@ -278,10 +311,13 @@ impl AsyncComponent for Overlay {
 impl Overlay {
     fn set_font_size(&self, root: &ui::Overlay) {
         let mut font_desc = pango::FontDescription::new();
-        font_desc.set_size(self.settings.int(OVERLAY_FONT_SIZE));
+        let font_size = self.settings.double(OVERLAY_FONT_SIZE);
+        let font_size_pango = (font_size * PANGO_SCALE as f64) as i32;
+        font_desc.set_size(font_size_pango);
         root.sentence()
             .layout()
             .set_font_description(Some(&font_desc));
+        root.sentence().queue_draw();
     }
 }
 
@@ -293,10 +329,10 @@ fn setup_root_opacity_animation(root: &gtk::Window, settings: &gio::Settings) {
         .target(&opacity_target)
         .build();
     settings
-        .bind("overlay-opacity-idle", &animation, "value-from")
+        .bind(OVERLAY_OPACITY_IDLE, &animation, "value-from")
         .build();
     settings
-        .bind("overlay-opacity-hover", &animation, "value-to")
+        .bind(OVERLAY_OPACITY_HOVER, &animation, "value-to")
         .build();
 
     let controller = gtk::EventControllerMotion::new();
@@ -360,3 +396,5 @@ fn setup_sentence_scan(root: &ui::Overlay, sender: &AsyncComponentSender<Overlay
 const POPUP_OFFSET: (i32, i32) = (0, 10);
 
 const OVERLAY_FONT_SIZE: &str = "overlay-font-size";
+const OVERLAY_OPACITY_IDLE: &str = "overlay-opacity-idle";
+const OVERLAY_OPACITY_HOVER: &str = "overlay-opacity-hover";

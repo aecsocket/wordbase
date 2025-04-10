@@ -14,9 +14,11 @@ template $WdbOverlay: Adw.Window {
       halign: end;
       valign: end;
 
-      Button settings {
+      MenuButton settings {
         icon-name: "settings-symbolic";
         tooltip-text: _("Settings");
+        popover: settings_menu;
+        direction: up;
       }
     }
 
@@ -33,4 +35,84 @@ template $WdbOverlay: Adw.Window {
       }
     }
   }
+}
+
+Popover settings_menu {
+  Box {
+    orientation: vertical;
+    spacing: 8;
+    width-request: 256;
+
+    Box {
+      orientation: horizontal;
+      spacing: 8;
+
+      Label font_size_label {
+        label: _("Font Size");
+        xalign: 0;
+      }
+
+      Scale font_size_scale {
+        hexpand: true;
+        adjustment: font_size;
+
+        marks [
+          mark (8, bottom, "8"),
+          mark (16, bottom, "16"),
+          mark (24, bottom, "24"),
+          mark (32, bottom, "32"),
+        ]
+      }
+    }
+
+    Box {
+      orientation: horizontal;
+      spacing: 8;
+
+      Label opacity_idle_label {
+        label: _("Idle Opacity");
+        xalign: 0;
+      }
+
+      Scale opacity_idle_scale {
+        hexpand: true;
+        adjustment: opacity_idle;
+      }
+    }
+
+    Box {
+      orientation: horizontal;
+      spacing: 8;
+
+      Label opacity_hover_label {
+        label: _("Hover Opacity");
+        xalign: 0;
+      }
+
+      Scale opacity_hover_scale {
+        hexpand: true;
+        adjustment: opacity_hover;
+      }
+    }
+  }
+}
+
+Adjustment font_size {
+  lower: 8;
+  upper: 32;
+}
+
+Adjustment opacity_idle {
+  lower: 0.2;
+  upper: 1.0;
+}
+
+Adjustment opacity_hover {
+  lower: 0.2;
+  upper: 1.0;
+}
+
+SizeGroup {
+  mode: horizontal;
+  widgets [ font_size_label, opacity_idle_label, opacity_hover_label ]
 }
