@@ -1,11 +1,7 @@
 mod ui;
 
 use {
-    crate::{
-        ACTION_PROFILE, APP_ID, gettext,
-        platform::Platform,
-        record::view::{RecordView, RecordViewMsg, RecordViewResponse},
-    },
+    crate::{ACTION_PROFILE, APP_ID, gettext, platform::Platform, record_view, theme::Theme},
     anyhow::Result,
     glib::clone,
     relm4::{
@@ -24,40 +20,39 @@ use {
 pub async fn connector(
     platform: &Arc<dyn Platform>,
     engine: Engine,
-) -> Result<AsyncConnector<Popup>> {
-    let connector = Popup::builder().launch((platform.clone(), engine));
+    custom_theme: Option<Arc<Theme>>,
+) -> Result<AsyncConnector<Model>> {
+    let connector = Model::builder().launch((platform.clone(), engine, custom_theme));
     let window = connector.widget();
-    relm4::main_application().add_window(window);
     platform.init_popup(window.upcast_ref()).await?;
     Ok(connector)
 }
 
 #[derive(Debug)]
-pub struct Popup {
+pub struct Model {
     platform: Arc<dyn Platform>,
-    record_view: AsyncController<RecordView>,
+    record_view: Controller<record_view::Model>,
     engine: Engine,
-    next_move_op: Option<(WindowFilter, (i32, i32))>,
 }
 
 #[derive(Debug)]
-pub enum PopupMsg {
+pub enum Msg {
+    CustomTheme(Option<Arc<Theme>>),
     Request(PopupRequest),
     #[doc(hidden)]
-    View(RecordViewResponse),
+    FromRender(record_view::Response),
 }
 
 #[derive(Debug)]
-pub enum PopupResponse {
+pub enum Response {
     Hidden,
     OpenSettings,
-    View(RecordViewResponse),
 }
 
-impl AsyncComponent for Popup {
-    type Init = (Arc<dyn Platform>, Engine);
-    type Input = PopupMsg;
-    type Output = PopupResponse;
+impl AsyncComponent for Model {
+    type Init = (Arc<dyn Platform>, Engine, Option<Arc<Theme>>);
+    type Input = Msg;
+    type Output = Response;
     type CommandOutput = ();
     type Root = ui::Popup;
     type Widgets = ui::Popup;
@@ -66,23 +61,13 @@ impl AsyncComponent for Popup {
         ui::Popup::new()
     }
 
-    fn init_loading_widgets(root: Self::Root) -> Option<LoadingWidgets> {
-        let root = root.upcast::<gtk::Window>();
-        view! {
-            #[local]
-            root {
-                #[name(spinner)]
-                adw::Spinner {}
-            }
-        }
-        Some(LoadingWidgets::new(root, spinner))
-    }
-
     async fn init(
-        (platform, engine): Self::Init,
+        (platform, engine, custom_theme): Self::Init,
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
+        relm4::main_application().add_window(&root);
+
         let settings = gio::Settings::new(APP_ID);
         settings.bind("popup-width", &root, "default-width").build();
         settings
@@ -91,23 +76,22 @@ impl AsyncComponent for Popup {
 
         let model = Self {
             platform,
-            record_view: RecordView::builder()
-                .launch(engine.clone())
-                .forward(sender.input_sender(), |resp| PopupMsg::View(resp)),
+            record_view: record_view::Model::builder()
+                .launch(record_view::Config { custom_theme })
+                .forward(sender.input_sender(), Msg::FromRender),
             engine,
-            next_move_op: None,
         };
         root.connect_visible_notify({
             let sender = sender.clone();
             move |root| {
                 if !root.is_visible() {
-                    sender.output(PopupResponse::Hidden);
+                    sender.output(Response::Hidden);
                 }
             }
         });
         root.content().set_child(Some(model.record_view.widget()));
         root.manager_profiles().connect_clicked(move |_| {
-            _ = sender.output(PopupResponse::OpenSettings);
+            _ = sender.output(Response::OpenSettings);
         });
         root.present();
         hide_on_lost_focus(root.upcast_ref());
@@ -141,33 +125,38 @@ impl AsyncComponent for Popup {
         root: &Self::Root,
     ) {
         match message {
-            PopupMsg::Request(request) => {
-                // TODO compute real origin
-                let origin = request.origin;
-                self.next_move_op = Some((request.target_window, origin));
-
-                _ = self
-                    .record_view
-                    .sender()
-                    .send(RecordViewMsg::Lookup(request.lookup));
-            }
-            PopupMsg::View(resp) => {
-                if let Some((target_window, origin)) = self.next_move_op.take() {
-                    if !resp.records.is_empty() {
-                        root.present();
-                        if let Err(err) = self
-                            .platform
-                            .move_popup_to_window(root.upcast_ref(), target_window, origin)
-                            .await
-                        {
-                            warn!("Failed to move popup to target window: {err:?}");
-                        }
-                    }
-                }
-
-                sender.output(PopupResponse::View(resp));
-            }
+            Msg::CustomTheme(theme) => self
+                .record_view
+                .sender()
+                .emit(record_view::Msg::CustomTheme(theme)),
+            _ => {}
         }
+
+        // match message {
+        // Msg::Request(request) => {
+        //     // TODO compute real origin
+        //     let origin = request.origin;
+        //     self.next_move_op = Some((request.target_window, origin));
+
+        //     _ = self.record_view.sender().send(Msg::Lookup(request.lookup));
+        // }
+        // Msg::FromRender(record_view::Response::Query(query)) => {
+        //     if let Some((target_window, origin)) = self.next_move_op.take() {
+        //         if !resp.records.is_empty() {
+        //             root.present();
+        //             if let Err(err) = self
+        //                 .platform
+        //                 .move_popup_to_window(root.upcast_ref(), target_window, origin)
+        //                 .await
+        //             {
+        //                 warn!("Failed to move popup to target window: {err:?}");
+        //             }
+        //         }
+        //     }
+
+        //     sender.output(Response::View(resp));
+        // }
+        // }
     }
 }
 

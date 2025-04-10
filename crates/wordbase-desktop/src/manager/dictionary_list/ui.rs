@@ -4,8 +4,8 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, gtk::CompositeTemplate)]
-    #[template(file = "src/manager/themes/ui.blp")]
-    pub struct Themes {
+    #[template(file = "src/manager/dictionary_list/ui.blp")]
+    pub struct Dictionaries {
         #[template_child]
         pub list: TemplateChild<gtk::ListBox>,
         #[template_child]
@@ -15,9 +15,9 @@ mod imp {
     }
 
     #[glib::object_subclass]
-    impl ObjectSubclass for Themes {
-        const NAME: &str = "WdbThemes";
-        type Type = super::Themes;
+    impl ObjectSubclass for Dictionaries {
+        const NAME: &str = "WdbDictionaries";
+        type Type = super::Dictionaries;
         type ParentType = adw::Bin;
 
         fn class_init(klass: &mut Self::Class) {
@@ -29,16 +29,16 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for Themes {}
-    impl WidgetImpl for Themes {}
-    impl BinImpl for Themes {}
+    impl ObjectImpl for Dictionaries {}
+    impl WidgetImpl for Dictionaries {}
+    impl BinImpl for Dictionaries {}
 }
 
 glib::wrapper! {
-    pub struct Themes(ObjectSubclass<imp::Themes>) @extends gtk::Widget, adw::Bin;
+    pub struct Dictionaries(ObjectSubclass<imp::Dictionaries>) @extends gtk::Widget, adw::Bin;
 }
 
-impl Themes {
+impl Dictionaries {
     #[must_use]
     pub fn new() -> Self {
         glib::Object::new()

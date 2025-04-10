@@ -3,8 +3,6 @@ mod ui;
 use gtk4::prelude::{CheckButtonExt, ListBoxRowExt};
 use relm4::prelude::*;
 
-use crate::theme::CustomTheme;
-
 use super::theme_row;
 
 #[derive(Debug)]

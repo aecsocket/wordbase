@@ -7,11 +7,10 @@
 )]
 
 mod manager;
-mod state;
 // mod overlay;
 mod platform;
 mod popup;
-mod record;
+mod record_view;
 mod theme;
 
 mod icon_names {
@@ -22,9 +21,7 @@ use {
     anyhow::{Context, Result},
     directories::ProjectDirs,
     foldhash::HashMap,
-    manager::Manager,
     platform::Platform,
-    popup::Popup,
     relm4::{
         adw::{self, gio, prelude::*},
         loading_widgets::LoadingWidgets,
@@ -66,8 +63,9 @@ fn main() {
 struct App {
     themes: HashMap<ThemeName, CustomTheme>,
     _theme_watcher: notify::RecommendedWatcher,
-    manager: AsyncController<Manager>,
-    main_popup: Option<AsyncController<Popup>>,
+    manager: AsyncController<manager::Model>,
+    main_popup: AsyncController<popup::Model>,
+    // overlays: AsyncController<overlay::Model>,
 }
 
 #[derive(Debug)]
@@ -120,21 +118,20 @@ impl AsyncComponent for App {
         let (engine, initial_themes, theme_watcher) = init_engine(sender.input_sender().clone())
             .await
             .expect("failed to initialize engine");
+        let custom_theme = None; // TODO
         setup_profile_action(engine.clone());
 
         let model = Self {
             themes: initial_themes,
             _theme_watcher: theme_watcher,
-            manager: Manager::builder()
-                .launch((root.clone(), engine.clone()))
+            manager: manager::Model::builder()
+                .launch((root.clone(), engine.clone(), custom_theme.clone()))
                 .detach(),
-            main_popup: match popup::connector(&platform, engine).await {
-                Ok(popup) => Some(popup.detach()),
-                Err(err) => {
-                    error!("Failed to create popup: {err:?}");
-                    None
-                }
-            },
+            main_popup: popup::connector(&platform, engine.clone(), custom_theme)
+                .await
+                .expect("failed to create popup")
+                .detach(),
+            // overlays: overlay::Model::builder().launch(engine).detach(),
         };
         let widgets = view_output!();
         AsyncComponentParts { model, widgets }

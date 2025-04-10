@@ -26,11 +26,68 @@ use {
             atomic::{self, AtomicI32},
         },
     },
-    tokio::sync::mpsc,
+    tokio::sync::{broadcast, mpsc},
     tracing::{info, trace, warn},
     wordbase::{Lookup, PopupAnchor, PopupRequest, TexthookerSentence, WindowFilter},
-    wordbase_engine::Engine,
+    wordbase_engine::{Engine, Event},
 };
+
+#[derive(Debug)]
+pub struct Model {
+    by_process_path: HashMap<String, AsyncController<Overlay>>,
+}
+
+#[derive(Debug)]
+#[doc(hidden)]
+pub enum Command {
+    Sentence(TexthookerSentence),
+}
+
+impl AsyncComponent for Model {
+    type Init = Engine;
+    type Input = ();
+    type Output = ();
+    type CommandOutput = Command;
+    type Root = ();
+    type Widgets = ();
+
+    fn init_root() -> Self::Root {}
+
+    async fn init(
+        engine: Self::Init,
+        root: Self::Root,
+        sender: AsyncComponentSender<Self>,
+    ) -> AsyncComponentParts<Self> {
+        let model = Self {
+            by_process_path: HashMap::new(),
+        };
+
+        let recv_event = engine.recv_event();
+        sender.command(move |out, shutdown| {
+            shutdown
+                .register(backend(out, recv_event))
+                .drop_on_shutdown()
+        });
+
+        AsyncComponentParts { model, widgets: () }
+    }
+
+    fn update_cmd(
+        &mut self,
+        message: Self::CommandOutput,
+        sender: AsyncComponentSender<Self>,
+        root: &Self::Root,
+    ) -> impl std::future::Future<Output = ()> {
+        match message {
+            Command::Sentence(event) => {
+                trace!(
+                    "New sentence for {:?}: {:?}",
+                    event.process_path, event.sentence
+                );
+            }
+        }
+    }
+}
 
 pub async fn run(
     app: adw::Application,
@@ -46,10 +103,6 @@ pub async fn run(
         tokio::select! {
             event = recv_sentence.recv() => {
                 let event = event.context("sentence channel closed")?;
-                trace!(
-                    "New sentence for {:?}: {:?}",
-                    event.process_path, event.sentence
-                );
 
                 if let Err(err) = handle(
                     &app,
@@ -68,6 +121,17 @@ pub async fn run(
                 info!("Overlay window {process_path:?} closed, removing");
                 overlays.remove(&process_path);
             }
+        }
+    }
+}
+
+async fn backend(out: relm4::Sender<Command>, mut recv_event: broadcast::Receiver<Event>) -> ! {
+    loop {
+        tokio::select! {
+            Ok(Event::TexthookerSentence(event)) = recv_event.recv() => {
+                out.emit(Command::Sentence(event));
+            }
+            // todo listen for removals
         }
     }
 }
@@ -134,13 +198,6 @@ struct Overlay {
 }
 
 #[derive(Debug)]
-struct OverlayConfig {
-    engine: Engine,
-    to_app: relm4::Sender<AppMsg>,
-    process_path: String,
-}
-
-#[derive(Debug)]
 enum OverlayMsg {
     Sentence { sentence: String },
     ScanSentence { byte_index_i32: i32 },
@@ -148,7 +205,7 @@ enum OverlayMsg {
 
 #[relm4::component(pub, async)]
 impl AsyncComponent for Overlay {
-    type Init = OverlayConfig;
+    type Init = Engine;
     type Input = OverlayMsg;
     type Output = ();
     type CommandOutput = ();

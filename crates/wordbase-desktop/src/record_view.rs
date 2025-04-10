@@ -13,33 +13,38 @@ use {
 };
 
 #[derive(Debug)]
-pub struct RecordRender {
+pub struct Model {
     pub custom_theme: Option<Arc<Theme>>,
     pub dictionaries: Arc<Dictionaries>,
-    pub records: Arc<Vec<RecordLookup>>,
+    pub records: Vec<RecordLookup>,
 }
 
 pub const SUPPORTED_RECORD_KINDS: &[RecordKind] = RecordKind::ALL;
 
 #[derive(Debug)]
-pub enum RecordRenderMsg {
+pub enum Msg {
     CustomTheme(Option<Arc<Theme>>),
     Render {
         dictionaries: Arc<Dictionaries>,
-        records: Arc<Vec<RecordLookup>>,
+        records: Vec<RecordLookup>,
     },
 }
 
 #[derive(Debug)]
-pub enum RecordRenderResponse {
-    RequestLookup { query: String },
+pub struct Config {
+    pub custom_theme: Option<Arc<Theme>>,
+}
+
+#[derive(Debug)]
+pub enum Response {
+    Query(String),
 }
 
 #[relm4::component(pub)]
-impl Component for RecordRender {
-    type Init = Self;
-    type Input = RecordRenderMsg;
-    type Output = RecordRenderResponse;
+impl Component for Model {
+    type Init = Config;
+    type Input = Msg;
+    type Output = Response;
     type CommandOutput = ();
 
     view! {
@@ -62,20 +67,25 @@ impl Component for RecordRender {
     }
 
     fn init(
-        model: Self::Init,
+        config: Self::Init,
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
+        let model = Self {
+            custom_theme: config.custom_theme,
+            dictionaries: Arc::default(),
+            records: Vec::new(),
+        };
         let widgets = view_output!();
         ComponentParts { model, widgets }
     }
 
     fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>, _root: &Self::Root) {
         match message {
-            RecordRenderMsg::CustomTheme(theme) => {
+            Msg::CustomTheme(theme) => {
                 self.custom_theme = theme;
             }
-            RecordRenderMsg::Render {
+            Msg::Render {
                 dictionaries,
                 records,
             } => {
@@ -113,7 +123,7 @@ impl Component for RecordRender {
     }
 }
 
-fn on_decide_policy(decision: &webkit6::PolicyDecision, sender: &ComponentSender<RecordRender>) {
+fn on_decide_policy(decision: &webkit6::PolicyDecision, sender: &ComponentSender<Model>) {
     let Some(decision) = decision.downcast_ref::<webkit6::NavigationPolicyDecision>() else {
         return;
     };
@@ -139,7 +149,7 @@ fn on_decide_policy(decision: &webkit6::PolicyDecision, sender: &ComponentSender
         {
             let query = query.into_owned();
             info!("Opening {query:?} as query");
-            _ = sender.output(RecordRenderResponse::RequestLookup { query });
+            _ = sender.output(Response::Query(query));
         }
         return;
     }
