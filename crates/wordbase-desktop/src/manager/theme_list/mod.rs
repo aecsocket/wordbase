@@ -26,7 +26,7 @@ impl Component for Model {
     fn init(
         window: Self::Init,
         root: Self::Root,
-        sender: ComponentSender<Self>,
+        _sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
         let default_theme = theme_row::Model::builder()
             .launch((window.clone(), None))

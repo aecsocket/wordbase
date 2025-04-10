@@ -1,291 +1,223 @@
 mod ui;
 
 use {
-    crate::{
-        APP_ID, CHANNEL_BUF_CAP,
-        platform::{OverlayGuard, Platform},
-    },
-    anyhow::{Context, Result},
+    crate::{APP_ID, SignalHandler, platform::Platform, popup, record_view},
     foldhash::{HashMap, HashMapExt},
-    futures::never::Never,
+    glib::clone,
     relm4::{
         adw::{
-            self,
+            self, gio,
             gtk::{graphene, pango},
             prelude::*,
         },
-        css::classes,
-        loading_widgets::LoadingWidgets,
         prelude::*,
-        view,
     },
     std::{
+        any::Any,
         collections::hash_map::Entry,
         sync::{
             Arc,
             atomic::{self, AtomicI32},
         },
     },
-    tokio::sync::{broadcast, mpsc},
-    tracing::{info, trace, warn},
-    wordbase::{Lookup, PopupAnchor, PopupRequest, TexthookerSentence, WindowFilter},
+    tracing::trace,
+    wordbase::{PopupAnchor, TexthookerSentence, WindowFilter},
     wordbase_engine::{Engine, Event},
 };
 
 #[derive(Debug)]
-pub struct Model {
+pub struct Overlays {
+    engine: Engine,
+    platform: Arc<dyn Platform>,
+    to_popup: relm4::Sender<popup::Msg>,
     by_process_path: HashMap<String, AsyncController<Overlay>>,
 }
 
 #[derive(Debug)]
-#[doc(hidden)]
-pub enum Command {
-    Sentence(TexthookerSentence),
+pub enum OverlaysMsg {
+    #[doc(hidden)]
+    Remove(String),
 }
 
-impl AsyncComponent for Model {
-    type Init = Engine;
-    type Input = ();
+impl AsyncComponent for Overlays {
+    type Init = (Engine, Arc<dyn Platform>, relm4::Sender<popup::Msg>);
+    type Input = OverlaysMsg;
     type Output = ();
-    type CommandOutput = Command;
+    type CommandOutput = TexthookerSentence;
     type Root = ();
     type Widgets = ();
 
     fn init_root() -> Self::Root {}
 
     async fn init(
-        engine: Self::Init,
-        root: Self::Root,
+        (engine, platform, to_popup): Self::Init,
+        _root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
-        let model = Self {
-            by_process_path: HashMap::new(),
-        };
-
-        let recv_event = engine.recv_event();
+        let mut recv_event = engine.recv_event();
         sender.command(move |out, shutdown| {
             shutdown
-                .register(backend(out, recv_event))
+                .register(async move {
+                    while let Ok(event) = recv_event.recv().await {
+                        if let Event::TexthookerSentence(event) = event {
+                            out.emit(event);
+                        }
+                    }
+                })
                 .drop_on_shutdown()
         });
 
-        AsyncComponentParts { model, widgets: () }
-    }
-
-    fn update_cmd(
-        &mut self,
-        message: Self::CommandOutput,
-        sender: AsyncComponentSender<Self>,
-        root: &Self::Root,
-    ) -> impl std::future::Future<Output = ()> {
-        match message {
-            Command::Sentence(event) => {
-                trace!(
-                    "New sentence for {:?}: {:?}",
-                    event.process_path, event.sentence
-                );
-            }
-        }
-    }
-}
-
-pub async fn run(
-    app: adw::Application,
-    platform: Arc<dyn Platform>,
-    engine: Engine,
-    mut recv_sentence: mpsc::Receiver<TexthookerSentence>,
-    to_app: relm4::Sender<AppMsg>,
-) -> Result<Never> {
-    let mut overlays = HashMap::<String, OverlayState>::new();
-    let (send_closed, mut recv_closed) = mpsc::unbounded_channel::<String>();
-
-    loop {
-        tokio::select! {
-            event = recv_sentence.recv() => {
-                let event = event.context("sentence channel closed")?;
-
-                if let Err(err) = handle(
-                    &app,
-                    &*platform,
-                    &engine,
-                    &to_app,
-                    &mut overlays,
-                    &send_closed,
-                    event,
-                )
-                .await {
-                    warn!("Failed to handle new sentence event: {err:?}");
-                }
-            }
-            Some(process_path) = recv_closed.recv() => {
-                info!("Overlay window {process_path:?} closed, removing");
-                overlays.remove(&process_path);
-            }
-        }
-    }
-}
-
-async fn backend(out: relm4::Sender<Command>, mut recv_event: broadcast::Receiver<Event>) -> ! {
-    loop {
-        tokio::select! {
-            Ok(Event::TexthookerSentence(event)) = recv_event.recv() => {
-                out.emit(Command::Sentence(event));
-            }
-            // todo listen for removals
-        }
-    }
-}
-
-const POPUP_OFFSET: (i32, i32) = (0, 10);
-
-struct OverlayState {
-    _guard: OverlayGuard,
-    controller: AsyncController<Overlay>,
-}
-
-async fn handle(
-    app: &adw::Application,
-    platform: &dyn Platform,
-    engine: &Engine,
-    to_app: &relm4::Sender<AppMsg>,
-    overlays: &mut HashMap<String, OverlayState>,
-    send_closed: &mpsc::UnboundedSender<String>,
-    TexthookerSentence {
-        process_path,
-        sentence,
-    }: TexthookerSentence,
-) -> Result<()> {
-    let OverlayState { controller, .. } = match overlays.entry(process_path.clone()) {
-        Entry::Occupied(entry) => entry.into_mut(),
-        Entry::Vacant(entry) => {
-            let overlay = Overlay::builder().launch(OverlayConfig {
-                engine: engine.clone(),
-                to_app: to_app.clone(),
-                process_path: process_path.clone(),
-            });
-            let window = overlay.widget();
-            app.add_window(window);
-            let guard = platform
-                .init_overlay(window)
-                .await
-                .context("failed to create overlay window")?;
-
-            window.connect_close_request({
-                let send_closed = send_closed.clone();
-                let process_path = process_path.clone();
-                move |_| {
-                    _ = send_closed.send(process_path.clone());
-                    glib::Propagation::Proceed
-                }
-            });
-
-            info!("Created overlay for new process {process_path:?}");
-            entry.insert(OverlayState {
-                controller: overlay.detach(),
-                _guard: guard,
-            })
-        }
-    };
-    _ = controller.sender().send(OverlayMsg::Sentence { sentence });
-    Ok(())
-}
-
-#[derive(Debug)]
-struct Overlay {
-    engine: Engine,
-    to_app: relm4::Sender<AppMsg>,
-    sentence: gtk::Label,
-}
-
-#[derive(Debug)]
-enum OverlayMsg {
-    Sentence { sentence: String },
-    ScanSentence { byte_index_i32: i32 },
-}
-
-#[relm4::component(pub, async)]
-impl AsyncComponent for Overlay {
-    type Init = Engine;
-    type Input = OverlayMsg;
-    type Output = ();
-    type CommandOutput = ();
-
-    fn init_loading_widgets(root: Self::Root) -> Option<LoadingWidgets> {
-        view! {
-            #[local]
-            root {
-                set_title: Some("Wordbase Overlay"),
-                set_width_request: 180,
-                set_height_request: 100,
-
-                #[name(spinner)]
-                adw::Spinner {},
-            }
-        }
-        Some(LoadingWidgets::new(root, spinner))
-    }
-
-    view! {
-        adw::Window {
-            set_title: Some(&format!("{} — Wordbase", init.process_path)),
-
-            gtk::ScrolledWindow {
-                set_hexpand: true,
-                set_vexpand: true,
-
-                #[name(sentence)]
-                gtk::Label {
-                    set_margin_start: 16,
-                    set_margin_end: 16,
-                    set_margin_top: 16,
-                    set_margin_bottom: 16,
-                    set_halign: gtk::Align::Start,
-                    set_valign: gtk::Align::Start,
-                    set_hexpand: true,
-                    set_vexpand: true,
-                    set_xalign: 0.0,
-                    set_yalign: 0.0,
-                    set_wrap: true,
-                    set_selectable: true,
-                    add_css_class: classes::BODY,
-                },
-            },
-        }
-    }
-
-    async fn init(
-        init: Self::Init,
-        root: Self::Root,
-        sender: AsyncComponentSender<Self>,
-    ) -> AsyncComponentParts<Self> {
-        let widgets = view_output!();
         let model = Self {
-            engine: init.engine,
-            to_app: init.to_app,
-            sentence: widgets.sentence.clone(),
+            engine,
+            platform,
+            to_popup,
+            by_process_path: HashMap::new(),
         };
-
-        // let desc = pango::FontDescription::new();
-        // desc.set_size(size);
-        // widgets.sentence.pango_context().set_font_description(desc);
-
-        setup_root_opacity_animation(&root);
-        setup_sentence_scan(&widgets.sentence, &sender);
-        AsyncComponentParts { model, widgets }
+        AsyncComponentParts { model, widgets: () }
     }
 
     async fn update(
         &mut self,
         message: Self::Input,
         _sender: AsyncComponentSender<Self>,
+        _root: &Self::Root,
+    ) {
+        match message {
+            OverlaysMsg::Remove(process_path) => {
+                self.by_process_path.remove(&process_path);
+            }
+        }
+    }
+
+    async fn update_cmd(
+        &mut self,
+        event: Self::CommandOutput,
+        sender: AsyncComponentSender<Self>,
+        _root: &Self::Root,
+    ) {
+        trace!(
+            "New sentence for {:?}: {:?}",
+            event.process_path, event.sentence
+        );
+
+        let overlay = match self.by_process_path.entry(event.process_path) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                let process_path = entry.key().clone();
+                let overlay = Overlay::builder()
+                    .launch((
+                        self.engine.clone(),
+                        self.platform.clone(),
+                        self.to_popup.clone(),
+                        process_path.clone(),
+                    ))
+                    .forward(sender.input_sender(), move |resp| match resp {
+                        OverlayResponse::Closed => OverlaysMsg::Remove(process_path.clone()),
+                    });
+                entry.insert(overlay)
+            }
+        };
+        overlay.emit(OverlayMsg::Sentence(event.sentence));
+    }
+}
+
+#[derive(Debug)]
+struct Overlay {
+    engine: Engine,
+    to_popup: relm4::Sender<popup::Msg>,
+    settings: gio::Settings,
+    _window_guard: Box<dyn Any>,
+    _font_size_signal_handler: SignalHandler,
+}
+
+#[derive(Debug)]
+enum OverlayMsg {
+    Sentence(String),
+    ScanSentence { byte_index_i32: i32 },
+    FontSize,
+}
+
+#[derive(Debug)]
+enum OverlayResponse {
+    Closed,
+}
+
+impl AsyncComponent for Overlay {
+    type Init = (Engine, Arc<dyn Platform>, relm4::Sender<popup::Msg>, String);
+    type Input = OverlayMsg;
+    type Output = OverlayResponse;
+    type CommandOutput = ();
+    type Root = ui::Overlay;
+    type Widgets = ();
+
+    fn init_root() -> Self::Root {
+        ui::Overlay::new()
+    }
+
+    async fn init(
+        (engine, platform, to_popup, process_path): Self::Init,
+        root: Self::Root,
+        sender: AsyncComponentSender<Self>,
+    ) -> AsyncComponentParts<Self> {
+        root.set_title(Some(&format!("{process_path} — Wordbase")));
+        relm4::main_application().add_window(&root);
+
+        let window_guard = platform.init_overlay(root.upcast_ref()).await.unwrap();
+        let settings = gio::Settings::new(APP_ID);
+
+        root.connect_close_request(clone!(
+            #[strong]
+            sender,
+            move |_| {
+                _ = sender.output(OverlayResponse::Closed);
+                glib::Propagation::Proceed
+            }
+        ));
+
+        let font_size_signal_handler = SignalHandler::new(&settings, |it| {
+            it.connect_changed(
+                Some(OVERLAY_FONT_SIZE),
+                clone!(
+                    #[strong]
+                    sender,
+                    move |_, _| {
+                        sender.input(OverlayMsg::FontSize);
+                    }
+                ),
+            )
+        });
+        setup_root_opacity_animation(root.upcast_ref(), &settings);
+
+        let model = Self {
+            engine,
+            to_popup,
+            settings,
+            _window_guard: window_guard,
+            _font_size_signal_handler: font_size_signal_handler,
+        };
+        model.set_font_size(&root);
+
+        setup_sentence_scan(&root, &sender);
+        AsyncComponentParts { model, widgets: () }
+    }
+
+    async fn update_with_view(
+        &mut self,
+        _widgets: &mut Self::Widgets,
+        message: Self::Input,
+        _sender: AsyncComponentSender<Self>,
         root: &Self::Root,
     ) {
         match message {
-            OverlayMsg::Sentence { sentence } => {
-                self.sentence.set_text(&sentence);
+            OverlayMsg::Sentence(sentence) => {
+                root.sentence().set_text(&sentence);
+            }
+            OverlayMsg::FontSize => {
+                self.set_font_size(root);
             }
             OverlayMsg::ScanSentence { byte_index_i32 } => {
-                let text = &self.sentence.text();
+                let sentence = root.sentence();
+                let text = &sentence.text();
                 let Ok(byte_index) = usize::try_from(byte_index_i32) else {
                     return;
                 };
@@ -297,16 +229,15 @@ impl AsyncComponent for Overlay {
                     return;
                 };
 
-                let char_rect = self.sentence.layout().index_to_pos(byte_index_i32);
+                let char_rect = sentence.layout().index_to_pos(byte_index_i32);
                 let (char_rel_x, char_rel_y) = (
                     // anchor to bottom-right of character
                     (char_rect.x() + char_rect.width()) as f32 / pango::SCALE as f32,
                     (char_rect.y() + char_rect.height()) as f32 / pango::SCALE as f32,
                 );
-                let abs_point = self
-                    .sentence
+                let abs_point = sentence
                     .compute_point(root, &graphene::Point::new(char_rel_x, char_rel_y))
-                    .expect("`sentence` and `root` should share a common ancestor");
+                    .expect("`root` is an ancestor of `sentence`");
 
                 // TODO variable offset
                 #[expect(clippy::cast_possible_truncation, reason = "no other way to convert")]
@@ -315,49 +246,57 @@ impl AsyncComponent for Overlay {
                     abs_point.y() as i32 + POPUP_OFFSET.1,
                 );
 
-                let (send_result, recv_result) = mpsc::channel(CHANNEL_BUF_CAP);
-                _ = self.to_app.send(AppMsg::Popup {
-                    request: PopupRequest {
-                        target_window: WindowFilter {
-                            id: None,
-                            title: root.title().map(|s| s.to_string()),
-                            wm_class: Some(APP_ID.to_owned()),
-                        },
-                        origin,
-                        anchor: PopupAnchor::TopLeft,
-                        lookup: Lookup {
-                            context: text.to_string(),
-                            cursor: byte_index,
-                        },
-                    },
-                    send_result,
-                });
+                let Ok(records) = self
+                    .engine
+                    .lookup(text, byte_index, record_view::SUPPORTED_RECORD_KINDS)
+                    .await
+                else {
+                    return;
+                };
 
-                // let bytes_scanned = records
-                //     .iter()
-                //     .map(|record| record.bytes_scanned)
-                //     .max()
-                //     .unwrap_or_default();
-                // let chars_scanned_i32 = after
-                //     .get(..bytes_scanned)
-                //     .map(|s| s.chars().count())
-                //     .and_then(|n| i32::try_from(n).ok())
-                //     .unwrap_or_default();
-                // self.sentence
-                //     .select_region(char_index_i32, char_index_i32 + chars_scanned_i32);
+                let longest_scan_chars = record_view::longest_scan_chars(text, &records);
+                sentence.select_region(
+                    char_index_i32,
+                    char_index_i32 + i32::try_from(longest_scan_chars).unwrap_or(i32::MAX),
+                );
+
+                self.to_popup.emit(popup::Msg::Present {
+                    target_window: WindowFilter {
+                        id: None,
+                        title: root.title().map(|s| s.to_string()),
+                        wm_class: Some(APP_ID.to_owned()),
+                    },
+                    origin,
+                    anchor: PopupAnchor::TopLeft,
+                });
+                self.to_popup.emit(popup::Msg::Render { records });
             }
         }
     }
 }
 
-fn setup_root_opacity_animation(root: &adw::Window) {
+impl Overlay {
+    fn set_font_size(&self, root: &ui::Overlay) {
+        let mut font_desc = pango::FontDescription::new();
+        font_desc.set_size(self.settings.int(OVERLAY_FONT_SIZE));
+        root.sentence()
+            .layout()
+            .set_font_description(Some(&font_desc));
+    }
+}
+
+fn setup_root_opacity_animation(root: &gtk::Window, settings: &gio::Settings) {
     let opacity_target = adw::PropertyAnimationTarget::new(root, "opacity");
     let animation = adw::TimedAnimation::builder()
         .widget(root)
         .duration(100)
         .target(&opacity_target)
-        .value_from(0.5)
-        .value_to(0.95)
+        .build();
+    settings
+        .bind("overlay-opacity-idle", &animation, "value-from")
+        .build();
+    settings
+        .bind("overlay-opacity-hover", &animation, "value-to")
         .build();
 
     let controller = gtk::EventControllerMotion::new();
@@ -381,33 +320,43 @@ fn setup_root_opacity_animation(root: &adw::Window) {
     animation.play();
 }
 
-fn setup_sentence_scan(label: &gtk::Label, sender: &AsyncComponentSender<Overlay>) {
+fn setup_sentence_scan(root: &ui::Overlay, sender: &AsyncComponentSender<Overlay>) {
     let controller = gtk::EventControllerMotion::new();
-    label.add_controller(controller.clone());
+    root.sentence().add_controller(controller.clone());
 
-    let label = label.clone();
-    let sender = sender.clone();
     let last_scan_byte_index = Arc::new(AtomicI32::new(-1));
-    controller.connect_leave({
-        let last_scan_char_idx = last_scan_byte_index.clone();
+    controller.connect_leave(clone!(
+        #[strong]
+        last_scan_byte_index,
         move |_| {
-            last_scan_char_idx.store(-1, atomic::Ordering::Relaxed);
+            last_scan_byte_index.store(-1, atomic::Ordering::Relaxed);
         }
-    });
-    controller.connect_motion(move |_, rel_x, rel_y| {
-        #[expect(clippy::cast_possible_truncation, reason = "no other way to convert")]
-        let (ch_x, ch_y) = (rel_x as i32 * pango::SCALE, rel_y as i32 * pango::SCALE);
+    ));
+    controller.connect_motion(clone!(
+        #[strong]
+        root,
+        #[strong]
+        sender,
+        move |_, rel_x, rel_y| {
+            #[expect(clippy::cast_possible_truncation, reason = "no other way to convert")]
+            let (ch_x, ch_y) = (rel_x as i32 * pango::SCALE, rel_y as i32 * pango::SCALE);
 
-        let (valid, byte_index_i32, _grapheme_pos) = label.layout().xy_to_index(ch_x, ch_y);
-        if !valid {
-            return;
+            let sentence = root.sentence();
+            let (valid, byte_index_i32, _grapheme_pos) = sentence.layout().xy_to_index(ch_x, ch_y);
+            if !valid {
+                return;
+            }
+            if byte_index_i32 == last_scan_byte_index.swap(byte_index_i32, atomic::Ordering::SeqCst)
+            {
+                // we're scanning the same character as in the last motion event
+                return;
+            }
+
+            sender.input(OverlayMsg::ScanSentence { byte_index_i32 });
         }
-        if byte_index_i32 == last_scan_byte_index.swap(byte_index_i32, atomic::Ordering::SeqCst) {
-            // we're scanning the same character as in the last motion event
-            return;
-        }
-        _ = sender
-            .input_sender()
-            .send(OverlayMsg::ScanSentence { byte_index_i32 });
-    });
+    ));
 }
+
+const POPUP_OFFSET: (i32, i32) = (0, 10);
+
+const OVERLAY_FONT_SIZE: &str = "overlay-font-size";

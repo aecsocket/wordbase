@@ -7,9 +7,9 @@ mod imp {
     #[template(file = "src/overlay/ui.blp")]
     pub struct Overlay {
         #[template_child]
-        pub content: TemplateChild<gtk::Overlay>,
-        #[template_child]
         pub settings: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub sentence: TemplateChild<gtk::Label>,
     }
 
     #[glib::object_subclass]
@@ -44,12 +44,12 @@ impl Overlay {
     }
 
     #[must_use]
-    pub fn content(&self) -> gtk::Overlay {
-        self.imp().content.get()
+    pub fn settings(&self) -> gtk::Button {
+        self.imp().settings.get()
     }
 
     #[must_use]
-    pub fn settings(&self) -> gtk::Button {
-        self.imp().settings.get()
+    pub fn sentence(&self) -> gtk::Label {
+        self.imp().sentence.get()
     }
 }

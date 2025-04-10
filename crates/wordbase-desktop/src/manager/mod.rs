@@ -88,10 +88,17 @@ impl AsyncComponent for Model {
             sender,
             move |entry| sender.input(Msg::Query(entry.text().into())),
         ));
+        root.search_entry().connect_activate(clone!(
+            #[strong]
+            sender,
+            move |entry| sender.input(Msg::Query(entry.text().into()))
+        ));
 
         let record_view = record_view::Model::builder()
             .launch(record_view::Config { custom_theme })
-            .detach();
+            .forward(sender.input_sender(), |resp| match resp {
+                record_view::Response::Query(query) => Msg::Query(query),
+            });
         root.search_view().set_content(Some(record_view.widget()));
 
         let model = Self {
@@ -102,7 +109,7 @@ impl AsyncComponent for Model {
                 .launch((window.clone(), engine.dictionaries()))
                 .forward(sender.input_sender(), Msg::SearchDictionaries),
             overview_themes: theme_list::Model::builder().launch(window.clone()).detach(),
-            search_themes: theme_list::Model::builder().launch(window.clone()).detach(),
+            search_themes: theme_list::Model::builder().launch(window).detach(),
             engine,
             record_view,
             last_query: String::new(),
@@ -124,7 +131,7 @@ impl AsyncComponent for Model {
         &mut self,
         message: Self::Input,
         sender: AsyncComponentSender<Self>,
-        _root: &Self::Root,
+        root: &Self::Root,
     ) {
         match message {
             Msg::CustomTheme(theme) => self
@@ -156,7 +163,7 @@ impl AsyncComponent for Model {
                 }
             }
             Msg::Query(query) => {
-                self.last_query = query.clone();
+                self.last_query.clone_from(&query);
                 let Ok(records) = self
                     .engine
                     .lookup(&query, 0, record_view::SUPPORTED_RECORD_KINDS)
@@ -164,6 +171,10 @@ impl AsyncComponent for Model {
                 else {
                     return;
                 };
+
+                let longest_scan_chars = record_view::longest_scan_chars(&query, &records);
+                root.search_entry()
+                    .select_region(0, i32::try_from(longest_scan_chars).unwrap_or(-1));
 
                 self.record_view.sender().emit(record_view::Msg::Render {
                     dictionaries: self.engine.dictionaries(),

@@ -5,15 +5,13 @@ use {
     anyhow::Result,
     glib::clone,
     relm4::{
-        adw::{self, gdk, gio, prelude::*},
+        adw::{gdk, gio, prelude::*},
         component::AsyncConnector,
-        loading_widgets::LoadingWidgets,
         prelude::*,
-        view,
     },
     std::sync::Arc,
     tracing::warn,
-    wordbase::{PopupRequest, WindowFilter},
+    wordbase::{PopupAnchor, RecordLookup, WindowFilter},
     wordbase_engine::Engine,
 };
 
@@ -30,17 +28,25 @@ pub async fn connector(
 
 #[derive(Debug)]
 pub struct Model {
-    platform: Arc<dyn Platform>,
     record_view: Controller<record_view::Model>,
+    platform: Arc<dyn Platform>,
     engine: Engine,
+    query_override: Option<String>,
 }
 
 #[derive(Debug)]
 pub enum Msg {
     CustomTheme(Option<Arc<Theme>>),
-    Request(PopupRequest),
+    Render {
+        records: Vec<RecordLookup>,
+    },
+    Present {
+        target_window: WindowFilter,
+        origin: (i32, i32),
+        anchor: PopupAnchor,
+    },
     #[doc(hidden)]
-    FromRender(record_view::Response),
+    FromView(record_view::Response),
 }
 
 #[derive(Debug)]
@@ -78,14 +84,15 @@ impl AsyncComponent for Model {
             platform,
             record_view: record_view::Model::builder()
                 .launch(record_view::Config { custom_theme })
-                .forward(sender.input_sender(), Msg::FromRender),
+                .forward(sender.input_sender(), Msg::FromView),
             engine,
+            query_override: None,
         };
         root.connect_visible_notify({
             let sender = sender.clone();
             move |root| {
                 if !root.is_visible() {
-                    sender.output(Response::Hidden);
+                    _ = sender.output(Response::Hidden);
                 }
             }
         });
@@ -104,13 +111,12 @@ impl AsyncComponent for Model {
 
     fn update_view(&self, widgets: &mut Self::Widgets, _sender: AsyncComponentSender<Self>) {
         widgets.profiles_menu().remove_all();
-        for (profile_id, profile) in self.engine.profiles().by_id.iter() {
+        for (profile_id, profile) in &self.engine.profiles().by_id {
             let label = profile
                 .meta
                 .name
                 .as_ref()
-                .map(|s| s.as_str())
-                .unwrap_or_else(|| gettext("Default Profile"));
+                .map_or_else(|| gettext("Default Profile"), |s| s.as_str());
             widgets.profiles_menu().append(
                 Some(label),
                 Some(&format!("app.{ACTION_PROFILE}::{}", profile_id.0)),
@@ -129,34 +135,37 @@ impl AsyncComponent for Model {
                 .record_view
                 .sender()
                 .emit(record_view::Msg::CustomTheme(theme)),
-            _ => {}
+            Msg::Render { records } => {
+                self.query_override = None;
+                self.record_view.sender().emit(record_view::Msg::Render {
+                    dictionaries: self.engine.dictionaries(),
+                    records,
+                });
+            }
+            Msg::Present {
+                target_window,
+                origin,
+                anchor,
+            } => {
+                root.present();
+                if let Err(err) = self
+                    .platform
+                    .move_popup_to_window(root.upcast_ref(), target_window, origin)
+                    .await
+                {
+                    warn!("Failed to present popup: {err:?}");
+                }
+            }
+            Msg::FromView(record_view::Response::Query(query)) => {
+                let records = self
+                    .engine
+                    .lookup(&query, 0, record_view::SUPPORTED_RECORD_KINDS)
+                    .await;
+                self.query_override = Some(query);
+                let Ok(records) = records else { return };
+                sender.input(Msg::Render { records });
+            }
         }
-
-        // match message {
-        // Msg::Request(request) => {
-        //     // TODO compute real origin
-        //     let origin = request.origin;
-        //     self.next_move_op = Some((request.target_window, origin));
-
-        //     _ = self.record_view.sender().send(Msg::Lookup(request.lookup));
-        // }
-        // Msg::FromRender(record_view::Response::Query(query)) => {
-        //     if let Some((target_window, origin)) = self.next_move_op.take() {
-        //         if !resp.records.is_empty() {
-        //             root.present();
-        //             if let Err(err) = self
-        //                 .platform
-        //                 .move_popup_to_window(root.upcast_ref(), target_window, origin)
-        //                 .await
-        //             {
-        //                 warn!("Failed to move popup to target window: {err:?}");
-        //             }
-        //         }
-        //     }
-
-        //     sender.output(Response::View(resp));
-        // }
-        // }
     }
 }
 

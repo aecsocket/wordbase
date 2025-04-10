@@ -7,7 +7,7 @@
 )]
 
 mod manager;
-// mod overlay;
+mod overlay;
 mod platform;
 mod popup;
 mod record_view;
@@ -62,10 +62,10 @@ fn main() {
 #[derive(Debug)]
 struct App {
     themes: HashMap<ThemeName, CustomTheme>,
-    _theme_watcher: notify::RecommendedWatcher,
     manager: AsyncController<manager::Model>,
+    overlays: AsyncController<overlay::Overlays>,
     main_popup: AsyncController<popup::Model>,
-    // overlays: AsyncController<overlay::Model>,
+    _theme_watcher: notify::RecommendedWatcher,
 }
 
 #[derive(Debug)]
@@ -121,17 +121,20 @@ impl AsyncComponent for App {
         let custom_theme = None; // TODO
         setup_profile_action(engine.clone());
 
+        let main_popup = popup::connector(&platform, engine.clone(), custom_theme.clone())
+            .await
+            .expect("failed to create popup")
+            .detach();
         let model = Self {
             themes: initial_themes,
-            _theme_watcher: theme_watcher,
             manager: manager::Model::builder()
-                .launch((root.clone(), engine.clone(), custom_theme.clone()))
+                .launch((root.clone(), engine.clone(), custom_theme))
                 .detach(),
-            main_popup: popup::connector(&platform, engine.clone(), custom_theme)
-                .await
-                .expect("failed to create popup")
+            overlays: overlay::Overlays::builder()
+                .launch((engine, platform, main_popup.sender().clone()))
                 .detach(),
-            // overlays: overlay::Model::builder().launch(engine).detach(),
+            main_popup,
+            _theme_watcher: theme_watcher,
         };
         let widgets = view_output!();
         AsyncComponentParts { model, widgets }
@@ -193,3 +196,32 @@ fn setup_profile_action(engine: Engine) {
 }
 
 const CHANNEL_BUF_CAP: usize = 4;
+
+#[derive(Debug)]
+struct SignalHandler {
+    object: glib::Object,
+    id: Option<glib::SignalHandlerId>,
+}
+
+impl Drop for SignalHandler {
+    fn drop(&mut self) {
+        self.object.disconnect(
+            self.id
+                .take()
+                .expect("signal handler id should not be taken before drop"),
+        );
+    }
+}
+
+impl SignalHandler {
+    pub fn new<T: IsA<glib::Object>>(
+        object: &T,
+        make_id: impl FnOnce(&T) -> glib::SignalHandlerId,
+    ) -> Self {
+        let id = make_id(object);
+        Self {
+            object: object.upcast_ref().clone(),
+            id: Some(id),
+        }
+    }
+}

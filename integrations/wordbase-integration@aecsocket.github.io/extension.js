@@ -196,7 +196,7 @@ class IntegrationService {
 
             overlay_window.focus(global.get_current_time());
             overlay_window.raise();
-            // overlay_window.move_frame(false, parent_rect.x, parent_rect.y);
+            overlay_window.move_frame(false, parent_rect.x, parent_rect.y);
             if (parent_window.is_fullscreen()) {
                 overlay_window.make_above();
             }
@@ -207,10 +207,16 @@ class IntegrationService {
         // we MUST also add a `overlay_window.connect("destroy")`
         // which cleans up that (1)
         // we do that using `parent_connect`
-        const parent_connect = (id, callback) => {
+        const parent_window_connect = (id, callback) => {
             const handler_id = parent_window.connect(id, callback);
             overlay_actor.connect("destroy", (__) => {
                 parent_window.disconnect(handler_id);
+            });
+        };
+        const parent_actor_connect = (id, callback) => {
+            const handler_id = parent_actor.connect(id, callback);
+            overlay_actor.connect("destroy", (__) => {
+                parent_actor.disconnect(handler_id);
             });
         };
 
@@ -219,7 +225,7 @@ class IntegrationService {
             parent_window.get_frame_rect().x,
             parent_window.get_frame_rect().y,
         ];
-        parent_connect("position-changed", (__) => {
+        parent_window_connect("position-changed", (__) => {
             const [parent_now_x, parent_now_y] = [
                 parent_window.get_frame_rect().x,
                 parent_window.get_frame_rect().y,
@@ -239,11 +245,11 @@ class IntegrationService {
                 overlay_now_x + parent_delta_x,
                 overlay_now_y + parent_delta_y,
             ];
-            // overlay_window.move_frame(false, overlay_new_x, overlay_new_y);
+            overlay_window.move_frame(false, overlay_new_x, overlay_new_y);
         });
 
         // make the overlay follow the parent's workspace
-        parent_connect("workspace-changed", (__) => {
+        parent_window_connect("workspace-changed", (__) => {
             const workspace = parent_window.get_workspace();
             if (workspace) {
                 overlay_window.change_workspace(workspace);
@@ -256,14 +262,14 @@ class IntegrationService {
             }
         });
 
-        parent_connect("focus", (__) => {
+        parent_window_connect("focus", (__) => {
             overlay_window.raise();
         });
-        parent_connect("raised", (__) => {
+        parent_window_connect("raised", (__) => {
             overlay_window.raise();
         });
 
-        parent_connect("notify::fullscreen", (__) => {
+        parent_window_connect("notify::fullscreen", (__) => {
             if (parent_window.is_fullscreen()) {
                 overlay_window.make_above();
             } else {
@@ -271,7 +277,7 @@ class IntegrationService {
             }
         });
 
-        parent_connect("destroy", (__) => {
+        parent_actor_connect("destroy", (__) => {
             console.log(
                 `"${overlay_window.title}" destroyed, closing ${overlay_id}`,
             );
@@ -362,7 +368,7 @@ class IntegrationService {
         // - after (or if) it's shown (presented and ready to move)
         //
         // if the window doesn't end up `shown` soon, then we won't do the 2nd move
-        // moved_window.move_frame(false, moved_x, moved_y);
+        moved_window.move_frame(false, moved_x, moved_y);
         let handler_id = null;
         handler_id = moved_window.connect("shown", (__) => {
             if (!handler_id) {
@@ -371,7 +377,7 @@ class IntegrationService {
             moved_window.disconnect(handler_id);
             handler_id = null;
 
-            // moved_window.move_frame(false, moved_x, moved_y);
+            moved_window.move_frame(false, moved_x, moved_y);
             // even though we've just raised the popup window, it's not guaranteed
             // to be on top if we're in a fullscreen window
             // so we force it to be always on top

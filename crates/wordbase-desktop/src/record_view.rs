@@ -157,3 +157,12 @@ fn on_decide_policy(decision: &webkit6::PolicyDecision, sender: &ComponentSender
     info!("Opening {uri:?} in browser");
     gtk::UriLauncher::new(&uri).launch(None::<&gtk::Window>, None::<&gio::Cancellable>, |_| {});
 }
+
+pub fn longest_scan_chars(query: &str, records: &[RecordLookup]) -> usize {
+    records
+        .iter()
+        .map(|record| record.bytes_scanned)
+        .max()
+        .and_then(|longest_scan_bytes| query.get(..longest_scan_bytes).map(|s| s.chars().count()))
+        .unwrap_or(0)
+}

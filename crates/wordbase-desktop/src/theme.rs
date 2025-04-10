@@ -40,7 +40,7 @@ impl CustomTheme {
         let style = fs::read_to_string(path)
             .await
             .context("failed to read theme file")?;
-        Ok(CustomTheme {
+        Ok(Self {
             name: ThemeName(Arc::from(name.to_string())),
             theme: Arc::new(Theme { style }),
         })
@@ -59,7 +59,7 @@ impl ThemeName {
             .to_str()
             .context("file name is not UTF-8")?;
 
-        Ok(ThemeName(Arc::from(name.to_string())))
+        Ok(Self(Arc::from(name.to_string())))
     }
 }
 

@@ -1,8 +1,8 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $WdbOverlay: Adw.Bin {
-  Overlay content {
+template $WdbOverlay: Adw.Window {
+  Overlay {
     [overlay]
     Box {
       margin-start: 16;
@@ -17,8 +17,19 @@ template $WdbOverlay: Adw.Bin {
       Button settings {
         icon-name: "settings-symbolic";
         tooltip-text: _("Settings");
+      }
+    }
 
-        styles ["circular"]
+    ScrolledWindow {
+      Label sentence {
+        margin-start: 16;
+        margin-end: 16;
+        margin-top: 16;
+        margin-bottom: 16;
+        xalign: 0.0;
+        yalign: 0.0;
+        wrap: true;
+        selectable: true;
       }
     }
   }

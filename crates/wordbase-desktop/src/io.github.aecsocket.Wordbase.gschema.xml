@@ -30,15 +30,15 @@
       <summary>Popup dictionary window height</summary>
     </key>
 
-    <key name="overlay-idle-opacity" type="d">
+    <key name="overlay-opacity-idle" type="d">
       <default>0.5</default>
       <summary>Overlay window opacity when the cursor is not inside the window</summary>
     </key>
-    <key name="overlay-hover-opacity" type="d">
+    <key name="overlay-opacity-hover" type="d">
       <default>0.95</default>
       <summary>Overlay window opacity when the cursor is inside the window</summary>
     </key>
-    <key name="overlay-font-size" type="d">
+    <key name="overlay-font-size" type="i">
       <default>12</default>
       <summary>Font size of text in the overlay window</summary>
     </key>
