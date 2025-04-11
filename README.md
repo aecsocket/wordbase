@@ -14,10 +14,11 @@ TODO:
     - 聞き流す - ききながす
     - 言い争い - いいあらそい
     - 言い直す - いいなおす
-  - [ ] why do some things get the wrong char length?
+  - [x] why do some things get the wrong char length?
     - ショックでだろう -> should just be ショック
     - 日常だった -> should just be 日常
     - "共に" -> chars as 共, but should be 共に
+  - [ ] add lindera tests for the above
   - [ ] if clicking the mouse while sentence motion, it should NOT lookup
   - [ ] this fails to lookup:
     - 居たたまれなくなって

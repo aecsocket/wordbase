@@ -8,6 +8,7 @@ use {
         dictionary::{DictionaryKind, load_dictionary_from_kind},
         mode::Mode,
         segmenter::Segmenter,
+        token::Token,
         tokenizer::Tokenizer,
     },
     std::borrow::Cow,
@@ -76,7 +77,12 @@ fn lindera<'a>(
     let lemmas = (1..=TOKEN_LOOKAHEAD)
         .rev()
         .filter_map(move |up_to| {
-            let lookahead = tokens.get_mut(..up_to)?;
+            #[expect(clippy::option_if_let_else, reason = "borrow checker")]
+            let (lookahead, rem) = if let Some(split) = tokens.split_at_mut_checked(up_to) {
+                split
+            } else {
+                (tokens.as_mut_slice(), [].as_mut_slice())
+            };
 
             // each slice of tokens actually turns into 2 lemmas:
             // - the result of joining the conjugation form of each token together
@@ -95,12 +101,15 @@ fn lindera<'a>(
                 .map(|token| token.get_detail(DETAIL_CONJUGATION_FORM))
                 .collect::<Option<Vec<_>>>()?
                 .join("");
-
             let full_lemma = lookahead
                 .iter_mut()
                 .map(|token| token.get_detail(DETAIL_LEMMA))
                 .collect::<Option<Vec<_>>>()?
                 .join("");
+
+            let last_token = lookahead.last_mut()?;
+            let last_token_end = last_token.byte_end;
+            let last_token_pos = last_token.get_detail(DETAIL_PART_OF_SPEECH)?;
 
             // now we try to find where the last token ends
             // we go through all tokens after the last one, and find the last one
@@ -108,17 +117,14 @@ fn lindera<'a>(
             // verb), then we use that last continuation token's end position as
             // the end of the word. this is a naive approach, but I don't know
             // how to do it better.
-            let last_token_end = lookahead.last()?.byte_end;
-            let scan_len = tokens
+            let scan_len = rem
                 .iter_mut()
-                .skip(up_to)
-                .filter_map(|token| {
-                    let byte_end = token.byte_end;
-                    token
-                        .get_detail(DETAIL_PART_OF_SPEECH)
+                .filter_map(|next| {
+                    let byte_end = next.byte_end;
+                    next.get_detail(DETAIL_PART_OF_SPEECH)
                         .map(|pos| (pos, byte_end))
                 })
-                .take_while(|(pos, _)| pos_is_continuation(pos))
+                .take_while(|(next_pos, _)| is_continuation(last_token_pos, next_pos))
                 .map(|(_, byte_end)| byte_end)
                 .last()
                 .unwrap_or(last_token_end);
@@ -139,11 +145,14 @@ fn lindera<'a>(
     stream::iter(lemmas).right_stream()
 }
 
-fn pos_is_continuation(pos: &str) -> bool {
-    matches!(
-        pos,
-        "助動詞" // auxiliary verb
-    )
+fn is_continuation(last_pos: &str, next_pos: &str) -> bool {
+    match last_pos {
+        "動詞" => {
+            // verb
+            matches!(next_pos, "助動詞") // auxiliary verb
+        }
+        _ => false,
+    }
 }
 
 fn _lindera_debug<'a>(deinflectors: &'a Deinflectors, text: &'a str) {
