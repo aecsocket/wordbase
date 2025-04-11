@@ -3,11 +3,10 @@ use relm4::{
     adw::{gio, prelude::*},
     prelude::*,
 };
-use std::sync::Arc;
 use tracing::info;
 use wordbase_engine::Engine;
 
-use crate::{APP_ID, gettext, record_view, theme::Theme};
+use crate::{APP_ID, AppEvent, forward_events, gettext, record_view};
 
 mod dictionary_list;
 mod dictionary_row;
@@ -17,8 +16,8 @@ mod ui;
 
 #[derive(Debug)]
 pub struct Model {
-    overview_dictionaries: Controller<dictionary_list::Model>,
-    search_dictionaries: Controller<dictionary_list::Model>,
+    overview_dictionaries: AsyncController<dictionary_list::Model>,
+    search_dictionaries: AsyncController<dictionary_list::Model>,
     overview_themes: AsyncController<theme_list::Model>,
     search_themes: AsyncController<theme_list::Model>,
     record_view: AsyncController<record_view::Model>,
@@ -29,12 +28,10 @@ pub struct Model {
 #[derive(Debug)]
 #[doc(hidden)]
 pub enum Msg {
-    OverviewDictionaries(dictionary_list::Response),
-    SearchDictionaries(dictionary_list::Response),
-    ImportDictionaries(gio::ListModel),
     SetAnkiConnectConfig,
     SetTexthookerUrl(String),
     Query(String),
+    Requery,
     Error(anyhow::Error),
 }
 
@@ -42,7 +39,7 @@ impl AsyncComponent for Model {
     type Init = (adw::Window, Engine);
     type Input = Msg;
     type Output = ();
-    type CommandOutput = ();
+    type CommandOutput = AppEvent;
     type Root = ui::Manager;
     type Widgets = ();
 
@@ -55,6 +52,8 @@ impl AsyncComponent for Model {
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
+        forward_events(&sender);
+
         let settings = gio::Settings::new(APP_ID);
         settings
             .bind(
@@ -100,23 +99,20 @@ impl AsyncComponent for Model {
             });
         root.search_view().set_content(Some(record_view.widget()));
 
+        let toaster = root.toast_overlay();
         let model = Self {
             overview_dictionaries: dictionary_list::Model::builder()
-                .launch((window.clone(), engine.dictionaries()))
-                .forward(sender.input_sender(), Msg::OverviewDictionaries),
+                .launch((engine.clone(), window.clone(), toaster.clone()))
+                .detach(),
             search_dictionaries: dictionary_list::Model::builder()
-                .launch((window.clone(), engine.dictionaries()))
-                .forward(sender.input_sender(), Msg::SearchDictionaries),
+                .launch((engine.clone(), window.clone(), toaster.clone()))
+                .detach(),
             overview_themes: theme_list::Model::builder()
-                .launch((window.clone(), engine.clone()))
-                .forward(sender.input_sender(), |resp| match resp {
-                    theme_list::Response::Error(err) => Msg::Error(err),
-                }),
+                .launch((engine.clone(), window.clone(), toaster.clone()))
+                .detach(),
             search_themes: theme_list::Model::builder()
-                .launch((window, engine.clone()))
-                .forward(sender.input_sender(), |resp| match resp {
-                    theme_list::Response::Error(err) => Msg::Error(err),
-                }),
+                .launch((engine.clone(), window, toaster))
+                .detach(),
             engine,
             record_view,
             last_query: String::new(),
@@ -141,21 +137,6 @@ impl AsyncComponent for Model {
         root: &Self::Root,
     ) {
         match message {
-            Msg::ImportDictionaries(files) => {
-                todo!();
-            }
-            Msg::OverviewDictionaries(resp) => {
-                // _ = self.search_dictionaries.sender().send(msg.clone());
-                // if let Err(err) = dictionaries::apply(msg, &self.engine).await {
-                //     sender.input(ManagerMsg::Error(err));
-                // }
-            }
-            Msg::SearchDictionaries(resp) => {
-                // _ = self.overview_dictionaries.sender().send(msg.clone());
-                if let Err(err) = dictionary_list::apply(resp, &self.engine).await {
-                    sender.input(Msg::Error(err));
-                }
-            }
             Msg::SetAnkiConnectConfig => {}
             Msg::SetTexthookerUrl(url) => {
                 if let Err(err) = self.engine.set_texthooker_url(&url).await {
@@ -167,15 +148,19 @@ impl AsyncComponent for Model {
             }
             Msg::Query(query) => {
                 self.last_query.clone_from(&query);
+                sender.input(Msg::Requery);
+            }
+            Msg::Requery => {
+                let query = &self.last_query;
                 let Ok(records) = self
                     .engine
-                    .lookup(&query, 0, record_view::SUPPORTED_RECORD_KINDS)
+                    .lookup(query, 0, record_view::SUPPORTED_RECORD_KINDS)
                     .await
                 else {
                     return;
                 };
 
-                let longest_scan_chars = record_view::longest_scan_chars(&query, &records);
+                let longest_scan_chars = record_view::longest_scan_chars(query, &records);
                 root.search_entry()
                     .select_region(0, i32::try_from(longest_scan_chars).unwrap_or(-1));
 
@@ -202,5 +187,17 @@ impl AsyncComponent for Model {
 
         self.update(message, sender.clone(), root).await;
         self.update_view(widgets, sender);
+    }
+
+    async fn update_cmd_with_view(
+        &mut self,
+        _widgets: &mut Self::Widgets,
+        event: Self::CommandOutput,
+        sender: AsyncComponentSender<Self>,
+        _root: &Self::Root,
+    ) {
+        if record_view::should_requery(&event) {
+            sender.input(Msg::Requery);
+        }
     }
 }

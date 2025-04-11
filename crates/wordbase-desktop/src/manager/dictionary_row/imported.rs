@@ -1,43 +1,40 @@
+use std::sync::Arc;
+
 use super::ui;
+use anyhow::{Context, Result};
 use glib::clone;
 use relm4::{
     adw::{gio, prelude::*},
     prelude::*,
 };
 use wordbase::Dictionary;
+use wordbase_engine::Engine;
 
-use crate::gettext;
+use crate::{APP_EVENTS, AppEvent, forward_events, gettext, toast_result};
 
 #[derive(Debug)]
 pub struct Model {
+    dictionary: Arc<Dictionary>,
+    engine: Engine,
     window: adw::Window,
-    dictionary: Dictionary,
-    sorting: bool,
-    meta_rows: Vec<Controller<MetaRow>>,
+    toaster: adw::ToastOverlay,
 }
 
 #[derive(Debug)]
+#[doc(hidden)]
 pub enum Msg {
     SetEnabled(bool),
     SetSorting(bool),
-    #[doc(hidden)]
     VisitWebsite,
-    #[doc(hidden)]
     AskRemove,
-}
-
-#[derive(Debug)]
-pub enum Response {
-    SetEnabled(bool),
-    SetSorting(bool),
     Remove,
 }
 
-impl Component for Model {
-    type Init = (adw::Window, Dictionary, bool);
+impl AsyncComponent for Model {
+    type Init = (Engine, adw::Window, adw::ToastOverlay, Arc<Dictionary>);
     type Input = Msg;
-    type Output = Response;
-    type CommandOutput = ();
+    type Output = ();
+    type CommandOutput = AppEvent;
     type Root = ui::DictionaryRow;
     type Widgets = ();
 
@@ -45,40 +42,27 @@ impl Component for Model {
         ui::DictionaryRow::new()
     }
 
-    fn init(
-        (window, dictionary, sorting): Self::Init,
+    async fn init(
+        (engine, window, toaster, dictionary): Self::Init,
         root: Self::Root,
-        sender: ComponentSender<Self>,
-    ) -> ComponentParts<Self> {
-        let mut model = Self {
-            window,
-            dictionary,
-            sorting,
-            meta_rows: Vec::new(),
-        };
-        let dictionary = &model.dictionary;
-        let meta = &dictionary.meta;
+        sender: AsyncComponentSender<Self>,
+    ) -> AsyncComponentParts<Self> {
+        forward_events(&sender);
 
         root.enabled().connect_toggled(clone!(
             #[strong]
             sender,
-            move |button| {
-                _ = sender.output(Response::SetEnabled(button.is_active()));
-            }
+            move |button| sender.input(Msg::SetEnabled(button.is_active()))
         ));
         root.is_sorting().connect_clicked(clone!(
             #[strong]
             sender,
-            move |_| {
-                _ = sender.output(Response::SetSorting(false));
-            }
+            move |_| sender.input(Msg::SetSorting(false))
         ));
         root.set_sorting().connect_clicked(clone!(
             #[strong]
             sender,
-            move |_| {
-                _ = sender.output(Response::SetSorting(true));
-            }
+            move |_| sender.input(Msg::SetSorting(true))
         ));
         root.remove().connect_clicked(clone!(
             #[strong]
@@ -90,9 +74,7 @@ impl Component for Model {
             clone!(
                 #[strong]
                 sender,
-                move |_, _| {
-                    _ = sender.output(Response::Remove);
-                }
+                move |_, _| sender.input(Msg::Remove)
             ),
         );
         root.visit_website().connect_clicked(clone!(
@@ -106,12 +88,6 @@ impl Component for Model {
         root.import_error().set_visible(false);
         root.progress().set_visible(false);
 
-        root.enabled().set_active(dictionary.enabled);
-        root.is_sorting().set_visible(sorting);
-
-        root.set_title(&meta.name);
-        root.set_subtitle(meta.version.as_deref().unwrap_or_default());
-
         let meta_parent = root
             .action_row()
             .parent()
@@ -123,8 +99,12 @@ impl Component for Model {
                 .launch((key.to_string(), value.to_string()))
                 .detach();
             meta_parent.insert(row.widget(), root.action_row().index());
-            model.meta_rows.push(row);
         };
+
+        let meta = &dictionary.meta;
+
+        root.set_title(&meta.name);
+        root.set_subtitle(meta.version.as_deref().unwrap_or_default());
 
         add_meta_row(gettext("Format"), &format!("{:?}", meta.kind));
         if let Some(description) = &meta.description {
@@ -137,34 +117,118 @@ impl Component for Model {
                 add_meta_row(gettext("Attribution"), attribution);
             }
         }
-
         root.visit_website().set_visible(meta.url.is_some());
 
-        ComponentParts { model, widgets: () }
+        let model = Self {
+            dictionary,
+            engine,
+            window,
+            toaster,
+        };
+        show_enabled(&model, &root);
+        show_sorting(&model, &root);
+        AsyncComponentParts { model, widgets: () }
     }
 
-    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>, root: &Self::Root) {
-        match message {
-            Msg::SetEnabled(enabled) => {
-                self.dictionary.enabled = enabled;
-            }
-            Msg::SetSorting(sorting) => {
-                self.sorting = sorting;
-            }
-            Msg::VisitWebsite => {
-                if let Some(url) = &self.dictionary.meta.url {
-                    gtk::UriLauncher::new(url).launch(
-                        None::<&gtk::Window>,
-                        None::<&gio::Cancellable>,
-                        |_| {},
-                    );
+    async fn update(
+        &mut self,
+        message: Self::Input,
+        _sender: AsyncComponentSender<Self>,
+        root: &Self::Root,
+    ) {
+        toast_result(
+            &self.toaster,
+            match message {
+                Msg::SetEnabled(enabled) => set_enabled(self, enabled)
+                    .await
+                    .with_context(|| gettext("Failed to set dictionary enabled")),
+                Msg::SetSorting(sorting) => set_sorting(self, sorting)
+                    .await
+                    .with_context(|| gettext("Failed to set sorting dictionary")),
+                Msg::VisitWebsite => {
+                    visit_website(self).with_context(|| gettext("Failed to open website"))
                 }
+                Msg::AskRemove => {
+                    root.remove_dialog().present(Some(&self.window));
+                    Ok(())
+                }
+                Msg::Remove => remove(self)
+                    .await
+                    .with_context(|| gettext("Failed to remove dictionary")),
+            },
+        );
+    }
+
+    async fn update_cmd_with_view(
+        &mut self,
+        _widgets: &mut Self::Widgets,
+        message: Self::CommandOutput,
+        _sender: AsyncComponentSender<Self>,
+        root: &Self::Root,
+    ) {
+        match message {
+            AppEvent::DictionaryEnabledSet(id, _) if id == self.dictionary.id => {
+                sync(self);
+                show_enabled(self, root);
             }
-            Msg::AskRemove => {
-                root.remove_dialog().present(Some(&self.window));
+            AppEvent::DictionarySortingSet(_) => {
+                show_sorting(self, root);
             }
+            _ => {}
         }
     }
+}
+
+fn sync(model: &mut Model) {
+    if let Some(dictionary) = model.engine.dictionaries().by_id.get(&model.dictionary.id) {
+        model.dictionary = dictionary.clone();
+    }
+}
+
+fn show_enabled(model: &Model, root: &ui::DictionaryRow) {
+    root.enabled().set_active(model.dictionary.enabled);
+}
+
+fn show_sorting(model: &Model, root: &ui::DictionaryRow) {
+    let is_sorting =
+        model.engine.profiles().current.sorting_dictionary == Some(model.dictionary.id);
+    root.is_sorting().set_visible(is_sorting);
+}
+
+async fn set_enabled(model: &Model, enabled: bool) -> Result<()> {
+    if enabled {
+        model.engine.enable_dictionary(model.dictionary.id).await?;
+    } else {
+        model.engine.disable_dictionary(model.dictionary.id).await?;
+    }
+    _ = APP_EVENTS.send(AppEvent::DictionaryEnabledSet(model.dictionary.id, enabled));
+    Ok(())
+}
+
+async fn set_sorting(model: &Model, sorting: bool) -> Result<()> {
+    if sorting {
+        model
+            .engine
+            .set_sorting_dictionary(Some(model.dictionary.id))
+            .await?;
+        _ = APP_EVENTS.send(AppEvent::DictionarySortingSet(Some(model.dictionary.id)));
+    } else {
+        model.engine.set_sorting_dictionary(None).await?;
+        _ = APP_EVENTS.send(AppEvent::DictionarySortingSet(None));
+    }
+    Ok(())
+}
+
+fn visit_website(model: &Model) -> Result<()> {
+    let url = model.dictionary.meta.url.as_ref().context("no URL")?;
+    gtk::UriLauncher::new(url).launch(None::<&gtk::Window>, None::<&gio::Cancellable>, |_| {});
+    Ok(())
+}
+
+async fn remove(model: &Model) -> Result<()> {
+    model.engine.remove_dictionary(model.dictionary.id).await?;
+    APP_EVENTS.send(AppEvent::DictionaryRemoved(model.dictionary.id));
+    Ok(())
 }
 
 #[derive(Debug)]

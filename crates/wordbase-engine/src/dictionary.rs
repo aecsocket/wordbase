@@ -11,7 +11,7 @@ use {
 
 #[derive(Debug, Default)]
 pub struct Dictionaries {
-    pub by_id: IndexMap<DictionaryId, Dictionary>,
+    pub by_id: IndexMap<DictionaryId, Arc<Dictionary>>,
     pub sorting_id: Option<DictionaryId>,
 }
 
@@ -21,8 +21,8 @@ impl Dictionaries {
             .await
             .context("failed to fetch dictionaries")?
             .into_iter()
-            .map(|dict| (dict.id, dict))
-            .collect();
+            .map(|dict| (dict.id, Arc::new(dict)))
+            .collect::<IndexMap<_, _>>();
         let sorting_id = profiles
             .by_id
             .get(&profiles.current_id)

@@ -8,7 +8,7 @@ use relm4::{
 };
 use wordbase_engine::{Engine, profile::ProfileConfig};
 
-use crate::{APP_EVENTS, AppEvent, forward_events, gettext};
+use crate::{APP_EVENTS, AppEvent, forward_events, gettext, toast_result};
 
 use super::theme_row;
 
@@ -16,36 +16,32 @@ use super::theme_row;
 pub struct Model {
     default_theme: Controller<theme_row::Model>,
     custom_themes: Vec<Controller<theme_row::Model>>,
-    window: adw::Window,
     engine: Engine,
+    window: adw::Window,
+    toaster: adw::ToastOverlay,
 }
 
 #[derive(Debug)]
 #[doc(hidden)]
 pub enum Msg {
-    SelectFont,
+    AskSetFont,
     ResetFont,
 }
 
-#[derive(Debug)]
-pub enum Response {
-    Error(anyhow::Error),
-}
-
 impl AsyncComponent for Model {
-    type Init = (adw::Window, Engine);
+    type Init = (Engine, adw::Window, adw::ToastOverlay);
     type Input = Msg;
-    type Output = Response;
+    type Output = ();
     type CommandOutput = AppEvent;
-    type Root = ui::Themes;
+    type Root = ui::ThemeList;
     type Widgets = ();
 
     fn init_root() -> Self::Root {
-        ui::Themes::new()
+        ui::ThemeList::new()
     }
 
     async fn init(
-        (window, engine): Self::Init,
+        (engine, window, toaster): Self::Init,
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
@@ -54,7 +50,7 @@ impl AsyncComponent for Model {
         root.font_row().connect_activated(clone!(
             #[strong]
             sender,
-            move |_| sender.input(Msg::SelectFont)
+            move |_| sender.input(Msg::AskSetFont)
         ));
         root.font_reset().connect_clicked(clone!(
             #[strong]
@@ -75,10 +71,11 @@ impl AsyncComponent for Model {
         let model = Self {
             default_theme,
             custom_themes: Vec::new(),
-            window,
             engine,
+            window,
+            toaster,
         };
-        set_font(&model, &root);
+        show_font(&model, &root);
         AsyncComponentParts { model, widgets: () }
     }
 
@@ -86,20 +83,20 @@ impl AsyncComponent for Model {
         &mut self,
         _widgets: &mut Self::Widgets,
         message: Self::Input,
-        sender: AsyncComponentSender<Self>,
+        _sender: AsyncComponentSender<Self>,
         _root: &Self::Root,
     ) {
-        let result = match message {
-            Msg::SelectFont => select_font(self)
-                .await
-                .with_context(|| gettext("Failed to set font")),
-            Msg::ResetFont => reset_font(self)
-                .await
-                .with_context(|| gettext("Failed to reset font")),
-        };
-        if let Err(err) = result {
-            _ = sender.output(Response::Error(err));
-        }
+        toast_result(
+            &self.toaster,
+            match message {
+                Msg::AskSetFont => set_font(self)
+                    .await
+                    .with_context(|| gettext("Failed to set font")),
+                Msg::ResetFont => reset_font(self)
+                    .await
+                    .with_context(|| gettext("Failed to reset font")),
+            },
+        );
     }
 
     async fn update_cmd_with_view(
@@ -110,12 +107,13 @@ impl AsyncComponent for Model {
         root: &Self::Root,
     ) {
         match message {
-            AppEvent::FontSet => set_font(self, root),
+            AppEvent::FontSet => show_font(self, root),
+            _ => {}
         }
     }
 }
 
-fn set_font(model: &Model, root: &ui::Themes) {
+fn show_font(model: &Model, root: &ui::ThemeList) {
     let profile = model.engine.profiles().current.clone();
     if let Some(family) = &profile.config.font_family {
         let subtitle = format!(r#"<span face="{family}">{family}</span>"#);
@@ -127,7 +125,7 @@ fn set_font(model: &Model, root: &ui::Themes) {
     }
 }
 
-async fn select_font(model: &Model) -> Result<()> {
+async fn set_font(model: &Model) -> Result<()> {
     let Ok(font) = gtk::FontDialog::new()
         .choose_face_future(Some(&model.window), None::<&pango::FontFace>)
         .await

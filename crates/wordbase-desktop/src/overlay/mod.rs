@@ -35,8 +35,8 @@ pub struct Overlays {
 }
 
 #[derive(Debug)]
+#[doc(hidden)]
 pub enum OverlaysMsg {
-    #[doc(hidden)]
     Remove(String),
 }
 
@@ -166,13 +166,6 @@ impl AsyncComponent for Overlay {
         let window_guard = platform.init_overlay(root.upcast_ref()).await.unwrap();
         let settings = gio::Settings::new(APP_ID);
 
-        gtk::FontDialog::builder().build().choose_font_and_features(
-            None::<&gtk::Window>,
-            None,
-            None::<&gio::Cancellable>,
-            |_| {},
-        );
-
         root.connect_close_request(clone!(
             #[strong]
             sender,
@@ -293,6 +286,9 @@ impl AsyncComponent for Overlay {
                 else {
                     return;
                 };
+                if records.is_empty() {
+                    return;
+                }
 
                 let longest_scan_chars = record_view::longest_scan_chars(text, &records);
                 sentence.select_region(

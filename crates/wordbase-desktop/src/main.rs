@@ -35,8 +35,8 @@ use {
     tokio::{fs, sync::broadcast},
     tracing::{error, info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
-    wordbase::ProfileId,
-    wordbase_engine::{Engine, profile::ProfileConfig},
+    wordbase::{DictionaryId, ProfileId},
+    wordbase_engine::Engine,
 };
 
 const APP_ID: &str = "io.github.aecsocket.Wordbase";
@@ -47,6 +47,9 @@ static APP_EVENTS: LazyLock<broadcast::Sender<AppEvent>> =
 #[derive(Debug, Clone)]
 pub enum AppEvent {
     FontSet,
+    DictionaryEnabledSet(DictionaryId, bool),
+    DictionarySortingSet(Option<DictionaryId>),
+    DictionaryRemoved(DictionaryId),
 }
 
 pub fn forward_events<C>(sender: &AsyncComponentSender<C>)
@@ -62,6 +65,16 @@ where
             })
             .drop_on_shutdown()
     });
+}
+
+pub fn toast_error(toaster: &adw::ToastOverlay, err: &anyhow::Error) {
+    toaster.add_toast(adw::Toast::new(&format!("{err}")));
+}
+
+pub fn toast_result(toaster: &adw::ToastOverlay, result: Result<()>) {
+    if let Err(err) = result {
+        toast_error(toaster, &err);
+    }
 }
 
 fn gettext(s: &str) -> &str {
@@ -96,6 +109,7 @@ struct App {
 
 #[derive(Debug)]
 enum AppMsg {
+    Present,
     ThemeInsert(CustomTheme),
     ThemeRemove(ThemeName),
 }
@@ -164,6 +178,20 @@ impl AsyncComponent for App {
         };
         let widgets = view_output!();
         AsyncComponentParts { model, widgets }
+    }
+
+    async fn update(
+        &mut self,
+        message: Self::Input,
+        sender: AsyncComponentSender<Self>,
+        root: &Self::Root,
+    ) {
+        match message {
+            AppMsg::Present => {
+                root.present();
+            }
+            _ => todo!(),
+        }
     }
 }
 

@@ -5,7 +5,7 @@ mod imp {
 
     #[derive(Debug, Default, gtk::CompositeTemplate)]
     #[template(file = "src/manager/theme_list/ui.blp")]
-    pub struct Themes {
+    pub struct ThemeList {
         #[template_child]
         pub font_row: TemplateChild<adw::ActionRow>,
         #[template_child]
@@ -21,9 +21,9 @@ mod imp {
     }
 
     #[glib::object_subclass]
-    impl ObjectSubclass for Themes {
-        const NAME: &str = "WdbThemes";
-        type Type = super::Themes;
+    impl ObjectSubclass for ThemeList {
+        const NAME: &str = "WdbThemeList";
+        type Type = super::ThemeList;
         type ParentType = adw::Bin;
 
         fn class_init(klass: &mut Self::Class) {
@@ -35,16 +35,16 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for Themes {}
-    impl WidgetImpl for Themes {}
-    impl BinImpl for Themes {}
+    impl ObjectImpl for ThemeList {}
+    impl WidgetImpl for ThemeList {}
+    impl BinImpl for ThemeList {}
 }
 
 glib::wrapper! {
-    pub struct Themes(ObjectSubclass<imp::Themes>) @extends gtk::Widget, adw::Bin;
+    pub struct ThemeList(ObjectSubclass<imp::ThemeList>) @extends gtk::Widget, adw::Bin;
 }
 
-impl Themes {
+impl ThemeList {
     #[must_use]
     pub fn new() -> Self {
         glib::Object::new()

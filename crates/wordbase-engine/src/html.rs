@@ -10,8 +10,8 @@ use {
     },
 };
 
-pub fn render_records(
-    dictionaries: &IndexMap<DictionaryId, Dictionary>,
+pub fn render_records<'a>(
+    dictionary_by_id: &impl Fn(DictionaryId) -> Option<&'a Dictionary>,
     records: &[RecordLookup],
 ) -> Markup {
     let terms = make_terms(records);
@@ -35,7 +35,7 @@ pub fn render_records(
                     .frequency-group {
                         @for &(source, frequency) in &info.frequencies {
                             .frequency {
-                                (render_frequency(dictionaries, source, frequency))
+                                (render_frequency(dictionary_by_id, source, frequency))
                             }
                         }
                     }
@@ -52,7 +52,7 @@ pub fn render_records(
                 .glossaries {
                     @for (&source, glossaries) in &info.glossaries {
                         .one-source {
-                            (render_glossaries(dictionaries, source, glossaries))
+                            (render_glossaries(dictionary_by_id, source, glossaries))
                         }
                     }
                 }
@@ -201,14 +201,14 @@ pub fn render_pitch(term: &Term, pitch: &dict::yomitan::Pitch) -> Markup {
 }
 
 #[must_use]
-pub fn render_frequency(
-    dictionaries: &IndexMap<DictionaryId, Dictionary>,
+pub fn render_frequency<'a>(
+    dictionary_by_id: &impl Fn(DictionaryId) -> Option<&'a Dictionary>,
     source: DictionaryId,
     frequency: &dict::yomitan::Frequency,
 ) -> Markup {
     html! {
         span .source {
-            (name_of(dictionaries, source))
+            (name_of(dictionary_by_id, source))
         }
 
         span .value {
@@ -250,14 +250,14 @@ pub fn render_audio(record: &Audio) -> Markup {
 }
 
 #[must_use]
-pub fn render_glossaries(
-    dictionaries: &IndexMap<DictionaryId, Dictionary>,
+pub fn render_glossaries<'a>(
+    dictionary_by_id: &impl Fn(DictionaryId) -> Option<&'a Dictionary>,
     source: DictionaryId,
     glossaries: &Glossaries,
 ) -> Markup {
     html! {
         span .source-name {
-            (name_of(dictionaries, source))
+            (name_of(dictionary_by_id, source))
         }
 
         @for glossary in &glossaries.0 {
@@ -290,8 +290,9 @@ pub fn render_glossary(glossary: &dict::yomitan::Glossary) -> Markup {
     }
 }
 
-fn name_of(dictionaries: &IndexMap<DictionaryId, Dictionary>, dictionary_id: DictionaryId) -> &str {
-    dictionaries
-        .get(&dictionary_id)
-        .map_or("?", |dict| dict.meta.name.as_str())
+fn name_of<'a>(
+    dictionary_by_id: &impl Fn(DictionaryId) -> Option<&'a Dictionary>,
+    dictionary_id: DictionaryId,
+) -> &'a str {
+    dictionary_by_id(dictionary_id).map_or("?", |dict| dict.meta.name.as_str())
 }

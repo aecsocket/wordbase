@@ -1,7 +1,10 @@
 mod ui;
 
 use {
-    crate::{ACTION_PROFILE, APP_ID, gettext, platform::Platform, record_view, theme::Theme},
+    crate::{
+        ACTION_PROFILE, APP_BROKER, APP_ID, AppEvent, AppMsg, forward_events, gettext,
+        platform::Platform, record_view,
+    },
     anyhow::Result,
     glib::clone,
     relm4::{
@@ -44,20 +47,16 @@ pub enum Msg {
         anchor: PopupAnchor,
     },
     #[doc(hidden)]
-    FromView(record_view::Response),
-}
-
-#[derive(Debug)]
-pub enum Response {
-    Hidden,
-    OpenSettings,
+    Query(String),
+    #[doc(hidden)]
+    Requery,
 }
 
 impl AsyncComponent for Model {
     type Init = (Arc<dyn Platform>, Engine);
     type Input = Msg;
-    type Output = Response;
-    type CommandOutput = ();
+    type Output = ();
+    type CommandOutput = AppEvent;
     type Root = ui::Popup;
     type Widgets = ui::Popup;
 
@@ -70,6 +69,7 @@ impl AsyncComponent for Model {
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
+        forward_events(&sender);
         relm4::main_application().add_window(&root);
 
         let settings = gio::Settings::new(APP_ID);
@@ -82,22 +82,15 @@ impl AsyncComponent for Model {
             platform,
             record_view: record_view::Model::builder()
                 .launch(engine.clone())
-                .forward(sender.input_sender(), Msg::FromView),
+                .forward(sender.input_sender(), |resp| match resp {
+                    record_view::Response::Query(query) => Msg::Query(query),
+                }),
             engine,
             query_override: None,
         };
-        root.connect_visible_notify({
-            let sender = sender.clone();
-            move |root| {
-                if !root.is_visible() {
-                    _ = sender.output(Response::Hidden);
-                }
-            }
-        });
         root.content().set_child(Some(model.record_view.widget()));
-        root.manager_profiles().connect_clicked(move |_| {
-            _ = sender.output(Response::OpenSettings);
-        });
+        root.manager_profiles()
+            .connect_clicked(move |_| APP_BROKER.send(AppMsg::Present));
         root.present();
         hide_on_lost_focus(root.upcast_ref());
         root.set_visible(false);
@@ -147,16 +140,37 @@ impl AsyncComponent for Model {
                     warn!("Failed to present popup: {err:?}");
                 }
             }
-            Msg::FromView(record_view::Response::Query(query)) => {
-                let records = self
-                    .engine
-                    .lookup(&query, 0, record_view::SUPPORTED_RECORD_KINDS)
-                    .await;
+            Msg::Query(query) => {
                 self.query_override = Some(query);
-                let Ok(records) = records else { return };
+                sender.input(Msg::Requery);
+            }
+            Msg::Requery => {
+                let Some(query) = &self.query_override else {
+                    return;
+                };
+                let Ok(records) = self
+                    .engine
+                    .lookup(query, 0, record_view::SUPPORTED_RECORD_KINDS)
+                    .await
+                else {
+                    return;
+                };
                 sender.input(Msg::Render { records });
             }
         }
+    }
+
+    async fn update_cmd_with_view(
+        &mut self,
+        _widgets: &mut Self::Widgets,
+        event: Self::CommandOutput,
+        sender: AsyncComponentSender<Self>,
+        _root: &Self::Root,
+    ) {
+        if !record_view::should_requery(&event) {
+            return;
+        }
+        sender.input(Msg::Requery);
     }
 }
 

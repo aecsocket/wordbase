@@ -69,47 +69,58 @@ impl AsyncComponent for Model {
 
     async fn update_cmd_with_view(
         &mut self,
-        widgets: &mut Self::Widgets,
+        _widgets: &mut Self::Widgets,
         message: Self::CommandOutput,
-        sender: AsyncComponentSender<Self>,
+        _sender: AsyncComponentSender<Self>,
         root: &Self::Root,
     ) {
+        match message {
+            AppEvent::FontSet => update_view(self, root),
+            _ => {}
+        }
     }
 
     async fn update_with_view(
         &mut self,
-        widgets: &mut Self::Widgets,
+        _widgets: &mut Self::Widgets,
         records: Self::Input,
-        sender: AsyncComponentSender<Self>,
+        _sender: AsyncComponentSender<Self>,
         root: &Self::Root,
     ) {
         self.records = records.0;
-        let profile = self.engine.profiles().current.clone();
-
-        root.set_settings(
-            &webkit6::Settings::builder()
-                .default_font_family(profile.config.font_family.as_deref().unwrap_or_default())
-                .enable_page_cache(false)
-                .build(),
-        );
-
-        let records_html = html::render_records(&self.engine.dictionaries().by_id, &self.records);
-        let full_html = html! {
-            style {
-                (DEFAULT_THEME.style)
-            }
-
-            // TODO custom theme
-            // style {
-            //     (self.custom_theme.as_ref().map(|theme| theme.style.as_str()).unwrap_or_default())
-            // }
-
-            .records {
-                (records_html)
-            }
-        };
-        root.load_html(&full_html.0, None);
+        update_view(self, root);
     }
+}
+
+fn update_view(model: &Model, root: &webkit6::WebView) {
+    let profile = model.engine.profiles().current.clone();
+    let settings = webkit6::Settings::new();
+    settings.set_enable_page_cache(false);
+    if let Some(family) = &profile.config.font_family {
+        settings.set_default_font_family(family);
+    }
+    root.set_settings(&settings);
+
+    let dictionaries = model.engine.dictionaries();
+    let records_html = html::render_records(
+        &|id| dictionaries.by_id.get(&id).map(|dict| &**dict),
+        &model.records,
+    );
+    let full_html = html! {
+        style {
+            (DEFAULT_THEME.style)
+        }
+
+        // TODO custom theme
+        // style {
+        //     (self.custom_theme.as_ref().map(|theme| theme.style.as_str()).unwrap_or_default())
+        // }
+
+        .records {
+            (records_html)
+        }
+    };
+    root.load_html(&full_html.0, None);
 }
 
 fn on_decide_policy(decision: &webkit6::PolicyDecision, sender: &AsyncComponentSender<Model>) {
@@ -154,4 +165,13 @@ pub fn longest_scan_chars(query: &str, records: &[RecordLookup]) -> usize {
         .max()
         .and_then(|longest_scan_bytes| query.get(..longest_scan_bytes).map(|s| s.chars().count()))
         .unwrap_or(0)
+}
+
+pub fn should_requery(event: &AppEvent) -> bool {
+    match event {
+        AppEvent::DictionaryEnabledSet(_, _)
+        | AppEvent::DictionarySortingSet(_)
+        | AppEvent::DictionaryRemoved(_) => true,
+        _ => false,
+    }
 }
