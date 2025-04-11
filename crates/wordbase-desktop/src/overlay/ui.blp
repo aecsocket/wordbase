@@ -22,16 +22,28 @@ template $WdbOverlay: Adw.Window {
       }
     }
 
-    ScrolledWindow {
-      Label sentence {
-        margin-start: 16;
-        margin-end: 16;
-        margin-top: 16;
-        margin-bottom: 16;
-        xalign: 0.0;
-        yalign: 0.0;
-        wrap: true;
-        selectable: true;
+    WindowHandle {
+      ScrolledWindow scrolled_window {
+        Box {
+          orientation: vertical;
+
+          Label sentence {
+            margin-start: 16;
+            margin-end: 16;
+            margin-top: 16;
+            margin-bottom: 16;
+            halign: start;
+            valign: start;
+            xalign: 0.0;
+            yalign: 0.0;
+            wrap: true;
+            selectable: true;
+          }
+
+          Box scroll_padding {
+            height-request: 64;
+          }
+        }
       }
     }
   }

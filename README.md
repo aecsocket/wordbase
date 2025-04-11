@@ -25,7 +25,7 @@ TODO:
       - because: root form is 居たたまれない
     - 仕えする
     - 向き合わせになる
-  - [ ] click dragging on the overlay popup should let you drag it
+  - [x] click dragging on the overlay popup should let you drag it
   - [ ] I really want a scrollback, but the current sentence goes to the bottom + there's enough padding at the bottom to push the scrollback up out of the way
   - [ ] dictionary popup settings button is literally invisible, need to add OSD class somehow
   - [x] changing dictionaries from the popup window?
