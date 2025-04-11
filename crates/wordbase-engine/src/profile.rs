@@ -29,7 +29,6 @@ pub struct ProfileState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProfileConfig {
     pub font_family: Option<String>,
-    pub font_face: Option<String>,
     pub anki_deck: Option<NormString>,
     pub anki_model: Option<NormString>,
     #[serde(default)]

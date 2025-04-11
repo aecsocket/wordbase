@@ -21,7 +21,7 @@ pub struct Model {
     search_dictionaries: Controller<dictionary_list::Model>,
     overview_themes: AsyncController<theme_list::Model>,
     search_themes: AsyncController<theme_list::Model>,
-    record_view: Controller<record_view::Model>,
+    record_view: AsyncController<record_view::Model>,
     engine: Engine,
     last_query: String,
 }
@@ -29,7 +29,6 @@ pub struct Model {
 #[derive(Debug)]
 #[doc(hidden)]
 pub enum Msg {
-    CustomTheme(Option<Arc<Theme>>),
     OverviewDictionaries(dictionary_list::Response),
     SearchDictionaries(dictionary_list::Response),
     ImportDictionaries(gio::ListModel),
@@ -40,7 +39,7 @@ pub enum Msg {
 }
 
 impl AsyncComponent for Model {
-    type Init = (adw::Window, Engine, Option<Arc<Theme>>);
+    type Init = (adw::Window, Engine);
     type Input = Msg;
     type Output = ();
     type CommandOutput = ();
@@ -52,7 +51,7 @@ impl AsyncComponent for Model {
     }
 
     async fn init(
-        (window, engine, custom_theme): Self::Init,
+        (window, engine): Self::Init,
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
@@ -95,7 +94,7 @@ impl AsyncComponent for Model {
         ));
 
         let record_view = record_view::Model::builder()
-            .launch(record_view::Config { custom_theme })
+            .launch(engine.clone())
             .forward(sender.input_sender(), |resp| match resp {
                 record_view::Response::Query(query) => Msg::Query(query),
             });
@@ -142,10 +141,6 @@ impl AsyncComponent for Model {
         root: &Self::Root,
     ) {
         match message {
-            Msg::CustomTheme(theme) => self
-                .record_view
-                .sender()
-                .emit(record_view::Msg::CustomTheme(theme)),
             Msg::ImportDictionaries(files) => {
                 todo!();
             }
@@ -184,10 +179,7 @@ impl AsyncComponent for Model {
                 root.search_entry()
                     .select_region(0, i32::try_from(longest_scan_chars).unwrap_or(-1));
 
-                self.record_view.sender().emit(record_view::Msg::Render {
-                    dictionaries: self.engine.dictionaries(),
-                    records,
-                });
+                self.record_view.sender().emit(record_view::Msg(records));
             }
             Msg::Error(_) => {}
         }

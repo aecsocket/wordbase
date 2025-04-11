@@ -18,9 +18,8 @@ use {
 pub async fn connector(
     platform: &Arc<dyn Platform>,
     engine: Engine,
-    custom_theme: Option<Arc<Theme>>,
 ) -> Result<AsyncConnector<Model>> {
-    let connector = Model::builder().launch((platform.clone(), engine, custom_theme));
+    let connector = Model::builder().launch((platform.clone(), engine));
     let window = connector.widget();
     platform.init_popup(window.upcast_ref()).await?;
     Ok(connector)
@@ -28,7 +27,7 @@ pub async fn connector(
 
 #[derive(Debug)]
 pub struct Model {
-    record_view: Controller<record_view::Model>,
+    record_view: AsyncController<record_view::Model>,
     platform: Arc<dyn Platform>,
     engine: Engine,
     query_override: Option<String>,
@@ -36,7 +35,6 @@ pub struct Model {
 
 #[derive(Debug)]
 pub enum Msg {
-    CustomTheme(Option<Arc<Theme>>),
     Render {
         records: Vec<RecordLookup>,
     },
@@ -56,7 +54,7 @@ pub enum Response {
 }
 
 impl AsyncComponent for Model {
-    type Init = (Arc<dyn Platform>, Engine, Option<Arc<Theme>>);
+    type Init = (Arc<dyn Platform>, Engine);
     type Input = Msg;
     type Output = Response;
     type CommandOutput = ();
@@ -68,7 +66,7 @@ impl AsyncComponent for Model {
     }
 
     async fn init(
-        (platform, engine, custom_theme): Self::Init,
+        (platform, engine): Self::Init,
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
@@ -83,7 +81,7 @@ impl AsyncComponent for Model {
         let model = Self {
             platform,
             record_view: record_view::Model::builder()
-                .launch(record_view::Config { custom_theme })
+                .launch(engine.clone())
                 .forward(sender.input_sender(), Msg::FromView),
             engine,
             query_override: None,
@@ -131,16 +129,9 @@ impl AsyncComponent for Model {
         root: &Self::Root,
     ) {
         match message {
-            Msg::CustomTheme(theme) => self
-                .record_view
-                .sender()
-                .emit(record_view::Msg::CustomTheme(theme)),
             Msg::Render { records } => {
                 self.query_override = None;
-                self.record_view.sender().emit(record_view::Msg::Render {
-                    dictionaries: self.engine.dictionaries(),
-                    records,
-                });
+                self.record_view.sender().emit(record_view::Msg(records));
             }
             Msg::Present {
                 target_window,

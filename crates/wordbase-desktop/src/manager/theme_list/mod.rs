@@ -8,7 +8,7 @@ use relm4::{
 };
 use wordbase_engine::{Engine, profile::ProfileConfig};
 
-use crate::{APP_EVENTS, AppEvent, gettext};
+use crate::{APP_EVENTS, AppEvent, forward_events, gettext};
 
 use super::theme_row;
 
@@ -49,15 +49,7 @@ impl AsyncComponent for Model {
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
-        sender.command(|out, shutdown| {
-            shutdown
-                .register(async move {
-                    while let Ok(event) = APP_EVENTS.subscribe().recv().await {
-                        _ = out.send(event);
-                    }
-                })
-                .drop_on_shutdown()
-        });
+        forward_events(&sender);
 
         root.font_row().connect_activated(clone!(
             #[strong]
@@ -80,15 +72,14 @@ impl AsyncComponent for Model {
         root.list()
             .insert(default_theme.widget(), root.import_button().index());
 
-        AsyncComponentParts {
-            model: Self {
-                default_theme,
-                custom_themes: Vec::new(),
-                window,
-                engine,
-            },
-            widgets: (),
-        }
+        let model = Self {
+            default_theme,
+            custom_themes: Vec::new(),
+            window,
+            engine,
+        };
+        set_font(&model, &root);
+        AsyncComponentParts { model, widgets: () }
     }
 
     async fn update_with_view(
@@ -119,17 +110,20 @@ impl AsyncComponent for Model {
         root: &Self::Root,
     ) {
         match message {
-            AppEvent::FontSet => {
-                let profile = self.engine.profiles().current.clone();
-                let font_name = match (&profile.config.font_family, &profile.config.font_face) {
-                    (Some(font_family), Some(font_face)) => {
-                        format!(r#"<span face="{font_family}">{font_family} {font_face}</span>"#)
-                    }
-                    _ => String::new(),
-                };
-                root.font_row().set_subtitle(&font_name);
-            }
+            AppEvent::FontSet => set_font(self, root),
         }
+    }
+}
+
+fn set_font(model: &Model, root: &ui::Themes) {
+    let profile = model.engine.profiles().current.clone();
+    if let Some(family) = &profile.config.font_family {
+        let subtitle = format!(r#"<span face="{family}">{family}</span>"#);
+        root.font_row().set_subtitle(&subtitle);
+        root.font_reset().set_visible(true);
+    } else {
+        root.font_row().set_subtitle("");
+        root.font_reset().set_visible(false);
     }
 }
 
@@ -148,7 +142,6 @@ async fn select_font(model: &Model) -> Result<()> {
             profiles.current_id,
             &ProfileConfig {
                 font_family: Some(font.family().name().to_string()),
-                font_face: Some(font.face_name().to_string()),
                 ..profiles.current.config.clone()
             },
         )
@@ -166,7 +159,6 @@ async fn reset_font(model: &Model) -> Result<()> {
             profiles.current_id,
             &ProfileConfig {
                 font_family: None,
-                font_face: None,
                 ..profiles.current.config.clone()
             },
         )

@@ -11,8 +11,8 @@ pub struct Model {
 }
 
 #[derive(Debug)]
+#[doc(hidden)]
 pub enum Msg {
-    #[doc(hidden)]
     AskRemove,
 }
 
@@ -38,6 +38,7 @@ impl Component for Model {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
+        root.connect_activated(|root| root.enabled().set_active(true));
         root.set_title(
             theme_name
                 .as_deref()

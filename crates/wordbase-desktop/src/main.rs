@@ -49,6 +49,21 @@ pub enum AppEvent {
     FontSet,
 }
 
+pub fn forward_events<C>(sender: &AsyncComponentSender<C>)
+where
+    C: AsyncComponent<CommandOutput = AppEvent>,
+{
+    sender.command(|out, shutdown| {
+        shutdown
+            .register(async move {
+                while let Ok(event) = APP_EVENTS.subscribe().recv().await {
+                    _ = out.send(event);
+                }
+            })
+            .drop_on_shutdown()
+    });
+}
+
 fn gettext(s: &str) -> &str {
     s
 }
@@ -83,10 +98,6 @@ struct App {
 enum AppMsg {
     ThemeInsert(CustomTheme),
     ThemeRemove(ThemeName),
-    SetFont {
-        font_family: Option<String>,
-        font_face: Option<String>,
-    },
 }
 
 #[relm4::component(async)]
@@ -133,17 +144,16 @@ impl AsyncComponent for App {
         let (engine, initial_themes, theme_watcher) = init_engine(sender.input_sender().clone())
             .await
             .expect("failed to initialize engine");
-        let custom_theme = None; // TODO
         setup_profile_action(engine.clone());
 
-        let main_popup = popup::connector(&platform, engine.clone(), custom_theme.clone())
+        let main_popup = popup::connector(&platform, engine.clone())
             .await
             .expect("failed to create popup")
             .detach();
         let model = Self {
             themes: initial_themes,
             manager: manager::Model::builder()
-                .launch((root.clone(), engine.clone(), custom_theme))
+                .launch((root.clone(), engine.clone()))
                 .detach(),
             overlays: overlay::Overlays::builder()
                 .launch((engine.clone(), platform, main_popup.sender().clone()))
@@ -155,46 +165,6 @@ impl AsyncComponent for App {
         let widgets = view_output!();
         AsyncComponentParts { model, widgets }
     }
-
-    async fn update(
-        &mut self,
-        msg: Self::Input,
-        _sender: AsyncComponentSender<Self>,
-        _root: &Self::Root,
-    ) {
-        if let Err(err) = update(&self.engine, msg).await {
-            // todo manager toast msg
-            error!("{err:?}");
-        }
-    }
-}
-
-async fn update(engine: &Engine, msg: AppMsg) -> Result<()> {
-    match msg {
-        AppMsg::SetFont {
-            font_family,
-            font_face,
-        } => {
-            let profiles = engine.profiles();
-            let current_profile = profiles
-                .by_id
-                .get(&profiles.current_id)
-                .context("no current profile")?;
-            engine
-                .set_profile_config(
-                    profiles.current_id,
-                    &ProfileConfig {
-                        font_family,
-                        font_face,
-                        ..current_profile.config.clone()
-                    },
-                )
-                .await
-                .context("failed to set profile config")?;
-        }
-        _ => {}
-    }
-    Ok(())
 }
 
 async fn init_engine(

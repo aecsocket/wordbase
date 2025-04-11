@@ -1,51 +1,38 @@
 use {
-    crate::theme::{DEFAULT_THEME, Theme},
+    crate::{AppEvent, forward_events, theme::DEFAULT_THEME},
     maud::html,
     relm4::{
         adw::{gdk, gio, prelude::*},
         prelude::*,
     },
-    std::sync::Arc,
     tracing::{debug, info},
     webkit6::prelude::*,
     wordbase::{RecordKind, RecordLookup},
-    wordbase_engine::{dictionary::Dictionaries, html},
+    wordbase_engine::{Engine, html},
 };
 
 #[derive(Debug)]
 pub struct Model {
-    pub custom_theme: Option<Arc<Theme>>,
-    pub dictionaries: Arc<Dictionaries>,
-    pub records: Vec<RecordLookup>,
+    engine: Engine,
+    records: Vec<RecordLookup>,
 }
 
 pub const SUPPORTED_RECORD_KINDS: &[RecordKind] = RecordKind::ALL;
 
 #[derive(Debug)]
-pub enum Msg {
-    CustomTheme(Option<Arc<Theme>>),
-    Render {
-        dictionaries: Arc<Dictionaries>,
-        records: Vec<RecordLookup>,
-    },
-}
-
-#[derive(Debug)]
-pub struct Config {
-    pub custom_theme: Option<Arc<Theme>>,
-}
+pub struct Msg(pub Vec<RecordLookup>);
 
 #[derive(Debug)]
 pub enum Response {
     Query(String),
 }
 
-#[relm4::component(pub)]
-impl Component for Model {
-    type Init = Config;
+#[relm4::component(pub, async)]
+impl AsyncComponent for Model {
+    type Init = Engine;
     type Input = Msg;
     type Output = Response;
-    type CommandOutput = ();
+    type CommandOutput = AppEvent;
 
     view! {
         webkit6::WebView {
@@ -66,54 +53,56 @@ impl Component for Model {
         }
     }
 
-    fn init(
-        config: Self::Init,
+    async fn init(
+        engine: Self::Init,
         root: Self::Root,
-        sender: ComponentSender<Self>,
-    ) -> ComponentParts<Self> {
+        sender: AsyncComponentSender<Self>,
+    ) -> AsyncComponentParts<Self> {
+        forward_events(&sender);
         let model = Self {
-            custom_theme: config.custom_theme,
-            dictionaries: Arc::default(),
+            engine,
             records: Vec::new(),
         };
         let widgets = view_output!();
-        ComponentParts { model, widgets }
+        AsyncComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>, _root: &Self::Root) {
-        match message {
-            Msg::CustomTheme(theme) => {
-                self.custom_theme = theme;
-            }
-            Msg::Render {
-                dictionaries,
-                records,
-            } => {
-                self.dictionaries = dictionaries;
-                self.records = records;
-            }
-        }
-    }
-
-    fn update_with_view(
+    async fn update_cmd_with_view(
         &mut self,
         widgets: &mut Self::Widgets,
-        message: Self::Input,
-        sender: ComponentSender<Self>,
+        message: Self::CommandOutput,
+        sender: AsyncComponentSender<Self>,
         root: &Self::Root,
     ) {
-        self.update(message, sender.clone(), root);
-        self.update_view(widgets, sender);
+    }
 
-        let records_html = html::render_records(&self.dictionaries.by_id, &self.records);
+    async fn update_with_view(
+        &mut self,
+        widgets: &mut Self::Widgets,
+        records: Self::Input,
+        sender: AsyncComponentSender<Self>,
+        root: &Self::Root,
+    ) {
+        self.records = records.0;
+        let profile = self.engine.profiles().current.clone();
+
+        root.set_settings(
+            &webkit6::Settings::builder()
+                .default_font_family(profile.config.font_family.as_deref().unwrap_or_default())
+                .enable_page_cache(false)
+                .build(),
+        );
+
+        let records_html = html::render_records(&self.engine.dictionaries().by_id, &self.records);
         let full_html = html! {
             style {
                 (DEFAULT_THEME.style)
             }
 
-            style {
-                (self.custom_theme.as_ref().map(|theme| theme.style.as_str()).unwrap_or_default())
-            }
+            // TODO custom theme
+            // style {
+            //     (self.custom_theme.as_ref().map(|theme| theme.style.as_str()).unwrap_or_default())
+            // }
 
             .records {
                 (records_html)
@@ -123,7 +112,7 @@ impl Component for Model {
     }
 }
 
-fn on_decide_policy(decision: &webkit6::PolicyDecision, sender: &ComponentSender<Model>) {
+fn on_decide_policy(decision: &webkit6::PolicyDecision, sender: &AsyncComponentSender<Model>) {
     let Some(decision) = decision.downcast_ref::<webkit6::NavigationPolicyDecision>() else {
         return;
     };
