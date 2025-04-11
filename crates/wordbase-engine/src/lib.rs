@@ -12,21 +12,21 @@ pub mod lookup;
 pub mod profile;
 pub mod texthook;
 
-use anki::Anki;
-use arc_swap::ArcSwap;
-use dictionary::Dictionaries;
-use profile::Profiles;
-use tokio::sync::broadcast;
 pub use wordbase;
-use wordbase::TexthookerSentence;
 use {
+    anki::Anki,
     anyhow::{Context, Result},
+    arc_swap::ArcSwap,
     deinflect::Deinflectors,
     derive_more::{Deref, DerefMut},
+    dictionary::Dictionaries,
     import::Imports,
+    profile::Profiles,
     sqlx::{Pool, Sqlite},
     std::{path::Path, sync::Arc},
     texthook::Texthookers,
+    tokio::sync::broadcast,
+    wordbase::TexthookerSentence,
 };
 
 #[derive(Debug, Clone, Deref, DerefMut)]

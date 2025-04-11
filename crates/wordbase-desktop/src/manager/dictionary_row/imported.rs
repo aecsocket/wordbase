@@ -1,16 +1,16 @@
-use std::sync::Arc;
-
-use super::ui;
-use anyhow::{Context, Result};
-use glib::clone;
-use relm4::{
-    adw::{gio, prelude::*},
-    prelude::*,
+use {
+    super::ui,
+    crate::{APP_EVENTS, AppEvent, forward_events, gettext, toast_result},
+    anyhow::{Context, Result},
+    glib::clone,
+    relm4::{
+        adw::{gio, prelude::*},
+        prelude::*,
+    },
+    std::sync::Arc,
+    wordbase::Dictionary,
+    wordbase_engine::Engine,
 };
-use wordbase::Dictionary;
-use wordbase_engine::Engine;
-
-use crate::{APP_EVENTS, AppEvent, forward_events, gettext, toast_result};
 
 #[derive(Debug)]
 pub struct Model {

@@ -1,7 +1,9 @@
-use super::request::{Request, RequestWrapper};
-use anyhow::Result;
-use derive_more::{Display, Error};
-use serde::{Deserialize, Serialize};
+use {
+    super::request::{Request, RequestWrapper},
+    anyhow::Result,
+    derive_more::{Display, Error},
+    serde::{Deserialize, Serialize},
+};
 
 pub const VERSION: u32 = 6;
 

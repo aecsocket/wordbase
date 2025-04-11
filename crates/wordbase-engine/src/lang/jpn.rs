@@ -1,6 +1,6 @@
 //! Japanese-specific items.
 
-use {itertools::Itertools, std::iter};
+use {crate::texthook::run, itertools::Itertools, std::iter};
 
 /// Checks if the given character is hiragana
 ///
@@ -108,6 +108,7 @@ pub fn kana_to_hiragana(s: &str) -> String {
 /// );
 /// ```
 #[must_use]
+#[expect(clippy::missing_panics_doc, reason = "shouldn't panic")]
 pub fn furigana_parts<'a>(headword: &'a str, mut reading: &'a str) -> Vec<(&'a str, &'a str)> {
     #[derive(Debug)]
     struct HeadwordPart<'a> {
@@ -147,19 +148,61 @@ pub fn furigana_parts<'a>(headword: &'a str, mut reading: &'a str) -> Vec<(&'a s
             }
             (part.text, "")
         } else if let Some(peek) = headword_parts.peek() {
-            // the next part must be a kana, so we split our reading in half,
-            // at that kana's position
-            //
+            // the next part must be a kana...
+            debug_assert!(peek.is_kana);
+
+            // ...so we split our reading in half, at that kana's position
             // let's say we're on "取"
             // we peek the next part "り"
             // and try to find the next occurrence of "り" in `reading`
             // so everything in `reading` up to that "り" is a part of the reading of "取"
             // and "り" and everything after that is the remainder of the reading
-            debug_assert!(peek.is_kana);
-            if let Some(split_pos) = reading.find(peek.text) {
-                let (this_part_reading, rem) = reading.split_at(split_pos);
+            //
+            // let's say we're generating for "聞き" (きき) and we're on "聞"
+            // if we look for き we're gonna find the FIRST one, which is wrong
+            // instead, we want to find the LAST き before a non-き pattern (or the end)
+            //
+            // in the general case, if we have some text "xxababCDab", we want to:
+            // - find where the "ab" pattern starts
+            // - keep going through "ab"s until we find a non-"ab" pattern
+            // - collect everything before that last "ab" ("xxab") as this part's reading
+            // - keep that "ab" and after ("abCDab") for the reading remainder
+
+            if let Some(first_peek_pos) = reading.find(peek.text) {
+                //
+                //     た べ る べ る あ い う
+                //     ^^ --------------------
+                //  pre | | post
+                //
+                let (_pre, mut post) = reading.split_at(first_peek_pos);
+
+                // now we remove "ab"s until we reach a non-"ab" pattern
+                let mut removed = 0usize;
+                while let Some(rem) = post.strip_prefix(peek.text) {
+                    post = rem;
+                    removed += 1;
+                }
+
+                // this is so genuinely stupid but I can't think of a better way to do this
+                removed = removed.checked_sub(1).expect(
+                    "we should have been able to strip at least one `peek.text` from `post`, \
+                     since we found `peek.text` in `reading`",
+                );
+
+                //
+                //             た べ る
+                //             ^^ -----
+                // part_reading | | rem
+                //
+                //       た べ る べ る あ い う
+                //       ^^^^^^^^ --------------
+                // part_reading | | post
+                //
+
+                let (part_reading, rem) =
+                    reading.split_at(first_peek_pos + peek.text.len() * removed);
                 reading = rem;
-                (part.text, this_part_reading)
+                (part.text, part_reading)
             } else {
                 // this shouldn't happen; we do the best we can
                 (part.text, reading)
@@ -271,6 +314,14 @@ mod tests {
         assert_eq!(
             super::furigana_parts("お茶", "おちゃ"),
             [("お", ""), ("茶", "ちゃ")]
+        );
+        assert_eq!(
+            super::furigana_parts("聞き流す", "ききながす"),
+            [("聞", "き"), ("き", ""), ("流", "なが"), ("す", "")]
+        );
+        assert_eq!(
+            super::furigana_parts("言い争い", "いいあらそい"),
+            [("言", "い"), ("い", ""), ("争", "あらそ"), ("い", "")]
         );
     }
 

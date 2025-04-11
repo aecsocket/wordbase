@@ -1,12 +1,12 @@
-use std::{cmp, fmt::Write as _, sync::Arc};
-
-use anyhow::{Context, Result, bail};
-use arc_swap::ArcSwapOption;
-use client::{AnkiClient, VERSION};
-use request::{DeckName, ModelFieldName, ModelName};
-use wordbase::{Record, RecordLookup, Term};
-
-use crate::{Engine, IndexMap, html, lang};
+use {
+    crate::{Engine, IndexMap, html, lang},
+    anyhow::{Context, Result, bail},
+    arc_swap::ArcSwapOption,
+    client::{AnkiClient, VERSION},
+    request::{DeckName, ModelFieldName, ModelName},
+    std::{cmp, fmt::Write as _, sync::Arc},
+    wordbase::{Record, RecordLookup, Term},
+};
 
 mod client;
 mod request;
@@ -142,8 +142,8 @@ impl Engine {
             // ("IsSentenceCard", ""),
             // (
             //     "Frequency",
-            //     r#"<ul style="text-align: left;"><li>JPDBv2㋕: 14122</li><li>BCCWJ: 65310</li></ul>"#,
-            // ),
+            //     r#"<ul style="text-align: left;"><li>JPDBv2㋕: 14122</li><li>BCCWJ:
+            // 65310</li></ul>"#, ),
             // ("FreqSort", "22994"), // frequency harmonic mean
         ];
 

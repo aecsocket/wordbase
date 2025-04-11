@@ -7,7 +7,7 @@ use {
     gtk4::pango::ffi::PANGO_SCALE,
     relm4::{
         adw::{
-            self, gio,
+            self, gdk, gio,
             gtk::{graphene, pango},
             prelude::*,
         },
@@ -207,6 +207,36 @@ impl AsyncComponent for Overlay {
             .bind(OVERLAY_OPACITY_HOVER, &root.opacity_hover(), "value")
             .build();
 
+        settings
+            .bind(OVERLAY_SCAN_TRIGGER, &root.scan_trigger(), "selected")
+            .mapping(|from, _ty| {
+                Some(
+                    match from.str() {
+                        Some("hover") => 0u32,
+                        Some("click") => 1u32,
+                        Some("shift") => 2u32,
+                        Some("ctrl") => 3u32,
+                        Some("alt") => 4u32,
+                        _ => todo!(),
+                    }
+                    .to_value(),
+                )
+            })
+            .set_mapping(|from, _ty| {
+                Some(
+                    match from.get::<u32>() {
+                        Ok(0) => "hover",
+                        Ok(1) => "click",
+                        Ok(2) => "shift",
+                        Ok(3) => "ctrl",
+                        Ok(4) => "alt",
+                        _ => todo!(),
+                    }
+                    .to_variant(),
+                )
+            })
+            .build();
+
         let font_size_signal_handler = SignalHandler::new(&settings, |it| {
             it.connect_changed(
                 Some(OVERLAY_FONT_SIZE),
@@ -383,6 +413,15 @@ fn setup_sentence_scan(root: &ui::Overlay, sender: &AsyncComponentSender<Overlay
         #[strong]
         sender,
         move |_, rel_x, rel_y| {
+            let modifiers = gdk::Display::default()
+                .and_then(|display| display.default_seat())
+                .and_then(|seat| seat.keyboard())
+                .map(|pointer| pointer.modifier_state());
+            println!("mods = {modifiers:?}");
+            // if modifiers.contains(gdk::ModifierType::BUTTON1_MASK) {
+            //     return;
+            // }
+
             #[expect(clippy::cast_possible_truncation, reason = "no other way to convert")]
             let (ch_x, ch_y) = (rel_x as i32 * pango::SCALE, rel_y as i32 * pango::SCALE);
 
@@ -407,3 +446,4 @@ const POPUP_OFFSET: (i32, i32) = (0, 10);
 const OVERLAY_FONT_SIZE: &str = "overlay-font-size";
 const OVERLAY_OPACITY_IDLE: &str = "overlay-opacity-idle";
 const OVERLAY_OPACITY_HOVER: &str = "overlay-opacity-hover";
+const OVERLAY_SCAN_TRIGGER: &str = "overlay-scan-trigger";

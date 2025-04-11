@@ -22,6 +22,8 @@ mod imp {
         pub opacity_idle: TemplateChild<gtk::Adjustment>,
         #[template_child]
         pub opacity_hover: TemplateChild<gtk::Adjustment>,
+        #[template_child]
+        pub scan_trigger: TemplateChild<gtk::DropDown>,
     }
 
     #[glib::object_subclass]
@@ -93,5 +95,10 @@ impl Overlay {
     #[must_use]
     pub fn opacity_hover(&self) -> gtk::Adjustment {
         self.imp().opacity_hover.get()
+    }
+
+    #[must_use]
+    pub fn scan_trigger(&self) -> gtk::DropDown {
+        self.imp().scan_trigger.get()
     }
 }

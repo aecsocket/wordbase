@@ -1,16 +1,16 @@
 mod ui;
 
-use anyhow::{Context, Result};
-use gtk4::prelude::{CheckButtonExt, ListBoxRowExt};
-use relm4::{
-    adw::{glib::clone, gtk::pango, prelude::*},
-    prelude::*,
+use {
+    super::theme_row,
+    crate::{APP_EVENTS, AppEvent, forward_events, gettext, toast_result},
+    anyhow::{Context, Result},
+    gtk4::prelude::{CheckButtonExt, ListBoxRowExt},
+    relm4::{
+        adw::{glib::clone, gtk::pango, prelude::*},
+        prelude::*,
+    },
+    wordbase_engine::{Engine, profile::ProfileConfig},
 };
-use wordbase_engine::{Engine, profile::ProfileConfig};
-
-use crate::{APP_EVENTS, AppEvent, forward_events, gettext, toast_result};
-
-use super::theme_row;
 
 #[derive(Debug)]
 pub struct Model {

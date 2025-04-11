@@ -1,12 +1,13 @@
-use glib::clone;
-use relm4::{
-    adw::{gio, prelude::*},
-    prelude::*,
+use {
+    crate::{APP_ID, AppEvent, forward_events, gettext, record_view},
+    glib::clone,
+    relm4::{
+        adw::{gio, prelude::*},
+        prelude::*,
+    },
+    tracing::info,
+    wordbase_engine::Engine,
 };
-use tracing::info;
-use wordbase_engine::Engine;
-
-use crate::{APP_ID, AppEvent, forward_events, gettext, record_view};
 
 mod dictionary_list;
 mod dictionary_row;

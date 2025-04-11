@@ -93,6 +93,21 @@ Popover settings_menu {
         adjustment: opacity_hover;
       }
     }
+
+    Box {
+      orientation: horizontal;
+      spacing: 8;
+
+      Label scan_trigger_label {
+        label: _("Scan On");
+        xalign: 0;
+      }
+
+      DropDown scan_trigger {
+        hexpand: true;
+        model: scan_trigger_model;
+      }
+    }
   }
 }
 
@@ -111,7 +126,22 @@ Adjustment opacity_hover {
   upper: 1.0;
 }
 
+StringList scan_trigger_model {
+  strings [
+    _("Hover"),
+    _("Click"),
+    _("Shift"),
+    _("Control"),
+    _("Alt"),
+  ]
+}
+
 SizeGroup {
   mode: horizontal;
-  widgets [ font_size_label, opacity_idle_label, opacity_hover_label ]
+  widgets [
+    font_size_label,
+    opacity_idle_label,
+    opacity_hover_label,
+    scan_trigger_label,
+  ]
 }

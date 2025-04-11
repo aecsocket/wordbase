@@ -1,7 +1,9 @@
-use crate::gettext;
-use glib::clone;
-use gtk4::prelude::ButtonExt;
-use relm4::{adw::prelude::*, prelude::*};
+use {
+    crate::gettext,
+    glib::clone,
+    gtk4::prelude::ButtonExt,
+    relm4::{adw::prelude::*, prelude::*},
+};
 
 mod ui;
 

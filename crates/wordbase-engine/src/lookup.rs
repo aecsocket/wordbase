@@ -6,7 +6,7 @@ use {
     itertools::Itertools,
     std::borrow::Borrow,
     wordbase::{
-        DictionaryId, FrequencyValue, RecordLookup, Record, RecordId, RecordKind, Term, for_kinds,
+        DictionaryId, FrequencyValue, Record, RecordId, RecordKind, RecordLookup, Term, for_kinds,
     },
 };
 

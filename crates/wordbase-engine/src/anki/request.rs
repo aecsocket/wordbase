@@ -1,5 +1,7 @@
-use foldhash::HashMap;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use {
+    foldhash::HashMap,
+    serde::{Deserialize, Serialize, de::DeserializeOwned},
+};
 
 pub trait Request: Send + Sync + Serialize + 'static {
     type Response: DeserializeOwned;

@@ -10,7 +10,7 @@ TODO:
   - [ ] sometimes when hovering, the lookup is done, BUT the popup isn't focused maybe?
   - [ ] chinese fonts (force switch away from Inter?)
   - [ ] overlay opacity should update when you modify it
-  - [ ] incorrect furigana
+  - [x] incorrect furigana
     - 聞き流す - ききながす
     - 言い争い - いいあらそい
     - 言い直す - いいなおす
@@ -21,6 +21,7 @@ TODO:
   - [ ] if clicking the mouse while sentence motion, it should NOT lookup
   - [ ] this fails to lookup:
     - 居たたまれなくなって
+      - because: root form is 居たたまれない
     - 仕えする
     - 向き合わせになる
   - [ ] click dragging on the overlay popup should let you drag it

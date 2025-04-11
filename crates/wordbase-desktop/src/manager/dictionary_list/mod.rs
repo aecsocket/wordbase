@@ -1,16 +1,16 @@
 mod ui;
 
-use std::sync::Arc;
-
-use foldhash::{HashMap, HashMapExt};
-use relm4::{
-    adw::{glib::clone, prelude::*},
-    prelude::*,
+use {
+    crate::{AppEvent, forward_events, manager::dictionary_row},
+    foldhash::{HashMap, HashMapExt},
+    relm4::{
+        adw::{glib::clone, prelude::*},
+        prelude::*,
+    },
+    std::sync::Arc,
+    wordbase::{Dictionary, DictionaryId},
+    wordbase_engine::Engine,
 };
-use wordbase::{Dictionary, DictionaryId};
-use wordbase_engine::Engine;
-
-use crate::{AppEvent, forward_events, manager::dictionary_row};
 
 #[derive(Debug)]
 pub struct Model {
