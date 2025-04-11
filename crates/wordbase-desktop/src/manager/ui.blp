@@ -24,6 +24,13 @@ template $WdbManager: Adw.Bin {
           }
 
           Adw.PreferencesPage {
+            Adw.PreferencesGroup {
+              Adw.ComboRow {
+                title: _("Language");
+                model: languages_model;
+              }
+            }
+
             Adw.PreferencesGroup dictionaries {
               title: _("Dictionaries");
             }
@@ -163,6 +170,13 @@ template $WdbManager: Adw.Bin {
       }
     }
   }
+}
+
+StringList languages_model {
+  strings [
+    _("Unset"),
+    "日本語",
+  ]
 }
 
 StringList profiles_model {

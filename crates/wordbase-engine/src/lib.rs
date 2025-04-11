@@ -46,8 +46,6 @@ pub struct Inner {
 
 #[derive(Debug, Clone)]
 pub enum Event {
-    SyncDictionaries,
-    SyncProfiles,
     PullTexthookerConnected,
     PullTexthookerDisconnected,
     TexthookerSentence(TexthookerSentence),

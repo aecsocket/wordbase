@@ -3,8 +3,8 @@
 
 pub mod dict;
 
+mod lang;
 mod protocol;
-use foldhash::HashMap;
 pub use protocol::*;
 use {
     derive_more::{Deref, Display, From},
@@ -326,7 +326,6 @@ pub struct Profile {
     ///
     /// [position]: Dictionary::position
     pub sorting_dictionary: Option<DictionaryId>,
-    pub config: ProfileConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -342,14 +341,7 @@ pub struct ProfileMeta {
     /// different profiles, and allow users to quickly differentiate between
     /// their profiles by color.
     pub accent_color: Option<[f32; 3]>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProfileConfig {
-    pub anki_deck: Option<NormString>,
-    pub anki_model: Option<NormString>,
-    #[serde(default)]
-    pub anki_model_fields: HashMap<NormString, NormString>,
+    pub language: Option<String>,
 }
 
 /// Opaque and unique identifier for a single [`Profile`] in a database.

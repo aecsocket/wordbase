@@ -19,27 +19,35 @@ mod icon_names {
 
 use {
     anyhow::{Context, Result},
+    derive_more::Debug,
     directories::ProjectDirs,
     foldhash::HashMap,
     platform::Platform,
     relm4::{
+        MessageBroker,
         adw::{self, gio, prelude::*},
         loading_widgets::LoadingWidgets,
         prelude::*,
         view,
     },
-    std::sync::Arc,
+    std::sync::{Arc, LazyLock},
     theme::{CustomTheme, ThemeName},
-    tokio::fs,
+    tokio::{fs, sync::broadcast},
     tracing::{error, info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
     wordbase::ProfileId,
-    wordbase_engine::Engine,
+    wordbase_engine::{Engine, profile::ProfileConfig},
 };
 
 const APP_ID: &str = "io.github.aecsocket.Wordbase";
+static APP_BROKER: MessageBroker<AppMsg> = MessageBroker::new();
+static APP_EVENTS: LazyLock<broadcast::Sender<AppEvent>> =
+    LazyLock::new(|| broadcast::channel(CHANNEL_BUF_CAP).0);
 
-const ACTION_PROFILE: &str = "profile";
+#[derive(Debug, Clone)]
+pub enum AppEvent {
+    FontSet,
+}
 
 fn gettext(s: &str) -> &str {
     s
@@ -56,7 +64,9 @@ fn main() {
     glib::log_set_default_handler(glib::rust_log_handler);
     relm4_icons::initialize_icons(icon_names::GRESOURCE_BYTES, icon_names::RESOURCE_PREFIX);
 
-    RelmApp::new(APP_ID).run_async::<App>(());
+    RelmApp::new(APP_ID)
+        .with_broker(&APP_BROKER)
+        .run_async::<App>(());
 }
 
 #[derive(Debug)]
@@ -65,6 +75,7 @@ struct App {
     manager: AsyncController<manager::Model>,
     overlays: AsyncController<overlay::Overlays>,
     main_popup: AsyncController<popup::Model>,
+    engine: Engine,
     _theme_watcher: notify::RecommendedWatcher,
 }
 
@@ -72,6 +83,10 @@ struct App {
 enum AppMsg {
     ThemeInsert(CustomTheme),
     ThemeRemove(ThemeName),
+    SetFont {
+        font_family: Option<String>,
+        font_face: Option<String>,
+    },
 }
 
 #[relm4::component(async)]
@@ -131,14 +146,55 @@ impl AsyncComponent for App {
                 .launch((root.clone(), engine.clone(), custom_theme))
                 .detach(),
             overlays: overlay::Overlays::builder()
-                .launch((engine, platform, main_popup.sender().clone()))
+                .launch((engine.clone(), platform, main_popup.sender().clone()))
                 .detach(),
             main_popup,
+            engine,
             _theme_watcher: theme_watcher,
         };
         let widgets = view_output!();
         AsyncComponentParts { model, widgets }
     }
+
+    async fn update(
+        &mut self,
+        msg: Self::Input,
+        _sender: AsyncComponentSender<Self>,
+        _root: &Self::Root,
+    ) {
+        if let Err(err) = update(&self.engine, msg).await {
+            // todo manager toast msg
+            error!("{err:?}");
+        }
+    }
+}
+
+async fn update(engine: &Engine, msg: AppMsg) -> Result<()> {
+    match msg {
+        AppMsg::SetFont {
+            font_family,
+            font_face,
+        } => {
+            let profiles = engine.profiles();
+            let current_profile = profiles
+                .by_id
+                .get(&profiles.current_id)
+                .context("no current profile")?;
+            engine
+                .set_profile_config(
+                    profiles.current_id,
+                    &ProfileConfig {
+                        font_family,
+                        font_face,
+                        ..current_profile.config.clone()
+                    },
+                )
+                .await
+                .context("failed to set profile config")?;
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 async fn init_engine(
@@ -161,7 +217,7 @@ async fn init_engine(
         .await
         .context("failed to create engine")?;
 
-    let (initial_themes, theme_watcher) = theme::watch_themes(data_path, sender)
+    let (initial_themes, theme_watcher) = theme::watch_themes(data_path)
         .await
         .context("failed to start watching theme files")?;
 
@@ -225,3 +281,5 @@ impl SignalHandler {
         }
     }
 }
+
+const ACTION_PROFILE: &str = "profile";

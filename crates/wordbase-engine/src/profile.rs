@@ -1,17 +1,39 @@
 use {
-    crate::{Engine, Event, IndexMap},
+    crate::{Engine, IndexMap},
     anyhow::{Context, Result, bail},
     derive_more::{Display, Error},
+    foldhash::HashMap,
     futures::StreamExt,
+    serde::{Deserialize, Serialize},
     sqlx::{Pool, Sqlite},
     std::sync::Arc,
-    wordbase::{DictionaryId, Profile, ProfileConfig, ProfileId, ProfileMeta},
+    wordbase::{DictionaryId, NormString, ProfileId, ProfileMeta},
 };
 
 #[derive(Debug)]
 pub struct Profiles {
-    pub by_id: IndexMap<ProfileId, Profile>,
+    pub by_id: IndexMap<ProfileId, Arc<ProfileState>>,
     pub current_id: ProfileId,
+    pub current: Arc<ProfileState>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileState {
+    pub id: ProfileId,
+    pub meta: ProfileMeta,
+    pub enabled_dictionaries: Vec<DictionaryId>,
+    pub sorting_dictionary: Option<DictionaryId>,
+    pub config: ProfileConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileConfig {
+    pub font_family: Option<String>,
+    pub font_face: Option<String>,
+    pub anki_deck: Option<NormString>,
+    pub anki_model: Option<NormString>,
+    #[serde(default)]
+    pub anki_model_fields: HashMap<NormString, NormString>,
 }
 
 impl Profiles {
@@ -20,15 +42,23 @@ impl Profiles {
             .await
             .context("failed to fetch profiles")?
             .into_iter()
-            .map(|profile| (profile.id, profile))
-            .collect();
+            .map(|profile| (profile.id, Arc::new(profile)))
+            .collect::<IndexMap<_, _>>();
         let current_id = ProfileId(
             sqlx::query_scalar!("SELECT current_profile FROM config")
                 .fetch_one(db)
                 .await
                 .context("failed to fetch current profile")?,
         );
-        Ok(Self { by_id, current_id })
+        let current = by_id
+            .get(&current_id)
+            .with_context(|| format!("{current_id:?} does not exist"))?
+            .clone();
+        Ok(Self {
+            by_id,
+            current_id,
+            current,
+        })
     }
 }
 
@@ -44,7 +74,6 @@ impl Engine {
                 .await
                 .context("failed to sync profiles")?,
         ));
-        _ = self.send_event.send(Event::SyncProfiles);
         Ok(())
     }
 
@@ -145,8 +174,8 @@ impl Engine {
     }
 }
 
-async fn fetch_owned(db: &Pool<Sqlite>) -> Result<Vec<Profile>> {
-    let mut profiles = Vec::<Profile>::new();
+async fn fetch_owned(db: &Pool<Sqlite>) -> Result<Vec<ProfileState>> {
+    let mut profiles = Vec::<ProfileState>::new();
 
     let mut records = sqlx::query!(
         "SELECT
@@ -173,12 +202,12 @@ async fn fetch_owned(db: &Pool<Sqlite>) -> Result<Vec<Profile>> {
                     .context("failed to deserialize profile meta")?;
                 let config = serde_json::from_str::<ProfileConfig>(&record.config)
                     .context("failed to deserialize profile config")?;
-                profiles.push(Profile {
+                profiles.push(ProfileState {
                     id,
                     meta,
-                    config,
                     enabled_dictionaries: Vec::new(),
                     sorting_dictionary: record.sorting_dictionary.map(DictionaryId),
+                    config,
                 });
                 index
             };

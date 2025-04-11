@@ -19,8 +19,8 @@ mod ui;
 pub struct Model {
     overview_dictionaries: Controller<dictionary_list::Model>,
     search_dictionaries: Controller<dictionary_list::Model>,
-    overview_themes: Controller<theme_list::Model>,
-    search_themes: Controller<theme_list::Model>,
+    overview_themes: AsyncController<theme_list::Model>,
+    search_themes: AsyncController<theme_list::Model>,
     record_view: Controller<record_view::Model>,
     engine: Engine,
     last_query: String,
@@ -108,8 +108,16 @@ impl AsyncComponent for Model {
             search_dictionaries: dictionary_list::Model::builder()
                 .launch((window.clone(), engine.dictionaries()))
                 .forward(sender.input_sender(), Msg::SearchDictionaries),
-            overview_themes: theme_list::Model::builder().launch(window.clone()).detach(),
-            search_themes: theme_list::Model::builder().launch(window).detach(),
+            overview_themes: theme_list::Model::builder()
+                .launch((window.clone(), engine.clone()))
+                .forward(sender.input_sender(), |resp| match resp {
+                    theme_list::Response::Error(err) => Msg::Error(err),
+                }),
+            search_themes: theme_list::Model::builder()
+                .launch((window, engine.clone()))
+                .forward(sender.input_sender(), |resp| match resp {
+                    theme_list::Response::Error(err) => Msg::Error(err),
+                }),
             engine,
             record_view,
             last_query: String::new(),

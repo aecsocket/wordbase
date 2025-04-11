@@ -7,6 +7,12 @@ mod imp {
     #[template(file = "src/manager/theme_list/ui.blp")]
     pub struct Themes {
         #[template_child]
+        pub font_row: TemplateChild<adw::ActionRow>,
+        #[template_child]
+        pub font_reset: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub enabled_dummy: TemplateChild<gtk::CheckButton>,
+        #[template_child]
         pub list: TemplateChild<gtk::ListBox>,
         #[template_child]
         pub import_button: TemplateChild<adw::ButtonRow>,
@@ -42,6 +48,21 @@ impl Themes {
     #[must_use]
     pub fn new() -> Self {
         glib::Object::new()
+    }
+
+    #[must_use]
+    pub fn font_row(&self) -> adw::ActionRow {
+        self.imp().font_row.get()
+    }
+
+    #[must_use]
+    pub fn font_reset(&self) -> gtk::Button {
+        self.imp().font_reset.get()
+    }
+
+    #[must_use]
+    pub fn enabled_dummy(&self) -> gtk::CheckButton {
+        self.imp().enabled_dummy.get()
     }
 
     #[must_use]

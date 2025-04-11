@@ -166,6 +166,13 @@ impl AsyncComponent for Overlay {
         let window_guard = platform.init_overlay(root.upcast_ref()).await.unwrap();
         let settings = gio::Settings::new(APP_ID);
 
+        gtk::FontDialog::builder().build().choose_font_and_features(
+            None::<&gtk::Window>,
+            None,
+            None::<&gio::Cancellable>,
+            |_| {},
+        );
+
         root.connect_close_request(clone!(
             #[strong]
             sender,
@@ -317,6 +324,12 @@ impl Overlay {
         root.sentence()
             .layout()
             .set_font_description(Some(&font_desc));
+
+        // todo
+        root.sentence()
+            .pango_context()
+            .set_language(Some(&pango::Language::from_string("ja")));
+
         root.sentence().queue_draw();
     }
 }

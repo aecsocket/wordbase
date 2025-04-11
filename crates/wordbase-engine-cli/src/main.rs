@@ -9,8 +9,8 @@ use {
     tokio::{fs, sync::oneshot},
     tracing::{info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
-    wordbase::{DictionaryId, NormString, ProfileConfig, ProfileId, ProfileMeta, RecordKind},
-    wordbase_engine::{Engine, Event, import::ImportStarted},
+    wordbase::{DictionaryId, NormString, ProfileId, ProfileMeta, RecordKind},
+    wordbase_engine::{Engine, Event, import::ImportStarted, profile::ProfileConfig},
 };
 
 #[derive(Debug, clap::Parser)]
@@ -341,6 +341,7 @@ async fn profile_new(engine: &Engine, name: String) -> Result<()> {
         .insert_profile(&ProfileMeta {
             name: Some(name),
             accent_color: None,
+            language: None,
         })
         .await?;
     println!("Created profile with ID {}", new_id.0);
@@ -615,7 +616,6 @@ async fn texthooker_watch(engine: &Engine) -> Result<()> {
             Event::TexthookerSentence(sentence) => {
                 println!("{sentence:?}");
             }
-            _ => {}
         }
     }
 }

@@ -1,9 +1,8 @@
 use {
-    crate::AppMsg,
+    crate::{APP_BROKER, AppMsg},
     anyhow::{Context, Result},
     derive_more::Deref,
     foldhash::{HashMap, HashMapExt},
-    glib::clone,
     notify::{
         Watcher,
         event::{CreateKind, ModifyKind, RemoveKind},
@@ -65,7 +64,6 @@ impl ThemeName {
 
 pub async fn watch_themes(
     data_path: &Path,
-    sender: relm4::Sender<AppMsg>,
 ) -> Result<(HashMap<ThemeName, CustomTheme>, notify::RecommendedWatcher)> {
     let themes_path = data_path.join("themes");
     fs::create_dir_all(&themes_path)
@@ -74,15 +72,11 @@ pub async fn watch_themes(
 
     let tokio = tokio::runtime::Handle::current();
     let mut watcher = notify::recommended_watcher(move |event| {
-        tokio.spawn(clone!(
-            #[strong]
-            sender,
-            async move {
-                if let Err(err) = on_file_watcher_event(event, sender).await {
-                    warn!("Theme file watcher error: {err:?}");
-                }
+        tokio.spawn(async move {
+            if let Err(err) = on_file_watcher_event(event).await {
+                warn!("Theme file watcher error: {err:?}");
             }
-        ));
+        });
     })
     .context("failed to create file watcher")?;
     watcher
@@ -113,12 +107,8 @@ pub async fn watch_themes(
     Ok((initial_themes, watcher))
 }
 
-async fn on_file_watcher_event(
-    event: notify::Result<notify::Event>,
-    sender: relm4::Sender<AppMsg>,
-) -> Result<()> {
+async fn on_file_watcher_event(event: notify::Result<notify::Event>) -> Result<()> {
     let event = event.context("file watch error")?;
-
     match event.kind {
         notify::EventKind::Create(CreateKind::File)
         | notify::EventKind::Modify(ModifyKind::Any) => {
@@ -126,18 +116,17 @@ async fn on_file_watcher_event(
                 let theme = CustomTheme::read_from(&path)
                     .await
                     .with_context(|| format!("failed to read theme `{path:?}`"))?;
-                sender.emit(AppMsg::ThemeInsert(theme));
+                APP_BROKER.send(AppMsg::ThemeInsert(theme));
             }
         }
         notify::EventKind::Remove(RemoveKind::File) => {
             for path in event.paths {
                 let name = ThemeName::from_path(&path)
                     .with_context(|| format!("invalid theme name `{path:?}`"))?;
-                sender.emit(AppMsg::ThemeRemove(name));
+                APP_BROKER.send(AppMsg::ThemeRemove(name));
             }
         }
         _ => {}
     }
-
     Ok(())
 }

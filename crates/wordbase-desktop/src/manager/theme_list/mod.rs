@@ -1,7 +1,14 @@
 mod ui;
 
+use anyhow::{Context, Result};
 use gtk4::prelude::{CheckButtonExt, ListBoxRowExt};
-use relm4::prelude::*;
+use relm4::{
+    adw::{glib::clone, gtk::pango, prelude::*},
+    prelude::*,
+};
+use wordbase_engine::{Engine, profile::ProfileConfig};
+
+use crate::{APP_EVENTS, AppEvent, gettext};
 
 use super::theme_row;
 
@@ -9,13 +16,27 @@ use super::theme_row;
 pub struct Model {
     default_theme: Controller<theme_row::Model>,
     custom_themes: Vec<Controller<theme_row::Model>>,
+    window: adw::Window,
+    engine: Engine,
 }
 
-impl Component for Model {
-    type Init = adw::Window;
-    type Input = ();
-    type Output = ();
-    type CommandOutput = ();
+#[derive(Debug)]
+#[doc(hidden)]
+pub enum Msg {
+    SelectFont,
+    ResetFont,
+}
+
+#[derive(Debug)]
+pub enum Response {
+    Error(anyhow::Error),
+}
+
+impl AsyncComponent for Model {
+    type Init = (adw::Window, Engine);
+    type Input = Msg;
+    type Output = Response;
+    type CommandOutput = AppEvent;
     type Root = ui::Themes;
     type Widgets = ();
 
@@ -23,25 +44,134 @@ impl Component for Model {
         ui::Themes::new()
     }
 
-    fn init(
-        window: Self::Init,
+    async fn init(
+        (window, engine): Self::Init,
         root: Self::Root,
-        _sender: ComponentSender<Self>,
-    ) -> ComponentParts<Self> {
+        sender: AsyncComponentSender<Self>,
+    ) -> AsyncComponentParts<Self> {
+        sender.command(|out, shutdown| {
+            shutdown
+                .register(async move {
+                    while let Ok(event) = APP_EVENTS.subscribe().recv().await {
+                        _ = out.send(event);
+                    }
+                })
+                .drop_on_shutdown()
+        });
+
+        root.font_row().connect_activated(clone!(
+            #[strong]
+            sender,
+            move |_| sender.input(Msg::SelectFont)
+        ));
+        root.font_reset().connect_clicked(clone!(
+            #[strong]
+            sender,
+            move |_| sender.input(Msg::ResetFont)
+        ));
+
         let default_theme = theme_row::Model::builder()
             .launch((window.clone(), None))
             .detach();
-        let group = default_theme.widget().enabled();
-        group.set_group(Some(&group));
+        default_theme
+            .widget()
+            .enabled()
+            .set_group(Some(&root.enabled_dummy()));
         root.list()
             .insert(default_theme.widget(), root.import_button().index());
 
-        ComponentParts {
+        AsyncComponentParts {
             model: Self {
                 default_theme,
                 custom_themes: Vec::new(),
+                window,
+                engine,
             },
             widgets: (),
         }
     }
+
+    async fn update_with_view(
+        &mut self,
+        _widgets: &mut Self::Widgets,
+        message: Self::Input,
+        sender: AsyncComponentSender<Self>,
+        _root: &Self::Root,
+    ) {
+        let result = match message {
+            Msg::SelectFont => select_font(self)
+                .await
+                .with_context(|| gettext("Failed to set font")),
+            Msg::ResetFont => reset_font(self)
+                .await
+                .with_context(|| gettext("Failed to reset font")),
+        };
+        if let Err(err) = result {
+            _ = sender.output(Response::Error(err));
+        }
+    }
+
+    async fn update_cmd_with_view(
+        &mut self,
+        _widgets: &mut Self::Widgets,
+        message: Self::CommandOutput,
+        _sender: AsyncComponentSender<Self>,
+        root: &Self::Root,
+    ) {
+        match message {
+            AppEvent::FontSet => {
+                let profile = self.engine.profiles().current.clone();
+                let font_name = match (&profile.config.font_family, &profile.config.font_face) {
+                    (Some(font_family), Some(font_face)) => {
+                        format!(r#"<span face="{font_family}">{font_family} {font_face}</span>"#)
+                    }
+                    _ => String::new(),
+                };
+                root.font_row().set_subtitle(&font_name);
+            }
+        }
+    }
+}
+
+async fn select_font(model: &Model) -> Result<()> {
+    let Ok(font) = gtk::FontDialog::new()
+        .choose_face_future(Some(&model.window), None::<&pango::FontFace>)
+        .await
+    else {
+        return Ok(());
+    };
+
+    let profiles = model.engine.profiles();
+    model
+        .engine
+        .set_profile_config(
+            profiles.current_id,
+            &ProfileConfig {
+                font_family: Some(font.family().name().to_string()),
+                font_face: Some(font.face_name().to_string()),
+                ..profiles.current.config.clone()
+            },
+        )
+        .await
+        .context("failed to set font")?;
+    _ = APP_EVENTS.send(AppEvent::FontSet);
+    Ok(())
+}
+
+async fn reset_font(model: &Model) -> Result<()> {
+    let profiles = model.engine.profiles();
+    model
+        .engine
+        .set_profile_config(
+            profiles.current_id,
+            &ProfileConfig {
+                font_family: None,
+                font_face: None,
+                ..profiles.current.config.clone()
+            },
+        )
+        .await
+        .context("failed to reset font")?;
+    _ = APP_EVENTS.send(AppEvent::FontSet);
+    Ok(())
 }

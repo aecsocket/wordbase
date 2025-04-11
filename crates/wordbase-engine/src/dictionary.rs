@@ -1,5 +1,5 @@
 use {
-    crate::{Engine, Event, IndexMap, profile::Profiles},
+    crate::{Engine, IndexMap, profile::Profiles},
     anyhow::{Context, Result, bail},
     derive_more::{Display, Error},
     futures::TryStreamExt,
@@ -43,7 +43,6 @@ impl Engine {
                 .await
                 .context("failed to sync dictionaries")?,
         ));
-        _ = self.send_event.send(Event::SyncDictionaries);
         Ok(())
     }
 
