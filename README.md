@@ -9,7 +9,7 @@ TODO:
 - extended test sesh:
   - [ ] sometimes when hovering, the lookup is done, BUT the popup isn't focused maybe?
   - [ ] chinese fonts (force switch away from Inter?)
-  - [ ] overlay opacity should update when you modify it
+  - [x] overlay opacity should update when you modify it
   - [x] incorrect furigana
     - 聞き流す - ききながす
     - 言い争い - いいあらそい
@@ -28,15 +28,18 @@ TODO:
   - [ ] click dragging on the overlay popup should let you drag it
   - [ ] I really want a scrollback, but the current sentence goes to the bottom + there's enough padding at the bottom to push the scrollback up out of the way
   - [ ] dictionary popup settings button is literally invisible, need to add OSD class somehow
-  - [ ] changing dictionaries from the popup window?
-  - [ ] 停学処分 - we have lookups for:
+  - [x] changing dictionaries from the popup window?
+    - we don't need this, you have a button to open the manager anyway
+  - [x] 停学処分 - we have lookups for:
     - (停学処分, ていがくしょぶん) -> jitendex
     - (停学処分, NULL) -> audio
     - can we merge the 2 somehow?
     - 体育会系 as well
+    - won't fix
   - [ ] TONS of stack trace errors in journalctl. we need a way to only send them as error messages to the dbus client from the extension
   - [ ] イカす is improperly deinflected - lindera thinks it's 活かす/生かす
     - how about: when we deinflect e.g. イカす to 活かす, we ALSO generate a deinflection which maps to the same substring length as 活かす, BUT is a substring of the original query it self (イカす)?
+    - uughhhhh idk
   - [ ] the "is ready" popup keeps coming up
   - [ ] sometimes the dictionary IS spawned, but doesnt appear in front of the window. maybe `make_above` is not being applied?
     - yes, it's as I guessed. it's not being set as `make_above`. maybe related to below?

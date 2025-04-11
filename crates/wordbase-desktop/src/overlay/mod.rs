@@ -128,7 +128,9 @@ struct Overlay {
     to_popup: relm4::Sender<popup::Msg>,
     settings: gio::Settings,
     _window_guard: Box<dyn Any>,
-    _font_size_signal_handler: SignalHandler,
+    _font_size_handler: SignalHandler,
+    _opacity_idle_handler: SignalHandler,
+    _opacity_hover_handler: SignalHandler,
 }
 
 #[derive(Debug)]
@@ -237,7 +239,7 @@ impl AsyncComponent for Overlay {
             })
             .build();
 
-        let font_size_signal_handler = SignalHandler::new(&settings, |it| {
+        let font_size_handler = SignalHandler::new(&settings, |it| {
             it.connect_changed(
                 Some(OVERLAY_FONT_SIZE),
                 clone!(
@@ -249,14 +251,17 @@ impl AsyncComponent for Overlay {
                 ),
             )
         });
-        setup_root_opacity_animation(root.upcast_ref(), &settings);
+        let (opacity_idle_handler, opacity_hover_handler) =
+            setup_root_opacity_animation(root.upcast_ref(), &settings);
 
         let model = Self {
             engine,
             to_popup,
             settings,
             _window_guard: window_guard,
-            _font_size_signal_handler: font_size_signal_handler,
+            _font_size_handler: font_size_handler,
+            _opacity_idle_handler: opacity_idle_handler,
+            _opacity_hover_handler: opacity_hover_handler,
         };
         setup_sentence_scan(&root, &sender);
         AsyncComponentParts { model, widgets: () }
@@ -360,19 +365,52 @@ impl Overlay {
     }
 }
 
-fn setup_root_opacity_animation(root: &gtk::Window, settings: &gio::Settings) {
+fn setup_root_opacity_animation(
+    root: &gtk::Window,
+    settings: &gio::Settings,
+) -> (SignalHandler, SignalHandler) {
     let opacity_target = adw::PropertyAnimationTarget::new(root, "opacity");
     let animation = adw::TimedAnimation::builder()
         .widget(root)
         .duration(100)
         .target(&opacity_target)
         .build();
+
     settings
         .bind(OVERLAY_OPACITY_IDLE, &animation, "value-from")
         .build();
+    let idle_handler = SignalHandler::new(settings, |it| {
+        it.connect_changed(
+            Some(OVERLAY_OPACITY_IDLE),
+            clone!(
+                #[strong]
+                animation,
+                move |_, _| {
+                    animation.set_reverse(true);
+                    animation.play();
+                    animation.skip();
+                }
+            ),
+        )
+    });
+
     settings
         .bind(OVERLAY_OPACITY_HOVER, &animation, "value-to")
         .build();
+    let hover_handler = SignalHandler::new(settings, |it| {
+        it.connect_changed(
+            Some(OVERLAY_OPACITY_HOVER),
+            clone!(
+                #[strong]
+                animation,
+                move |_, _| {
+                    animation.set_reverse(false);
+                    animation.play();
+                    animation.skip();
+                }
+            ),
+        )
+    });
 
     let controller = gtk::EventControllerMotion::new();
     root.add_controller(controller.clone());
@@ -393,6 +431,8 @@ fn setup_root_opacity_animation(root: &gtk::Window, settings: &gio::Settings) {
     });
     animation.set_reverse(true);
     animation.play();
+
+    (idle_handler, hover_handler)
 }
 
 fn setup_sentence_scan(root: &ui::Overlay, sender: &AsyncComponentSender<Overlay>) {
@@ -417,7 +457,6 @@ fn setup_sentence_scan(root: &ui::Overlay, sender: &AsyncComponentSender<Overlay
                 .and_then(|display| display.default_seat())
                 .and_then(|seat| seat.keyboard())
                 .map(|pointer| pointer.modifier_state());
-            println!("mods = {modifiers:?}");
             // if modifiers.contains(gdk::ModifierType::BUTTON1_MASK) {
             //     return;
             // }

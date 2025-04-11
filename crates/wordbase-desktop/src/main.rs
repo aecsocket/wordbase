@@ -252,6 +252,7 @@ fn setup_profile_action(engine: Engine) {
 const CHANNEL_BUF_CAP: usize = 4;
 
 #[derive(Debug)]
+#[must_use]
 struct SignalHandler {
     object: glib::Object,
     id: Option<glib::SignalHandlerId>,

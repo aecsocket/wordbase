@@ -227,7 +227,7 @@ fn visit_website(model: &Model) -> Result<()> {
 
 async fn remove(model: &Model) -> Result<()> {
     model.engine.remove_dictionary(model.dictionary.id).await?;
-    APP_EVENTS.send(AppEvent::DictionaryRemoved(model.dictionary.id));
+    _ = APP_EVENTS.send(AppEvent::DictionaryRemoved(model.dictionary.id));
     Ok(())
 }
 
