@@ -323,6 +323,12 @@ mod tests {
             super::furigana_parts("言い争い", "いいあらそい"),
             [("言", "い"), ("い", ""), ("争", "あらそ"), ("い", "")]
         );
+
+        // TODO: this one is broken, idk how to fix it
+        assert_eq!(
+            super::furigana_parts("関係無い", "かんけいない"),
+            [("関係無", "かんけいな"), ("い", "")]
+        );
     }
 
     #[test]

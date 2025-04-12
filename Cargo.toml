@@ -55,6 +55,7 @@ charabia             = { version = "0.9.3", default-features = true }
 clap                 = { version = "4.5" }
 derive_more          = { version = "2.0" }
 directories          = { version = "6.0" }
+either               = { version = "1.15" }
 foldhash             = { version = "0.1.4" }
 form_urlencoded      = { version = "1.2" }
 futures              = { version = "0.3" }

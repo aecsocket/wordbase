@@ -1,5 +1,110 @@
-use lindera::token::Token;
+use std::borrow::Cow;
 
+use anyhow::{Context as _, Result};
+use itertools::Itertools;
+use lindera::{
+    dictionary::{DictionaryKind, load_dictionary_from_kind},
+    mode::Mode,
+    segmenter::Segmenter,
+    token::Token,
+    tokenizer::Tokenizer,
+};
+
+use super::{Deinflection, Deinflector};
+
+#[derive(derive_more::Debug)]
+pub struct Lindera {
+    #[debug(skip)]
+    tokenizer: Tokenizer,
+}
+
+const TOKEN_LOOKAHEAD: usize = 8;
+
+impl Deinflector for Lindera {
+    fn new() -> Result<Self> {
+        let dictionary = load_dictionary_from_kind(DictionaryKind::UniDic)
+            .context("failed to load dictionary")?;
+        let segmenter = Segmenter::new(Mode::Normal, dictionary, None);
+        let tokenizer = Tokenizer::new(segmenter);
+        Ok(Self { tokenizer })
+    }
+
+    fn deinflect<'a>(&'a self, text: &'a str) -> impl Iterator<Item = Deinflection<'a>> {
+        let Ok(mut tokens) = self.tokenizer.tokenize(text) else {
+            return Vec::new().into_iter();
+        };
+        // some tokens may genuinely not be able to be mapped to `Details`,
+        // i.e. an UNK token, so we filter them out, rather than failing entirely
+        let mut tokens = tokens
+            .iter_mut()
+            .filter_map(Details::new)
+            .collect::<Vec<_>>();
+
+        // in text like "東京大学", lindera tokenizes it as "東京" and "大学"
+        // our dictionary will have an entry for "東京", but we also want to check
+        // if there's an entry for "東京大学"
+        // to do this, we turn the first `TOKEN_LOOKAHEAD` tokens into a lemma,
+        // then turn the first `TOKEN_LOOKAHEAD - 1` into another lemma, etc.
+        let lemmas = (1..=TOKEN_LOOKAHEAD)
+            .rev()
+            .filter_map(move |up_to| {
+                #[expect(clippy::option_if_let_else, reason = "borrow checker")]
+                let (lookahead, rem) = if let Some(split) = tokens.split_at_mut_checked(up_to) {
+                    split
+                } else {
+                    (tokens.as_mut_slice(), [].as_mut_slice())
+                };
+
+                // each slice of tokens actually turns into 2 lemmas:
+                // - the result of joining the reading of each token together
+                // - the result of joining the pronunciation of each token together
+                //
+                // in UniDic, for a word like "食べる":
+                //     reading = 食べる (good)
+                //       lemma = たべる (bad)
+                // for a word like "東京":
+                //     reading = トウキョウ (bad)
+                //       lemma = 東京 (good)
+                //
+                // so we need to do a lookup for both
+                let full_reading = lookahead
+                    .iter_mut()
+                    .map(|token| token.lemma)
+                    .collect::<Vec<_>>()
+                    .join("");
+                let full_pronunciation = lookahead
+                    .iter_mut()
+                    .map(|token| token.orthography)
+                    .collect::<Vec<_>>()
+                    .join("");
+
+                let last_lookahead = lookahead.last_mut()?;
+                let word_last_token = rem
+                    .iter_mut()
+                    .take_while_inclusive(|token| !is_word_ending(token))
+                    .take_while(|token| is_word_continuation(last_lookahead, token))
+                    .last();
+                let scan_len =
+                    word_last_token.map_or(last_lookahead.byte_end, |token| token.byte_end);
+
+                Some([
+                    Deinflection {
+                        lemma: Cow::Owned(full_reading),
+                        scan_len,
+                    },
+                    Deinflection {
+                        lemma: Cow::Owned(full_pronunciation),
+                        scan_len,
+                    },
+                ])
+            })
+            .flatten();
+
+        lemmas.collect::<Vec<_>>().into_iter()
+    }
+}
+
+// based on the `List of features` here: https://clrd.ninjal.ac.jp/unidic/faq.html
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Details<'a> {
     byte_start: usize,
@@ -10,13 +115,13 @@ struct Details<'a> {
     pos4: &'a str,
     conjugation_type: &'a str,
     conjugation_form: &'a str,
+    lexeme_form: &'a str,
     lemma: &'a str,
-    reading: &'a str,
+    orthography: &'a str,
     pronunciation: &'a str,
-    pronunciation_base_form: &'a str,
-    spoken_base_form: &'a str,
-    spoken_form: &'a str,
-    word_type: &'a str,
+    orthography_base: &'a str,
+    pronunciation_base: &'a str,
+    origin: &'a str,
     word_subtype1: &'a str,
     word_subtype2: &'a str,
     word_subtype3: &'a str,
@@ -37,13 +142,13 @@ impl<'a> Details<'a> {
             pos4: details.next()?,
             conjugation_type: details.next()?,
             conjugation_form: details.next()?,
+            lexeme_form: details.next()?,
             lemma: details.next()?,
-            reading: details.next()?,
+            orthography: details.next()?,
+            orthography_base: details.next()?,
             pronunciation: details.next()?,
-            pronunciation_base_form: details.next()?,
-            spoken_base_form: details.next()?,
-            spoken_form: details.next()?,
-            word_type: details.next()?,
+            pronunciation_base: details.next()?,
+            origin: details.next()?,
             word_subtype1: details.next()?,
             word_subtype2: details.next()?,
             word_subtype3: details.next()?,
@@ -75,13 +180,7 @@ fn is_word_continuation(last_lookahead: &Details, token: &Details) -> bool {
 mod tests {
     use std::sync::LazyLock;
 
-    use itertools::Itertools;
-    use lindera::{
-        dictionary::{DictionaryKind, load_dictionary_from_kind},
-        mode::Mode,
-        segmenter::Segmenter,
-        tokenizer::Tokenizer,
-    };
+    use crate::{IndexSet, deinflect::Deinflector as _};
 
     use super::*;
 
@@ -96,13 +195,13 @@ mod tests {
             pos4: "*",
             conjugation_type: "下一段-バ行", // ichidan
             conjugation_form: "終止形-一般", // terminal form
-            lemma: "タベル",
-            reading: "食べる",
+            lexeme_form: "タベル",
+            lemma: "食べる",
+            orthography: "",   // overridden later
             pronunciation: "", // overridden later
-            pronunciation_base_form: "タベル",
-            spoken_base_form: "", // overridden later
-            spoken_form: "タベル",
-            word_type: "和", // native Japanese
+            orthography_base: "タベル",
+            pronunciation_base: "タベル",
+            origin: "和", // native Japanese
             word_subtype1: "*",
             word_subtype2: "*",
             word_subtype3: "*",
@@ -112,8 +211,8 @@ mod tests {
             Details::new(&mut first_token("食べる")).unwrap(),
             Details {
                 byte_end: "食べる".len(),
+                orthography: "食べる",
                 pronunciation: "食べる",
-                spoken_base_form: "食べる",
                 ..taberu
             }
         );
@@ -121,9 +220,58 @@ mod tests {
             Details::new(&mut first_token("たべる")).unwrap(),
             Details {
                 byte_end: "たべる".len(),
+                orthography: "たべる",
                 pronunciation: "たべる",
-                spoken_base_form: "たべる",
                 ..taberu
+            }
+        );
+
+        let toukyou = Details {
+            byte_start: 0,
+            byte_end: 0,      // overridden later
+            pos1: "名詞",     // noun
+            pos2: "固有名詞", // proper noun
+            pos3: "地名",     // place name
+            pos4: "一般",     // general
+            conjugation_type: "*",
+            conjugation_form: "*",
+            lexeme_form: "トウキョウ",
+            lemma: "トウキョウ",
+            orthography: "",   // overridden later
+            pronunciation: "", // overridden later
+            orthography_base: "トーキョー",
+            pronunciation_base: "トーキョー",
+            origin: "固", // proper noun
+            word_subtype1: "*",
+            word_subtype2: "*",
+            word_subtype3: "*",
+            alternate_form: "*",
+        };
+        assert_eq!(
+            Details::new(&mut first_token("東京")).unwrap(),
+            Details {
+                byte_end: "東京".len(),
+                orthography: "東京",
+                pronunciation: "東京",
+                ..toukyou
+            }
+        );
+        assert_eq!(
+            Details::new(&mut first_token("とうきょう")).unwrap(),
+            Details {
+                byte_end: "とうきょう".len(),
+                orthography: "とうきょう",
+                pronunciation: "とうきょう",
+                ..toukyou
+            }
+        );
+        assert_eq!(
+            Details::new(&mut first_token("トウキョウ")).unwrap(),
+            Details {
+                byte_end: "トウキョウ".len(),
+                orthography: "トウキョウ",
+                pronunciation: "トウキョウ",
+                ..toukyou
             }
         );
     }
@@ -179,6 +327,39 @@ mod tests {
         // this test ensures that we stop scanning
         // after finding a terminal form verb
         assert_split("消えてた", "じゃない");
+    }
+
+    #[test]
+    fn deinflect() {
+        let deinflector = Lindera {
+            tokenizer: TOKENIZER.clone(),
+        };
+
+        // some token patterns might result in UNK tokens, like this trailing whitespace
+        // here we test that we handle UNKs gracefully
+        assert_eq!(
+            deinflector.deinflect("ある。 ").collect::<IndexSet<_>>(),
+            [
+                Deinflection::new("有る。"),
+                Deinflection::new("ある。"),
+                Deinflection::new("有る"),
+                Deinflection::new("ある"),
+            ]
+            .into_iter()
+            .collect::<IndexSet<_>>()
+        );
+
+        assert_eq!(
+            deinflector.deinflect("東京大学").collect::<IndexSet<_>>(),
+            [
+                Deinflection::new("トウキョウ大学"),
+                Deinflection::new("東京大学"),
+                Deinflection::new("トウキョウ"),
+                Deinflection::new("東京"),
+            ]
+            .into_iter()
+            .collect::<IndexSet<_>>()
+        );
     }
 
     static TOKENIZER: LazyLock<Tokenizer> = LazyLock::new(|| {

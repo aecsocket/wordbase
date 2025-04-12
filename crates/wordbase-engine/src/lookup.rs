@@ -162,7 +162,7 @@ impl Engine {
         let mut records = Vec::new();
         let mut seen_record_ids = HashSet::new();
 
-        for deinflection in self.deinflect(query).await {
+        for deinflection in self.deinflect(query) {
             for result in self.lookup_lemma(&deinflection.lemma, record_kinds).await? {
                 if seen_record_ids.insert(result.record_id) {
                     records.push(RecordLookup {

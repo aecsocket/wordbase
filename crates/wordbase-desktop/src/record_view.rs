@@ -38,9 +38,6 @@ impl AsyncComponent for Model {
         webkit6::WebView {
             set_hexpand: true,
             set_vexpand: true,
-            set_settings = &webkit6::Settings {
-                set_enable_smooth_scrolling: false,
-            },
             set_background_color: &gdk::RGBA::new(0.0, 0.0, 0.0, 0.0),
             connect_context_menu => |_, _, _| {
                 // prevent opening context menu
@@ -96,6 +93,7 @@ fn update_view(model: &Model, root: &webkit6::WebView) {
     let profile = model.engine.profiles().current.clone();
     let settings = webkit6::Settings::new();
     settings.set_enable_page_cache(false);
+    settings.set_enable_smooth_scrolling(false);
     if let Some(family) = &profile.config.font_family {
         settings.set_default_font_family(family);
     }

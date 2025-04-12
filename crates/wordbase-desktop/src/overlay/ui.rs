@@ -7,6 +7,10 @@ mod imp {
     #[template(file = "src/overlay/ui.blp")]
     pub struct Overlay {
         #[template_child]
+        pub copy: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub manager: TemplateChild<gtk::Button>,
+        #[template_child]
         pub settings: TemplateChild<gtk::MenuButton>,
         #[template_child]
         pub sentence: TemplateChild<gtk::Label>,
@@ -55,6 +59,16 @@ impl Overlay {
     #[must_use]
     pub fn new() -> Self {
         glib::Object::new()
+    }
+
+    #[must_use]
+    pub fn copy(&self) -> gtk::Button {
+        self.imp().copy.get()
+    }
+
+    #[must_use]
+    pub fn manager(&self) -> gtk::Button {
+        self.imp().manager.get()
     }
 
     #[must_use]

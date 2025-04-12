@@ -52,6 +52,7 @@ pub enum Event {
 }
 
 pub type IndexMap<K, V> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
+pub type IndexSet<T> = indexmap::IndexSet<T, foldhash::fast::RandomState>;
 
 impl Engine {
     pub async fn new(db_path: impl AsRef<Path>) -> Result<Self> {

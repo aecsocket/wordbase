@@ -257,7 +257,7 @@ async fn main() -> Result<()> {
         Command::Dictionary {
             command: DictionaryCommand::Rm { id },
         } => dictionary_rm(&engine, id).await?,
-        Command::Deinflect { text } => deinflect(&engine, text).await?,
+        Command::Deinflect { text } => deinflect(&engine, text),
         Command::Lookup { text } => lookup(&engine, text).await?,
         Command::Texthooker {
             command: TexthookerCommand::GetUrl,
@@ -571,8 +571,8 @@ async fn dictionary_rm(engine: &Engine, id: i64) -> Result<()> {
     Ok(())
 }
 
-async fn deinflect(engine: &Engine, text: String) -> Result<()> {
-    for deinflection in engine.deinflect(&text).await {
+fn deinflect(engine: &Engine, text: String) {
+    for deinflection in engine.deinflect(&text) {
         let scan_len = deinflection.scan_len;
         let text_part = text.get(..scan_len).map_or_else(
             || format!("(invalid scan len {scan_len})"),
@@ -581,7 +581,6 @@ async fn deinflect(engine: &Engine, text: String) -> Result<()> {
         let lemma = deinflection.lemma;
         println!("{text_part:?} -> {:?}", &*lemma);
     }
-    Ok(())
 }
 
 async fn lookup(engine: &Engine, text: String) -> Result<()> {

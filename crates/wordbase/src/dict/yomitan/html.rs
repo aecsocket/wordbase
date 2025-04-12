@@ -1,6 +1,6 @@
 use {
     super::structured::{Content, ContentStyle, Element},
-    maud::{Markup, Render, html},
+    maud::{Markup, PreEscaped, Render, html},
     std::fmt,
 };
 
@@ -8,7 +8,10 @@ impl Render for Content {
     fn render(&self) -> Markup {
         html! {
             @match self {
-                Self::String(text) => (text),
+                Self::String(text) => ({
+                    let lines = text.lines().map(|line| html! { (line) }.0).collect::<Vec<_>>();
+                    PreEscaped(lines.join(&html! { br; }.0))
+                }),
                 Self::Content(children) => {
                     @for child in children {
                         (child)

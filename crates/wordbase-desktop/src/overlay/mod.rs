@@ -1,7 +1,7 @@
 mod ui;
 
 use {
-    crate::{APP_ID, SignalHandler, platform::Platform, popup, record_view},
+    crate::{APP_BROKER, APP_ID, AppMsg, SignalHandler, platform::Platform, popup, record_view},
     foldhash::{HashMap, HashMapExt},
     glib::clone,
     gtk4::pango::ffi::PANGO_SCALE,
@@ -127,6 +127,7 @@ struct Overlay {
     engine: Engine,
     to_popup: relm4::Sender<popup::Msg>,
     settings: gio::Settings,
+    sentence: String,
     _window_guard: Box<dyn Any>,
     _font_size_handler: SignalHandler,
     _opacity_idle_handler: SignalHandler,
@@ -136,6 +137,7 @@ struct Overlay {
 #[derive(Debug)]
 enum OverlayMsg {
     Sentence(String),
+    Copy,
     ScanSentence { byte_index_i32: i32 },
     FontSize,
 }
@@ -162,6 +164,12 @@ impl AsyncComponent for Overlay {
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
+        root.connect_maximized_notify(|root| {
+            root.unmaximize();
+        });
+        root.connect_fullscreened_notify(|root| {
+            root.unfullscreen();
+        });
         root.set_title(Some(&format!("{process_path} — Wordbase")));
         relm4::main_application().add_window(&root);
 
@@ -175,6 +183,17 @@ impl AsyncComponent for Overlay {
                 _ = sender.output(OverlayResponse::Closed);
                 glib::Propagation::Proceed
             }
+        ));
+
+        root.copy().connect_clicked(clone!(
+            #[strong]
+            sender,
+            move |_| sender.input(OverlayMsg::Copy)
+        ));
+        root.manager().connect_clicked(clone!(
+            #[strong]
+            sender,
+            move |_| APP_BROKER.send(AppMsg::Present),
         ));
 
         settings
@@ -258,6 +277,7 @@ impl AsyncComponent for Overlay {
             engine,
             to_popup,
             settings,
+            sentence: String::new(),
             _window_guard: window_guard,
             _font_size_handler: font_size_handler,
             _opacity_idle_handler: opacity_idle_handler,
@@ -275,20 +295,28 @@ impl AsyncComponent for Overlay {
         root: &Self::Root,
     ) {
         match message {
+            OverlayMsg::Copy => {
+                gdk::Display::default()
+                    .unwrap()
+                    .clipboard()
+                    .set_text(&self.sentence);
+            }
             OverlayMsg::Sentence(sentence) => {
                 root.sentence().set_text(&sentence);
                 // for some reason the label doesn't persist its font after new text is set
                 self.update_font(root);
+                self.sentence = sentence;
             }
             OverlayMsg::FontSize => {
                 self.update_font(root);
             }
             OverlayMsg::ScanSentence { byte_index_i32 } => {
                 let sentence = root.sentence();
-                let text = &sentence.text();
+                let text = &self.sentence;
                 let Ok(byte_index) = usize::try_from(byte_index_i32) else {
                     return;
                 };
+
                 let Some((before, after)) = text.split_at_checked(byte_index) else {
                     return;
                 };

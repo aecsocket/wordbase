@@ -28,6 +28,7 @@ async_zip            = { workspace = true, features = ["deflate"] }
 base64               = { workspace = true }
 blocking             = { workspace = true }
 bytes                = { workspace = true }
+either               = { workspace = true }
 foldhash             = { workspace = true }
 futures              = { workspace = true }
 indexmap             = { workspace = true }
