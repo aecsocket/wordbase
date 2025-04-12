@@ -104,7 +104,8 @@ impl super::Platform for Platform {
         &self,
         popup: &adw::Window,
         to: WindowFilter,
-        offset: (i32, i32),
+        offset_nw: (i32, i32),
+        offset_se: (i32, i32),
     ) -> LocalBoxFuture<Result<()>> {
         let popup = popup.clone();
         Box::pin(async move {
@@ -115,8 +116,10 @@ impl super::Platform for Platform {
                     to.id.unwrap_or_default(),
                     to.title.as_deref().unwrap_or_default(),
                     to.wm_class.as_deref().unwrap_or_default(),
-                    offset.0,
-                    offset.1,
+                    offset_nw.0,
+                    offset_nw.1,
+                    offset_se.0,
+                    offset_se.1,
                 )
                 .await
                 .context("failed to request to move popup window")?;
@@ -156,8 +159,10 @@ trait Integration {
         to_id: u64,
         to_title: &str,
         to_wm_class: &str,
-        offset_x: i32,
-        offset_y: i32,
+        offset_nw_x: i32,
+        offset_nw_y: i32,
+        offset_se_x: i32,
+        offset_se_y: i32,
     ) -> zbus::Result<()>;
 
     #[zbus(signal)]

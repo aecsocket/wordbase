@@ -14,7 +14,7 @@ use {
     },
     std::sync::Arc,
     tracing::warn,
-    wordbase::{PopupAnchor, RecordLookup, WindowFilter},
+    wordbase::{RecordLookup, WindowFilter},
     wordbase_engine::Engine,
 };
 
@@ -43,8 +43,8 @@ pub enum Msg {
     },
     Present {
         target_window: WindowFilter,
-        origin: (i32, i32),
-        anchor: PopupAnchor,
+        origin_nw: (i32, i32),
+        origin_se: (i32, i32),
     },
     #[doc(hidden)]
     Query(String),
@@ -128,13 +128,13 @@ impl AsyncComponent for Model {
             }
             Msg::Present {
                 target_window,
-                origin,
-                anchor,
+                origin_nw,
+                origin_se,
             } => {
                 root.present();
                 if let Err(err) = self
                     .platform
-                    .move_popup_to_window(root.upcast_ref(), target_window, origin)
+                    .move_popup_to_window(root.upcast_ref(), target_window, origin_nw, origin_se)
                     .await
                 {
                     warn!("Failed to present popup: {err:?}");

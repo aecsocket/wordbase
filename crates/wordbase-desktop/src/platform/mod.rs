@@ -20,7 +20,8 @@ pub trait Platform: Debug {
         &self,
         popup: &adw::Window,
         to: WindowFilter,
-        offset: (i32, i32),
+        offset_nw: (i32, i32),
+        offset_se: (i32, i32),
     ) -> LocalBoxFuture<Result<()>>;
 }
 

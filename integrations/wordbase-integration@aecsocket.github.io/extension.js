@@ -97,8 +97,10 @@ const INTERFACE = `
             <arg direction="in" type="t" name="to_id"/>
             <arg direction="in" type="s" name="to_title"/>
             <arg direction="in" type="s" name="to_wm_class"/>
-            <arg direction="in" type="i" name="offset_x"/>
-            <arg direction="in" type="i" name="offset_y"/>
+            <arg direction="in" type="i" name="offset_nw_x"/>
+            <arg direction="in" type="i" name="offset_nw_y"/>
+            <arg direction="in" type="i" name="offset_se_x"/>
+            <arg direction="in" type="i" name="offset_se_y"/>
         </method>
         <signal name="CloseOverlay">
             <arg type="t" name="overlay_id"/>
@@ -133,12 +135,10 @@ class IntegrationService {
     }
 
     /**
-     * @param {Gio.DBusMethodInvocation} invocation
-     * @param {GLib.Variant} params
+     * @param {string} title
      * @returns {number}
      */
-    GetAppWindowId(invocation, params) {
-        const [title] = params.deep_unpack();
+    GetAppWindowId(title) {
         const window = global
             .get_window_actors()
             .map((window_actor) => window_actor.meta_window)
@@ -148,12 +148,11 @@ class IntegrationService {
                     window.get_title() === title,
             );
         if (!window) {
-            invocation.return_dbus_error(
-                Gio.DBusError.INVALID_ARGS,
+            return new Error(
                 `no Wordbase window with title "${title}", windows:\n${window_debug_info()}`,
             );
-            return;
         }
+
         return window.get_id();
     }
 
@@ -166,7 +165,7 @@ class IntegrationService {
             .get_window_actors()
             .find((window) => window.meta_window.get_id() === parent_id);
         if (!parent_actor) {
-            throw new Error(
+            return new Error(
                 `no parent window with ID ${parent_id}, windows:\n${window_debug_info()}`,
             );
         }
@@ -176,13 +175,13 @@ class IntegrationService {
             .get_window_actors()
             .find((window) => window.meta_window.get_id() === overlay_id);
         if (!overlay_actor) {
-            throw new Error(
+            return new Error(
                 `no overlay window with ID ${parent_id}, windows:\n${window_debug_info()}`,
             );
         }
         const overlay_window = overlay_actor.meta_window;
         if (overlay_window.gtk_application_id !== APP_ID) {
-            throw new Error(
+            return new Error(
                 `overlay window GTK application ID is ${overlay_window.gtk_application_id}, not ${APP_ID}`,
             );
         }
@@ -301,16 +300,20 @@ class IntegrationService {
      * @param {number} to_id
      * @param {string} to_title
      * @param {string} to_wm_class
-     * @param {number} offset_x
-     * @param {number} offset_y
+     * @param {number} offset_nw_x
+     * @param {number} offset_nw_y
+     * @param {number} offset_se_x
+     * @param {number} offset_se_y
      */
     MovePopupToWindow(
         moved_id,
         to_id,
         to_title,
         to_wm_class,
-        offset_x,
-        offset_y,
+        offset_nw_x,
+        offset_nw_y,
+        offset_se_x,
+        offset_se_y,
     ) {
         // find moved window
 
@@ -318,13 +321,13 @@ class IntegrationService {
             .get_window_actors()
             .find((window) => window.meta_window.get_id() === moved_id);
         if (!moved_actor) {
-            throw new Error(
+            return new Error(
                 `no window with ID ${moved_id}, windows:\n${window_debug_info()}`,
             );
         }
         const moved_window = moved_actor.meta_window;
         if (moved_window.gtk_application_id !== APP_ID) {
-            throw new Error(
+            return new Error(
                 `window GTK application ID is ${moved_window.gtk_application_id}, not ${APP_ID}`,
             );
         }
@@ -342,26 +345,46 @@ class IntegrationService {
             .get_window_actors()
             .filter((actor) => is_to_window(actor.meta_window));
         if (to_actors.length < 1) {
-            throw new Error(
+            return new Error(
                 `no window matching filter (id=${to_id}, to_title=${to_title}, to_wm_class=${to_wm_class}), windows:\n${window_debug_info()}`,
             );
-            return;
         }
         if (to_actors.length > 1) {
-            throw new Error(
+            return new Error(
                 `found ${to_actors.length} matching (id=${to_id}, to_title=${to_title}, to_wm_class=${to_wm_class}), but only 1 must match; windows:\n${window_debug_info()}`,
             );
-            return;
         }
+        const to_actor = to_actors[0];
+        const to_window = to_actor.meta_window;
 
         // move the window
 
         moved_window.focus(global.get_current_time());
         moved_window.raise();
-        const to_actor = to_actors[0];
-        const to_window = to_actor.meta_window;
+
         const to_rect = to_window.get_frame_rect();
-        const [moved_x, moved_y] = [to_rect.x + offset_x, to_rect.y + offset_y];
+        const moved_rect = moved_window.get_frame_rect();
+        // positioning logic:
+        //
+        // - for the X axis:
+        //   - align the moved window's west edge with the origin's west edge
+        //   - TODO: RTL languages?
+        // - for the Y axis:
+        //   - if we have enough space to put the window below the south edge:
+        //     - align the window's north edge with the origin's south edge
+        //   - if there's not enough space:
+        //     - align the window's south edge with the origin's north edge
+
+        const moved_x = to_rect.x + offset_nw_x;
+
+        const target_moved_bottom_y =
+            to_rect.y + offset_se_y + moved_rect.height;
+        let moved_y;
+        if (target_moved_bottom_y < global.screen_height) {
+            moved_y = to_rect.y + offset_se_y;
+        } else {
+            moved_y = to_rect.y + offset_nw_y - moved_rect.height;
+        }
 
         // when we move the window, if we've *just* shown and presented the window
         // (made it visible on the GTK side), then it might not be ready to move to

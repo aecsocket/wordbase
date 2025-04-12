@@ -1,7 +1,10 @@
 mod ui;
 
 use {
-    crate::{APP_BROKER, APP_ID, AppMsg, SignalHandler, platform::Platform, popup, record_view},
+    crate::{
+        APP_BROKER, APP_ID, AppEvent, AppMsg, SignalHandler, forward_events, platform::Platform,
+        popup, record_view,
+    },
     foldhash::{HashMap, HashMapExt},
     glib::clone,
     gtk4::pango::ffi::PANGO_SCALE,
@@ -22,7 +25,7 @@ use {
         },
     },
     tracing::trace,
-    wordbase::{PopupAnchor, TexthookerSentence, WindowFilter},
+    wordbase::{TexthookerSentence, WindowFilter},
     wordbase_engine::{Engine, Event},
 };
 
@@ -151,7 +154,7 @@ impl AsyncComponent for Overlay {
     type Init = (Engine, Arc<dyn Platform>, relm4::Sender<popup::Msg>, String);
     type Input = OverlayMsg;
     type Output = OverlayResponse;
-    type CommandOutput = ();
+    type CommandOutput = AppEvent;
     type Root = ui::Overlay;
     type Widgets = ();
 
@@ -164,6 +167,7 @@ impl AsyncComponent for Overlay {
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
+        forward_events(&sender);
         root.connect_maximized_notify(|root| {
             root.unmaximize();
         });
@@ -190,11 +194,8 @@ impl AsyncComponent for Overlay {
             sender,
             move |_| sender.input(OverlayMsg::Copy)
         ));
-        root.manager().connect_clicked(clone!(
-            #[strong]
-            sender,
-            move |_| APP_BROKER.send(AppMsg::Present),
-        ));
+        root.manager()
+            .connect_clicked(move |_| APP_BROKER.send(AppMsg::Present));
 
         settings
             .bind(OVERLAY_FONT_SIZE, &root.font_size(), "value")
@@ -297,7 +298,7 @@ impl AsyncComponent for Overlay {
         match message {
             OverlayMsg::Copy => {
                 gdk::Display::default()
-                    .unwrap()
+                    .expect("should have default display")
                     .clipboard()
                     .set_text(&self.sentence);
             }
@@ -317,30 +318,13 @@ impl AsyncComponent for Overlay {
                     return;
                 };
 
-                let Some((before, after)) = text.split_at_checked(byte_index) else {
+                let Some((before, _)) = text.split_at_checked(byte_index) else {
                     return;
                 };
                 let char_index = before.chars().count();
                 let Ok(char_index_i32) = i32::try_from(char_index) else {
                     return;
                 };
-
-                let char_rect = sentence.layout().index_to_pos(byte_index_i32);
-                let (char_rel_x, char_rel_y) = (
-                    // anchor to bottom-right of character
-                    (char_rect.x() + char_rect.width()) as f32 / pango::SCALE as f32,
-                    (char_rect.y() + char_rect.height()) as f32 / pango::SCALE as f32,
-                );
-                let abs_point = sentence
-                    .compute_point(root, &graphene::Point::new(char_rel_x, char_rel_y))
-                    .expect("`root` is an ancestor of `sentence`");
-
-                // TODO variable offset
-                #[expect(clippy::cast_possible_truncation, reason = "no other way to convert")]
-                let origin = (
-                    abs_point.x() as i32 + POPUP_OFFSET.0,
-                    abs_point.y() as i32 + POPUP_OFFSET.1,
-                );
 
                 let Ok(records) = self
                     .engine
@@ -354,9 +338,37 @@ impl AsyncComponent for Overlay {
                 }
 
                 let longest_scan_chars = record_view::longest_scan_chars(text, &records);
-                sentence.select_region(
-                    char_index_i32,
-                    char_index_i32 + i32::try_from(longest_scan_chars).unwrap_or(i32::MAX),
+                let selection_end =
+                    char_index_i32 + i32::try_from(longest_scan_chars).unwrap_or(i32::MAX);
+                sentence.select_region(char_index_i32, selection_end);
+
+                let local_rect = sentence.layout().index_to_pos(byte_index_i32);
+                let local_origin_nw = (
+                    local_rect.x() as f32 / pango::SCALE as f32,
+                    local_rect.y() as f32 / pango::SCALE as f32,
+                );
+                let local_origin_se = (
+                    (local_rect.x() + local_rect.width()) as f32 / pango::SCALE as f32,
+                    (local_rect.y() + local_rect.height()) as f32 / pango::SCALE as f32,
+                );
+
+                let abs_origin_nw = sentence
+                    .compute_point(
+                        root,
+                        &graphene::Point::new(local_origin_nw.0, local_origin_nw.1),
+                    )
+                    .expect("`root` is an ancestor of `sentence`");
+                let abs_origin_se = sentence
+                    .compute_point(
+                        root,
+                        &graphene::Point::new(local_origin_se.0, local_origin_se.1),
+                    )
+                    .expect("`root` is an ancestor of `sentence`");
+
+                #[expect(clippy::cast_possible_truncation, reason = "no other way to convert")]
+                let (origin_nw, origin_se) = (
+                    (abs_origin_nw.x() as i32, abs_origin_nw.y() as i32),
+                    (abs_origin_se.x() as i32, abs_origin_se.y() as i32),
                 );
 
                 self.to_popup.emit(popup::Msg::Present {
@@ -365,11 +377,23 @@ impl AsyncComponent for Overlay {
                         title: root.title().map(|s| s.to_string()),
                         wm_class: Some(APP_ID.to_owned()),
                     },
-                    origin,
-                    anchor: PopupAnchor::TopLeft,
+                    origin_nw,
+                    origin_se,
                 });
                 self.to_popup.emit(popup::Msg::Render { records });
             }
+        }
+    }
+
+    async fn update_cmd_with_view(
+        &mut self,
+        _widgets: &mut Self::Widgets,
+        message: Self::CommandOutput,
+        _sender: AsyncComponentSender<Self>,
+        root: &Self::Root,
+    ) {
+        if matches!(message, AppEvent::FontSet) {
+            self.update_font(root);
         }
     }
 }
@@ -383,7 +407,8 @@ impl Overlay {
         }
 
         let font_size = self.settings.double(OVERLAY_FONT_SIZE);
-        let font_size_pango = (font_size * PANGO_SCALE as f64) as i32;
+        #[expect(clippy::cast_possible_truncation, reason = "no other way to convert")]
+        let font_size_pango = (font_size * f64::from(PANGO_SCALE)) as i32;
         font_desc.set_size(font_size_pango);
 
         root.sentence()
@@ -474,19 +499,11 @@ fn setup_sentence_scan(root: &ui::Overlay, sender: &AsyncComponentSender<Overlay
     root.sentence().add_controller(controller.clone());
 
     let last_scan_byte_index = Arc::new(AtomicI32::new(-1));
-    controller.connect_leave(clone!(
-        #[strong]
-        last_scan_byte_index,
-        move |_| {
-            last_scan_byte_index.store(-1, atomic::Ordering::Relaxed);
-        }
-    ));
-    controller.connect_motion(clone!(
-        #[strong]
-        root,
-        #[strong]
-        sender,
-        move |_, rel_x, rel_y| {
+    let try_scan = {
+        let root = root.clone();
+        let sender = sender.clone();
+        let last_scan_byte_index = last_scan_byte_index.clone();
+        move |rel_x: f64, rel_y: f64| {
             let modifiers = gdk::Display::default()
                 .and_then(|display| display.default_seat())
                 .and_then(|seat| seat.keyboard())
@@ -511,10 +528,36 @@ fn setup_sentence_scan(root: &ui::Overlay, sender: &AsyncComponentSender<Overlay
 
             sender.input(OverlayMsg::ScanSentence { byte_index_i32 });
         }
+    };
+
+    // we specifically need this to run on BOTH enter and leave events,
+    // because we aren't guaranteed to get a leave event!
+    // e.g. if the window is unfocused without the pointer leaving
+    controller.connect_enter(clone!(
+        #[strong]
+        try_scan,
+        #[strong]
+        last_scan_byte_index,
+        move |_, rel_x, rel_y| {
+            last_scan_byte_index.store(-1, atomic::Ordering::SeqCst);
+            try_scan(rel_x, rel_y);
+        }
+    ));
+    controller.connect_leave(clone!(
+        #[strong]
+        last_scan_byte_index,
+        move |_| {
+            last_scan_byte_index.store(-1, atomic::Ordering::SeqCst);
+        }
+    ));
+    controller.connect_motion(clone!(
+        #[strong]
+        try_scan,
+        move |_, rel_x, rel_y| {
+            try_scan(rel_x, rel_y);
+        }
     ));
 }
-
-const POPUP_OFFSET: (i32, i32) = (0, 10);
 
 const OVERLAY_FONT_SIZE: &str = "overlay-font-size";
 const OVERLAY_OPACITY_IDLE: &str = "overlay-opacity-idle";

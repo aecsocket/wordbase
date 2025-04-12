@@ -29,7 +29,8 @@ impl super::Platform for Platform {
         &self,
         _popup: &adw::Window,
         _target: WindowFilter,
-        _offset: (i32, i32),
+        _offset_nw: (i32, i32),
+        _offset_se: (i32, i32),
     ) -> LocalBoxFuture<Result<()>> {
         Box::pin(async move { bail!("unsupported") })
     }
