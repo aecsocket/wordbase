@@ -129,6 +129,9 @@ impl AsyncComponent for Model {
         root.search_themes()
             .set_child(Some(model.search_themes.widget()));
 
+        root.quit()
+            .connect_activated(|_| relm4::main_application().quit());
+
         AsyncComponentParts { model, widgets: () }
     }
 

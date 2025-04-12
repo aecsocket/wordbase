@@ -95,6 +95,14 @@ template $WdbManager: Adw.Bin {
                 }
               }
             }
+
+            Adw.PreferencesGroup {
+              Adw.ButtonRow quit {
+                title: _("Quit App");
+
+                styles ["destructive-action"]
+              }
+            }
           }
         }
       }

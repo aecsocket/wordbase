@@ -40,6 +40,8 @@ mod imp {
         pub search_dictionaries: TemplateChild<adw::Bin>,
         #[template_child]
         pub search_themes: TemplateChild<adw::Bin>,
+        #[template_child]
+        pub quit: TemplateChild<adw::ButtonRow>,
     }
 
     #[glib::object_subclass]
@@ -155,5 +157,10 @@ impl Manager {
     #[must_use]
     pub fn search_themes(&self) -> adw::Bin {
         self.imp().search_themes.get()
+    }
+
+    #[must_use]
+    pub fn quit(&self) -> adw::ButtonRow {
+        self.imp().quit.get()
     }
 }
