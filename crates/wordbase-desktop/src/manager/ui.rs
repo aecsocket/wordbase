@@ -7,7 +7,7 @@ mod imp {
     #[template(file = "src/manager/ui.blp")]
     pub struct Manager {
         #[template_child]
-        pub toast_overlay: TemplateChild<adw::ToastOverlay>,
+        pub toaster: TemplateChild<adw::ToastOverlay>,
         #[template_child]
         pub current_profile: TemplateChild<gtk::DropDown>,
         #[template_child]
@@ -75,8 +75,8 @@ impl Manager {
     }
 
     #[must_use]
-    pub fn toast_overlay(&self) -> adw::ToastOverlay {
-        self.imp().toast_overlay.get()
+    pub fn toaster(&self) -> adw::ToastOverlay {
+        self.imp().toaster.get()
     }
 
     #[must_use]

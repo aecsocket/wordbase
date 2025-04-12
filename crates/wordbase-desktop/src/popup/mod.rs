@@ -131,7 +131,6 @@ impl AsyncComponent for Model {
                 origin_nw,
                 origin_se,
             } => {
-                root.present();
                 if let Err(err) = self
                     .platform
                     .move_popup_to_window(root.upcast_ref(), target_window, origin_nw, origin_se)
@@ -139,6 +138,7 @@ impl AsyncComponent for Model {
                 {
                     warn!("Failed to present popup: {err:?}");
                 }
+                root.present();
             }
             Msg::Query(query) => {
                 self.query_override = Some(query);

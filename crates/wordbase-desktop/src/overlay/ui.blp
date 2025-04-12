@@ -2,56 +2,58 @@ using Gtk 4.0;
 using Adw 1;
 
 template $WdbOverlay: Adw.Window {
-  Overlay {
-    [overlay]
-    Box {
-      margin-start: 16;
-      margin-end: 16;
-      margin-top: 16;
-      margin-bottom: 16;
-      orientation: horizontal;
-      spacing: 8;
-      halign: end;
-      valign: end;
+  Adw.ToastOverlay toaster {
+    Overlay {
+      [overlay]
+      Box {
+        margin-start: 16;
+        margin-end: 16;
+        margin-top: 16;
+        margin-bottom: 16;
+        orientation: horizontal;
+        spacing: 8;
+        halign: end;
+        valign: end;
 
-      Button copy {
-        icon-name: "edit-copy-symbolic";
-        tooltip-text: _("Copy Sentence");
+        Button copy {
+          icon-name: "edit-copy-symbolic";
+          tooltip-text: _("Copy Sentence");
+        }
+
+        Button manager {
+          icon-name: "library-symbolic";
+          tooltip-text: _("Open Manager");
+        }
+
+        MenuButton settings {
+          icon-name: "settings-symbolic";
+          tooltip-text: _("Settings");
+          popover: settings_menu;
+          direction: up;
+        }
       }
 
-      Button manager {
-        icon-name: "library-symbolic";
-        tooltip-text: _("Open Manager");
-      }
+      WindowHandle {
+        ScrolledWindow scrolled_window {
+          Box {
+            orientation: vertical;
 
-      MenuButton settings {
-        icon-name: "settings-symbolic";
-        tooltip-text: _("Settings");
-        popover: settings_menu;
-        direction: up;
-      }
-    }
+            Label sentence {
+              margin-start: 16;
+              margin-end: 16;
+              margin-top: 16;
+              margin-bottom: 16;
+              halign: start;
+              valign: start;
+              xalign: 0.0;
+              yalign: 0.0;
+              wrap: true;
+              selectable: true;
+            }
 
-    WindowHandle {
-      ScrolledWindow scrolled_window {
-        Box {
-          orientation: vertical;
-
-          Label sentence {
-            margin-start: 16;
-            margin-end: 16;
-            margin-top: 16;
-            margin-bottom: 16;
-            halign: start;
-            valign: start;
-            xalign: 0.0;
-            yalign: 0.0;
-            wrap: true;
-            selectable: true;
-          }
-
-          Box scroll_padding {
-            height-request: 64;
+            Box scroll_padding {
+              height-request: 64;
+            }
           }
         }
       }

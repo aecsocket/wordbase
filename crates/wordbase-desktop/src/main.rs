@@ -52,7 +52,7 @@ pub enum AppEvent {
     DictionaryRemoved(DictionaryId),
 }
 
-pub fn forward_events<C>(sender: &AsyncComponentSender<C>)
+fn forward_events<C>(sender: &AsyncComponentSender<C>)
 where
     C: AsyncComponent<CommandOutput = AppEvent>,
 {
@@ -67,11 +67,11 @@ where
     });
 }
 
-pub fn toast_error(toaster: &adw::ToastOverlay, err: &anyhow::Error) {
+fn toast_error(toaster: &adw::ToastOverlay, err: &anyhow::Error) {
     toaster.add_toast(adw::Toast::new(&format!("{err}")));
 }
 
-pub fn toast_result(toaster: &adw::ToastOverlay, result: Result<()>) {
+fn toast_result(toaster: &adw::ToastOverlay, result: Result<()>) {
     if let Err(err) = result {
         toast_error(toaster, &err);
     }
@@ -103,7 +103,6 @@ struct App {
     manager: AsyncController<manager::Model>,
     overlays: AsyncController<overlay::Overlays>,
     main_popup: AsyncController<popup::Model>,
-    engine: Engine,
     _theme_watcher: notify::RecommendedWatcher,
 }
 
@@ -155,9 +154,8 @@ impl AsyncComponent for App {
                 .await
                 .expect("failed to create platform"),
         );
-        let (engine, initial_themes, theme_watcher) = init_engine(sender.input_sender().clone())
-            .await
-            .expect("failed to initialize engine");
+        let (engine, initial_themes, theme_watcher) =
+            init_engine().await.expect("failed to initialize engine");
         setup_profile_action(engine.clone());
 
         let main_popup = popup::connector(&platform, engine.clone())
@@ -170,10 +168,9 @@ impl AsyncComponent for App {
                 .launch((root.clone(), engine.clone()))
                 .detach(),
             overlays: overlay::Overlays::builder()
-                .launch((engine.clone(), platform, main_popup.sender().clone()))
+                .launch((engine, platform, main_popup.sender().clone()))
                 .detach(),
             main_popup,
-            engine,
             _theme_watcher: theme_watcher,
         };
         let widgets = view_output!();
@@ -195,9 +192,7 @@ impl AsyncComponent for App {
     }
 }
 
-async fn init_engine(
-    sender: relm4::Sender<AppMsg>,
-) -> Result<(
+async fn init_engine() -> Result<(
     Engine,
     HashMap<ThemeName, CustomTheme>,
     notify::RecommendedWatcher,

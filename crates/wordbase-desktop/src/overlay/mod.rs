@@ -2,8 +2,8 @@ mod ui;
 
 use {
     crate::{
-        APP_BROKER, APP_ID, AppEvent, AppMsg, SignalHandler, forward_events, platform::Platform,
-        popup, record_view,
+        APP_BROKER, APP_ID, AppEvent, AppMsg, SignalHandler, forward_events, gettext,
+        platform::Platform, popup, record_view,
     },
     foldhash::{HashMap, HashMapExt},
     glib::clone,
@@ -301,6 +301,9 @@ impl AsyncComponent for Overlay {
                     .expect("should have default display")
                     .clipboard()
                     .set_text(&self.sentence);
+
+                root.toaster()
+                    .add_toast(adw::Toast::new(gettext("Copied sentence to clipboard")));
             }
             OverlayMsg::Sentence(sentence) => {
                 root.sentence().set_text(&sentence);
@@ -474,20 +477,22 @@ fn setup_root_opacity_animation(
     let controller = gtk::EventControllerMotion::new();
     root.add_controller(controller.clone());
 
-    controller.connect_enter({
-        let animation = animation.clone();
+    controller.connect_enter(clone!(
+        #[strong]
+        animation,
         move |_, _, _| {
             animation.set_reverse(false);
             animation.play();
         }
-    });
-    controller.connect_leave({
-        let animation = animation.clone();
+    ));
+    controller.connect_leave(clone!(
+        #[strong]
+        animation,
         move |_| {
             animation.set_reverse(true);
             animation.play();
         }
-    });
+    ));
     animation.set_reverse(true);
     animation.play();
 

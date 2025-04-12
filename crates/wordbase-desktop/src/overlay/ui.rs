@@ -7,6 +7,8 @@ mod imp {
     #[template(file = "src/overlay/ui.blp")]
     pub struct Overlay {
         #[template_child]
+        pub toaster: TemplateChild<adw::ToastOverlay>,
+        #[template_child]
         pub copy: TemplateChild<gtk::Button>,
         #[template_child]
         pub manager: TemplateChild<gtk::Button>,
@@ -59,6 +61,11 @@ impl Overlay {
     #[must_use]
     pub fn new() -> Self {
         glib::Object::new()
+    }
+
+    #[must_use]
+    pub fn toaster(&self) -> adw::ToastOverlay {
+        self.imp().toaster.get()
     }
 
     #[must_use]

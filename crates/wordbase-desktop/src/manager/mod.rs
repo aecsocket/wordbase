@@ -100,7 +100,7 @@ impl AsyncComponent for Model {
             });
         root.search_view().set_content(Some(record_view.widget()));
 
-        let toaster = root.toast_overlay();
+        let toaster = root.toaster();
         let model = Self {
             overview_dictionaries: dictionary_list::Model::builder()
                 .launch((engine.clone(), window.clone(), toaster.clone()))

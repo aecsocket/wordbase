@@ -396,6 +396,12 @@ class IntegrationService {
         //
         // if the window doesn't end up `shown` soon, then we won't do the 2nd move
         moved_window.move_frame(false, moved_x, moved_y);
+        // even though we've just raised the popup window, it's not guaranteed
+        // to be on top if we're in a fullscreen window
+        // so we force it to be always on top
+        // this shouldn't impact the user experience, since as soon as the window is unfocused,
+        // the popup window will hide anyway
+        moved_window.make_above();
         let handler_id = null;
         handler_id = moved_window.connect("shown", (__) => {
             if (!handler_id) {
@@ -405,11 +411,7 @@ class IntegrationService {
             handler_id = null;
 
             moved_window.move_frame(false, moved_x, moved_y);
-            // even though we've just raised the popup window, it's not guaranteed
-            // to be on top if we're in a fullscreen window
-            // so we force it to be always on top
-            // this shouldn't impact the user experience, since as soon as the unfocus,
-            // the popup window will hide anyway
+            // ditto
             moved_window.make_above();
         });
         GLib.timeout_add(0, 100, () => {
