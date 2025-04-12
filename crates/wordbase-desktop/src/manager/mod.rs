@@ -1,11 +1,11 @@
 use {
-    crate::{APP_ID, AppEvent, forward_events, gettext, record_view},
+    crate::{APP_ID, AppEvent, forward_events, gettext, record_view, toast_result},
+    anyhow::{Context, Result},
     glib::clone,
     relm4::{
         adw::{gio, prelude::*},
         prelude::*,
     },
-    tracing::info,
     wordbase_engine::Engine,
 };
 
@@ -22,6 +22,7 @@ pub struct Model {
     overview_themes: AsyncController<theme_list::Model>,
     search_themes: AsyncController<theme_list::Model>,
     record_view: AsyncController<record_view::Model>,
+    toaster: adw::ToastOverlay,
     engine: Engine,
     last_query: String,
 }
@@ -31,9 +32,8 @@ pub struct Model {
 pub enum Msg {
     SetAnkiConnectConfig,
     SetTexthookerUrl(String),
-    Query(String),
-    Requery,
-    Error(anyhow::Error),
+    SetQuery(String),
+    Query,
 }
 
 impl AsyncComponent for Model {
@@ -85,18 +85,18 @@ impl AsyncComponent for Model {
         root.search_entry().connect_search_changed(clone!(
             #[strong]
             sender,
-            move |entry| sender.input(Msg::Query(entry.text().into())),
+            move |entry| sender.input(Msg::SetQuery(entry.text().into())),
         ));
         root.search_entry().connect_activate(clone!(
             #[strong]
             sender,
-            move |entry| sender.input(Msg::Query(entry.text().into()))
+            move |entry| sender.input(Msg::SetQuery(entry.text().into()))
         ));
 
         let record_view = record_view::Model::builder()
             .launch(engine.clone())
             .forward(sender.input_sender(), |resp| match resp {
-                record_view::Response::Query(query) => Msg::Query(query),
+                record_view::Response::Query(query) => Msg::SetQuery(query),
             });
         root.search_view().set_content(Some(record_view.widget()));
 
@@ -112,8 +112,9 @@ impl AsyncComponent for Model {
                 .launch((engine.clone(), window.clone(), toaster.clone()))
                 .detach(),
             search_themes: theme_list::Model::builder()
-                .launch((engine.clone(), window, toaster))
+                .launch((engine.clone(), window, toaster.clone()))
                 .detach(),
+            toaster,
             engine,
             record_view,
             last_query: String::new(),
@@ -137,57 +138,25 @@ impl AsyncComponent for Model {
         sender: AsyncComponentSender<Self>,
         root: &Self::Root,
     ) {
-        match message {
-            Msg::SetAnkiConnectConfig => {}
-            Msg::SetTexthookerUrl(url) => {
-                if let Err(err) = self.engine.set_texthooker_url(&url).await {
-                    info!("Set texthooker URL to {url:?}");
-                    sender.input(Msg::Error(
-                        err.context(gettext("Failed to set texthooker URL")),
-                    ));
-                }
-            }
-            Msg::Query(query) => {
-                self.last_query.clone_from(&query);
-                sender.input(Msg::Requery);
-            }
-            Msg::Requery => {
-                let query = &self.last_query;
-                let Ok(records) = self
+        toast_result(
+            &self.toaster,
+            match message {
+                Msg::SetAnkiConnectConfig => Ok(()),
+                Msg::SetTexthookerUrl(url) => self
                     .engine
-                    .lookup(query, 0, record_view::SUPPORTED_RECORD_KINDS)
+                    .set_texthooker_url(&url)
                     .await
-                else {
-                    return;
-                };
-
-                let longest_scan_chars = record_view::longest_scan_chars(query, &records);
-                root.search_entry()
-                    .select_region(0, i32::try_from(longest_scan_chars).unwrap_or(-1));
-
-                self.record_view.sender().emit(record_view::Msg(records));
-            }
-            Msg::Error(_) => {}
-        }
-    }
-
-    async fn update_with_view(
-        &mut self,
-        widgets: &mut Self::Widgets,
-        message: Self::Input,
-        sender: AsyncComponentSender<Self>,
-        root: &Self::Root,
-    ) {
-        match &message {
-            Msg::Error(err) => {
-                let toast = adw::Toast::builder().title(err.to_string()).build();
-                root.toast_overlay().add_toast(toast);
-            }
-            _ => {}
-        }
-
-        self.update(message, sender.clone(), root).await;
-        self.update_view(widgets, sender);
+                    .with_context(|| gettext("Failed to set texthooker URL")),
+                Msg::SetQuery(query) => {
+                    self.last_query.clone_from(&query);
+                    sender.input(Msg::Query);
+                    Ok(())
+                }
+                Msg::Query => query(self, root)
+                    .await
+                    .with_context(|| gettext("Failed to perform lookup")),
+            },
+        );
     }
 
     async fn update_cmd_with_view(
@@ -198,7 +167,22 @@ impl AsyncComponent for Model {
         _root: &Self::Root,
     ) {
         if record_view::should_requery(&event) {
-            sender.input(Msg::Requery);
+            sender.input(Msg::Query);
         }
     }
+}
+
+async fn query(model: &Model, root: &ui::Manager) -> Result<()> {
+    let query = &model.last_query;
+    let records = model
+        .engine
+        .lookup(query, 0, record_view::SUPPORTED_RECORD_KINDS)
+        .await
+        .context("failed to perform lookup")?;
+
+    let longest_scan_chars = record_view::longest_scan_chars(query, &records);
+    root.search_entry()
+        .select_region(0, i32::try_from(longest_scan_chars).unwrap_or(-1));
+    model.record_view.sender().emit(record_view::Msg(records));
+    Ok(())
 }

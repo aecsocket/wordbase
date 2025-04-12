@@ -133,10 +133,12 @@ class IntegrationService {
     }
 
     /**
-     * @param {string} title
+     * @param {Gio.DBusMethodInvocation} invocation
+     * @param {GLib.Variant} params
      * @returns {number}
      */
-    GetAppWindowId(title) {
+    GetAppWindowId(invocation, params) {
+        const [title] = params.deep_unpack();
         const window = global
             .get_window_actors()
             .map((window_actor) => window_actor.meta_window)
@@ -146,9 +148,11 @@ class IntegrationService {
                     window.get_title() === title,
             );
         if (!window) {
-            throw new Error(
+            invocation.return_dbus_error(
+                Gio.DBusError.INVALID_ARGS,
                 `no Wordbase window with title "${title}", windows:\n${window_debug_info()}`,
             );
+            return;
         }
         return window.get_id();
     }

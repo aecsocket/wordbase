@@ -27,15 +27,17 @@ TODO:
     - 向き合わせになる
   - [x] click dragging on the overlay popup should let you drag it
   - [ ] I really want a scrollback, but the current sentence goes to the bottom + there's enough padding at the bottom to push the scrollback up out of the way
-  - [ ] dictionary popup settings button is literally invisible, need to add OSD class somehow
+  - [x] dictionary popup settings button is literally invisible, need to add OSD class somehow
+    - fixed by making the card background transparent
   - [x] changing dictionaries from the popup window?
     - we don't need this, you have a button to open the manager anyway
-  - [x] 停学処分 - we have lookups for:
+  - [ ] 停学処分 - we have lookups for:
     - (停学処分, ていがくしょぶん) -> jitendex
     - (停学処分, NULL) -> audio
     - can we merge the 2 somehow?
     - 体育会系 as well
     - won't fix
+    - ok I lied about won't fix. I really do want to fix this somehow.
   - [ ] TONS of stack trace errors in journalctl. we need a way to only send them as error messages to the dbus client from the extension
   - [ ] イカす is improperly deinflected - lindera thinks it's 活かす/生かす
     - how about: when we deinflect e.g. イカす to 活かす, we ALSO generate a deinflection which maps to the same substring length as 活かす, BUT is a substring of the original query it self (イカす)?
@@ -44,6 +46,24 @@ TODO:
   - [ ] sometimes the dictionary IS spawned, but doesnt appear in front of the window. maybe `make_above` is not being applied?
     - yes, it's as I guessed. it's not being set as `make_above`. maybe related to below?
   - [ ] or maybe it's to do with the window not found error from the extension. we should fix that
+- sesh 2:
+  - IPAex Gothic looks *really* nice
+  - [ ] まじない -> deinflects as 呪い, and prioritises 呪い (のろい). can we make it prioritse まじない?
+  - [ ] my top priority HAS to be making anki notes from lookups
+  - [ ] 頼りなさげな目を... - scans as <頼りな>さげな... we need extra lindera continuation rules for this case
+    - <肩をおとし>て
+    - <叩きつけ>ていた
+    - <消えてたじゃない> -> <きえてた>じゃない
+  - [ ] つまらねぇ - lindera/unidic doesn't seem to be able to turn this into つまらない. do we hardcode some rules like ねぇ -> ない?
+    - handwritten deinflector? 🤔
+  - [ ] 関係ない furigana is wrong?
+  - [ ] ともなると - in DOJG, the line breaks are done wrong. \n should be replaced with <br/>. let's do this in the renderer, not the importer.
+  - [ ] popup should dynamically anchor itself to the topleft/topright/etc. shouldn't be up to the requester. e.g. if it's in the bottom 50% of the screen, anchor it to a top corner
+  - 大事 has a lot of pitch accents, will be good for testing PA rendering
+  - [ ] 当てられまくる授業だった - need better lookup for 当たられまくる. dicts?
+  - [ ] I accidentally fullscreened the overlay. this should be impossible!
+  - [ ] a button in the overlay to copy the sentence
+  - [ ] a button in the overlay to go to the manager search field immediately, or an inline search? idk exactly
 
 - overlay settings: font size, overlay opacity, lookup mode (hover, hold shift, hold ctrl, hold alt)
 - good gnome integration - DONE

@@ -1,6 +1,6 @@
 //! Japanese-specific items.
 
-use {crate::texthook::run, itertools::Itertools, std::iter};
+use {itertools::Itertools, std::iter};
 
 /// Checks if the given character is hiragana
 ///

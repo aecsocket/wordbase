@@ -349,9 +349,15 @@ impl AsyncComponent for Overlay {
 impl Overlay {
     fn update_font(&self, root: &ui::Overlay) {
         let mut font_desc = pango::FontDescription::new();
+
+        if let Some(family) = &self.engine.profiles().current.config.font_family {
+            font_desc.set_family(family);
+        }
+
         let font_size = self.settings.double(OVERLAY_FONT_SIZE);
         let font_size_pango = (font_size * PANGO_SCALE as f64) as i32;
         font_desc.set_size(font_size_pango);
+
         root.sentence()
             .layout()
             .set_font_description(Some(&font_desc));

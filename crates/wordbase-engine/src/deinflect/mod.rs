@@ -1,16 +1,15 @@
-// mod lindera;
+mod lindera;
 
 use {
     crate::Engine,
-    anyhow::{Context, Result},
-    futures::{Stream, StreamExt, stream},
-    lindera::{
+    ::lindera::{
         dictionary::{DictionaryKind, load_dictionary_from_kind},
         mode::Mode,
         segmenter::Segmenter,
-        token::Token,
         tokenizer::Tokenizer,
     },
+    anyhow::{Context, Result},
+    futures::{Stream, StreamExt, stream},
     std::borrow::Cow,
 };
 
@@ -64,7 +63,6 @@ fn lindera<'a>(
     deinflectors: &'a Deinflectors,
     text: &'a str,
 ) -> impl Stream<Item = Deinflection<'a>> {
-    // _lindera_debug(deinflectors, text);
     let Ok(mut tokens) = deinflectors.tokenizer.tokenize(text) else {
         return stream::empty().left_stream();
     };
@@ -108,8 +106,8 @@ fn lindera<'a>(
                 .join("");
 
             let last_token = lookahead.last_mut()?;
-            let last_token_end = last_token.byte_end;
-            let last_token_pos = last_token.get_detail(DETAIL_PART_OF_SPEECH)?;
+            let last_end = last_token.byte_end;
+            let last_pos = last_token.get_detail(DETAIL_PART_OF_SPEECH)?;
 
             // now we try to find where the last token ends
             // we go through all tokens after the last one, and find the last one
@@ -124,10 +122,10 @@ fn lindera<'a>(
                     next.get_detail(DETAIL_PART_OF_SPEECH)
                         .map(|pos| (pos, byte_end))
                 })
-                .take_while(|(next_pos, _)| is_continuation(last_token_pos, next_pos))
+                .take_while(|(next_pos, _)| is_continuation(last_pos, next_pos))
                 .map(|(_, byte_end)| byte_end)
                 .last()
-                .unwrap_or(last_token_end);
+                .unwrap_or(last_end);
 
             Some([
                 Deinflection {
@@ -145,27 +143,19 @@ fn lindera<'a>(
     stream::iter(lemmas).right_stream()
 }
 
-fn is_continuation(last_pos: &str, next_pos: &str) -> bool {
-    match last_pos {
+// TODO: 終止形-一般 marks the end of a word
+fn is_continuation(last_lookahead_pos: &str, next_pos: &str) -> bool {
+    match last_lookahead_pos {
+        // verb
         "動詞" => {
-            // verb
             matches!(next_pos, "助動詞") // auxiliary verb
+        }
+        // adjective
+        "形容詞" => {
+            matches!(next_pos, "接尾辞") // suffix
         }
         _ => false,
     }
-}
-
-fn _lindera_debug<'a>(deinflectors: &'a Deinflectors, text: &'a str) {
-    let tokens = deinflectors
-        .tokenizer
-        .tokenize(text)
-        .expect("should be able to tokenize text");
-    println!("TOKENS:");
-    for mut token in tokens {
-        println!("- {}", token.text);
-        println!("  {}", token.details().join(", "));
-    }
-    println!("------");
 }
 
 const DETAIL_PART_OF_SPEECH: usize = 0;
