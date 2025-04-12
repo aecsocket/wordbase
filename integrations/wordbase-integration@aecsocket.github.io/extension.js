@@ -364,6 +364,11 @@ class IntegrationService {
 
         const to_rect = to_window.get_frame_rect();
         const moved_rect = moved_window.get_frame_rect();
+        const monitor = to_window.get_monitor();
+        if (monitor < 0) {
+            return new Error("to window has no monitor");
+        }
+        const monitor_rect = global.display.get_monitor_geometry(monitor);
         // positioning logic:
         //
         // - for the X axis:
@@ -380,7 +385,7 @@ class IntegrationService {
         const target_moved_bottom_y =
             to_rect.y + offset_se_y + moved_rect.height;
         let moved_y;
-        if (target_moved_bottom_y < global.screen_height) {
+        if (target_moved_bottom_y < monitor_rect.y + monitor_rect.height) {
             moved_y = to_rect.y + offset_se_y;
         } else {
             moved_y = to_rect.y + offset_nw_y - moved_rect.height;

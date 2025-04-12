@@ -1,6 +1,6 @@
 # Goals
 
-## Be a **language learning platform**
+## Be a *language learning platform*
 
 There exist many tools for language learning, offering features like popup dictionaries, pronunciation audio, etc. These exist in various forms, like desktop apps, mobile apps, and browser extensions. But due to the fragmented nature of the ecosystem, there's almost no consistency in any of these - one app may use a hardcoded dictionary, another may fetch data from a server online, whereas another may require you to import dictionaries manually - but those dictionaries aren't shared with any other apps, even though they use the same format.
 
@@ -11,7 +11,7 @@ There's great value in having a single shared database of dictionaries, and a si
 [Yomitan]: https://github.com/yomidevs/yomitan/
 [Memento]: https://github.com/ripose-jp/memento
 
-## Be **simple to use**
+## Be *simple to use*
 
 Following the GNOME philosophy of "every preference has a cost"[^1][^2][^3], Wordbase *the app* focuses on being easy to pick up and use immediately by anyone, rather than being as flexible as possible. Features will be added if they benefit the 90% of users, and don't significantly increase the cognitive complexity of the app.
 
@@ -23,7 +23,7 @@ Perhaps this is a niche goal, considering the typical audience of apps like this
 [^2]: https://blogs.gnome.org/tbernard/2021/07/13/community-power-4/
 [^3]: https://ometer.com/preferences.html
 
-## First-class **Linux/Wayland/Flatpak support**
+## First-class *Linux/Wayland/Flatpak support*
 
 Out of the existing language learning tools available, a small number have first-class Linux support, and an even smaller number have support for the modern Linux desktop with Wayland and Flatpak. This number drops even further when delving into niches like visual novel texthookers and related tools ([Textractor], [JL]). This is understandable, as Linux is still a small fraction of market share - but it's a steadily growing fraction, and its users deserve something nicer.
 
@@ -138,6 +138,8 @@ This is a GTK/Adwaita app which runs on the desktop, and runs `wordbase-engine` 
 - importing dictionary files
 - running a WebSocket server (requires extra Flatpak permissions)
 - on Linux, providing the DBus service over the app's known name
+
+Currently, this app uses Relm4 on top of GTK/Adwaita, but we might switch this to raw GTK/Adwaita in the future. Relm4 doesn't help us much, considering that state is mostly stored outside of memory (in SQLite, the filesystem, etc.), and its component model adds complexity.
 
 ### ⚙️ `wordbase-mobile`
 
