@@ -190,77 +190,86 @@ TODO: this might not be entirely true...
 
 # notes - temp
 
-# Features
+## Test session 3
 
-what's missing in the engine?
-- anki integration
-- non-Japanese support
-- more dictionary formats support
+Now that I've done a bunch of generic bug fixing and improvements, I want to do more targeted high-impact improvements
+- [ ] AnkiConnect!!!!!! (!!!)
+- The first-hover popup experience MUST be perfect, since it's like 90% of the popup use case
+  - [ ] it sometimes just doesn't show up. like, I *know* it scans, I can see the text highlight, but it doesn't appear on top for whatever reason. This has to work perfectly at all costs, even using hacks.
+- [x] Terms like 此処等 are more common in kana as ここら, they should be displayed as such
+  - How does Memento/Yomitan determine what becomes reading-only?
+- [ ] When exiting the overlay, it presents for some reason? I think this is from a previous bugfix
+- [x] "何かを念じるかのようだった。" - "念じる" has wrong order of lookup
+- [x] "こんな図書室には似つかわしくないぐらい、専門的で高価そうな本ばかりだ。" - 高価 has wrong ordering. it's below 高い
+- Future goal: can we get some way of highlighting known/unknown words? I'd like to use AnkiConnect for this tracking ideally, since that gives us the best estimate of how well the user knows a word. Then we can mark new words in a different color in the overlay or something.
+- Future goal: I have a term like 履帯映像, I want to ask AI a question like "break down the kanji in this phrase". I should be able to do this integrated into the dictionary popup.
 
-TODO:
-- extended test sesh:
-  - [ ] sometimes when hovering, the lookup is done, BUT the popup isn't focused maybe?
-  - [x] chinese fonts (force switch away from Inter?)
-    - [x] allow switching overlay and dict font
-    - [ ] set `lang=[bcp47 code]` based on current language (hardcoded to JP for now)
-  - [x] overlay opacity should update when you modify it
-  - [x] incorrect furigana
-    - 聞き流す - ききながす
-    - 言い争い - いいあらそい
-    - 言い直す - いいなおす
-  - [x] why do some things get the wrong char length?
-    - ショックでだろう -> should just be ショック
-    - 日常だった -> should just be 日常
-    - "共に" -> chars as 共, but should be 共に
-  - [x] add lindera tests for the above
-  - [ ] if clicking the mouse while sentence motion, it should NOT lookup
-  - [ ] this fails to lookup:
-    - 居たたまれなくなって
-      - because: root form is 居たたまれない
-    - 仕えする
-    - 向き合わせになる
-  - [x] click dragging on the overlay popup should let you drag it
-  - [ ] I really want a scrollback, but the current sentence goes to the bottom + there's enough padding at the bottom to push the scrollback up out of the way
-  - [x] dictionary popup settings button is literally invisible, need to add OSD class somehow
-    - fixed by making the card background transparent
-  - [x] changing dictionaries from the popup window?
-    - we don't need this, you have a button to open the manager anyway
-  - [ ] 停学処分 - we have lookups for:
-    - (停学処分, ていがくしょぶん) -> jitendex
-    - (停学処分, NULL) -> audio
-    - can we merge the 2 somehow?
-    - 体育会系 as well
-    - won't fix
-    - ok I lied about won't fix. I really do want to fix this somehow.
-  - [x] TONS of stack trace errors in journalctl. we need a way to only send them as error messages to the dbus client from the extension
-  - [x] イカす is improperly deinflected - lindera thinks it's 活かす/生かす
-    - how about: when we deinflect e.g. イカす to 活かす, we ALSO generate a deinflection which maps to the same substring length as 活かす, BUT is a substring of the original query it self (イカす)?
-    - [x] sorta fixed via a better deinflector + maintain deinflect ordering
-  - [ ] the "is ready" popup keeps coming up
-  - [ ] sometimes the dictionary IS spawned, but doesnt appear in front of the window. maybe `make_above` is not being applied?
-    - yes, it's as I guessed. it's not being set as `make_above`. maybe related to below?
-  - [ ] or maybe it's to do with the window not found error from the extension. we should fix that
-- sesh 2:
-  - IPAex Gothic looks *really* nice
-  - [x] まじない -> deinflects as 呪い, and prioritises 呪い (のろい). can we make it prioritse まじない?
-    - fixed with new deinflect algo
-  - [ ] my top priority HAS to be making anki notes from lookups
-  - [x] 頼りなさげな目を... - scans as <頼りな>さげな... we need extra lindera continuation rules for this case
-    - <肩をおとし>て
-    - <叩きつけ>ていた
-    - <消えてたじゃない> -> <きえてた>じゃない
-  - [ ] つまらねぇ - lindera/unidic doesn't seem to be able to turn this into つまらない. do we hardcode some rules like ねぇ -> ない?
-    - handwritten deinflector? 🤔
-  - [x] 関係ない furigana is wrong?
-    - [ ] added a test case, but idk how to resolve it. failing test.
-  - [x] ともなると - in DOJG, the line breaks are done wrong. \n should be replaced with <br/>. let's do this in the renderer, not the importer.
-  - [x] popup should dynamically anchor itself to the topleft/topright/etc. shouldn't be up to the requester. e.g. if it's in the bottom 50% of the screen, anchor it to a top corner
-    - improved positioning algorithm, similar to yomitan's (didn't copy any code tho)
-  - 大事 has a lot of pitch accents, will be good for testing PA rendering
-  - [ ] 当てられまくる授業だった - need better lookup for 当てられまくる. dicts?
-  - [x] I accidentally fullscreened the overlay. this should be impossible!
-  - [x] a button in the overlay to copy the sentence
-  - [x] a button in the overlay to go to the manager search field immediately, or an inline search? idk exactly
+## Test session 2
+
+- IPAex Gothic looks *really* nice
+- [x] まじない -> deinflects as 呪い, and prioritises 呪い (のろい). can we make it prioritse まじない?
+  - fixed with new deinflect algo
+- [ ] my top priority HAS to be making anki notes from lookups
+- [x] 頼りなさげな目を... - scans as <頼りな>さげな... we need extra lindera continuation rules for this case
+  - <肩をおとし>て
+  - <叩きつけ>ていた
+  - <消えてたじゃない> -> <きえてた>じゃない
+- [ ] つまらねぇ - lindera/unidic doesn't seem to be able to turn this into つまらない. do we hardcode some rules like ねぇ -> ない?
+  - handwritten deinflector? 🤔
+- [x] 関係ない furigana is wrong?
+  - [ ] added a test case, but idk how to resolve it. failing test.
+- [x] ともなると - in DOJG, the line breaks are done wrong. \n should be replaced with <br/>. let's do this in the renderer, not the importer.
+- [x] popup should dynamically anchor itself to the topleft/topright/etc. shouldn't be up to the requester. e.g. if it's in the bottom 50% of the screen, anchor it to a top corner
+  - improved positioning algorithm, similar to yomitan's (didn't copy any code tho)
+- 大事 has a lot of pitch accents, will be good for testing PA rendering
+- [ ] 当てられまくる授業だった - need better lookup for 当てられまくる. dicts?
+- [x] I accidentally fullscreened the overlay. this should be impossible!
+- [x] a button in the overlay to copy the sentence
+- [x] a button in the overlay to go to the manager search field immediately, or an inline search? idk exactly
+
+## Test session 1
+
+- [ ] sometimes when hovering, the lookup is done, BUT the popup isn't focused maybe?
+- [x] chinese fonts (force switch away from Inter?)
+  - [x] allow switching overlay and dict font
+  - [ ] set `lang=[bcp47 code]` based on current language (hardcoded to JP for now)
+- [x] overlay opacity should update when you modify it
+- [x] incorrect furigana
+  - 聞き流す - ききながす
+  - 言い争い - いいあらそい
+  - 言い直す - いいなおす
+- [x] why do some things get the wrong char length?
+  - ショックでだろう -> should just be ショック
+  - 日常だった -> should just be 日常
+  - "共に" -> chars as 共, but should be 共に
+- [x] add lindera tests for the above
+- [ ] if clicking the mouse while sentence motion, it should NOT lookup
+- [ ] this fails to lookup:
+  - 居たたまれなくなって
+    - because: root form is 居たたまれない
+  - 仕えする
+  - 向き合わせになる
+- [x] click dragging on the overlay popup should let you drag it
+- [ ] I really want a scrollback, but the current sentence goes to the bottom + there's enough padding at the bottom to push the scrollback up out of the way
+- [x] dictionary popup settings button is literally invisible, need to add OSD class somehow
+  - fixed by making the card background transparent
+- [x] changing dictionaries from the popup window?
+  - we don't need this, you have a button to open the manager anyway
+- [ ] 停学処分 - we have lookups for:
+  - (停学処分, ていがくしょぶん) -> jitendex
+  - (停学処分, NULL) -> audio
+  - can we merge the 2 somehow?
+  - 体育会系 as well
+  - won't fix
+  - ok I lied about won't fix. I really do want to fix this somehow.
+- [x] TONS of stack trace errors in journalctl. we need a way to only send them as error messages to the dbus client from the extension
+- [x] イカす is improperly deinflected - lindera thinks it's 活かす/生かす
+  - how about: when we deinflect e.g. イカす to 活かす, we ALSO generate a deinflection which maps to the same substring length as 活かす, BUT is a substring of the original query it self (イカす)?
+  - [x] sorta fixed via a better deinflector + maintain deinflect ordering
+- [ ] the "is ready" popup keeps coming up
+- [ ] sometimes the dictionary IS spawned, but doesnt appear in front of the window. maybe `make_above` is not being applied?
+  - yes, it's as I guessed. it's not being set as `make_above`. maybe related to below?
+- [ ] or maybe it's to do with the window not found error from the extension. we should fix that
 
 - overlay settings: font size, overlay opacity, lookup mode (hover, hold shift, hold ctrl, hold alt)
 - good gnome integration - DONE
@@ -270,6 +279,8 @@ TODO:
   - Receives context of the looked up sentence (let's say 1 sentence before and after), and asks AI to generate an explanation
   - Can include extra metadata from the app e.g. video file name, browser tab title, so the AI has more context on what the user is doing
   - Local-first support via Ramalama
+
+## Misc
 
 TODO:
 - local audio server - SORTA DONE

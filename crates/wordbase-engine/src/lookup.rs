@@ -75,6 +75,20 @@ impl Engine {
             WHERE kind IN (SELECT value FROM json_each($2))
 
             ORDER BY
+                CASE
+                    -- prioritize results where both the headword and reading match the lemma
+                    -- e.g. if you typed あらゆる:
+                    -- - the first results would be for the kana あらゆる
+                    -- - then the kanji like 汎ゆる
+                    WHEN term_record.reading = $1 AND term_record.headword = $1 THEN 0
+                    -- then prioritize results where at least the reading or headword are an exact match
+                    -- e.g. in 念じる, usually 念ずる comes up first
+                    -- but this is obviously a different reading
+                    -- so we want to prioritize 念じる
+                    WHEN term_record.reading = $1 OR term_record.headword = $1 THEN 1
+                    -- all other results at the end
+                    ELSE 2
+                END,
                 -- user-specified dictionary sorting position always takes priority
                 dictionary.position,
                 -- put entries without an explicit frequency value last
@@ -92,8 +106,8 @@ impl Engine {
                 END,
                 -- sort by source-specific frequency info
                 CASE
-                    WHEN source_frequency.mode = 0 THEN  source_frequency.mode
-                    WHEN source_frequency.mode = 1 THEN -source_frequency.mode
+                    WHEN source_frequency.mode = 0 THEN  source_frequency.value
+                    WHEN source_frequency.mode = 1 THEN -source_frequency.value
                     ELSE 0
                 END",
                 lemma,

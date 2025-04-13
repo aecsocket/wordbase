@@ -44,6 +44,11 @@ enum Command {
         /// Text to look up
         text: String,
     },
+    /// Fetch records for a lemma directly
+    LookupLemma {
+        /// Lemma to look up
+        lemma: String,
+    },
     /// Manage texthooker functions
     #[command(alias = "hook")]
     Texthooker {
@@ -259,6 +264,7 @@ async fn main() -> Result<()> {
         } => dictionary_rm(&engine, id).await?,
         Command::Deinflect { text } => deinflect(&engine, text),
         Command::Lookup { text } => lookup(&engine, text).await?,
+        Command::LookupLemma { lemma } => lookup_lemma(&engine, lemma).await?,
         Command::Texthooker {
             command: TexthookerCommand::GetUrl,
         } => texthooker_get_url(&engine),
@@ -585,6 +591,13 @@ fn deinflect(engine: &Engine, text: String) {
 
 async fn lookup(engine: &Engine, text: String) -> Result<()> {
     for result in engine.lookup(&text, 0, RecordKind::ALL).await? {
+        println!("{result:#?}");
+    }
+    Ok(())
+}
+
+async fn lookup_lemma(engine: &Engine, lemma: String) -> Result<()> {
+    for result in engine.lookup_lemma(&lemma, RecordKind::ALL).await? {
         println!("{result:#?}");
     }
     Ok(())
