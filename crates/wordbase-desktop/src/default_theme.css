@@ -1,0 +1,288 @@
+body {
+    margin: 0;
+    padding: 0;
+}
+
+:root {
+    /* <https://gitlab.gnome.org/GNOME/libadwaita/-/blob/main/src/stylesheet/_common.scss?ref_type=heads#L9> */
+    --button-color: color-mix(in srgb, currentColor 10%, transparent);
+    --button-hover-color: color-mix(in srgb, currentColor 15%, transparent);
+    --button-active-color: color-mix(in srgb, currentColor 30%, transparent);
+    --button-radius: 9px;
+    --card-radius: 12px;
+    --dim-opacity: 55%;
+    --caption-font-size: 82%;
+    --caption-font-weight: 700;
+    --content-padding: 16px;
+}
+
+/* named colors: <https://gnome.pages.gitlab.gnome.org/libadwaita/doc/1.5/named-colors.html> */
+:root {
+    --blue-2: #62a0ea;
+    --blue-3: #3584e4;
+    --green-2: #57e389;
+    --green-3: #33d17a;
+    --yellow-2: #f8e45c;
+    --yellow-3: #f6d32d;
+    --red-2: #ed333b;
+    --red-3: #e01b24;
+
+    --heiban: var(--blue-2);
+    --atamadaka: var(--red-2);
+    --nakadaka: var(--yellow-2);
+    --odaka: var(--green-2);
+}
+
+:root {
+    --window-bg-color: #fafafa;
+    --window-fg-color: rgba(0, 0, 0, 0.8);
+    --card-bg-color: #ffffff;
+    --card-fg-color: rgba(0, 0, 0, 0.8);
+    --card-shade-color: rgba(0, 0, 0, 0.07);
+    --headerbar-shade-color: rgba(0, 0, 0, 0.12);
+    --headerbar-darker-shade-color: rgba(0, 0, 0, 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --window-bg-color: #242424;
+        --window-fg-color: #ffffff;
+        --card-bg-color: rgba(255, 255, 255, 0.08);
+        --card-fg-color: #ffffff;
+        --card-shade-color: rgba(0, 0, 0, 0.36);
+        --headerbar-shade-color: rgba(0, 0, 0, 0.36);
+    }
+}
+
+/* generic styling */
+
+:root {
+    background-color: var(--window-bg-color);
+    color: var(--window-fg-color);
+    /** for Jitendex */
+    --text-color: var(--window-fg-color);
+}
+
+a {
+    color: var(--accent-color);
+}
+
+button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--button-color);
+    border: none;
+    border-radius: var(--button-radius);
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    line-height: 1;
+    margin: 0;
+    padding: 8px 14px;
+    text-align: center;
+    text-decoration: none;
+    transition: background-color 0.2s ease;
+}
+
+button:hover {
+    background: var(--button-hover-color);
+}
+
+button:focus {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+}
+
+button:active {
+    background-color: var(--button-active-color);
+}
+
+li {
+    line-height: 1.5;
+}
+
+table {
+    border-collapse: collapse;
+    margin: 8px 0;
+}
+
+table th,
+table td {
+    padding: 8px;
+    border: 1px solid currentColor;
+}
+
+.tag {
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    background-color: var(--button-color);
+    border-radius: 9999px;
+    padding: 6px 12px;
+}
+
+.records {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+}
+
+.term-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.term-group .meta-group {
+    display: flex;
+    flex-direction: row;
+    position: sticky;
+    top: 0;
+    background-color: var(--window-bg-color);
+    padding: 10px var(--content-padding);
+    box-shadow:
+        0 1px color-mix(in srgb, var(--headerbar-shade-color) 50%, transparent),
+        0 2px 4px
+            color-mix(in srgb, var(--headerbar-shade-color) 50%, transparent);
+}
+
+/* term meta - the top sticky header */
+
+.term-group .meta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.term-group .term {
+    font-size: 2.5rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.term-group .actions {
+    /* todo */
+    visibility: hidden;
+}
+
+/* term misc - the flowing tags */
+
+.misc-group {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: stretch;
+    padding: 0 var(--content-padding);
+}
+
+.misc-group .tag {
+    display: inline-flex;
+    align-items: center;
+    background-color: var(--button-color);
+    border-radius: 9999px;
+    padding: 6px 12px;
+}
+
+.pitch:has(.heiban) {
+    color: var(--heiban);
+}
+
+.pitch:has(.atamadaka) {
+    color: var(--atamadaka);
+}
+
+.pitch:has(.nakadaka) {
+    color: var(--nakadaka);
+}
+
+.pitch:has(.odaka) {
+    color: var(--odaka);
+}
+
+.mora {
+    border-width: 1.5px;
+}
+
+.mora.high.next-high {
+    border-style: solid none none none;
+}
+
+.mora.high.next-low {
+    border-style: solid solid none none;
+    border-image: linear-gradient(to bottom, currentColor 50%, transparent 50%)
+        1 1;
+    padding-right: 3px;
+    margin-right: 2px;
+}
+
+.frequencies {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.frequencies .value:not(:last-child)::after {
+    content: "・";
+}
+
+.frequencies .value {
+    font-weight: 700;
+}
+
+/* glossaries - the actual dictionary content */
+
+.glossaries {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 0 var(--content-padding);
+}
+
+.glossaries .one-source {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.glossaries .source-name {
+    font-size: var(--caption-font-size);
+    font-weight: var(--caption-font-weight);
+}
+
+/* card styling: <https://gitlab.gnome.org/GNOME/libadwaita/-/blob/main/src/stylesheet/widgets/_misc.scss> */
+.glossary {
+    color: var(--card-fg-color);
+    background-color: var(--card-bg-color);
+    border-radius: var(--card-radius);
+    padding: 12px;
+    box-shadow:
+        0 0 0 1px rgb(0 0 6 / 3%),
+        0 1px 3px 1px rgb(0 0 6 / 7%),
+        0 2px 6px 2px rgb(0 0 6 / 3%);
+}
+
+.glossary ul[data-count="1"] {
+    padding-left: 0;
+    list-style-type: none;
+}
+
+.glossary .tag-group {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: stretch;
+}
+
+/*
+
+BELOW TODO
+
+*/
+
+/* Definition lists */
+.glossary ul {
+    padding-left: 1.2em;
+    margin: 8px 0;
+}

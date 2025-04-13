@@ -2,7 +2,7 @@ use {
     crate::lang,
     base64::{Engine, prelude::BASE64_STANDARD},
     derive_more::{Deref, DerefMut},
-    maud::{Markup, html},
+    maud::{Markup, PreEscaped, html},
     std::fmt::Write as _,
     wordbase::{
         Dictionary, DictionaryId, Record, RecordLookup, Term,
@@ -17,42 +17,52 @@ pub fn render_records<'a>(
     let terms = make_terms(records);
 
     html! {
+        svg style="display: none;" {
+            symbol id="speakers-symbolic" viewBox="0 0 16 16" {
+                (r##"<path d="m 12.039062 0.00390625 c -0.257812 -0.01171875 -0.523437 0.07421875 -0.726562 0.28124975 l -3.3125 3.292969 v 1.421875 h 1.390625 l 3.304687 -3.296875 c 0.40625 -0.40625 0.363282 -1.042969 0.03125 -1.394531 c -0.175781 -0.183594 -0.429687 -0.292969 -0.6875 -0.30468775 z m -5.039062 1.00390575 c -0.296875 -0.003906 -0.578125 0.125 -0.765625 0.351563 l -3.234375 3.640625 h -1 c -1.09375 0 -2 0.84375 -2 2 v 2 c 0 1.089844 0.910156 2 2 2 h 1 l 3.234375 3.640625 c 0.207031 0.253906 0.488281 0.363281 0.765625 0.359375 z m 1 5.992188 v 2 h 6 c 0.75 0 1 -0.5 1 -1 s -0.25 -1 -1 -1 z m 0 4 v 1.421875 l 3.324219 3.292969 c 0.402343 0.410156 1.0625 0.347656 1.414062 -0.023438 c 0.332031 -0.351562 0.371094 -0.988281 -0.03125 -1.390625 l -3.316406 -3.300781 z m 0 0" fill="#222222"/>"##)
+            }
+        }
+
         @for (term, info) in &terms.0 {
             .term-group {
-                .term-meta {
-                    .term {
-                        (render_term(term))
-                    }
-
-                    .pitch-group {
-                        @for pitch in &info.pitches {
-                            .pitch {
-                                (render_pitch(term, pitch))
-                            }
+                .meta-group {
+                    .meta {
+                        .term {
+                            (render_term(term))
                         }
                     }
 
-                    .frequencies-group {
-                        @for (&source, frequencies) in &info.frequencies {
-                            .frequencies {
-                                (render_frequencies(dictionary_by_id, source, frequencies))
-                            }
-                        }
-                    }
-
-                    .audio-group {
-                        @for (_, audio) in &info.audio {
-                            .audio {
-                                (render_audio(audio))
-                            }
+                    .actions {
+                        button {
+                            "TODO: anki buttons"
                         }
                     }
                 }
 
-                .glossaries {
-                    @for (&source, glossaries) in &info.glossaries {
-                        .one-source {
-                            (render_glossaries(dictionary_by_id, source, glossaries))
+                .misc-group {
+                    @for (_, audio) in &info.audio {
+                        (render_audio(audio))
+                    }
+
+                    @for pitch in &info.pitches {
+                        span .tag .pitch {
+                            (render_pitch(term, pitch))
+                        }
+                    }
+
+                    @for (&source, frequencies) in &info.frequencies {
+                        span .tag .frequencies {
+                            (render_frequencies(dictionary_by_id, source, frequencies))
+                        }
+                    }
+                }
+
+                @if !info.glossaries.is_empty() {
+                    .glossaries {
+                        @for (&source, glossaries) in &info.glossaries {
+                            .one-source {
+                                (render_glossaries(dictionary_by_id, source, glossaries))
+                            }
                         }
                     }
                 }
@@ -164,8 +174,13 @@ pub fn render_term(term: &Term) -> Markup {
 
 #[must_use]
 pub fn render_pitch(term: &Term, pitch: &dict::yomitan::Pitch) -> Markup {
-    let Some(reading) = term.reading() else {
-        return html! {};
+    let reading = match term {
+        Term::Full {
+            headword: _,
+            reading,
+        }
+        | Term::Reading { reading } => reading,
+        Term::Headword { headword } => headword,
     };
 
     let downstep = usize::try_from(pitch.position).unwrap_or(usize::MAX);
@@ -203,7 +218,7 @@ pub fn render_pitch(term: &Term, pitch: &dict::yomitan::Pitch) -> Markup {
     });
 
     html! {
-        .(pitch_css_class) {
+        span .(pitch_css_class) {
             @for mora in morae {
                 (mora)
             }
@@ -246,12 +261,12 @@ pub fn render_frequency(frequency: &dict::yomitan::Frequency) -> Markup {
 pub fn render_audio(record: &Audio) -> Markup {
     let (name, audio) = match record {
         Audio::Forvo(dict::yomichan_audio::Forvo { audio, username }) => {
-            (format!("Forvo {username}"), audio)
+            (username.to_string(), audio)
         }
         Audio::Jpod(dict::yomichan_audio::Jpod { audio }) => ("JPod".into(), audio),
-        Audio::Nhk16(dict::yomichan_audio::Nhk16 { audio }) => ("Nhk16".into(), audio),
+        Audio::Nhk16(dict::yomichan_audio::Nhk16 { audio }) => ("NHK".into(), audio),
         Audio::Shinmeikai8(dict::yomichan_audio::Shinmeikai8 { audio, .. }) => {
-            ("Shinmeikai8".into(), audio)
+            ("Shinmeikai".into(), audio)
         }
     };
 
@@ -264,7 +279,9 @@ pub fn render_audio(record: &Audio) -> Markup {
 
     html! {
         button onclick=(on_click) {
-            "Play Audio " (name)
+            (PreEscaped(include_str!("../assets/speakers-symbolic.svg")))
+
+            (name)
         }
     }
 }
@@ -294,9 +311,13 @@ pub fn render_glossary(glossary: &dict::yomitan::Glossary) -> Markup {
     tags.sort_by_key(|tag| tag.order);
 
     html! {
-        @for tag in tags {
-            .tag title=(tag.description) {
-                (tag.name)
+        @if !tags.is_empty() {
+            .tag-group {
+                @for tag in tags {
+                    .tag title=(tag.description) {
+                        (tag.name)
+                    }
+                }
             }
         }
 
