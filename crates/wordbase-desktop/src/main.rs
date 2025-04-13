@@ -121,7 +121,9 @@ impl AsyncComponent for App {
     type CommandOutput = ();
 
     view! {
-        adw::Window {
+        adw::ApplicationWindow {
+            set_application: Some(&relm4::main_application()),
+
             model.manager.widget(),
         }
     }
@@ -156,7 +158,7 @@ impl AsyncComponent for App {
         );
         let (engine, initial_themes, theme_watcher) =
             init_engine().await.expect("failed to initialize engine");
-        setup_profile_action(engine.clone());
+        setup_actions(engine.clone());
 
         let main_popup = popup::connector(&platform, engine.clone())
             .await
@@ -217,8 +219,10 @@ async fn init_engine() -> Result<(
     Ok((engine, initial_themes, theme_watcher))
 }
 
-fn setup_profile_action(engine: Engine) {
+fn setup_actions(engine: Engine) {
     let app = relm4::main_application();
+
+    app.set_accels_for_action("win.copy-html", &["<Shift><Ctrl>H"]);
 
     let action = gio::ActionEntry::builder(ACTION_PROFILE)
         .parameter_type(Some(glib::VariantTy::STRING))

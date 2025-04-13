@@ -7,6 +7,7 @@ use {
     },
     anyhow::Result,
     glib::clone,
+    maud::Markup,
     relm4::{
         adw::{gdk, gio, prelude::*},
         component::AsyncConnector,
@@ -33,6 +34,7 @@ pub struct Model {
     record_view: AsyncController<record_view::Model>,
     platform: Arc<dyn Platform>,
     engine: Engine,
+    last_html: Option<Markup>,
     query_override: Option<String>,
 }
 
@@ -46,6 +48,10 @@ pub enum Msg {
         origin_nw: (i32, i32),
         origin_se: (i32, i32),
     },
+    #[doc(hidden)]
+    Html(Markup),
+    #[doc(hidden)]
+    CopyHtml,
     #[doc(hidden)]
     Query(String),
     #[doc(hidden)]
@@ -70,7 +76,17 @@ impl AsyncComponent for Model {
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
         forward_events(&sender);
+        root.set_application(Some(&relm4::main_application()));
         relm4::main_application().add_window(&root);
+
+        let copy_html = gio::ActionEntry::builder("copy-html")
+            .activate(clone!(
+                #[strong]
+                sender,
+                move |_, _, _| sender.input(Msg::CopyHtml)
+            ))
+            .build();
+        root.add_action_entries([copy_html]);
 
         let settings = gio::Settings::new(APP_ID);
         settings.bind("popup-width", &root, "default-width").build();
@@ -83,9 +99,11 @@ impl AsyncComponent for Model {
             record_view: record_view::Model::builder()
                 .launch(engine.clone())
                 .forward(sender.input_sender(), |resp| match resp {
+                    record_view::Response::Html(html) => Msg::Html(html),
                     record_view::Response::Query(query) => Msg::Query(query),
                 }),
             engine,
+            last_html: None,
             query_override: None,
         };
         root.content().set_child(Some(model.record_view.widget()));
@@ -115,8 +133,9 @@ impl AsyncComponent for Model {
         }
     }
 
-    async fn update(
+    async fn update_with_view(
         &mut self,
+        _widgets: &mut Self::Widgets,
         message: Self::Input,
         sender: AsyncComponentSender<Self>,
         root: &Self::Root,
@@ -139,6 +158,20 @@ impl AsyncComponent for Model {
                     warn!("Failed to present popup: {err:?}");
                 }
                 root.present();
+            }
+            Msg::Html(html) => {
+                self.last_html = Some(html);
+            }
+            Msg::CopyHtml => {
+                let Some(html) = &self.last_html else {
+                    return;
+                };
+                gdk::Display::default()
+                    .expect("should have default display")
+                    .clipboard()
+                    .set_text(&html.0);
+                root.toaster()
+                    .add_toast(adw::Toast::new(gettext("Copied HTML to clipboard")));
             }
             Msg::Query(query) => {
                 self.query_override = Some(query);

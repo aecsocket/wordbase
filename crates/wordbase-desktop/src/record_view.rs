@@ -1,6 +1,6 @@
 use {
     crate::{AppEvent, forward_events, theme::DEFAULT_THEME},
-    maud::html,
+    maud::{Markup, html},
     relm4::{
         adw::{gdk, gio, prelude::*},
         prelude::*,
@@ -24,6 +24,7 @@ pub struct Msg(pub Vec<RecordLookup>);
 
 #[derive(Debug)]
 pub enum Response {
+    Html(Markup),
     Query(String),
 }
 
@@ -68,12 +69,11 @@ impl AsyncComponent for Model {
         &mut self,
         _widgets: &mut Self::Widgets,
         message: Self::CommandOutput,
-        _sender: AsyncComponentSender<Self>,
+        sender: AsyncComponentSender<Self>,
         root: &Self::Root,
     ) {
-        match message {
-            AppEvent::FontSet => update_view(self, root),
-            _ => {}
+        if matches!(message, AppEvent::FontSet) {
+            update_view(self, root, &sender);
         }
     }
 
@@ -81,15 +81,15 @@ impl AsyncComponent for Model {
         &mut self,
         _widgets: &mut Self::Widgets,
         records: Self::Input,
-        _sender: AsyncComponentSender<Self>,
+        sender: AsyncComponentSender<Self>,
         root: &Self::Root,
     ) {
         self.records = records.0;
-        update_view(self, root);
+        update_view(self, root, &sender);
     }
 }
 
-fn update_view(model: &Model, root: &webkit6::WebView) {
+fn update_view(model: &Model, root: &webkit6::WebView, sender: &AsyncComponentSender<Model>) {
     let profile = model.engine.profiles().current.clone();
     let settings = webkit6::Settings::new();
     settings.set_enable_page_cache(false);
@@ -119,6 +119,7 @@ fn update_view(model: &Model, root: &webkit6::WebView) {
         }
     };
     root.load_html(&full_html.0, None);
+    _ = sender.output(Response::Html(records_html));
 }
 
 fn on_decide_policy(decision: &webkit6::PolicyDecision, sender: &AsyncComponentSender<Model>) {
@@ -166,10 +167,10 @@ pub fn longest_scan_chars(query: &str, records: &[RecordLookup]) -> usize {
 }
 
 pub fn should_requery(event: &AppEvent) -> bool {
-    match event {
+    matches!(
+        event,
         AppEvent::DictionaryEnabledSet(_, _)
-        | AppEvent::DictionarySortingSet(_)
-        | AppEvent::DictionaryRemoved(_) => true,
-        _ => false,
-    }
+            | AppEvent::DictionarySortingSet(_)
+            | AppEvent::DictionaryRemoved(_)
+    )
 }

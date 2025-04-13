@@ -1,28 +1,30 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $WdbPopup: Adw.Window {
+template $WdbPopup: Adw.ApplicationWindow {
   title: _("Wordbase Popup");
   hide-on-close: true;
 
-  Overlay content {
-    [overlay]
-    Box {
-      margin-start: 16;
-      margin-end: 16;
-      margin-top: 16;
-      margin-bottom: 16;
-      orientation: vertical;
-      spacing: 8;
-      halign: end;
-      valign: end;
+  Adw.ToastOverlay toaster {
+    Overlay content {
+      [overlay]
+      Box {
+        margin-start: 16;
+        margin-end: 16;
+        margin-top: 16;
+        margin-bottom: 16;
+        orientation: vertical;
+        spacing: 8;
+        halign: end;
+        valign: end;
 
-      Adw.SplitButton manager_profiles {
-        icon-name: "library-symbolic";
-        tooltip-text: _("Open Manager");
-        dropdown-tooltip: _("Change Profile");
-        direction: up;
-        menu-model: profiles_menu;
+        Adw.SplitButton manager_profiles {
+          icon-name: "library-symbolic";
+          tooltip-text: _("Open Manager");
+          dropdown-tooltip: _("Change Profile");
+          direction: up;
+          menu-model: profiles_menu;
+        }
       }
     }
   }

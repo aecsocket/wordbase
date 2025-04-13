@@ -16,7 +16,7 @@ use {
 pub struct Model {
     dictionaries: HashMap<DictionaryId, AsyncController<dictionary_row::Model>>,
     engine: Engine,
-    window: adw::Window,
+    window: gtk::Window,
     toaster: adw::ToastOverlay,
 }
 
@@ -27,7 +27,7 @@ pub enum Msg {
 }
 
 impl AsyncComponent for Model {
-    type Init = (Engine, adw::Window, adw::ToastOverlay);
+    type Init = (Engine, gtk::Window, adw::ToastOverlay);
     type Input = Msg;
     type Output = ();
     type CommandOutput = AppEvent;

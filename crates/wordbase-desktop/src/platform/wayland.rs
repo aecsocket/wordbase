@@ -3,7 +3,7 @@ use {
     crate::CHANNEL_BUF_CAP,
     anyhow::{Context, Result, bail},
     futures::{StreamExt, future::LocalBoxFuture},
-    relm4::adw::{self, prelude::*},
+    relm4::gtk::{self, prelude::*},
     tokio::sync::broadcast,
     tokio_util::task::AbortOnDropHandle,
     wordbase::WindowFilter,
@@ -53,7 +53,7 @@ impl Platform {
 }
 
 impl super::Platform for Platform {
-    fn init_overlay(&self, overlay: &adw::Window) -> LocalBoxFuture<Result<OverlayGuard>> {
+    fn init_overlay(&self, overlay: &gtk::Window) -> LocalBoxFuture<Result<OverlayGuard>> {
         struct GuardImpl {
             close_on_request_task: glib::JoinHandle<()>,
         }
@@ -96,13 +96,13 @@ impl super::Platform for Platform {
         })
     }
 
-    fn init_popup(&self, _popup: &adw::Window) -> LocalBoxFuture<Result<()>> {
+    fn init_popup(&self, _popup: &gtk::Window) -> LocalBoxFuture<Result<()>> {
         Box::pin(async move { Ok(()) })
     }
 
     fn move_popup_to_window(
         &self,
-        popup: &adw::Window,
+        popup: &gtk::Window,
         to: WindowFilter,
         offset_nw: (i32, i32),
         offset_se: (i32, i32),
@@ -128,7 +128,7 @@ impl super::Platform for Platform {
     }
 }
 
-async fn get_window_id(integration: &IntegrationProxy<'_>, window: &adw::Window) -> Result<u64> {
+async fn get_window_id(integration: &IntegrationProxy<'_>, window: &gtk::Window) -> Result<u64> {
     let window_token = format!("{:016x}", rand::random::<u128>());
     let old_title = window.title();
     window.set_title(Some(&window_token));

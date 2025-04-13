@@ -2,7 +2,7 @@ use {
     super::{OverlayGuard, WindowFilter},
     anyhow::{Result, bail},
     futures::future::LocalBoxFuture,
-    relm4::adw,
+    relm4::gtk,
 };
 
 #[derive(Debug)]
@@ -17,17 +17,17 @@ impl Platform {
 }
 
 impl super::Platform for Platform {
-    fn init_overlay(&self, _overlay: &adw::Window) -> LocalBoxFuture<Result<OverlayGuard>> {
+    fn init_overlay(&self, _overlay: &gtk::Window) -> LocalBoxFuture<Result<OverlayGuard>> {
         Box::pin(async move { bail!("unsupported") })
     }
 
-    fn init_popup(&self, _popup: &adw::Window) -> LocalBoxFuture<Result<()>> {
+    fn init_popup(&self, _popup: &gtk::Window) -> LocalBoxFuture<Result<()>> {
         Box::pin(async move { bail!("unsupported") })
     }
 
     fn move_popup_to_window(
         &self,
-        _popup: &adw::Window,
+        _popup: &gtk::Window,
         _target: WindowFilter,
         _offset_nw: (i32, i32),
         _offset_se: (i32, i32),

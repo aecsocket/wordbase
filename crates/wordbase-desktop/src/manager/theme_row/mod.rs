@@ -9,7 +9,7 @@ mod ui;
 
 #[derive(Debug)]
 pub struct Model {
-    window: adw::Window,
+    window: gtk::Window,
 }
 
 #[derive(Debug)]
@@ -24,7 +24,7 @@ pub enum Response {
 }
 
 impl Component for Model {
-    type Init = (adw::Window, Option<String>);
+    type Init = (gtk::Window, Option<String>);
     type Input = Msg;
     type Output = Response;
     type CommandOutput = ();

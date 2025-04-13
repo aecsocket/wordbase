@@ -2,8 +2,9 @@ use {
     crate::{APP_ID, AppEvent, forward_events, gettext, record_view, toast_result},
     anyhow::{Context, Result},
     glib::clone,
+    maud::Markup,
     relm4::{
-        adw::{gio, prelude::*},
+        adw::{gdk, gio, prelude::*},
         prelude::*,
     },
     wordbase_engine::Engine,
@@ -24,6 +25,7 @@ pub struct Model {
     record_view: AsyncController<record_view::Model>,
     toaster: adw::ToastOverlay,
     engine: Engine,
+    last_html: Option<Markup>,
     last_query: String,
 }
 
@@ -34,10 +36,12 @@ pub enum Msg {
     SetTexthookerUrl(String),
     SetQuery(String),
     Query,
+    Html(Markup),
+    CopyHtml,
 }
 
 impl AsyncComponent for Model {
-    type Init = (adw::Window, Engine);
+    type Init = (adw::ApplicationWindow, Engine);
     type Input = Msg;
     type Output = ();
     type CommandOutput = AppEvent;
@@ -54,6 +58,16 @@ impl AsyncComponent for Model {
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
         forward_events(&sender);
+
+        let copy_html = gio::ActionEntry::builder("copy-html")
+            .activate(clone!(
+                #[strong]
+                sender,
+                move |_, _, _| sender.input(Msg::CopyHtml)
+            ))
+            .build();
+        window.add_action_entries([copy_html]);
+        let window = window.upcast::<gtk::Window>();
 
         let settings = gio::Settings::new(APP_ID);
         settings
@@ -96,6 +110,7 @@ impl AsyncComponent for Model {
         let record_view = record_view::Model::builder()
             .launch(engine.clone())
             .forward(sender.input_sender(), |resp| match resp {
+                record_view::Response::Html(html) => Msg::Html(html),
                 record_view::Response::Query(query) => Msg::SetQuery(query),
             });
         root.search_view().set_content(Some(record_view.widget()));
@@ -117,6 +132,7 @@ impl AsyncComponent for Model {
             toaster,
             engine,
             record_view,
+            last_html: None,
             last_query: String::new(),
         };
 
@@ -153,6 +169,21 @@ impl AsyncComponent for Model {
                 Msg::SetQuery(query) => {
                     self.last_query.clone_from(&query);
                     sender.input(Msg::Query);
+                    Ok(())
+                }
+                Msg::Html(html) => {
+                    self.last_html = Some(html);
+                    Ok(())
+                }
+                Msg::CopyHtml => {
+                    if let Some(html) = &self.last_html {
+                        gdk::Display::default()
+                            .expect("should have default display")
+                            .clipboard()
+                            .set_text(&html.0);
+                        root.toaster()
+                            .add_toast(adw::Toast::new(gettext("Copied HTML to clipboard")));
+                    }
                     Ok(())
                 }
                 Msg::Query => query(self, root)
