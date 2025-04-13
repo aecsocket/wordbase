@@ -1,0 +1,175 @@
+:root {
+    /* <https://gitlab.gnome.org/GNOME/libadwaita/-/blob/main/src/stylesheet/_common.scss?ref_type=heads#L9> */
+    --card-radius: 12px;
+    --dim-opacity: 55%;
+    --caption-font-size: 82%;
+}
+
+/* named colors: <https://gnome.pages.gitlab.gnome.org/libadwaita/doc/1.5/named-colors.html> */
+:root {
+    --window-bg-color: #fafafa;
+    --window-fg-color: rgba(0, 0, 0, 0.8);
+    --card-bg-color: #ffffff;
+    --card-fg-color: rgba(0, 0, 0, 0.8);
+    --card-shade-color: rgba(0, 0, 0, 0.07);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --window-bg-color: #242424;
+        --window-fg-color: #ffffff;
+        --card-bg-color: rgba(255, 255, 255, 0.08);
+        --card-fg-color: #ffffff;
+        --card-shade-color: rgba(0, 0, 0, 0.36);
+    }
+}
+
+/* style */
+
+:root {
+    background-color: var(--window-bg-color);
+    color: var(--window-fg-color);
+    /** for Jitendex */
+    --text-color: var(--window-fg-color);
+}
+
+a {
+    color: var(--accent-color);
+}
+
+/* card styling: <https://gitlab.gnome.org/GNOME/libadwaita/-/blob/main/src/stylesheet/widgets/_misc.scss> */
+.term-group {
+    /* color: var(--card-fg-color);
+    background-color: var(--card-bg-color);
+    border-radius: var(--card-radius);
+    padding: 12px;
+    margin-bottom: 16px;
+
+    box-shadow:
+        0 0 0 1px rgb(0 0 6 / 3%),
+        0 1px 3px 1px rgb(0 0 6 / 7%),
+        0 2px 6px 2px rgb(0 0 6 / 3%); */
+
+    /* box-shadow: 4px 2px 4px rgba(0, 0, 0, 0.3); */
+    /* 0 0 0 1px rgb(0, 0, 6 / 3%),
+        0 1px 3px 1px rgb(0, 0, 6 / 7%),
+        0 2px 6px 2px rgb(0, 0, 6 / 3%); */
+
+    /* border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+    box-shadow: 4px 2px 4px var(--headerbar-shade-color); */
+}
+
+.term {
+    font-size: 2rem;
+    margin-bottom: 8px;
+}
+
+/* Frequency tags container */
+.frequency-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0;
+}
+
+.frequency-group .frequency {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    color: var(--card-fg-color);
+    background: var(--card-bg-color);
+    border-radius: 9999px;
+    padding: 4px 10px;
+    font-size: 0.85rem;
+}
+
+.glossaries {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.glossaries .one-source {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    color: var(--card-fg-color);
+    background-color: var(--card-bg-color);
+    border-radius: var(--card-radius);
+    padding: 12px;
+    box-shadow:
+        0 0 0 1px rgb(0 0 6 / 3%),
+        0 1px 3px 1px rgb(0 0 6 / 7%),
+        0 2px 6px 2px rgb(0 0 6 / 3%);
+}
+
+.glossaries .source-name {
+    font-size: var(--caption-font-size);
+    opacity: var(--dim-opacity);
+}
+
+.glossary ul[data-count="1"] {
+    padding-left: 0;
+    list-style-type: none;
+}
+
+/* Tags styling */
+.tag {
+    display: inline-block;
+    background: #e1f5fe;
+    color: #0288d1;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.75rem;
+    margin-right: 6px;
+    margin-bottom: 4px;
+}
+
+/* Definition lists */
+.glossary ul {
+    padding-left: 1.2em;
+    margin: 8px 0;
+}
+
+.glossary li {
+    margin-bottom: 4px;
+    line-height: 1.5;
+}
+
+/* Kanji variants table */
+table {
+    border-collapse: collapse;
+    margin: 8px 0;
+    width: 100%;
+}
+
+table th,
+table td {
+    padding: 6px;
+    text-align: left;
+    border-bottom: 1px solid #eaecef;
+}
+
+/* .tag[title*="priority"] {
+    background: #fff8e1;
+    color: #ff8f00;
+}
+
+.tag[title="auxiliary verb"] {
+    background: #f3e5f5;
+    color: #8e24aa;
+}
+
+.tag[title="archaic"] {
+    background: #efebe9;
+    color: #6d4c41;
+}
+
+.tag[title*="verb"] {
+    background: #e8f5e9;
+    color: #2e7d32;
+} */

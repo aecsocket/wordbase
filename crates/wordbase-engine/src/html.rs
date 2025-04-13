@@ -280,7 +280,7 @@ pub fn render_glossary(glossary: &dict::yomitan::Glossary) -> Markup {
             }
         }
 
-        ul {
+        ul data-count=(glossary.content.len()) {
             @for content in &glossary.content {
                 li {
                     (content)

@@ -4,7 +4,7 @@ use {
         theme::{CUSTOM_THEMES, DEFAULT_THEME, ThemeName},
     },
     glib::clone,
-    maud::{Markup, html},
+    maud::{Markup, PreEscaped, html},
     relm4::{
         adw::{gdk, gio, prelude::*},
         prelude::*,
@@ -22,6 +22,7 @@ pub struct Model {
     settings: gio::Settings,
     records: Vec<RecordLookup>,
     _custom_theme_handler: SignalHandler,
+    _accent_color_handler: SignalHandler,
 }
 
 pub const SUPPORTED_RECORD_KINDS: &[RecordKind] = RecordKind::ALL;
@@ -82,11 +83,20 @@ impl AsyncComponent for Model {
             )
         });
 
+        let accent_color_handler = SignalHandler::new(&adw::StyleManager::default(), |it| {
+            it.connect_accent_color_rgba_notify(clone!(
+                #[strong]
+                sender,
+                move |_| sender.input(Msg::Rerender)
+            ))
+        });
+
         let model = Self {
             engine,
             settings,
             records: Vec::new(),
             _custom_theme_handler: custom_theme_handler,
+            _accent_color_handler: accent_color_handler,
         };
         let widgets = view_output!();
 
@@ -141,13 +151,32 @@ fn update_view(model: &Model, root: &webkit6::WebView, sender: &AsyncComponentSe
         .get(&ThemeName(Arc::from(custom_theme_name.to_string())))
         .map(|theme| theme.theme.clone());
 
+    let accent_color = adw::StyleManager::default().accent_color_rgba();
+    let root_style = format!(
+        ":root {{
+            --accent-color: rgb({} {} {});
+        }}",
+        accent_color.red() * 255.0,
+        accent_color.green() * 255.0,
+        accent_color.blue() * 255.0
+    );
+
     let full_html = html! {
         style {
-            (DEFAULT_THEME.style)
+            (escape_style(&root_style))
         }
 
         style {
-            (custom_theme.as_ref().map(|theme| theme.style.as_str()).unwrap_or_default())
+            (escape_style(&DEFAULT_THEME.style))
+        }
+
+        style {
+            (escape_style(
+                custom_theme
+                    .as_ref()
+                    .map(|theme| theme.style.as_str())
+                    .unwrap_or_default(),
+            ))
         }
 
         .records {
@@ -212,3 +241,24 @@ pub fn should_requery(event: &AppEvent) -> bool {
 }
 
 pub const CUSTOM_THEME: &str = "custom-theme";
+
+fn escape_style(input: &str) -> PreEscaped<String> {
+    let mut s = String::new();
+    escape_style_to_string(input, &mut s);
+    PreEscaped(s)
+}
+
+// copied from
+// https://github.com/lambda-fairy/maud/blob/c0df34f1b685fdffcb2bf08884629e4576b5748b/maud/src/escape.rs
+fn escape_style_to_string(input: &str, output: &mut String) {
+    for b in input.bytes() {
+        match b {
+            b'&' => output.push_str("&amp;"),
+            b'<' => output.push_str("&lt;"),
+            b'>' => output.push_str("&gt;"),
+            // modified: escaping `"` breaks CSS
+            // b'"' => output.push_str("&quot;"),
+            _ => unsafe { output.as_mut_vec().push(b) },
+        }
+    }
+}
