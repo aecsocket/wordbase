@@ -4676,6 +4676,7 @@ name = "wordbase-desktop"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "base64",
  "bimap",
  "bzip2",
  "derive_more",
@@ -4715,7 +4716,6 @@ dependencies = [
  "async-compression",
  "async-tar",
  "async_zip",
- "base64",
  "blocking",
  "bytes",
  "derive_more",

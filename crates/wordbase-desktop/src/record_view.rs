@@ -1,6 +1,6 @@
 use {
     crate::{
-        APP_ID, AppEvent, SignalHandler, forward_events,
+        APP_ID, AppEvent, SignalHandler, forward_events, html,
         theme::{CUSTOM_THEMES, DEFAULT_THEME, ThemeName},
     },
     glib::clone,
@@ -13,7 +13,7 @@ use {
     tracing::{debug, info},
     webkit6::prelude::*,
     wordbase::{RecordKind, RecordLookup},
-    wordbase_engine::{Engine, html},
+    wordbase_engine::Engine,
 };
 
 #[derive(Debug)]

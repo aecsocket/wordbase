@@ -1,5 +1,4 @@
 use {
-    crate::lang,
     base64::{Engine, prelude::BASE64_STANDARD},
     derive_more::{Deref, DerefMut},
     maud::{Markup, PreEscaped, html},
@@ -8,6 +7,7 @@ use {
         Dictionary, DictionaryId, Record, RecordLookup, Term,
         dict::{self, yomichan_audio::AudioFormat},
     },
+    wordbase_engine::lang,
 };
 
 pub fn render_records<'a>(

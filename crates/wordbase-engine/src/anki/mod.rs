@@ -1,11 +1,11 @@
 use {
-    crate::{Engine, IndexMap, html, lang},
+    crate::{Engine, IndexMap, lang},
     anyhow::{Context, Result, bail},
     arc_swap::ArcSwapOption,
     client::{AnkiClient, VERSION},
     request::{DeckName, ModelFieldName, ModelName},
     std::{cmp, fmt::Write as _, sync::Arc},
-    wordbase::{Record, RecordLookup, Term},
+    wordbase::{Record, Term},
 };
 
 mod client;
@@ -201,7 +201,8 @@ fn reading(term: &Term) -> String {
 }
 
 fn term_ruby_html(term: &Term) -> String {
-    html::render_term(term).0
+    todo!();
+    // html::render_term(term).0
 }
 
 fn term_ruby_plain(term: &Term) -> String {

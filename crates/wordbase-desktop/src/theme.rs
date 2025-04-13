@@ -1,5 +1,5 @@
 use {
-    crate::{APP_EVENTS, AppEvent, record_view::CUSTOM_THEME},
+    crate::{APP_EVENTS, AppEvent},
     anyhow::{Context, Result},
     derive_more::Deref,
     foldhash::{HashMap, HashMapExt},

@@ -6,6 +6,7 @@
     reason = "`gtk` doesn't follow this convention"
 )]
 
+mod html;
 mod manager;
 mod overlay;
 mod platform;
@@ -189,7 +190,6 @@ impl AsyncComponent for App {
             AppMsg::Present => {
                 root.present();
             }
-            _ => todo!(),
         }
     }
 }

@@ -5,7 +5,6 @@ pub mod anki;
 mod db;
 pub mod deinflect;
 pub mod dictionary;
-pub mod html;
 pub mod import;
 pub mod lang;
 pub mod lookup;
