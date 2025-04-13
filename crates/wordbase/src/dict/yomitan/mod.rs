@@ -23,14 +23,14 @@ pub struct Glossary {
     pub content: Vec<structured::Content>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Frequency {
     pub rank: Option<FrequencyValue>,
     pub display: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Pitch {
     /// What [mora] position the [downstep] is located on.

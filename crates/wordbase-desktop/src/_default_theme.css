@@ -1,11 +1,29 @@
 :root {
     /* <https://gitlab.gnome.org/GNOME/libadwaita/-/blob/main/src/stylesheet/_common.scss?ref_type=heads#L9> */
+    --button-color: color-mix(in srgb, currentColor 10%, transparent);
     --card-radius: 12px;
     --dim-opacity: 55%;
     --caption-font-size: 82%;
+    --caption-font-weight: 700;
 }
 
 /* named colors: <https://gnome.pages.gitlab.gnome.org/libadwaita/doc/1.5/named-colors.html> */
+:root {
+    --blue-2: #62a0ea;
+    --blue-3: #3584e4;
+    --green-2: #57e389;
+    --green-3: #33d17a;
+    --yellow-2: #f8e45c;
+    --yellow-3: #f6d32d;
+    --red-2: #ed333b;
+    --red-3: #e01b24;
+
+    --heiban: var(--blue-2);
+    --atamadaka: var(--red-2);
+    --nakadaka: var(--yellow-2);
+    --odaka: var(--green-2);
+}
+
 :root {
     --window-bg-color: #fafafa;
     --window-fg-color: rgba(0, 0, 0, 0.8);
@@ -37,53 +55,93 @@ a {
     color: var(--accent-color);
 }
 
-/* card styling: <https://gitlab.gnome.org/GNOME/libadwaita/-/blob/main/src/stylesheet/widgets/_misc.scss> */
-.term-group {
-    /* color: var(--card-fg-color);
-    background-color: var(--card-bg-color);
-    border-radius: var(--card-radius);
-    padding: 12px;
-    margin-bottom: 16px;
-
-    box-shadow:
-        0 0 0 1px rgb(0 0 6 / 3%),
-        0 1px 3px 1px rgb(0 0 6 / 7%),
-        0 2px 6px 2px rgb(0 0 6 / 3%); */
-
-    /* box-shadow: 4px 2px 4px rgba(0, 0, 0, 0.3); */
-    /* 0 0 0 1px rgb(0, 0, 6 / 3%),
-        0 1px 3px 1px rgb(0, 0, 6 / 7%),
-        0 2px 6px 2px rgb(0, 0, 6 / 3%); */
-
-    /* border-radius: 8px;
-    padding: 12px;
-    margin-bottom: 16px;
-    box-shadow: 4px 2px 4px var(--headerbar-shade-color); */
+li {
+    line-height: 1.5;
 }
 
-.term {
-    font-size: 2rem;
-    margin-bottom: 8px;
-}
-
-/* Frequency tags container */
-.frequency-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+table {
+    border-collapse: collapse;
     margin: 8px 0;
 }
 
-.frequency-group .frequency {
+table th,
+table td {
+    padding: 8px;
+    border: 1px solid currentColor;
+}
+
+.records {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+}
+
+.term {
+    font-size: 2.5rem;
+    margin-bottom: 8px;
+}
+
+.pitch-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.pitch-group .pitch .heiban {
+    color: var(--heiban);
+}
+
+.pitch-group .pitch .atamadaka {
+    color: var(--atamadaka);
+}
+
+.pitch-group .pitch .nakadaka {
+    color: var(--nakadaka);
+}
+
+.pitch-group .pitch .odaka {
+    color: var(--odaka);
+}
+
+.mora {
+    border-width: 2px;
+}
+
+.mora.high.next-high {
+    border-style: solid none none none;
+}
+
+.mora.high.next-low {
+    border-style: solid solid none none;
+    border-image: linear-gradient(to bottom, currentColor 50%, transparent 50%)
+        1 1;
+    padding-right: 3px;
+    margin-right: 2px;
+}
+
+.frequencies-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.frequencies {
     display: flex;
     align-items: center;
     gap: 8px;
 
-    color: var(--card-fg-color);
-    background: var(--card-bg-color);
+    background-color: var(--button-color);
     border-radius: 9999px;
-    padding: 4px 10px;
+    padding: 6px 12px;
     font-size: 0.85rem;
+}
+
+.frequencies .values .value:not(:last-child)::after {
+    content: "・";
+}
+
+.frequencies .values .value {
+    font-weight: 700;
 }
 
 .glossaries {
@@ -96,7 +154,15 @@ a {
     display: flex;
     flex-direction: column;
     gap: 8px;
+}
 
+.glossaries .source-name {
+    font-size: var(--caption-font-size);
+    font-weight: var(--caption-font-weight);
+}
+
+/* card styling: <https://gitlab.gnome.org/GNOME/libadwaita/-/blob/main/src/stylesheet/widgets/_misc.scss> */
+.glossary {
     color: var(--card-fg-color);
     background-color: var(--card-bg-color);
     border-radius: var(--card-radius);
@@ -107,15 +173,16 @@ a {
         0 2px 6px 2px rgb(0 0 6 / 3%);
 }
 
-.glossaries .source-name {
-    font-size: var(--caption-font-size);
-    opacity: var(--dim-opacity);
-}
-
 .glossary ul[data-count="1"] {
     padding-left: 0;
     list-style-type: none;
 }
+
+/*
+
+BELOW TODO
+
+*/
 
 /* Tags styling */
 .tag {
@@ -134,42 +201,3 @@ a {
     padding-left: 1.2em;
     margin: 8px 0;
 }
-
-.glossary li {
-    margin-bottom: 4px;
-    line-height: 1.5;
-}
-
-/* Kanji variants table */
-table {
-    border-collapse: collapse;
-    margin: 8px 0;
-    width: 100%;
-}
-
-table th,
-table td {
-    padding: 6px;
-    text-align: left;
-    border-bottom: 1px solid #eaecef;
-}
-
-/* .tag[title*="priority"] {
-    background: #fff8e1;
-    color: #ff8f00;
-}
-
-.tag[title="auxiliary verb"] {
-    background: #f3e5f5;
-    color: #8e24aa;
-}
-
-.tag[title="archaic"] {
-    background: #efebe9;
-    color: #6d4c41;
-}
-
-.tag[title*="verb"] {
-    background: #e8f5e9;
-    color: #2e7d32;
-} */

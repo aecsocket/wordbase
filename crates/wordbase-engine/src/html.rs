@@ -25,17 +25,17 @@ pub fn render_records<'a>(
                     }
 
                     .pitch-group {
-                        @for (_, pitch) in &info.pitches {
+                        @for pitch in &info.pitches {
                             .pitch {
                                 (render_pitch(term, pitch))
                             }
                         }
                     }
 
-                    .frequency-group {
-                        @for &(source, frequency) in &info.frequencies {
-                            .frequency {
-                                (render_frequency(dictionary_by_id, source, frequency))
+                    .frequencies-group {
+                        @for (&source, frequencies) in &info.frequencies {
+                            .frequencies {
+                                (render_frequencies(dictionary_by_id, source, frequencies))
                             }
                         }
                     }
@@ -65,17 +65,28 @@ pub fn make_terms(records: &[RecordLookup]) -> Terms {
     let mut terms = Terms::default();
     for record in records {
         let source = record.source;
-        let info = terms.entry(record.term.clone()).or_default();
+        let normalized_term = match &record.term {
+            Term::Full { headword, reading } if headword == reading => Term::Headword {
+                headword: headword.clone(),
+            },
+            Term::Reading { reading } => Term::Headword {
+                headword: reading.clone(),
+            },
+            term => term.clone(),
+        };
+        let info = terms.entry(normalized_term).or_default();
 
         match &record.record {
             Record::YomitanGlossary(glossary) => {
                 info.glossaries.entry(source).or_default().push(glossary);
             }
             Record::YomitanFrequency(frequency) => {
-                info.frequencies.push((source, frequency));
+                info.frequencies.entry(source).or_default().push(frequency);
             }
             Record::YomitanPitch(pitch) => {
-                info.pitches.push((source, pitch));
+                if !info.pitches.contains(&pitch) {
+                    info.pitches.push(pitch);
+                }
             }
             Record::YomichanAudioForvo(audio) => {
                 info.audio.push((source, Audio::Forvo(audio)));
@@ -103,8 +114,8 @@ pub struct Terms<'a>(IndexMap<Term, TermInfo<'a>>);
 #[derive(Debug, Default)]
 pub struct TermInfo<'a> {
     pub glossaries: IndexMap<DictionaryId, Glossaries<'a>>,
-    pub frequencies: Vec<(DictionaryId, &'a dict::yomitan::Frequency)>,
-    pub pitches: Vec<(DictionaryId, &'a dict::yomitan::Pitch)>,
+    pub frequencies: IndexMap<DictionaryId, Vec<&'a dict::yomitan::Frequency>>,
+    pub pitches: Vec<&'a dict::yomitan::Pitch>,
     pub audio: Vec<(DictionaryId, Audio<'a>)>,
 }
 
@@ -200,25 +211,34 @@ pub fn render_pitch(term: &Term, pitch: &dict::yomitan::Pitch) -> Markup {
     }
 }
 
-#[must_use]
-pub fn render_frequency<'a>(
+pub fn render_frequencies<'a>(
     dictionary_by_id: &impl Fn(DictionaryId) -> Option<&'a Dictionary>,
     source: DictionaryId,
-    frequency: &dict::yomitan::Frequency,
+    frequencies: &[&dict::yomitan::Frequency],
 ) -> Markup {
     html! {
         span .source {
             (name_of(dictionary_by_id, source))
         }
 
-        span .value {
-            (frequency
-                .display
-                .clone()
-                .or_else(|| frequency.rank.map(|rank| format!("{}", rank.value())))
-                .unwrap_or_else(|| "?".into())
-            )
+        .values {
+            @for frequency in frequencies {
+                span .value {
+                    (render_frequency(frequency))
+                }
+            }
         }
+    }
+}
+
+#[must_use]
+pub fn render_frequency(frequency: &dict::yomitan::Frequency) -> Markup {
+    html! {
+        (frequency
+            .display
+            .clone()
+            .or_else(|| frequency.rank.map(|rank| format!("{}", rank.value())))
+            .unwrap_or_else(|| "?".into()))
     }
 }
 
@@ -280,7 +300,7 @@ pub fn render_glossary(glossary: &dict::yomitan::Glossary) -> Markup {
             }
         }
 
-        ul data-count=(glossary.content.len()) {
+        ul .content data-count=(glossary.content.len()) {
             @for content in &glossary.content {
                 li {
                     (content)

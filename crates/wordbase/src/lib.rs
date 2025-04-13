@@ -295,7 +295,7 @@ impl Term {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum FrequencyValue {
     Rank(i64),
     Occurrence(i64),

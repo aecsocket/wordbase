@@ -11,7 +11,7 @@ use {
     bytes::Bytes,
     futures::{future::BoxFuture, io::Cursor},
     schema::{
-        INDEX_PATH, KANJI_BANK_PATTERN, KANJI_META_BANK_PATTERN, TAG_BANK_PATTERN,
+        FrequencyMode, INDEX_PATH, KANJI_BANK_PATTERN, KANJI_META_BANK_PATTERN, TAG_BANK_PATTERN,
         TERM_BANK_PATTERN, TERM_META_BANK_PATTERN,
     },
     serde::de::DeserializeOwned,
@@ -392,9 +392,8 @@ async fn import_term_meta(
     let headword = NormString::new(term_meta.expression);
     match term_meta.data {
         schema::TermMetaData::Frequency(frequency) => {
-            let frequency_mode = index.frequency_mode.context(
-                "encountered frequency entry but dictionary does not specify a frequency mode",
-            )?;
+            // Yomitan dictionaries like VN Freq v2 seem to default to rank-based
+            let frequency_mode = index.frequency_mode.unwrap_or(FrequencyMode::RankBased);
             let (record, reading) = to_frequency_and_reading(frequency_mode, frequency);
             let term = Term::new(headword, reading)
                 .context("frequency term has no headword or reading")?;
