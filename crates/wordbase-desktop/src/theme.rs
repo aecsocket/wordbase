@@ -1,23 +1,30 @@
 use {
-    crate::{APP_BROKER, AppMsg},
+    crate::{APP_EVENTS, AppEvent, record_view::CUSTOM_THEME},
     anyhow::{Context, Result},
     derive_more::Deref,
     foldhash::{HashMap, HashMapExt},
     notify::{
         Watcher,
-        event::{CreateKind, ModifyKind, RemoveKind},
+        event::{CreateKind, ModifyKind, RemoveKind, RenameMode},
     },
+    relm4::SharedState,
     std::{
         path::Path,
         sync::{Arc, LazyLock},
     },
     tokio::fs,
-    tracing::warn,
+    tracing::{info, warn},
 };
 
 #[derive(Debug, Clone)]
 pub struct Theme {
     pub style: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ThemeKey {
+    Default,
+    Custom(ThemeName),
 }
 
 pub static DEFAULT_THEME: LazyLock<Arc<Theme>> = LazyLock::new(|| {
@@ -31,6 +38,8 @@ pub struct CustomTheme {
     pub name: ThemeName,
     pub theme: Arc<Theme>,
 }
+
+pub static CUSTOM_THEMES: SharedState<HashMap<ThemeName, CustomTheme>> = SharedState::new();
 
 impl CustomTheme {
     pub async fn read_from(path: impl AsRef<Path>) -> Result<Self> {
@@ -62,9 +71,7 @@ impl ThemeName {
     }
 }
 
-pub async fn watch_themes(
-    data_path: &Path,
-) -> Result<(HashMap<ThemeName, CustomTheme>, notify::RecommendedWatcher)> {
+pub async fn watch_themes(data_path: &Path) -> Result<notify::RecommendedWatcher> {
     let themes_path = data_path.join("themes");
     fs::create_dir_all(&themes_path)
         .await
@@ -104,26 +111,49 @@ pub async fn watch_themes(
         initial_themes.insert(theme.name.clone(), theme);
     }
 
-    Ok((initial_themes, watcher))
+    *CUSTOM_THEMES.write() = initial_themes;
+    Ok(watcher)
 }
 
 async fn on_file_watcher_event(event: notify::Result<notify::Event>) -> Result<()> {
     let event = event.context("file watch error")?;
     match event.kind {
+        notify::EventKind::Modify(ModifyKind::Name(RenameMode::Both)) => {
+            let mut paths = event.paths.into_iter();
+            let from = ThemeName::from_path(paths.next().context("no rename `from` path")?)
+                .context("invalid rename `from` theme name")?;
+            let to = ThemeName::from_path(paths.next().context("no rename `to` path")?)
+                .context("invalid rename `to` theme name")?;
+
+            let mut themes = CUSTOM_THEMES.write();
+            if let Some(theme) = themes.remove(&from) {
+                themes.insert(to, theme.clone());
+                drop(themes);
+                _ = APP_EVENTS.send(AppEvent::ThemeRemoved(from));
+                _ = APP_EVENTS.send(AppEvent::ThemeAdded(theme));
+            }
+        }
+        notify::EventKind::Remove(RemoveKind::File)
+        | notify::EventKind::Modify(ModifyKind::Name(RenameMode::From)) => {
+            for path in event.paths {
+                let name = ThemeName::from_path(&path)
+                    .with_context(|| format!("invalid theme name `{path:?}`"))?;
+                info!("{name:?} removed");
+                CUSTOM_THEMES.write().remove(&name);
+                _ = APP_EVENTS.send(AppEvent::ThemeRemoved(name));
+            }
+        }
         notify::EventKind::Create(CreateKind::File)
-        | notify::EventKind::Modify(ModifyKind::Any) => {
+        | notify::EventKind::Modify(ModifyKind::Data(_) | ModifyKind::Name(RenameMode::To)) => {
             for path in event.paths {
                 let theme = CustomTheme::read_from(&path)
                     .await
                     .with_context(|| format!("failed to read theme `{path:?}`"))?;
-                APP_BROKER.send(AppMsg::ThemeInsert(theme));
-            }
-        }
-        notify::EventKind::Remove(RemoveKind::File) => {
-            for path in event.paths {
-                let name = ThemeName::from_path(&path)
-                    .with_context(|| format!("invalid theme name `{path:?}`"))?;
-                APP_BROKER.send(AppMsg::ThemeRemove(name));
+                info!("{:?} updated", theme.name);
+                CUSTOM_THEMES
+                    .write()
+                    .insert(theme.name.clone(), theme.clone());
+                _ = APP_EVENTS.send(AppEvent::ThemeAdded(theme));
             }
         }
         _ => {}

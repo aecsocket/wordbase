@@ -21,7 +21,6 @@ use {
     anyhow::{Context, Result},
     derive_more::Debug,
     directories::ProjectDirs,
-    foldhash::HashMap,
     platform::Platform,
     relm4::{
         MessageBroker,
@@ -31,7 +30,7 @@ use {
         view,
     },
     std::sync::{Arc, LazyLock},
-    theme::{CustomTheme, ThemeName},
+    theme::{CustomTheme, ThemeKey, ThemeName},
     tokio::{fs, sync::broadcast},
     tracing::{error, info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
@@ -50,6 +49,9 @@ pub enum AppEvent {
     DictionaryEnabledSet(DictionaryId, bool),
     DictionarySortingSet(Option<DictionaryId>),
     DictionaryRemoved(DictionaryId),
+    ThemeAdded(CustomTheme),
+    ThemeRemoved(ThemeName),
+    ThemeSelected(ThemeKey),
 }
 
 fn forward_events<C>(sender: &AsyncComponentSender<C>)
@@ -59,8 +61,11 @@ where
     sender.command(|out, shutdown| {
         shutdown
             .register(async move {
-                while let Ok(event) = APP_EVENTS.subscribe().recv().await {
-                    _ = out.send(event);
+                let mut recv_events = APP_EVENTS.subscribe();
+                loop {
+                    if let Ok(event) = recv_events.recv().await {
+                        _ = out.send(event);
+                    }
                 }
             })
             .drop_on_shutdown()
@@ -99,7 +104,6 @@ fn main() {
 
 #[derive(Debug)]
 struct App {
-    themes: HashMap<ThemeName, CustomTheme>,
     manager: AsyncController<manager::Model>,
     overlays: AsyncController<overlay::Overlays>,
     main_popup: AsyncController<popup::Model>,
@@ -109,8 +113,6 @@ struct App {
 #[derive(Debug)]
 enum AppMsg {
     Present,
-    ThemeInsert(CustomTheme),
-    ThemeRemove(ThemeName),
 }
 
 #[relm4::component(async)]
@@ -156,8 +158,7 @@ impl AsyncComponent for App {
                 .await
                 .expect("failed to create platform"),
         );
-        let (engine, initial_themes, theme_watcher) =
-            init_engine().await.expect("failed to initialize engine");
+        let (engine, theme_watcher) = init_engine().await.expect("failed to initialize engine");
         setup_actions(engine.clone());
 
         let main_popup = popup::connector(&platform, engine.clone())
@@ -165,7 +166,6 @@ impl AsyncComponent for App {
             .expect("failed to create popup")
             .detach();
         let model = Self {
-            themes: initial_themes,
             manager: manager::Model::builder()
                 .launch((root.clone(), engine.clone()))
                 .detach(),
@@ -194,11 +194,7 @@ impl AsyncComponent for App {
     }
 }
 
-async fn init_engine() -> Result<(
-    Engine,
-    HashMap<ThemeName, CustomTheme>,
-    notify::RecommendedWatcher,
-)> {
+async fn init_engine() -> Result<(Engine, notify::RecommendedWatcher)> {
     let dirs = ProjectDirs::from("io.github", "aecsocket", "Wordbase")
         .context("failed to get default app directories")?;
     let data_path = dirs.data_dir();
@@ -212,11 +208,11 @@ async fn init_engine() -> Result<(
         .await
         .context("failed to create engine")?;
 
-    let (initial_themes, theme_watcher) = theme::watch_themes(data_path)
+    let theme_watcher = theme::watch_themes(data_path)
         .await
         .context("failed to start watching theme files")?;
 
-    Ok((engine, initial_themes, theme_watcher))
+    Ok((engine, theme_watcher))
 }
 
 fn setup_actions(engine: Engine) {
@@ -248,7 +244,7 @@ fn setup_actions(engine: Engine) {
     app.add_action_entries([action]);
 }
 
-const CHANNEL_BUF_CAP: usize = 4;
+const CHANNEL_BUF_CAP: usize = 16;
 
 #[derive(Debug)]
 #[must_use]

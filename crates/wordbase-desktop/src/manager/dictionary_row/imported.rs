@@ -94,7 +94,7 @@ impl AsyncComponent for Model {
             .expect("action row should have parent")
             .downcast::<gtk::ListBox>()
             .expect("action row parent should be a `ListBox`");
-        let mut add_meta_row = |key: &str, value: &str| {
+        let add_meta_row = |key: &str, value: &str| {
             let row = MetaRow::builder()
                 .launch((key.to_string(), value.to_string()))
                 .detach();

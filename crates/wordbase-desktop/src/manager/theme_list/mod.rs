@@ -2,8 +2,13 @@ mod ui;
 
 use {
     super::theme_row,
-    crate::{APP_EVENTS, AppEvent, forward_events, gettext, toast_result},
+    crate::{
+        APP_EVENTS, AppEvent, forward_events, gettext,
+        theme::{CUSTOM_THEMES, ThemeKey, ThemeName},
+        toast_result,
+    },
     anyhow::{Context, Result},
+    foldhash::{HashMap, HashMapExt},
     gtk4::prelude::{CheckButtonExt, ListBoxRowExt},
     relm4::{
         adw::{glib::clone, gtk::pango, prelude::*},
@@ -14,8 +19,8 @@ use {
 
 #[derive(Debug)]
 pub struct Model {
-    default_theme: Controller<theme_row::Model>,
-    custom_themes: Vec<Controller<theme_row::Model>>,
+    _default_theme: AsyncController<theme_row::Model>,
+    custom_themes: HashMap<ThemeName, AsyncController<theme_row::Model>>,
     engine: Engine,
     window: gtk::Window,
     toaster: adw::ToastOverlay,
@@ -59,7 +64,7 @@ impl AsyncComponent for Model {
         ));
 
         let default_theme = theme_row::Model::builder()
-            .launch((window.clone(), None))
+            .launch((window.clone(), ThemeKey::Default))
             .detach();
         default_theme
             .widget()
@@ -68,13 +73,16 @@ impl AsyncComponent for Model {
         root.list()
             .insert(default_theme.widget(), root.import_button().index());
 
-        let model = Self {
-            default_theme,
-            custom_themes: Vec::new(),
+        let mut model = Self {
+            _default_theme: default_theme,
+            custom_themes: HashMap::new(),
             engine,
             window,
             toaster,
         };
+        for name in CUSTOM_THEMES.read().keys() {
+            add_row(&mut model, &root, name.clone());
+        }
         show_font(&model, &root);
         AsyncComponentParts { model, widgets: () }
     }
@@ -108,9 +116,31 @@ impl AsyncComponent for Model {
     ) {
         match message {
             AppEvent::FontSet => show_font(self, root),
+            AppEvent::ThemeAdded(theme) => {
+                if !self.custom_themes.contains_key(&theme.name) {
+                    add_row(self, root, theme.name);
+                }
+            }
+            AppEvent::ThemeRemoved(name) => {
+                if let Some(row) = self.custom_themes.remove(&name) {
+                    root.list().remove(row.widget());
+                }
+            }
             _ => {}
         }
     }
+}
+
+fn add_row(model: &mut Model, root: &ui::ThemeList, name: ThemeName) {
+    let row = theme_row::Model::builder()
+        .launch((model.window.clone(), ThemeKey::Custom(name.clone())))
+        .detach();
+    row.widget()
+        .enabled()
+        .set_group(Some(&root.enabled_dummy()));
+    root.list()
+        .insert(row.widget(), root.import_button().index());
+    model.custom_themes.insert(name, row);
 }
 
 fn show_font(model: &Model, root: &ui::ThemeList) {

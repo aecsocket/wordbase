@@ -65,9 +65,9 @@ impl AsyncComponent for Model {
 
     async fn update_with_view(
         &mut self,
-        widgets: &mut Self::Widgets,
+        _widgets: &mut Self::Widgets,
         message: Self::Input,
-        sender: AsyncComponentSender<Self>,
+        _sender: AsyncComponentSender<Self>,
         root: &Self::Root,
     ) {
         match message {

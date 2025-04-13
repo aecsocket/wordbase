@@ -8,6 +8,11 @@
     <value nick="alt" value="4"/>
   </enum>
   <schema id="io.github.aecsocket.Wordbase" path="/io/github/aecsocket/Wordbase/">
+    <key name="custom-theme" type="s">
+      <default>""</default>
+      <summary>Name of the currently selected custom dictionary theme</summary>
+    </key>
+
     <key name="manager-width" type="i">
       <default>480</default>
       <summary>Manager window width</summary>

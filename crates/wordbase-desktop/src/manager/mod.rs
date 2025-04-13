@@ -217,6 +217,9 @@ async fn query(model: &Model, root: &ui::Manager) -> Result<()> {
     let longest_scan_chars = record_view::longest_scan_chars(query, &records);
     root.search_entry()
         .select_region(0, i32::try_from(longest_scan_chars).unwrap_or(-1));
-    model.record_view.sender().emit(record_view::Msg(records));
+    model
+        .record_view
+        .sender()
+        .emit(record_view::Msg::Render(records));
     Ok(())
 }

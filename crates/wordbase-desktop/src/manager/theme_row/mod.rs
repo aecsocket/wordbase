@@ -1,8 +1,13 @@
 use {
-    crate::gettext,
+    crate::{
+        APP_EVENTS, APP_ID, AppEvent, forward_events, gettext, record_view::CUSTOM_THEME,
+        theme::ThemeKey,
+    },
     glib::clone,
-    gtk4::prelude::ButtonExt,
-    relm4::{adw::prelude::*, prelude::*},
+    relm4::{
+        adw::{gio, prelude::*},
+        prelude::*,
+    },
 };
 
 mod ui;
@@ -10,11 +15,14 @@ mod ui;
 #[derive(Debug)]
 pub struct Model {
     window: gtk::Window,
+    settings: gio::Settings,
+    key: ThemeKey,
 }
 
 #[derive(Debug)]
 #[doc(hidden)]
 pub enum Msg {
+    Select,
     AskRemove,
 }
 
@@ -23,11 +31,11 @@ pub enum Response {
     Remove,
 }
 
-impl Component for Model {
-    type Init = (gtk::Window, Option<String>);
+impl AsyncComponent for Model {
+    type Init = (gtk::Window, ThemeKey);
     type Input = Msg;
     type Output = Response;
-    type CommandOutput = ();
+    type CommandOutput = AppEvent;
     type Root = ui::ThemeRow;
     type Widgets = ();
 
@@ -35,17 +43,36 @@ impl Component for Model {
         ui::ThemeRow::new()
     }
 
-    fn init(
-        (window, theme_name): Self::Init,
+    async fn init(
+        (window, key): Self::Init,
         root: Self::Root,
-        sender: ComponentSender<Self>,
-    ) -> ComponentParts<Self> {
+        sender: AsyncComponentSender<Self>,
+    ) -> AsyncComponentParts<Self> {
+        forward_events(&sender);
+        let settings = gio::Settings::new(APP_ID);
+
+        let is_enabled = match settings.string(CUSTOM_THEME).as_str() {
+            "" => key == ThemeKey::Default,
+            s => matches!(key, ThemeKey::Custom(ref name) if &*name.0 == s),
+        };
+        if is_enabled {
+            root.enabled().set_active(true);
+        }
         root.connect_activated(|root| root.enabled().set_active(true));
-        root.set_title(
-            theme_name
-                .as_deref()
-                .unwrap_or_else(|| gettext("Default Theme")),
-        );
+        root.enabled().connect_active_notify(clone!(
+            #[strong]
+            sender,
+            move |active| {
+                if active.is_active() {
+                    sender.input(Msg::Select);
+                }
+            }
+        ));
+
+        root.set_title(match &key {
+            ThemeKey::Default => gettext("Default Theme"),
+            ThemeKey::Custom(name) => name,
+        });
         root.remove_button().connect_clicked(clone!(
             #[strong]
             sender,
@@ -62,27 +89,56 @@ impl Component for Model {
             ),
         );
 
-        if theme_name.is_none() {
+        if matches!(key, ThemeKey::Default) {
             root.remove_button().set_visible(false);
         }
 
-        ComponentParts {
-            model: Self { window },
+        AsyncComponentParts {
+            model: Self {
+                window,
+                settings,
+                key,
+            },
             widgets: (),
         }
     }
 
-    fn update_with_view(
+    async fn update_with_view(
         &mut self,
         _widgets: &mut Self::Widgets,
         message: Self::Input,
-        _sender: ComponentSender<Self>,
+        _sender: AsyncComponentSender<Self>,
         root: &Self::Root,
     ) {
         match message {
+            Msg::Select => {
+                _ = self.settings.set_string(
+                    CUSTOM_THEME,
+                    match &self.key {
+                        ThemeKey::Default => "",
+                        ThemeKey::Custom(name) => name,
+                    },
+                );
+                _ = APP_EVENTS.send(AppEvent::ThemeSelected(self.key.clone()));
+            }
             Msg::AskRemove => {
                 root.remove_dialog().present(Some(&self.window));
             }
+        }
+    }
+
+    async fn update_cmd_with_view(
+        &mut self,
+        _widgets: &mut Self::Widgets,
+        message: Self::CommandOutput,
+        _sender: AsyncComponentSender<Self>,
+        root: &Self::Root,
+    ) {
+        match message {
+            AppEvent::ThemeSelected(key) if key == self.key => {
+                root.enabled().set_active(true);
+            }
+            _ => {}
         }
     }
 }

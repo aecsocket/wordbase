@@ -143,7 +143,9 @@ impl AsyncComponent for Model {
         match message {
             Msg::Render { records } => {
                 self.query_override = None;
-                self.record_view.sender().emit(record_view::Msg(records));
+                self.record_view
+                    .sender()
+                    .emit(record_view::Msg::Render(records));
             }
             Msg::Present {
                 target_window,

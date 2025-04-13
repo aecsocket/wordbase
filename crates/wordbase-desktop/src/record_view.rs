@@ -1,10 +1,15 @@
 use {
-    crate::{AppEvent, forward_events, theme::DEFAULT_THEME},
+    crate::{
+        APP_ID, AppEvent, SignalHandler, forward_events,
+        theme::{CUSTOM_THEMES, DEFAULT_THEME, ThemeName},
+    },
+    glib::clone,
     maud::{Markup, html},
     relm4::{
         adw::{gdk, gio, prelude::*},
         prelude::*,
     },
+    std::sync::Arc,
     tracing::{debug, info},
     webkit6::prelude::*,
     wordbase::{RecordKind, RecordLookup},
@@ -14,13 +19,19 @@ use {
 #[derive(Debug)]
 pub struct Model {
     engine: Engine,
+    settings: gio::Settings,
     records: Vec<RecordLookup>,
+    _custom_theme_handler: SignalHandler,
 }
 
 pub const SUPPORTED_RECORD_KINDS: &[RecordKind] = RecordKind::ALL;
 
 #[derive(Debug)]
-pub struct Msg(pub Vec<RecordLookup>);
+pub enum Msg {
+    Render(Vec<RecordLookup>),
+    #[doc(hidden)]
+    Rerender,
+}
 
 #[derive(Debug)]
 pub enum Response {
@@ -57,11 +68,28 @@ impl AsyncComponent for Model {
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
         forward_events(&sender);
+        let settings = gio::Settings::new(APP_ID);
+        CUSTOM_THEMES.subscribe(sender.input_sender(), |_| Msg::Rerender);
+
+        let custom_theme_handler = SignalHandler::new(&settings, |it| {
+            it.connect_changed(
+                Some(CUSTOM_THEME),
+                clone!(
+                    #[strong]
+                    sender,
+                    move |_, _| sender.input(Msg::Rerender)
+                ),
+            )
+        });
+
         let model = Self {
             engine,
+            settings,
             records: Vec::new(),
+            _custom_theme_handler: custom_theme_handler,
         };
         let widgets = view_output!();
+
         AsyncComponentParts { model, widgets }
     }
 
@@ -70,21 +98,23 @@ impl AsyncComponent for Model {
         _widgets: &mut Self::Widgets,
         message: Self::CommandOutput,
         sender: AsyncComponentSender<Self>,
-        root: &Self::Root,
+        _root: &Self::Root,
     ) {
         if matches!(message, AppEvent::FontSet) {
-            update_view(self, root, &sender);
+            sender.input(Msg::Rerender);
         }
     }
 
     async fn update_with_view(
         &mut self,
         _widgets: &mut Self::Widgets,
-        records: Self::Input,
+        message: Self::Input,
         sender: AsyncComponentSender<Self>,
         root: &Self::Root,
     ) {
-        self.records = records.0;
+        if let Msg::Render(records) = message {
+            self.records = records;
+        }
         update_view(self, root, &sender);
     }
 }
@@ -104,15 +134,21 @@ fn update_view(model: &Model, root: &webkit6::WebView, sender: &AsyncComponentSe
         &|id| dictionaries.by_id.get(&id).map(|dict| &**dict),
         &model.records,
     );
+
+    let custom_theme_name = model.settings.string(CUSTOM_THEME);
+    let custom_theme = CUSTOM_THEMES
+        .read()
+        .get(&ThemeName(Arc::from(custom_theme_name.to_string())))
+        .map(|theme| theme.theme.clone());
+
     let full_html = html! {
         style {
             (DEFAULT_THEME.style)
         }
 
-        // TODO custom theme
-        // style {
-        //     (self.custom_theme.as_ref().map(|theme| theme.style.as_str()).unwrap_or_default())
-        // }
+        style {
+            (custom_theme.as_ref().map(|theme| theme.style.as_str()).unwrap_or_default())
+        }
 
         .records {
             (records_html)
@@ -174,3 +210,5 @@ pub fn should_requery(event: &AppEvent) -> bool {
             | AppEvent::DictionaryRemoved(_)
     )
 }
+
+pub const CUSTOM_THEME: &str = "custom-theme";
