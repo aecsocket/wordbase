@@ -19,30 +19,38 @@ pub fn render_records<'a>(
 
     html! {
         @for (term, info) in &terms.0 {
+            @let add_note_payload = serde_json::to_string(&term.0)
+                .expect("should be able to serialize term");
+
             .term-group {
                 .meta-group {
-                    .meta {
-                        .term {
-                            (render_term(term))
-                        }
+                    .term {
+                        (render_term(term))
                     }
 
                     .actions {
+                        button
+                            .add-note
+                            onclick=(format!("window.webkit.messageHandlers.add_note.postMessage({add_note_payload})"))
+                        {
+                            "Add Note"
+                        }
+
                         button {
-                            "TODO: anki buttons"
+                            "Other Button"
                         }
                     }
                 }
 
                 .misc-group {
-                    @for (_, audio) in &info.audio {
-                        (render_audio(audio))
-                    }
-
                     @for pitch in &info.pitches {
                         span .tag .pitch {
                             (render_pitch(term, pitch))
                         }
+                    }
+
+                    @for (_, audio) in &info.audio {
+                        (render_audio(audio))
                     }
 
                     @for (&source, frequencies) in &info.frequencies {

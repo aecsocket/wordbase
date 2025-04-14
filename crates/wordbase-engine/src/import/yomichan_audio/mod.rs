@@ -19,6 +19,7 @@ use {
     serde::de::DeserializeOwned,
     sqlx::{Sqlite, Transaction},
     std::{
+        any::type_name,
         pin::Pin,
         sync::{
             Arc,
@@ -464,7 +465,10 @@ where
     let Some(info) = index.for_path.get(path) else {
         // some files literally just don't have an index entry
         // like NHK `20170616125948.opus`
-        trace!("{path} does not have an index entry, skipping");
+        trace!(
+            "{path} of type `{}` does not have an index entry, skipping",
+            type_name::<T>()
+        );
         return Ok(());
     };
 

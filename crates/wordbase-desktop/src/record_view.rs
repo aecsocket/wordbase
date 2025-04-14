@@ -195,7 +195,16 @@ fn update_view(model: &Model, root: &webkit6::WebView, sender: &AsyncComponentSe
             (records_html)
         }
     };
+
+    let content_manager = root.user_content_manager().unwrap();
+    content_manager.connect_script_message_received(Some("add_note"), move |_, value| {
+        let json = value.to_json(0);
+        println!("VALUE: {json:?}");
+    });
+    content_manager.register_script_message_handler("add_note", None);
+
     root.load_html(&full_html.0, None);
+
     _ = sender.output(Response::Html(records_html));
 }
 

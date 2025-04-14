@@ -1,13 +1,14 @@
 //! Manually reverse engineered schema.
 #![expect(dead_code, reason = "we include all fields for completeness")]
 
+// very important: trailing `/`!!!
 pub const FORVO_PATH: &str = "user_files/forvo_files/";
 pub const JPOD_INDEX: &str = "user_files/jpod_files/index.json";
 pub const JPOD_MEDIA: &str = "user_files/jpod_files/media/";
 pub const NHK16_INDEX: &str = "user_files/nhk16_files/entries.json";
 pub const NHK16_AUDIO: &str = "user_files/nhk16_files/audio/";
 pub const SHINMEIKAI8_INDEX: &str = "user_files/shinmeikai8_files/index.json";
-pub const SHINMEIKAI8_MEDIA: &str = "user_files/shinmeikai8_files/media";
+pub const SHINMEIKAI8_MEDIA: &str = "user_files/shinmeikai8_files/media/";
 
 pub const MARKER_PATHS: &[&str] = &[
     FORVO_PATH,

@@ -74,7 +74,8 @@ a {
 }
 
 button {
-    display: inline-flex;
+    display: flex;
+    justify-content: center;
     align-items: center;
     gap: 4px;
     background: var(--button-color);
@@ -144,6 +145,7 @@ table td {
 .term-group .meta-group {
     display: flex;
     flex-direction: row;
+    align-items: center;
     position: sticky;
     z-index: 1000;
     top: 0;
@@ -155,17 +157,22 @@ table td {
             color-mix(in srgb, var(--headerbar-shade-color) 50%, transparent);
 }
 
-.term-group .meta {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-.term-group .term {
+.meta-group .term {
+    flex: 1;
     font-size: 2.5rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.meta-group .actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.meta-group .actions .add-note {
+    background: var(--accent-color);
 }
 
 /* term misc - the flowing tags */
@@ -222,6 +229,7 @@ table td {
     display: inline-flex;
     align-items: center;
     gap: 8px;
+    opacity: var(--dim-opacity);
 }
 
 .frequencies .value:not(:last-child)::after {
