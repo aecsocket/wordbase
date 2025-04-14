@@ -121,8 +121,10 @@ pub struct DuplicateScopeOptions<'a> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Asset<'a> {
-    pub url: &'a str,
     pub filename: &'a str,
+    pub data: Option<&'a str>,
+    pub path: Option<&'a str>,
+    pub url: Option<&'a str>,
     pub skip_hash: &'a str,
     pub fields: Vec<&'a str>,
 }

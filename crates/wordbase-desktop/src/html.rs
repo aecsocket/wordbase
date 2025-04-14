@@ -35,10 +35,6 @@ pub fn render_records<'a>(
                         {
                             "Add Note"
                         }
-
-                        button {
-                            "Other Button"
-                        }
                     }
                 }
 

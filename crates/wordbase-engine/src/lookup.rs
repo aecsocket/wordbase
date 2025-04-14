@@ -167,12 +167,12 @@ impl Engine {
     pub async fn lookup<'a>(
         &'a self,
         profile_id: ProfileId,
-        context: &'a str,
+        sentence: &'a str,
         cursor: usize,
         record_kinds: &[impl Borrow<RecordKind> + Send + Sync],
     ) -> Result<Vec<RecordLookup>> {
         // TODO: languages with words separated by e.g. spaces need a different strategy
-        let (_, query) = context
+        let (_, query) = sentence
             .split_at_checked(cursor)
             .context("cursor is not on a UTF-8 character boundary")?;
 

@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 
+mod anki;
 mod dict;
 mod lookup;
 mod profile;
@@ -51,11 +52,11 @@ enum Command {
         #[command(subcommand)]
         command: DictCommand,
     },
-    // /// Manage AnkiConnect functions
-    // Anki {
-    //     #[command(subcommand)]
-    //     command: AnkiCommand,
-    // },
+    /// Manage AnkiConnect functions
+    Anki {
+        #[command(subcommand)]
+        command: AnkiCommand,
+    },
     // /// Manage texthooker functions
     // #[command(alias = "hook")]
     // Texthooker {
@@ -132,6 +133,29 @@ enum DictSetCommand {
     Enabled,
     /// Disable the dictionary for the selected profile
     Disabled,
+}
+
+#[derive(Debug, clap::Parser)]
+enum AnkiCommand {
+    Set {
+        #[command(subcommand)]
+        command: AnkiSetCommand,
+    },
+    /// Create an Anki note for the given term
+    CreateNote {
+        sentence: String,
+        headword: String,
+        reading: String,
+    },
+}
+
+#[derive(Debug, clap::Parser)]
+enum AnkiSetCommand {
+    /// Set the AnkiConnect server URL
+    Url {
+        /// Server URL, should start with `http://`
+        url: String,
+    },
 }
 
 #[derive(Debug, clap::Parser)]
@@ -243,88 +267,32 @@ async fn main() -> Result<()> {
         Command::Dict {
             command: DictCommand::Rm { dict_id },
         } => dict::rm(&engine, DictionaryId(dict_id)).await?,
-        // dictionary
-        // Command::Profile {
-        //     command: ProfileCommand::Ls,
-        // } => {
-        //     profile_ls(&engine);
-        // }
-        // Command::Profile {
-        //     command: ProfileCommand::Copy { name },
-        // } => profile_new(&engine, name).await?,
-        // Command::Profile {
-        //     command:
-        //         ProfileCommand::Set {
-        //             profile_id,
-        //             command: ProfileSetCommand::Current,
-        //         },
-        // } => profile_set_current(&engine, profile_id).await?,
-        // Command::Profile {
-        //     command:
-        //         ProfileCommand::Set {
-        //             profile_id,
-        //             command: ProfileSetCommand::Name { name },
-        //         },
-        // } => profile_set_name(&engine, profile_id, name).await?,
-        // Command::Profile {
-        //     command:
-        //         ProfileCommand::Set {
-        //             profile_id,
-        //             command: ProfileSetCommand::AnkiDeck { deck },
-        //         },
-        // } => profile_set_anki_deck(&engine, profile_id, deck).await?,
-        // Command::Profile {
-        //     command:
-        //         ProfileCommand::Set {
-        //             profile_id,
-        //             command: ProfileSetCommand::AnkiModel { model },
-        //         },
-        // } => profile_set_anki_model(&engine, profile_id, model).await?,
-        // Command::Profile {
-        //     command: ProfileCommand::Rm { id },
-        // } => profile_rm(&engine, id).await?,
-        // Command::Dictionary {
-        //     command: DictionaryCommand::Ls,
-        // } => dictionary_ls(&engine),
-        // Command::Dictionary {
-        //     command: DictionaryCommand::Info { id },
-        // } => dictionary_info(&engine, id)?,
-        // Command::Dictionary {
-        //     command: DictionaryCommand::Import { path },
-        // } => dictionary_import(&engine, path).await?,
-        // Command::Dictionary {
-        //     command: DictionaryCommand::Enable { id },
-        // } => dictionary_enable(&engine, id).await?,
-        // Command::Dictionary {
-        //     command: DictionaryCommand::Disable { id },
-        // } => dictionary_disable(&engine, id).await?,
-        // Command::Dictionary {
-        //     command:
-        //         DictionaryCommand::Set {
-        //             command: DictionarySetCommand::Position { id, position },
-        //         },
-        // } => dictionary_set_position(&engine, id, position).await?,
-        // Command::Dictionary {
-        //     command:
-        //         DictionaryCommand::Set {
-        //             command: DictionarySetCommand::Sorting { id },
-        //         },
-        // } => dictionary_set_sorting(&engine, id).await?,
-        // Command::Dictionary {
-        //     command: DictionaryCommand::Rm { id },
-        // } => dictionary_rm(&engine, id).await?,
-        // Command::Deinflect { text } => deinflect(&engine, text),
-        // Command::Lookup { text } => lookup(&engine, text).await?,
-        // Command::LookupLemma { lemma } => lookup_lemma(&engine, lemma).await?,
-        // Command::Texthooker {
-        //     command: TexthookerCommand::GetUrl,
-        // } => texthooker_get_url(&engine),
-        // Command::Texthooker {
-        //     command: TexthookerCommand::SetUrl { url },
-        // } => texthooker_set_url(&engine, url).await?,
-        // Command::Texthooker {
-        //     command: TexthookerCommand::Watch,
-        // } => texthooker_watch(&engine).await?,
+        // anki
+        Command::Anki {
+            command:
+                AnkiCommand::CreateNote {
+                    sentence,
+                    headword,
+                    reading,
+                },
+        } => {
+            anki::create_note(
+                &engine,
+                &*require_profile()?,
+                &sentence,
+                &headword,
+                &reading,
+            )
+            .await?;
+        }
+        Command::Anki {
+            command:
+                AnkiCommand::Set {
+                    command: AnkiSetCommand::Url { url },
+                },
+        } => {
+            anki::set_url(&engine, &url).await?;
+        }
     }
 
     Ok(())

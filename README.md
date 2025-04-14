@@ -210,6 +210,11 @@ What's the original reason I started this project? I got annoyed at how:
   - by extension, how I have to configure 2 different tools whenever I set up a PC again (and a new browser)
 - there are no good integrated sentence mining tools for Linux
 
+I've ironed out a bunch of design issues, and AnkiConnect is like almost functioning. Most importantly, I've decided:
+- `wordbase-engine` no longer tracks the current profile - this is left as a responsibility of the app
+- I've figured out the scope of the different crates and the project as a whole - see paragraphs above.
+- `wordbase` and `wordbase-engine` are solid foundations to build on, but `wordbase-desktop` is a lost cause. I've just been hacking on top of it instead of trying to clean anything up. I want to definitely rewrite this without Relm4 at some point.
+
 ## Test session 4 - 13 Apr
 
 - I still haven't done the ankiconnect lmao. I've been procrastinating the stylesheet (but at least it's pretty now tho). This ACTUALLY has to be my priority now.
