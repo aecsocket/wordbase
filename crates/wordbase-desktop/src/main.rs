@@ -6,6 +6,7 @@
     reason = "`gtk` doesn't follow this convention"
 )]
 
+mod group;
 mod html;
 mod manager;
 mod overlay;

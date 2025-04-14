@@ -129,9 +129,10 @@ impl Engine {
 
         // based on Lapis
         let fields = [
-            ("Expression", headword(term)),
-            ("ExpressionFurigana", term_ruby_plain(term)),
-            ("ExpressionReading", reading(term)),
+            ("Expr", "a"),
+            // ("Expression", headword(term)),
+            // ("ExpressionFurigana", term_ruby_plain(term)),
+            // ("ExpressionReading", reading(term)),
             // ("MainDefinition", "to read"),
             // ("Sentence", "a <b>読む</b> b"),
             // ("SentenceAudio", ""),
@@ -151,19 +152,14 @@ impl Engine {
             deck_name: current_profile
                 .config
                 .anki_deck
-                .clone()
-                .context("no deck name")?
-                .into_inner(),
+                .as_ref()
+                .context("no deck name")?,
             model_name: current_profile
                 .config
                 .anki_model
-                .clone()
-                .context("no model name")?
-                .into_inner(),
-            fields: fields
-                .into_iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect(),
+                .as_ref()
+                .context("no model name")?,
+            fields: fields.iter().map(|(k, v)| (*k, *v)).collect(),
             options: request::NoteOptions {
                 allow_duplicate: true,
                 duplicate_scope: None,
@@ -182,42 +178,42 @@ impl Engine {
     }
 }
 
-#[derive(Debug)]
-struct TemplateContext<'a> {
-    term: &'a Term,
-}
+// #[derive(Debug)]
+// struct TemplateContext<'a> {
+//     term: &'a Term,
+// }
 
-fn headword(term: &Term) -> String {
-    term.headword()
-        .or_else(|| term.reading())
-        .map(|s| s.clone().into_inner())
-        .unwrap_or_default()
-}
+// fn headword(term: &Term) -> Box<str> {
+//     term.headword()
+//         .or_else(|| term.reading())
+//         .map(|s| s.clone().into_inner())
+//         .unwrap_or_default()
+// }
 
-fn reading(term: &Term) -> String {
-    term.reading()
-        .map(|s| s.clone().into_inner())
-        .unwrap_or_default()
-}
+// fn reading(term: &Term) -> Box<str> {
+//     term.reading()
+//         .map(|s| s.clone().into_inner())
+//         .unwrap_or_default()
+// }
 
-fn term_ruby_html(term: &Term) -> String {
-    todo!();
-    // html::render_term(term).0
-}
+// fn term_ruby_html(term: &Term) -> Box<str> {
+//     todo!();
+//     // html::render_term(term).0
+// }
 
-fn term_ruby_plain(term: &Term) -> String {
-    match term {
-        Term::Headword { headword } => headword.to_string(),
-        Term::Reading { reading } => reading.to_string(),
-        Term::Full { headword, reading } => {
-            let mut result = String::new();
-            for (headword_part, reading_part) in lang::jpn::furigana_parts(headword, reading) {
-                _ = write!(&mut result, "{headword_part}");
-                if !reading_part.is_empty() {
-                    _ = write!(&mut result, "[{reading_part}]");
-                }
-            }
-            result
-        }
-    }
-}
+// fn term_ruby_plain(term: &Term) -> Box<str> {
+//     match term {
+//         Term::Headword { headword } => headword.to_string(),
+//         Term::Reading { reading } => reading.to_string(),
+//         Term::Full { headword, reading } => {
+//             let mut result = String::new();
+//             for (headword_part, reading_part) in lang::jpn::furigana_parts(headword, reading) {
+//                 _ = write!(&mut result, "{headword_part}");
+//                 if !reading_part.is_empty() {
+//                     _ = write!(&mut result, "[{reading_part}]");
+//                 }
+//             }
+//             result
+//         }
+//     }
+// }

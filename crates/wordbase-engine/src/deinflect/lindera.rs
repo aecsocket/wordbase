@@ -158,8 +158,10 @@ impl<'a> Details<'a> {
 }
 
 fn is_word_ending(token: &Details) -> bool {
-    // terminal form
-    matches!(token.conjugation_form, "終止形-一般")
+    matches!(
+        token.conjugation_form,
+        "終止形-一般" // terminal form
+    )
 }
 
 fn is_word_continuation(last_lookahead: &Details, token: &Details) -> bool {
@@ -170,7 +172,11 @@ fn is_word_continuation(last_lookahead: &Details, token: &Details) -> bool {
         }
         // adjective
         "形容詞" => {
-            matches!(token.pos1, "接尾辞") // suffix
+            matches!(
+                token.pos1,
+                "接尾辞" // suffix
+                | "助動詞" // auxiliary verb
+            )
         }
         _ => false,
     }
@@ -313,6 +319,7 @@ mod tests {
         assert_split("食べる", "あいう");
         assert_split("食べたい", "あいう");
         assert_split("食べなかった", "あいう");
+        assert_split("騒がしかった", "こと");
         assert_split("大学", "とは");
         assert_split("頼りなさげ", "な目を");
 

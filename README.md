@@ -17,7 +17,7 @@ Following the GNOME philosophy of "every preference has a cost"[^1][^2][^3], Wor
 
 Of course, this doesn't mean that Wordbase *the platform* is inflexible. On the contrary, developers should be able (and encouraged!) to write their own software which hooks into Wordbase's API to solve problems in areas which Wordbase itself won't tackle. This includes software like browser extensions, video players, and OCR tools.
 
-Perhaps this is a niche goal, considering the typical audience of apps like this are the people who are already more technically inclined - but in my opinion, the more accurate viewpoint is that the average language doesn't use these tools *because* they're designed for the more technically inclined. Lowering the barrier to entry for language learning is a noble goal in of itself, and one worth pursuing.
+Perhaps this is a niche goal, considering the typical audience of apps like this are the people who are already more technically inclined - for many people, even getting Anki set up in the first place is a hurdle - but in my opinion, the more accurate viewpoint is that the average language learner doesn't use these tools *because* they're designed for the more technically inclined. Lowering the barrier to entry for language learning is a noble goal in of itself, and one worth pursuing.
 
 [^1]: https://www.omgubuntu.co.uk/2021/07/why-gnome-does-what-gnome-does-by-tobias-bernard
 [^2]: https://blogs.gnome.org/tbernard/2021/07/13/community-power-4/
@@ -99,6 +99,8 @@ Wordbase simplifies this:
 - scan the text in the overlay
 
 This is achieved by Wordbase connecting to your texthooker via [TextractorSender], receiving sentences, and pushing those sentences into an overlay window which sits on top of your VN. This window then integrates with the rest of Wordbase by triggering a popup dictionary when selecting a word.
+
+In the future this may be moved into a separate app, although this is TBD.
 
 [TextractorSender]: https://github.com/KamWithK/TextractorSender
 
@@ -190,7 +192,39 @@ TODO: this might not be entirely true...
 
 # notes - temp
 
-## Test session 3
+## Test session 4 - 13 Apr
+
+- I still haven't done the ankiconnect lmao. I've been procrastinating the stylesheet (but at least it's pretty now tho). This ACTUALLY has to be my priority now.
+- The desktop app is a piece of shit and a mess
+  - Where the fuck is all the state managed?!??!?!
+  - I don't think Relm4 is the right fit for this app, since so much of the state is stored outside of the component model.
+  - I want to rewrite this in raw GTK/Adwaita later, but for now I can keep hacking in features
+- IMO the engine shouldn't keep track of a "current profile". Leave this up to the individual app. (But it should still keep track of profiles)
+- If one of my goals is "keep it simple", then why did I add in texthooker support into the core app? This is a niche that only applies to Japanese visual novel language learners. I want to move this out to its own app later.
+  - Move it out of `wordbase` and `wordbase-engine` into... somewhere else
+  - Keep support for overlays in `wordbase-integration` - it's useful, and it means we don't need 2 separate GNOME extensions
+  - Write texthooker listen logic directly in `wordbase-desktop` (and `wordbase-engine-cli`? ehh idk)
+- [ ] Now that I have more dicts, lookups are starting to lag a bit. Currently, requesting a lookup "blocks" the async runtime. If we request a new lookup before the old one completes, it should stop the old lookup and no longer await it.
+- [x] looking up 替える gives results for 変える first - wrong! I know why this happens tho. in the lookup, we sort by `reading matches AND headword matches`, then `reading matches OR headword matches`. this should be `hm AND rm`, `hm`, `rm`, everything else
+  - fuck, this is wrong! if we looked up like "きびす" (踵), we'd get results for 踵<かかと> first. that's wrong
+  - uuughhhh, maybe we detect if we have kana in the lemma and if so look up by reading first? and otherwise headword first?
+  - can't reproduce anymore
+- we should be able to spawn sub-popups from looking up in the popup. maybe? future goal.
+- [ ] the audio should really be in the sticky header, not the meta tag flow box. When pitch accent readings are split onto multiple lines, it's a bit harder to read. They should be kept together. (Frequencies don't matter as much who cares)
+- [x] "（ふぅ…騒がしかった…）" - deinflects as <騒がしかっ>た. could we make this <騒がしかった>?
+- [x] there's a lot of Forvo audio records which have a headword but no reading e.g. 薄情. this makes the forvo audio appear as a separate entry below. I think we can unify this record with the main record by doing this:
+  - if we have a record with a term which has a headword but no reading, it gets cloned into all the other "buckets" for the same headword
+  - i.e. 見る, 観る would contain the same records for みる
+  - this will probably suck if we do this to ALL record kinds. maybe only yomichan audio records?
+- [ ] what would be really cool is, if you click on a sub-query lookup, it opens as a new navigation page in GTK with a new webview
+  - recycle sub-webviews
+  - you can swipe left to go back to the previous page seamlessly, like in epiphany
+- [x] wrong furigana generation - 黄色い声 (きいろいこえ)
+  - added test case - it's the same issue as before. I'll have to fix them together
+- interesting dictionary quirk: ぶいぶいいわせる - we have records for ブイブイ言わす with reading ぶいぶいいわせる - this doesn't match! and even yomitan fails to generate furigana in this case.
+  - [ ] its fallback is better than ours I think, we should use its strat
+
+## Test session 3 - 12 Apr
 
 Now that I've done a bunch of generic bug fixing and improvements, I want to do more targeted high-impact improvements
 - [ ] AnkiConnect!!!!!! (!!!)
@@ -204,7 +238,7 @@ Now that I've done a bunch of generic bug fixing and improvements, I want to do 
 - Future goal: can we get some way of highlighting known/unknown words? I'd like to use AnkiConnect for this tracking ideally, since that gives us the best estimate of how well the user knows a word. Then we can mark new words in a different color in the overlay or something.
 - Future goal: I have a term like 履帯映像, I want to ask AI a question like "break down the kanji in this phrase". I should be able to do this integrated into the dictionary popup.
 
-## Test session 2
+## Test session 2 - 11 Apr
 
 - IPAex Gothic looks *really* nice
 - [x] まじない -> deinflects as 呪い, and prioritises 呪い (のろい). can we make it prioritse まじない?
@@ -227,7 +261,7 @@ Now that I've done a bunch of generic bug fixing and improvements, I want to do 
 - [x] a button in the overlay to copy the sentence
 - [x] a button in the overlay to go to the manager search field immediately, or an inline search? idk exactly
 
-## Test session 1
+## Test session 1 - 10 Apr
 
 - [ ] sometimes when hovering, the lookup is done, BUT the popup isn't focused maybe?
 - [x] chinese fonts (force switch away from Inter?)

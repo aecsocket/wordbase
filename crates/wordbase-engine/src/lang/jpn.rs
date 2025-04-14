@@ -324,10 +324,14 @@ mod tests {
             [("言", "い"), ("い", ""), ("争", "あらそ"), ("い", "")]
         );
 
-        // TODO: this one is broken, idk how to fix it
+        // TODO: these are broken, idk how to fix it
         assert_eq!(
             super::furigana_parts("関係無い", "かんけいない"),
             [("関係無", "かんけいな"), ("い", "")]
+        );
+        assert_eq!(
+            super::furigana_parts("黄色い声", "きいろいこえ"),
+            [("黄色", "きいろ"), ("い", ""), ("声", "こえ")]
         );
     }
 

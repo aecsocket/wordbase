@@ -347,7 +347,6 @@ async fn profile_new(engine: &Engine, name: String) -> Result<()> {
         .insert_profile(&ProfileMeta {
             name: Some(name),
             accent_color: None,
-            language: None,
         })
         .await?;
     println!("Created profile with ID {}", new_id.0);

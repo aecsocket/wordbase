@@ -40,6 +40,18 @@ pub enum Response {
     Query(String),
 }
 
+fn new_web_view() -> webkit6::WebView {
+    // if we don't do this, then the app will make some files in ~/.local/share:
+    // ├── mediakeys
+    // │   └── v1
+    // │       └── salt
+    // └── storage
+    //     └── salt
+    webkit6::WebView::builder()
+        .network_session(&webkit6::NetworkSession::new_ephemeral())
+        .build()
+}
+
 #[relm4::component(pub, async)]
 impl AsyncComponent for Model {
     type Init = Engine;
@@ -48,7 +60,7 @@ impl AsyncComponent for Model {
     type CommandOutput = AppEvent;
 
     view! {
-        webkit6::WebView {
+        new_web_view() -> webkit6::WebView {
             set_hexpand: true,
             set_vexpand: true,
             set_background_color: &gdk::RGBA::new(0.0, 0.0, 0.0, 0.0),

@@ -3,6 +3,11 @@ body {
     padding: 0;
 }
 
+/*
+libadwaita latest main docs:
+<https://gnome.pages.gitlab.gnome.org/libadwaita/doc/main/css-variables.html>
+*/
+
 :root {
     /* <https://gitlab.gnome.org/GNOME/libadwaita/-/blob/main/src/stylesheet/_common.scss?ref_type=heads#L9> */
     --button-color: color-mix(in srgb, currentColor 10%, transparent);
@@ -34,23 +39,24 @@ body {
 }
 
 :root {
-    --window-bg-color: #fafafa;
-    --window-fg-color: rgba(0, 0, 0, 0.8);
+    --window-bg-color: #fafafb;
+    --window-fg-color: rgba(0 0 6 / 80%);
     --card-bg-color: #ffffff;
-    --card-fg-color: rgba(0, 0, 0, 0.8);
-    --card-shade-color: rgba(0, 0, 0, 0.07);
-    --headerbar-shade-color: rgba(0, 0, 0, 0.12);
-    --headerbar-darker-shade-color: rgba(0, 0, 0, 0.12);
+    --card-fg-color: rgb(0 0 6 / 80%);
+    --card-shade-color: rgb(0 0 6 / 7%);
+    --headerbar-shade-color: rgba(0 0 6 / 12%);
+    --headerbar-darker-shade-color: rgb(0 0 6 / 12%);
 }
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --window-bg-color: #242424;
+        --window-bg-color: #222226;
         --window-fg-color: #ffffff;
-        --card-bg-color: rgba(255, 255, 255, 0.08);
+        --card-bg-color: rgba(255 255 255 / 8%);
         --card-fg-color: #ffffff;
-        --card-shade-color: rgba(0, 0, 0, 0.36);
-        --headerbar-shade-color: rgba(0, 0, 0, 0.36);
+        --card-shade-color: rgba(0 0 6 / 36%);
+        --headerbar-shade-color: rgba(0 0 6 / 36%);
+        --headerbar-darker-shade-color: rgba(0 0 6 / 90%);
     }
 }
 
@@ -133,10 +139,13 @@ table td {
     gap: 12px;
 }
 
+/* term meta - the top sticky header */
+
 .term-group .meta-group {
     display: flex;
     flex-direction: row;
     position: sticky;
+    z-index: 1000;
     top: 0;
     background-color: var(--window-bg-color);
     padding: 10px var(--content-padding);
@@ -145,8 +154,6 @@ table td {
         0 2px 4px
             color-mix(in srgb, var(--headerbar-shade-color) 50%, transparent);
 }
-
-/* term meta - the top sticky header */
 
 .term-group .meta {
     display: flex;
@@ -159,11 +166,6 @@ table td {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-}
-
-.term-group .actions {
-    /* todo */
-    visibility: hidden;
 }
 
 /* term misc - the flowing tags */

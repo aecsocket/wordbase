@@ -1,4 +1,5 @@
 use {
+    crate::group::Grouping,
     base64::{Engine, prelude::BASE64_STANDARD},
     derive_more::{Deref, DerefMut},
     maud::{Markup, PreEscaped, html},
@@ -17,12 +18,6 @@ pub fn render_records<'a>(
     let terms = make_terms(records);
 
     html! {
-        svg style="display: none;" {
-            symbol id="speakers-symbolic" viewBox="0 0 16 16" {
-                (r##"<path d="m 12.039062 0.00390625 c -0.257812 -0.01171875 -0.523437 0.07421875 -0.726562 0.28124975 l -3.3125 3.292969 v 1.421875 h 1.390625 l 3.304687 -3.296875 c 0.40625 -0.40625 0.363282 -1.042969 0.03125 -1.394531 c -0.175781 -0.183594 -0.429687 -0.292969 -0.6875 -0.30468775 z m -5.039062 1.00390575 c -0.296875 -0.003906 -0.578125 0.125 -0.765625 0.351563 l -3.234375 3.640625 h -1 c -1.09375 0 -2 0.84375 -2 2 v 2 c 0 1.089844 0.910156 2 2 2 h 1 l 3.234375 3.640625 c 0.207031 0.253906 0.488281 0.363281 0.765625 0.359375 z m 1 5.992188 v 2 h 6 c 0.75 0 1 -0.5 1 -1 s -0.25 -1 -1 -1 z m 0 4 v 1.421875 l 3.324219 3.292969 c 0.402343 0.410156 1.0625 0.347656 1.414062 -0.023438 c 0.332031 -0.351562 0.371094 -0.988281 -0.03125 -1.390625 l -3.316406 -3.300781 z m 0 0" fill="#222222"/>"##)
-            }
-        }
-
         @for (term, info) in &terms.0 {
             .term-group {
                 .meta-group {
@@ -75,16 +70,8 @@ pub fn make_terms(records: &[RecordLookup]) -> Terms {
     let mut terms = Terms::default();
     for record in records {
         let source = record.source;
-        let normalized_term = match &record.term {
-            Term::Full { headword, reading } if headword == reading => Term::Headword {
-                headword: headword.clone(),
-            },
-            Term::Reading { reading } => Term::Headword {
-                headword: reading.clone(),
-            },
-            term => term.clone(),
-        };
-        let info = terms.entry(normalized_term).or_default();
+        let grouped_term = Grouping(record.term.clone());
+        let info = terms.entry(grouped_term).or_default();
 
         match &record.record {
             Record::YomitanGlossary(glossary) => {
@@ -119,7 +106,7 @@ pub fn make_terms(records: &[RecordLookup]) -> Terms {
 type IndexMap<K, V> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
 
 #[derive(Debug, Default, Deref, DerefMut)]
-pub struct Terms<'a>(IndexMap<Term, TermInfo<'a>>);
+pub struct Terms<'a>(IndexMap<Grouping<Term>, TermInfo<'a>>);
 
 #[derive(Debug, Default)]
 pub struct TermInfo<'a> {

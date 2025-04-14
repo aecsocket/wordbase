@@ -205,8 +205,8 @@ async fn insert_term_record(
     record_id: RecordId,
     term: &Term,
 ) -> Result<()> {
-    let headword = term.headword().map(|s| s.as_str());
-    let reading = term.reading().map(|s| s.as_str());
+    let headword = term.headword().map(|s| &**s);
+    let reading = term.reading().map(|s| &**s);
     sqlx::query!(
         "INSERT OR IGNORE INTO term_record (source, record, headword, reading)
         VALUES ($1, $2, $3, $4)",
@@ -226,8 +226,8 @@ async fn insert_frequency(
     term: &Term,
     frequency: FrequencyValue,
 ) -> Result<()> {
-    let headword = term.headword().map(|s| s.as_str());
-    let reading = term.reading().map(|s| s.as_str());
+    let headword = term.headword().map(|s| &**s);
+    let reading = term.reading().map(|s| &**s);
     let (mode, value) = match frequency {
         FrequencyValue::Rank(n) => (0, n),
         FrequencyValue::Occurrence(n) => (1, n),
