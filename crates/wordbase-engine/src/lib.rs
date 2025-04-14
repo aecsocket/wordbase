@@ -57,16 +57,17 @@ impl Engine {
     pub async fn new(db_path: impl AsRef<Path>) -> Result<Self> {
         let db = db::setup(db_path.as_ref()).await?;
         let (send_event, _) = broadcast::channel(CHANNEL_BUF_CAP);
-        let profiles = Profiles::fetch(&db)
-            .await
-            .context("failed to fetch initial profiles")?;
         let engine = Self(Arc::new(Inner {
+            profiles: ArcSwap::from_pointee(
+                Profiles::fetch(&db)
+                    .await
+                    .context("failed to fetch initial profiles")?,
+            ),
             dictionaries: ArcSwap::from_pointee(
-                Dictionaries::fetch(&db, &profiles)
+                Dictionaries::fetch(&db)
                     .await
                     .context("failed to fetch initial dictionaries")?,
             ),
-            profiles: ArcSwap::from_pointee(profiles),
             texthookers: Texthookers::new(&db, send_event.clone())
                 .await
                 .context("failed to create texthooker listener")?,

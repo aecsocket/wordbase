@@ -37,9 +37,3 @@ pub struct Shinmeikai8 {
     pub pitch_number: Option<u64>,
     pub pitch_pattern: Option<NormString>,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Furigana {
-    pub character: NormString,
-    pub reading: NormString,
-}

@@ -6,13 +6,15 @@ use {
     itertools::Itertools,
     std::borrow::Borrow,
     wordbase::{
-        DictionaryId, FrequencyValue, Record, RecordId, RecordKind, RecordLookup, Term, for_kinds,
+        DictionaryId, FrequencyValue, ProfileId, Record, RecordId, RecordKind, RecordLookup, Term,
+        for_kinds,
     },
 };
 
 impl Engine {
     pub async fn lookup_lemma(
         &self,
+        profile_id: ProfileId,
         lemma: impl AsRef<str> + Send + Sync,
         record_kinds: &[impl Borrow<RecordKind> + Send + Sync],
     ) -> Result<Vec<RecordLookup>> {
@@ -43,14 +45,13 @@ impl Engine {
             INNER JOIN dictionary ON record.source = dictionary.id
 
             -- make sure the dictionary we're getting this record from is enabled
-            INNER JOIN config
             INNER JOIN profile_enabled_dictionary ped
-                ON (ped.profile = config.current_profile AND ped.dictionary = dictionary.id)
+                ON (ped.profile = $1 AND ped.dictionary = dictionary.id)
 
             -- find which terms reference this record, either through the headword or reading
             INNER JOIN term_record ON (
                 term_record.record = record.id
-                AND (term_record.headword = $1 OR term_record.reading = $1)
+                AND (term_record.headword = $2 OR term_record.reading = $2)
             )
 
             -- join on profile-global frequency information, for the `ORDER BY` below
@@ -58,7 +59,7 @@ impl Engine {
                 -- only use frequency info from the currently selected sorting dict in this profile
                 profile_frequency.source = (
                     SELECT sorting_dictionary FROM profile
-                    WHERE id = config.current_profile
+                    WHERE id = $1
                 )
                 AND profile_frequency.headword = term_record.headword
                 AND profile_frequency.reading = term_record.reading
@@ -72,7 +73,7 @@ impl Engine {
             )
 
             -- only include records for the given record kinds
-            WHERE kind IN (SELECT value FROM json_each($2))
+            WHERE kind IN (SELECT value FROM json_each($3))
 
             ORDER BY
                 CASE
@@ -80,12 +81,12 @@ impl Engine {
                     -- e.g. if you typed あらゆる:
                     -- - the first results would be for the kana あらゆる
                     -- - then the kanji like 汎ゆる
-                    WHEN term_record.reading = $1 AND term_record.headword = $1 THEN 0
+                    WHEN term_record.reading = $2 AND term_record.headword = $2 THEN 0
                     -- then prioritize results where at least the reading or headword are an exact match
                     -- e.g. in 念じる, usually 念ずる comes up first
                     -- but this is obviously a different reading
                     -- so we want to prioritize 念じる
-                    WHEN term_record.reading = $1 OR term_record.headword = $1 THEN 1
+                    WHEN term_record.reading = $2 OR term_record.headword = $2 THEN 1
                     -- all other results at the end
                     ELSE 2
                 END,
@@ -110,6 +111,7 @@ impl Engine {
                     WHEN source_frequency.mode = 1 THEN -source_frequency.value
                     ELSE 0
                 END",
+                profile_id.0,
                 lemma,
                 record_kinds
             )
@@ -164,6 +166,7 @@ impl Engine {
 
     pub async fn lookup<'a>(
         &'a self,
+        profile_id: ProfileId,
         context: &'a str,
         cursor: usize,
         record_kinds: &[impl Borrow<RecordKind> + Send + Sync],
@@ -177,7 +180,10 @@ impl Engine {
         let mut seen_record_ids = HashSet::new();
 
         for deinflection in self.deinflect(query) {
-            for result in self.lookup_lemma(&deinflection.lemma, record_kinds).await? {
+            for result in self
+                .lookup_lemma(profile_id, &deinflection.lemma, record_kinds)
+                .await?
+            {
                 if seen_record_ids.insert(result.record_id) {
                     records.push(RecordLookup {
                         bytes_scanned: deinflection.scan_len,

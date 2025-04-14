@@ -32,7 +32,6 @@ serde_json  = { workspace = true }
 derive_more = { workspace = true, features = [
   "from",
   "display",
-  "error",
   "deref",
   "deref_mut",
 ] }

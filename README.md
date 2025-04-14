@@ -4,7 +4,7 @@
 
 There exist many tools for language learning, offering features like popup dictionaries, pronunciation audio, etc. These exist in various forms, like desktop apps, mobile apps, and browser extensions. But due to the fragmented nature of the ecosystem, there's almost no consistency in any of these - one app may use a hardcoded dictionary, another may fetch data from a server online, whereas another may require you to import dictionaries manually - but those dictionaries aren't shared with any other apps, even though they use the same format.
 
-As a real-life example, [Yomitan] is a browser extension providing a popup dictionary specialized for Japanese language learning. The Yomitan dictionary format is used by various tools - however, it's impossible for an external app (like [Memento], a Japanese language learning video player) to actually use the dictionaries stored inside Yomitan itself, since it's a browser extension. This means duplicate effort on writing logic for importing and rendering Yomitan dictionaries - not a simple task! Despite this, there are still inconsistences between the two - e.g., Memento struggles to render more complicated glossary contents due to the Yomitan dictionary format's structured content format.
+As a real-life example, [Yomitan] is a browser extension providing a popup dictionary specialized for Japanese language learning. The Yomitan dictionary format is used by various tools - however, it's impossible for an external app (like [Memento], a Japanese language learning video player) to actually use the dictionaries stored inside Yomitan itself, since it's a browser extension. This means duplicate effort on writing logic for importing and rendering Yomitan dictionaries, performing deinflection, etc. - not a simple task! Despite this, there are still inconsistences between the two - e.g., Memento struggles to render more complicated glossary contents due to the Yomitan dictionary format's structured content format.
 
 There's great value in having a single shared database of dictionaries, and a single consistent way to fetch data for some text. This is ultimately the goal of Wordbase - make it stupid simple to integrate a dictionary, and any other language learning tools, into any app.
 
@@ -13,7 +13,7 @@ There's great value in having a single shared database of dictionaries, and a si
 
 ## Be *simple to use*
 
-Following the GNOME philosophy of "every preference has a cost"[^1][^2][^3], Wordbase *the app* focuses on being easy to pick up and use immediately by anyone, rather than being as flexible as possible. Features will be added if they benefit the 90% of users, and don't significantly increase the cognitive complexity of the app.
+Following the GNOME philosophy of "every preference has a cost"[^1][^2][^3], Wordbase *the engine* focuses on providing a solid foundation to build language learning tools on top of, favoring robustness over features. Wordbase *the app* focuses on being easy to pick up and use immediately by anyone, rather than being as flexible as possible. Features will be added if they benefit the 90% of users, and don't significantly increase the cognitive complexity of the app.
 
 Of course, this doesn't mean that Wordbase *the platform* is inflexible. On the contrary, developers should be able (and encouraged!) to write their own software which hooks into Wordbase's API to solve problems in areas which Wordbase itself won't tackle. This includes software like browser extensions, video players, and OCR tools.
 
@@ -28,7 +28,7 @@ Perhaps this is a niche goal, considering the typical audience of apps like this
 Out of the existing language learning tools available, a small number have first-class Linux support, and an even smaller number have support for the modern Linux desktop with Wayland and Flatpak. This number drops even further when delving into niches like visual novel texthookers and related tools ([Textractor], [JL]). This is understandable, as Linux is still a small fraction of market share - but it's a steadily growing fraction, and its users deserve something nicer.
 
 [Textractor]: https://github.com/Artikash/Textractor
-[JL]: https://github.com/rampaa/jl
+[JL]: https://github.com/rampaa/JL
 
 # Installation
 
@@ -124,7 +124,6 @@ This is the heart of Wordbase, which implements the logic for:
 - storing dictionary records in a database
 - performing deinflection
 - performing lookups
-- connecting to texthooker servers
 
 The engine is a library, not a binary - it is intended to be packaged inside of an app. This is because the engine only implements the platform-agnostic logic, and cannot perform platform-dependent actions like spawning a popup dictionary. The app may also choose to not support some functions (i.e. on a mobile platform, you may not be able to spawn a popup on top of the currently active app).
 
@@ -191,6 +190,25 @@ Unsupported due to platform limitations. Apps can't spawn arbitrary windows on t
 TODO: this might not be entirely true...
 
 # notes - temp
+
+## 14 Apr
+
+I think my goals are a bit conflicted here. I want *the app* to be as simple as possible and min-config (see the GNOME stuff), but I want *the platform* to be as flexible as possible. For this reason, I went with the "anti-schema" of record kinds, instead of trying to standardize a single glossary format or whatever. If I take this to its logical extreme, the platform should be able to support:
+- any dictionary format (that's the point of the record kind stuff)
+- texthooker aggregation
+- AnkiConnect integration, and other flashcard apps potentially
+- collecting statistics on words learned/learning
+
+But despite all these features, the apps should stay as simple **to configure** as possible. I think that's the key here - I don't mind *more features*, but I do mind *more config*. It's fine if you want to add a feature to see what words you've looked up the most, but it *shouldn't require extra config*.
+
+In summary: state is cheap, config is expensive. Convention over configuration.
+
+This gives me a good guideline and goal to follow for the project.
+
+What's the original reason I started this project? I got annoyed at how:
+- my Memento and Yomitan dictionaries don't sync
+  - by extension, how I have to configure 2 different tools whenever I set up a PC again (and a new browser)
+- there are no good integrated sentence mining tools for Linux
 
 ## Test session 4 - 13 Apr
 

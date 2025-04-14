@@ -52,7 +52,7 @@ unicode-segmentation = { workspace = true }
 
 derive_more = { workspace = true, features = [
   "debug",
+  "from",
   "display",
   "error",
-  "from",
 ] }

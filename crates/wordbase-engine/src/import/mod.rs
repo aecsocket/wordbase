@@ -162,13 +162,9 @@ impl Engine {
         }
 
         _ = send_tracker.send(tracker);
-        let dictionary_id = import
+        import
             .await
             .map_err(|source| ImportError::Import { kind, source })?;
-
-        self.enable_dictionary(dictionary_id)
-            .await
-            .context("failed to enable dictionary")?;
         Ok(())
     }
 }

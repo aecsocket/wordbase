@@ -122,9 +122,6 @@ pub struct Dictionary {
     /// A higher position means records from this dictionary will be returned
     /// later, and should be displayed to the user with a lower priority.
     pub position: i64,
-    /// Whether this dictionary is enabled for record lookups under the current
-    /// [`Profile`].
-    pub enabled: bool,
 }
 
 /// Metadata for a [`Dictionary`].
@@ -149,6 +146,7 @@ pub struct DictionaryMeta {
     pub description: Option<String>,
     /// Homepage URL where users can learn more about this dictionary.
     pub url: Option<String>,
+    /// Attribution information for the content of this dictionary.
     pub attribution: Option<String>,
 }
 

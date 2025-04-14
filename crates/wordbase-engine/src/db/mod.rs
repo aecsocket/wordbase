@@ -10,32 +10,19 @@ use {
 
 pub async fn setup(path: &Path) -> Result<Pool<Sqlite>> {
     let db = SqlitePoolOptions::new()
-        .connect_with(connect_options(path))
-        .await
-        .context("failed to connect to database")?;
-    sqlx::query(include_str!("schema.sql"))
-        .execute(&db)
-        .await
-        .context("failed to set up database")?;
-    let config = sqlx::query!("SELECT max_db_connections FROM config")
-        .fetch_one(&db)
-        .await
-        .context("failed to fetch initial config")?;
-    drop(db);
-
-    let db = SqlitePoolOptions::new()
-        .max_connections(u32::try_from(config.max_db_connections).unwrap_or(1))
+        .max_connections(MAX_DB_CONNECTIONS)
         .connect_with(connect_options(path))
         .await
         .context("failed to connect to database")?;
     Ok(db)
 }
 
+const MAX_DB_CONNECTIONS: u32 = 8;
+
 fn connect_options(path: &Path) -> SqliteConnectOptions {
     SqliteConnectOptions::new()
         .filename(path)
         .create_if_missing(true)
-        // .journal_mode(SqliteJournalMode::Wal)
         .pragma("foreign_keys", "ON")
 }
 

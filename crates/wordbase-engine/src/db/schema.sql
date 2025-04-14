@@ -47,12 +47,9 @@ CREATE INDEX IF NOT EXISTS profile_enabled_dictionary_idx ON profile_enabled_dic
 
 CREATE TABLE IF NOT EXISTS config (
     id                      INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
-    max_db_connections      INTEGER NOT NULL DEFAULT 8,
-    max_concurrent_imports  INTEGER NOT NULL DEFAULT 4,
-    current_profile         INTEGER NOT NULL DEFAULT 1 REFERENCES profile(id),
-    texthooker_url          TEXT    NOT NULL DEFAULT 'ws://127.0.0.1:9001',
     ankiconnect_url         TEXT    NOT NULL DEFAULT 'http://127.0.0.1:8765',
-    ankiconnect_api_key     TEXT    NOT NULL DEFAULT ''
+    ankiconnect_api_key     TEXT    NOT NULL DEFAULT '',
+    texthooker_url          TEXT    NOT NULL DEFAULT 'ws://127.0.0.1:9001'
 );
 
 INSERT OR IGNORE INTO config DEFAULT VALUES;
@@ -61,13 +58,6 @@ CREATE TRIGGER IF NOT EXISTS prevent_config_delete
 BEFORE DELETE ON config
 BEGIN
     SELECT RAISE(ABORT, 'cannot delete config row');
-END;
-
-CREATE TRIGGER IF NOT EXISTS reset_current_profile
-AFTER DELETE ON profile
-WHEN OLD.id = (SELECT current_profile FROM config)
-BEGIN
-    UPDATE config SET current_profile = (SELECT MIN(id) FROM profile);
 END;
 
 --

@@ -14,11 +14,13 @@ pub struct Lookup {
     /// lookup text is contained.
     ///
     /// If you have no surrounding content, it's fine to only include the lookup
-    /// text in this field, but some actions (e.g. creating Anki cards) may be
-    /// negatively impacted.
+    /// text in this field, but some actions (e.g. creating Anki cards) may have
+    /// less relevant information to work with.
     pub context: String,
     /// Byte index into [`Lookup::context`] which marks what text you actually
     /// want to get lookup results for.
+    ///
+    /// The index must land on a UTF-8 character boundary.
     ///
     /// # Examples
     ///
@@ -34,7 +36,6 @@ pub struct Lookup {
     /// let cursor = 0;
     /// ```
     pub cursor: usize,
-    // TODO: image bytes? sentence audio? for anki cards
 }
 
 /// Single record returned in response to a [`Lookup`].
@@ -51,8 +52,8 @@ pub struct RecordLookup {
     pub record_id: RecordId,
     /// [`Record`] that was found.
     pub record: Record,
-    /// [`FrequencyValue`] of the record, as found in the current profile's
-    /// sorting dictionary.
+    /// [`FrequencyValue`] of the record, as found in the profile's sorting
+    /// dictionary.
     pub profile_sorting_frequency: Option<FrequencyValue>,
     /// [`FrequencyValue`] of the record, as found in [`RecordLookup::source`]'s
     /// frequency information.

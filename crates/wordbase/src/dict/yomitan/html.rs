@@ -8,10 +8,7 @@ impl Render for Content {
     fn render(&self) -> Markup {
         html! {
             @match self {
-                Self::String(text) => ({
-                    let lines = text.lines().map(|line| html! { (line) }.0).collect::<Vec<_>>();
-                    PreEscaped(lines.join(&html! { br; }.0))
-                }),
+                Self::String(text) => (newlines_to_brs(text)),
                 Self::Content(children) => {
                     @for child in children {
                         (child)
@@ -21,6 +18,15 @@ impl Render for Content {
             }
         }
     }
+}
+
+fn newlines_to_brs(text: &str) -> Markup {
+    PreEscaped(
+        text.lines()
+            .map(|line| html! { (line) }.0)
+            .collect::<Vec<_>>()
+            .join(&html! { br; }.0),
+    )
 }
 
 // TODO: `data` support

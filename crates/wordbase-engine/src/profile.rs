@@ -1,7 +1,7 @@
 use {
     crate::{Engine, IndexMap},
     anyhow::{Context, Result, bail},
-    derive_more::{Display, Error},
+    derive_more::Deref,
     foldhash::HashMap,
     futures::StreamExt,
     serde::{Deserialize, Serialize},
@@ -10,12 +10,8 @@ use {
     wordbase::{DictionaryId, NormString, ProfileId, ProfileMeta},
 };
 
-#[derive(Debug)]
-pub struct Profiles {
-    pub by_id: IndexMap<ProfileId, Arc<ProfileState>>,
-    pub current_id: ProfileId,
-    pub current: Arc<ProfileState>,
-}
+#[derive(Debug, Default, Deref)]
+pub struct Profiles(pub IndexMap<ProfileId, Arc<ProfileState>>);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProfileState {
@@ -26,7 +22,7 @@ pub struct ProfileState {
     pub config: ProfileConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProfileConfig {
     pub font_family: Option<String>,
     pub anki_deck: Option<NormString>,
@@ -37,27 +33,13 @@ pub struct ProfileConfig {
 
 impl Profiles {
     pub(super) async fn fetch(db: &Pool<Sqlite>) -> Result<Self> {
-        let by_id = fetch_owned(db)
+        let profiles = fetch_owned(db)
             .await
             .context("failed to fetch profiles")?
             .into_iter()
             .map(|profile| (profile.id, Arc::new(profile)))
             .collect::<IndexMap<_, _>>();
-        let current_id = ProfileId(
-            sqlx::query_scalar!("SELECT current_profile FROM config")
-                .fetch_one(db)
-                .await
-                .context("failed to fetch current profile")?,
-        );
-        let current = by_id
-            .get(&current_id)
-            .with_context(|| format!("{current_id:?} does not exist"))?
-            .clone();
-        Ok(Self {
-            by_id,
-            current_id,
-            current,
-        })
+        Ok(Self(profiles))
     }
 }
 
@@ -68,26 +50,26 @@ impl Engine {
     }
 
     pub(crate) async fn sync_profiles(&self) -> Result<()> {
-        self.profiles.store(Arc::new(
-            Profiles::fetch(&self.db)
-                .await
-                .context("failed to sync profiles")?,
-        ));
+        let profiles = Profiles::fetch(&self.db)
+            .await
+            .context("failed to sync profiles")?;
+        self.profiles.store(Arc::new(profiles));
         Ok(())
     }
 
-    pub async fn insert_profile(&self, meta: &ProfileMeta) -> Result<ProfileId> {
+    pub async fn copy_profile(
+        &self,
+        src_id: ProfileId,
+        new_meta: &ProfileMeta,
+    ) -> Result<ProfileId> {
         let profiles = self.profiles.load();
-        let current_id = profiles.current_id;
-        let current_profile = profiles
-            .by_id
-            .get(&current_id)
-            .context("no current profile")?;
+        let src = profiles.get(&src_id).context("profile not found")?;
 
-        let meta_json = serde_json::to_string(meta).context("failed to serialize profile meta")?;
+        let meta_json =
+            serde_json::to_string(&new_meta).context("failed to serialize profile meta")?;
         let config_json =
-            serde_json::to_string(&current_profile.config).context("failed to serialize config")?;
-        let sorting_dictionary = current_profile.sorting_dictionary.map(|id| id.0);
+            serde_json::to_string(&src.config).context("failed to serialize config")?;
+        let sorting_dictionary = src.sorting_dictionary.map(|id| id.0);
 
         let mut tx = self
             .db
@@ -112,7 +94,7 @@ impl Engine {
             FROM profile_enabled_dictionary
             WHERE profile = $2",
             new_id.0,
-            current_id.0,
+            src_id.0,
         )
         .execute(&mut *tx)
         .await
@@ -121,15 +103,6 @@ impl Engine {
 
         self.sync_profiles().await?;
         Ok(new_id)
-    }
-
-    pub async fn set_current_profile(&self, id: ProfileId) -> Result<()> {
-        sqlx::query!("UPDATE config SET current_profile = $1", id.0)
-            .execute(&self.db)
-            .await?;
-
-        self.sync_profiles().await?;
-        Ok(())
     }
 
     pub async fn set_profile_meta(&self, id: ProfileId, meta: &ProfileMeta) -> Result<()> {
@@ -160,12 +133,67 @@ impl Engine {
         Ok(())
     }
 
+    pub async fn set_sorting_dictionary(
+        &self,
+        profile_id: ProfileId,
+        dictionary_id: Option<DictionaryId>,
+    ) -> Result<()> {
+        let dictionary_id = dictionary_id.map(|id| id.0);
+        sqlx::query!(
+            "UPDATE profile SET sorting_dictionary = $1
+            WHERE id = $2",
+            dictionary_id,
+            profile_id.0
+        )
+        .execute(&self.db)
+        .await?;
+
+        self.sync_profiles().await?;
+        Ok(())
+    }
+
+    pub async fn enable_dictionary(
+        &self,
+        profile_id: ProfileId,
+        dictionary_id: DictionaryId,
+    ) -> Result<()> {
+        sqlx::query!(
+            "INSERT OR IGNORE INTO profile_enabled_dictionary (profile, dictionary)
+            VALUES ($1, $2)",
+            profile_id.0,
+            dictionary_id.0,
+        )
+        .execute(&self.db)
+        .await?;
+
+        self.sync_profiles().await?;
+        Ok(())
+    }
+
+    pub async fn disable_dictionary(
+        &self,
+        profile_id: ProfileId,
+        dictionary_id: DictionaryId,
+    ) -> Result<()> {
+        sqlx::query!(
+            "DELETE FROM profile_enabled_dictionary
+            WHERE profile = $1 AND dictionary = $2",
+            profile_id.0,
+            dictionary_id.0
+        )
+        .execute(&self.db)
+        .await?;
+
+        self.sync_profiles().await?;
+        Ok(())
+    }
+
     pub async fn remove_profile(&self, id: ProfileId) -> Result<()> {
         let result = sqlx::query!("DELETE FROM profile WHERE id = $1", id.0)
             .execute(&self.db)
             .await?;
         if result.rows_affected() == 0 {
-            bail!(NotFound);
+            bail!("profile not found");
         }
 
         self.sync_profiles().await?;
@@ -219,7 +247,3 @@ async fn fetch_owned(db: &Pool<Sqlite>) -> Result<Vec<ProfileState>> {
     }
     Ok(profiles)
 }
-
-#[derive(Debug, Clone, Display, Error)]
-#[display("profile not found")]
-pub struct NotFound;

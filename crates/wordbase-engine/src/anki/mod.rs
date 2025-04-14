@@ -1,11 +1,12 @@
+#![allow(dead_code)] // todo
+
 use {
-    crate::{Engine, IndexMap, lang},
+    crate::{Engine, IndexMap},
     anyhow::{Context, Result, bail},
     arc_swap::ArcSwapOption,
     client::{AnkiClient, VERSION},
     request::{DeckName, ModelFieldName, ModelName},
-    std::{cmp, fmt::Write as _, sync::Arc},
-    wordbase::{Record, Term},
+    std::{cmp, sync::Arc},
 };
 
 mod client;
@@ -114,68 +115,70 @@ impl Engine {
         Ok(())
     }
 
-    pub async fn create_anki_note(&self, term: &Term, records: &[Record]) -> Result<()> {
-        let anki = self
-            .anki
-            .state
-            .load()
-            .clone()
-            .context("no Anki connection")?;
-        let profiles = self.profiles();
-        let current_profile = profiles
-            .by_id
-            .get(&profiles.current_id)
-            .context("no current profile")?;
+    // pub async fn create_anki_note(
+    //     &self,
+    //     profile_id: ProfileId,
+    //     term: &Term,
+    //     records: &[Record],
+    // ) -> Result<()> {
+    //     let anki = self
+    //         .anki
+    //         .state
+    //         .load()
+    //         .clone()
+    //         .context("no Anki connection")?;
+    //     let profiles = self.profiles();
+    //     let current_profile = profiles.by_id.get(&profile_id).unwrap();
 
-        // based on Lapis
-        let fields = [
-            ("Expr", "a"),
-            // ("Expression", headword(term)),
-            // ("ExpressionFurigana", term_ruby_plain(term)),
-            // ("ExpressionReading", reading(term)),
-            // ("MainDefinition", "to read"),
-            // ("Sentence", "a <b>読む</b> b"),
-            // ("SentenceAudio", ""),
-            // ("Picture", ""),
-            // ("Glossary", "glossary..."),
-            // ("IsWordAndSentenceCard", ""),
-            // ("IsClickCard", "x"),
-            // ("IsSentenceCard", ""),
-            // (
-            //     "Frequency",
-            //     r#"<ul style="text-align: left;"><li>JPDBv2㋕: 14122</li><li>BCCWJ:
-            // 65310</li></ul>"#, ),
-            // ("FreqSort", "22994"), // frequency harmonic mean
-        ];
+    //     // based on Lapis
+    //     let fields = [
+    //         ("Expr", "a"),
+    //         // ("Expression", headword(term)),
+    //         // ("ExpressionFurigana", term_ruby_plain(term)),
+    //         // ("ExpressionReading", reading(term)),
+    //         // ("MainDefinition", "to read"),
+    //         // ("Sentence", "a <b>読む</b> b"),
+    //         // ("SentenceAudio", ""),
+    //         // ("Picture", ""),
+    //         // ("Glossary", "glossary..."),
+    //         // ("IsWordAndSentenceCard", ""),
+    //         // ("IsClickCard", "x"),
+    //         // ("IsSentenceCard", ""),
+    //         // (
+    //         //     "Frequency",
+    //         //     r#"<ul style="text-align: left;"><li>JPDBv2㋕: 14122</li><li>BCCWJ:
+    //         // 65310</li></ul>"#, ),
+    //         // ("FreqSort", "22994"), // frequency harmonic mean
+    //     ];
 
-        let note = request::Note {
-            deck_name: current_profile
-                .config
-                .anki_deck
-                .as_ref()
-                .context("no deck name")?,
-            model_name: current_profile
-                .config
-                .anki_model
-                .as_ref()
-                .context("no model name")?,
-            fields: fields.iter().map(|(k, v)| (*k, *v)).collect(),
-            options: request::NoteOptions {
-                allow_duplicate: true,
-                duplicate_scope: None,
-                duplicate_scope_options: None,
-            },
-            tags: vec!["wordbase".into()],
-            audio: Vec::new(),
-            video: Vec::new(),
-            picture: Vec::new(),
-        };
+    //     let note = request::Note {
+    //         deck_name: current_profile
+    //             .config
+    //             .anki_deck
+    //             .as_ref()
+    //             .context("no deck name")?,
+    //         model_name: current_profile
+    //             .config
+    //             .anki_model
+    //             .as_ref()
+    //             .context("no model name")?,
+    //         fields: fields.iter().map(|(k, v)| (*k, *v)).collect(),
+    //         options: request::NoteOptions {
+    //             allow_duplicate: true,
+    //             duplicate_scope: None,
+    //             duplicate_scope_options: None,
+    //         },
+    //         tags: vec!["wordbase".into()],
+    //         audio: Vec::new(),
+    //         video: Vec::new(),
+    //         picture: Vec::new(),
+    //     };
 
-        println!("{}", serde_json::to_string(&note).unwrap());
+    //     println!("{}", serde_json::to_string(&note).unwrap());
 
-        let fields = anki.client.send(&request::AddNote { note }).await?;
-        Ok(())
-    }
+    //     let fields = anki.client.send(&request::AddNote { note }).await?;
+    //     Ok(())
+    // }
 }
 
 // #[derive(Debug)]
