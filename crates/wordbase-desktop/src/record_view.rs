@@ -1,6 +1,6 @@
 use {
     crate::{
-        APP_ID, AppEvent, SignalHandler, forward_events, html,
+        APP_ID, AppEvent, CURRENT_PROFILE, SignalHandler, forward_events, html,
         theme::{CUSTOM_THEMES, DEFAULT_THEME, ThemeName},
     },
     glib::clone,
@@ -142,7 +142,7 @@ impl AsyncComponent for Model {
 }
 
 fn update_view(model: &Model, root: &webkit6::WebView, sender: &AsyncComponentSender<Model>) {
-    let profile = model.engine.profiles().current.clone();
+    let profile = CURRENT_PROFILE.read().as_ref().cloned().unwrap();
     let settings = webkit6::Settings::new();
     settings.set_enable_page_cache(false);
     settings.set_enable_smooth_scrolling(false);
@@ -153,7 +153,7 @@ fn update_view(model: &Model, root: &webkit6::WebView, sender: &AsyncComponentSe
 
     let dictionaries = model.engine.dictionaries();
     let records_html = html::render_records(
-        &|id| dictionaries.by_id.get(&id).map(|dict| &**dict),
+        &|id| dictionaries.get(&id).map(|dict| &**dict),
         &model.records,
     );
 

@@ -3,7 +3,7 @@ mod ui;
 use {
     super::theme_row,
     crate::{
-        APP_EVENTS, AppEvent, forward_events, gettext,
+        APP_EVENTS, AppEvent, CURRENT_PROFILE, CURRENT_PROFILE_ID, forward_events, gettext,
         theme::{CUSTOM_THEMES, ThemeKey, ThemeName},
         toast_result,
     },
@@ -144,7 +144,7 @@ fn add_row(model: &mut Model, root: &ui::ThemeList, name: ThemeName) {
 }
 
 fn show_font(model: &Model, root: &ui::ThemeList) {
-    let profile = model.engine.profiles().current.clone();
+    let profile = CURRENT_PROFILE.read().as_ref().cloned().unwrap();
     if let Some(family) = &profile.config.font_family {
         let subtitle = format!(r#"<span face="{family}">{family}</span>"#);
         root.font_row().set_subtitle(&subtitle);
@@ -163,14 +163,19 @@ async fn set_font(model: &Model) -> Result<()> {
         return Ok(());
     };
 
-    let profiles = model.engine.profiles();
     model
         .engine
         .set_profile_config(
-            profiles.current_id,
+            CURRENT_PROFILE_ID.read().unwrap(),
             &ProfileConfig {
                 font_family: Some(font.family().name().to_string()),
-                ..profiles.current.config.clone()
+                ..CURRENT_PROFILE
+                    .read()
+                    .as_ref()
+                    .cloned()
+                    .unwrap()
+                    .config
+                    .clone()
             },
         )
         .await
@@ -184,10 +189,16 @@ async fn reset_font(model: &Model) -> Result<()> {
     model
         .engine
         .set_profile_config(
-            profiles.current_id,
+            CURRENT_PROFILE_ID.read().unwrap(),
             &ProfileConfig {
                 font_family: None,
-                ..profiles.current.config.clone()
+                ..CURRENT_PROFILE
+                    .read()
+                    .as_ref()
+                    .cloned()
+                    .unwrap()
+                    .config
+                    .clone()
             },
         )
         .await

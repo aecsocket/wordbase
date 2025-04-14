@@ -219,6 +219,17 @@ async fn init_engine() -> Result<(Engine, notify::RecommendedWatcher)> {
     let profile_id = *engine.profiles().keys().next().unwrap();
     *CURRENT_PROFILE_ID.write() = Some(profile_id);
     *CURRENT_PROFILE.write() = Some(engine.profiles().get(&profile_id).cloned().unwrap());
+    let engine2 = engine.clone();
+    tokio::spawn(async move {
+        let mut recv_events = APP_EVENTS.subscribe();
+        loop {
+            if let Ok(event) = recv_events.recv().await {
+                *CURRENT_PROFILE.write() =
+                    Some(engine2.profiles().get(&profile_id).cloned().unwrap());
+            }
+        }
+    });
+
     Ok((engine, theme_watcher))
 }
 

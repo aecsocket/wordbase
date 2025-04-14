@@ -1,5 +1,7 @@
 use {
-    crate::{APP_ID, AppEvent, forward_events, gettext, record_view, toast_result},
+    crate::{
+        APP_ID, AppEvent, CURRENT_PROFILE_ID, forward_events, gettext, record_view, toast_result,
+    },
     anyhow::{Context, Result},
     glib::clone,
     maud::Markup,
@@ -210,7 +212,12 @@ async fn query(model: &Model, root: &ui::Manager) -> Result<()> {
     let query = &model.last_query;
     let records = model
         .engine
-        .lookup(query, 0, record_view::SUPPORTED_RECORD_KINDS)
+        .lookup(
+            CURRENT_PROFILE_ID.read().unwrap(),
+            query,
+            0,
+            record_view::SUPPORTED_RECORD_KINDS,
+        )
         .await
         .context("failed to perform lookup")?;
 

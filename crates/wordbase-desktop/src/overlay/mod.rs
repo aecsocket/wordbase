@@ -2,8 +2,8 @@ mod ui;
 
 use {
     crate::{
-        APP_BROKER, APP_ID, AppEvent, AppMsg, CURRENT_PROFILE_ID, SignalHandler, forward_events,
-        gettext, platform::Platform, popup, record_view,
+        APP_BROKER, APP_ID, AppEvent, AppMsg, CURRENT_PROFILE, CURRENT_PROFILE_ID, SignalHandler,
+        forward_events, gettext, platform::Platform, popup, record_view,
     },
     foldhash::{HashMap, HashMapExt},
     glib::clone,
@@ -410,7 +410,8 @@ impl Overlay {
     fn update_font(&self, root: &ui::Overlay) {
         let mut font_desc = pango::FontDescription::new();
 
-        if let Some(family) = &self.engine.profiles().current.config.font_family {
+        let profile = CURRENT_PROFILE.read().as_ref().cloned().unwrap();
+        if let Some(family) = &profile.config.font_family {
             font_desc.set_family(family);
         }
 
