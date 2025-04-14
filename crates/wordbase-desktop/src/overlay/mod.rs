@@ -2,8 +2,8 @@ mod ui;
 
 use {
     crate::{
-        APP_BROKER, APP_ID, AppEvent, AppMsg, SignalHandler, forward_events, gettext,
-        platform::Platform, popup, record_view,
+        APP_BROKER, APP_ID, AppEvent, AppMsg, CURRENT_PROFILE_ID, SignalHandler, forward_events,
+        gettext, platform::Platform, popup, record_view,
     },
     foldhash::{HashMap, HashMapExt},
     glib::clone,
@@ -331,7 +331,12 @@ impl AsyncComponent for Overlay {
 
                 let Ok(records) = self
                     .engine
-                    .lookup(text, byte_index, record_view::SUPPORTED_RECORD_KINDS)
+                    .lookup(
+                        CURRENT_PROFILE_ID.read().unwrap(),
+                        text,
+                        byte_index,
+                        record_view::SUPPORTED_RECORD_KINDS,
+                    )
                     .await
                 else {
                     return;

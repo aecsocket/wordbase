@@ -1,6 +1,9 @@
 use {
     super::ui,
-    crate::{APP_EVENTS, AppEvent, forward_events, gettext, toast_result},
+    crate::{
+        APP_EVENTS, AppEvent, CURRENT_PROFILE, CURRENT_PROFILE_ID, forward_events, gettext,
+        toast_result,
+    },
     anyhow::{Context, Result},
     glib::clone,
     relm4::{
@@ -180,26 +183,38 @@ impl AsyncComponent for Model {
 }
 
 fn sync(model: &mut Model) {
-    if let Some(dictionary) = model.engine.dictionaries().by_id.get(&model.dictionary.id) {
+    if let Some(dictionary) = model.engine.dictionaries().get(&model.dictionary.id) {
         model.dictionary = dictionary.clone();
     }
 }
 
 fn show_enabled(model: &Model, root: &ui::DictionaryRow) {
-    root.enabled().set_active(model.dictionary.enabled);
+    let enabled = CURRENT_PROFILE
+        .read()
+        .as_ref()
+        .unwrap()
+        .enabled_dictionaries
+        .contains(&model.dictionary.id);
+    root.enabled().set_active(enabled);
 }
 
 fn show_sorting(model: &Model, root: &ui::DictionaryRow) {
     let is_sorting =
-        model.engine.profiles().current.sorting_dictionary == Some(model.dictionary.id);
+        CURRENT_PROFILE.read().as_ref().unwrap().sorting_dictionary == Some(model.dictionary.id);
     root.is_sorting().set_visible(is_sorting);
 }
 
 async fn set_enabled(model: &Model, enabled: bool) -> Result<()> {
     if enabled {
-        model.engine.enable_dictionary(model.dictionary.id).await?;
+        model
+            .engine
+            .enable_dictionary(CURRENT_PROFILE_ID.read().unwrap(), model.dictionary.id)
+            .await?;
     } else {
-        model.engine.disable_dictionary(model.dictionary.id).await?;
+        model
+            .engine
+            .disable_dictionary(CURRENT_PROFILE_ID.read().unwrap(), model.dictionary.id)
+            .await?;
     }
     _ = APP_EVENTS.send(AppEvent::DictionaryEnabledSet(model.dictionary.id, enabled));
     Ok(())
@@ -209,11 +224,17 @@ async fn set_sorting(model: &Model, sorting: bool) -> Result<()> {
     if sorting {
         model
             .engine
-            .set_sorting_dictionary(Some(model.dictionary.id))
+            .set_sorting_dictionary(
+                CURRENT_PROFILE_ID.read().unwrap(),
+                Some(model.dictionary.id),
+            )
             .await?;
         _ = APP_EVENTS.send(AppEvent::DictionarySortingSet(Some(model.dictionary.id)));
     } else {
-        model.engine.set_sorting_dictionary(None).await?;
+        model
+            .engine
+            .set_sorting_dictionary(CURRENT_PROFILE_ID.read().unwrap(), None)
+            .await?;
         _ = APP_EVENTS.send(AppEvent::DictionarySortingSet(None));
     }
     Ok(())

@@ -25,7 +25,7 @@ use {
     directories::ProjectDirs,
     platform::Platform,
     relm4::{
-        MessageBroker,
+        MessageBroker, SharedState,
         adw::{self, gio, prelude::*},
         loading_widgets::LoadingWidgets,
         prelude::*,
@@ -37,13 +37,16 @@ use {
     tracing::{error, info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
     wordbase::{DictionaryId, ProfileId},
-    wordbase_engine::Engine,
+    wordbase_engine::{Engine, profile::ProfileState},
 };
 
 const APP_ID: &str = "io.github.aecsocket.Wordbase";
 static APP_BROKER: MessageBroker<AppMsg> = MessageBroker::new();
 static APP_EVENTS: LazyLock<broadcast::Sender<AppEvent>> =
     LazyLock::new(|| broadcast::channel(CHANNEL_BUF_CAP).0);
+
+static CURRENT_PROFILE_ID: SharedState<Option<ProfileId>> = SharedState::new();
+static CURRENT_PROFILE: SharedState<Option<Arc<ProfileState>>> = SharedState::new();
 
 #[derive(Debug, Clone)]
 pub enum AppEvent {
@@ -213,6 +216,9 @@ async fn init_engine() -> Result<(Engine, notify::RecommendedWatcher)> {
         .await
         .context("failed to start watching theme files")?;
 
+    let profile_id = *engine.profiles().keys().next().unwrap();
+    *CURRENT_PROFILE_ID.write() = Some(profile_id);
+    *CURRENT_PROFILE.write() = Some(engine.profiles().get(&profile_id).cloned().unwrap());
     Ok((engine, theme_watcher))
 }
 
@@ -221,28 +227,28 @@ fn setup_actions(engine: Engine) {
 
     app.set_accels_for_action("win.copy-html", &["<Shift><Ctrl>H"]);
 
-    let action = gio::ActionEntry::builder(ACTION_PROFILE)
-        .parameter_type(Some(glib::VariantTy::STRING))
-        .state(format!("{}", engine.profiles().current_id.0).to_variant())
-        .activate(move |_, action, param| {
-            let profile_id = param
-                .expect("activation should have parameter")
-                .get::<String>()
-                .expect("parameter should be a string")
-                .parse::<i64>()
-                .expect("parameter should be a valid integer");
-            action.set_state(&format!("{profile_id}").into());
+    // let action = gio::ActionEntry::builder(ACTION_PROFILE)
+    //     .parameter_type(Some(glib::VariantTy::STRING))
+    //     .state(format!("{}", engine.profiles().current_id.0).to_variant())
+    //     .activate(move |_, action, param| {
+    //         let profile_id = param
+    //             .expect("activation should have parameter")
+    //             .get::<String>()
+    //             .expect("parameter should be a string")
+    //             .parse::<i64>()
+    //             .expect("parameter should be a valid integer");
+    //         action.set_state(&format!("{profile_id}").into());
 
-            let engine = engine.clone();
-            glib::spawn_future_local(async move {
-                if let Err(err) = engine.set_current_profile(ProfileId(profile_id)).await {
-                    // todo: app-level notif toast and error handling
-                    error!("Failed to set current profile: {err:?}");
-                }
-            });
-        })
-        .build();
-    app.add_action_entries([action]);
+    //         let engine = engine.clone();
+    //         glib::spawn_future_local(async move {
+    //             if let Err(err) = engine.set_current_profile(ProfileId(profile_id)).await {
+    //                 // todo: app-level notif toast and error handling
+    //                 error!("Failed to set current profile: {err:?}");
+    //             }
+    //         });
+    //     })
+    //     .build();
+    // app.add_action_entries([action]);
 }
 
 const CHANNEL_BUF_CAP: usize = 16;

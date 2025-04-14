@@ -57,7 +57,7 @@ impl AsyncComponent for Model {
             window,
             toaster,
         };
-        for dictionary in model.engine.dictionaries().by_id.values() {
+        for dictionary in model.engine.dictionaries().values() {
             add_row(&mut model, &root, dictionary.clone());
         }
         AsyncComponentParts { model, widgets: () }

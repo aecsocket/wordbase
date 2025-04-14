@@ -2,8 +2,8 @@ mod ui;
 
 use {
     crate::{
-        ACTION_PROFILE, APP_BROKER, APP_ID, AppEvent, AppMsg, forward_events, gettext,
-        platform::Platform, record_view,
+        ACTION_PROFILE, APP_BROKER, APP_ID, AppEvent, AppMsg, CURRENT_PROFILE_ID, forward_events,
+        gettext, platform::Platform, record_view,
     },
     anyhow::Result,
     glib::clone,
@@ -119,18 +119,18 @@ impl AsyncComponent for Model {
     }
 
     fn update_view(&self, widgets: &mut Self::Widgets, _sender: AsyncComponentSender<Self>) {
-        widgets.profiles_menu().remove_all();
-        for (profile_id, profile) in &self.engine.profiles().by_id {
-            let label = profile
-                .meta
-                .name
-                .as_ref()
-                .map_or_else(|| gettext("Default Profile"), |s| s.as_str());
-            widgets.profiles_menu().append(
-                Some(label),
-                Some(&format!("app.{ACTION_PROFILE}::{}", profile_id.0)),
-            );
-        }
+        // widgets.profiles_menu().remove_all();
+        // for (profile_id, profile) in &self.engine.profiles().by_id {
+        //     let label = profile
+        //         .meta
+        //         .name
+        //         .as_ref()
+        //         .map_or_else(|| gettext("Default Profile"), |s| s.as_str());
+        //     widgets.profiles_menu().append(
+        //         Some(label),
+        //         Some(&format!("app.{ACTION_PROFILE}::{}", profile_id.0)),
+        //     );
+        // }
     }
 
     async fn update_with_view(
@@ -185,7 +185,12 @@ impl AsyncComponent for Model {
                 };
                 let Ok(records) = self
                     .engine
-                    .lookup(query, 0, record_view::SUPPORTED_RECORD_KINDS)
+                    .lookup(
+                        CURRENT_PROFILE_ID.read().unwrap(),
+                        query,
+                        0,
+                        record_view::SUPPORTED_RECORD_KINDS,
+                    )
                     .await
                 else {
                     return;
