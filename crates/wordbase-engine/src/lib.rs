@@ -13,6 +13,7 @@ pub mod texthook;
 
 use std::path::{Path, PathBuf};
 
+use derive_more::{Display, Error};
 use directories::ProjectDirs;
 use tracing::info;
 pub use wordbase;
@@ -99,5 +100,9 @@ pub fn data_dir() -> Result<PathBuf> {
         .context("failed to get default app directories")?;
     Ok(dirs.data_dir().to_path_buf())
 }
+
+#[derive(Debug, Clone, Display, Error)]
+#[display("not found")]
+pub struct NotFound;
 
 const CHANNEL_BUF_CAP: usize = 4;

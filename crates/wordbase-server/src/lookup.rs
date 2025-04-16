@@ -1,30 +1,88 @@
-use poem_openapi::{ApiResponse, Object, payload::Json, types::Any};
+use poem::Result;
+use poem_openapi::{
+    Object, Union,
+    types::{Any, Example},
+};
 use serde::{Deserialize, Serialize};
-use wordbase::{DictionaryId, FrequencyValue, ProfileId, Record, RecordId, RecordKind};
+use wordbase::{DictionaryId, ProfileId, Record, RecordId, RecordKind};
 use wordbase_engine::Engine;
 
-pub async fn deinflect(engine: &Engine, req: Json<DeinflectRequest>) -> DeinflectResponse {
-    DeinflectResponse::Ok(Json(
-        engine
-            .deinflect(&req.text)
-            .into_iter()
-            .map(|v| Deinflection {
-                lemma: v.lemma.into_owned(),
-                scan_len: v.scan_len,
-            })
-            .collect(),
-    ))
+pub async fn expr(engine: &Engine, req: &ExprRequest) -> Result<Vec<RecordLookup>> {
+    Ok(engine
+        .lookup(req.profile_id, &req.sentence, req.cursor, &req.record_kinds)
+        .await?
+        .into_iter()
+        .map(RecordLookup::from)
+        .collect())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Object)]
+#[oai(example)]
+pub struct ExprRequest {
+    profile_id: ProfileId,
+    sentence: String,
+    cursor: usize,
+    record_kinds: Vec<RecordKind>,
+}
+
+impl Example for ExprRequest {
+    fn example() -> Self {
+        Self {
+            profile_id: ProfileId(1),
+            sentence: "本を読んだ".into(),
+            cursor: "本を".len(),
+            record_kinds: vec![RecordKind::YomitanGlossary],
+        }
+    }
+}
+
+pub async fn lemma(engine: &Engine, req: &LemmaRequest) -> Result<Vec<RecordLookup>> {
+    Ok(engine
+        .lookup_lemma(req.profile_id, &req.lemma, &req.record_kinds)
+        .await?
+        .into_iter()
+        .map(RecordLookup::from)
+        .collect())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Object)]
+#[oai(example)]
+pub struct LemmaRequest {
+    profile_id: ProfileId,
+    lemma: String,
+    record_kinds: Vec<RecordKind>,
+}
+
+impl Example for LemmaRequest {
+    fn example() -> Self {
+        Self {
+            profile_id: ProfileId(1),
+            lemma: "読む".into(),
+            record_kinds: vec![RecordKind::YomitanGlossary],
+        }
+    }
+}
+
+pub async fn deinflect(engine: &Engine, req: &DeinflectRequest) -> Vec<Deinflection> {
+    engine
+        .deinflect(&req.text)
+        .into_iter()
+        .map(Deinflection::from)
+        .collect()
 }
 
 #[derive(Debug, Clone, Object)]
+#[oai(example)]
 pub struct DeinflectRequest {
     text: String,
 }
 
-#[derive(Debug, Clone, ApiResponse)]
-pub enum DeinflectResponse {
-    #[oai(status = 200)]
-    Ok(Json<Vec<Deinflection>>),
+impl Example for DeinflectRequest {
+    fn example() -> Self {
+        Self {
+            text: "読まなかった".into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Object)]
@@ -33,29 +91,13 @@ pub struct Deinflection {
     scan_len: usize,
 }
 
-pub async fn lemma(engine: &Engine, req: Json<LemmaRequest>) -> RecordsResponse {
-    RecordsResponse::Ok(Json(
-        engine
-            .lookup_lemma(req.profile_id, &req.lemma, &req.record_kinds)
-            .await
-            .unwrap()
-            .into_iter()
-            .map(RecordLookup::from)
-            .collect(),
-    ))
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Object)]
-pub struct LemmaRequest {
-    profile_id: ProfileId,
-    lemma: String,
-    record_kinds: Vec<RecordKind>,
-}
-
-#[derive(Debug, Clone, ApiResponse)]
-pub enum RecordsResponse {
-    #[oai(status = 200)]
-    Ok(Json<Vec<RecordLookup>>),
+impl From<wordbase_engine::deinflect::Deinflection<'_>> for Deinflection {
+    fn from(value: wordbase_engine::deinflect::Deinflection) -> Self {
+        Self {
+            lemma: value.lemma.into_owned(),
+            scan_len: value.scan_len,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Object)]
@@ -77,8 +119,8 @@ impl From<wordbase::RecordLookup> for RecordLookup {
             term: value.term.into(),
             record_id: value.record_id,
             record: Any(value.record),
-            profile_sorting_frequency: value.profile_sorting_frequency,
-            source_sorting_frequency: value.source_sorting_frequency,
+            profile_sorting_frequency: value.profile_sorting_frequency.map(FrequencyValue::from),
+            source_sorting_frequency: value.source_sorting_frequency.map(FrequencyValue::from),
         }
     }
 }
@@ -98,22 +140,30 @@ impl From<wordbase::Term> for Term {
     }
 }
 
-pub async fn expr(engine: &Engine, req: Json<ExprRequest>) -> RecordsResponse {
-    RecordsResponse::Ok(Json(
-        engine
-            .lookup(req.profile_id, &req.sentence, req.cursor, &req.record_kinds)
-            .await
-            .unwrap()
-            .into_iter()
-            .map(RecordLookup::from)
-            .collect(),
-    ))
+#[derive(Debug, Clone, Serialize, Deserialize, Union)]
+#[oai(discriminator_name = "kind")]
+pub enum FrequencyValue {
+    Rank(FrequencyRank),
+    Occurrence(FrequencyOccurrence),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Object)]
-pub struct ExprRequest {
-    profile_id: ProfileId,
-    sentence: String,
-    cursor: usize,
-    record_kinds: Vec<RecordKind>,
+pub struct FrequencyRank {
+    pub rank: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Object)]
+pub struct FrequencyOccurrence {
+    pub occurrence: i64,
+}
+
+impl From<wordbase::FrequencyValue> for FrequencyValue {
+    fn from(value: wordbase::FrequencyValue) -> Self {
+        match value {
+            wordbase::FrequencyValue::Rank(rank) => Self::Rank(FrequencyRank { rank }),
+            wordbase::FrequencyValue::Occurrence(occurrence) => {
+                Self::Occurrence(FrequencyOccurrence { occurrence })
+            }
+        }
+    }
 }

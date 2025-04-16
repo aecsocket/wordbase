@@ -43,6 +43,7 @@ anyhow               = { version = "1.0" }
 arc-swap             = { version = "1.7" }
 ascii_table          = { version = "4.0" }
 async-compression    = { version = "0.4" }
+async-stream         = { version = "0.3.6" }
 async-tar            = { version = "0.5" }
 async_zip            = { version = "0.0.17" }
 base64               = { version = "0.22" }

@@ -29,6 +29,7 @@ macro_rules! for_kinds { ($macro:ident) => { $macro!(
 
 macro_rules! define_types { ($($dict_kind:ident($dict_path:ident) { $($record_kind:ident),* $(,)? }),* $(,)?) => { paste::paste! {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Enum))]
 #[repr(u32)]
 #[non_exhaustive]
 pub enum DictionaryKind {
@@ -112,6 +113,7 @@ pub trait RecordType:
 pub struct RecordId(pub i64);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
 #[serde(deny_unknown_fields)]
 pub struct Dictionary {
     /// Unique identifier for this dictionary in the database.
@@ -128,6 +130,7 @@ pub struct Dictionary {
 
 /// Metadata for a [`Dictionary`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
 #[non_exhaustive]
 pub struct DictionaryMeta {
     /// What kind of dictionary this was imported from.
@@ -173,7 +176,6 @@ pub enum Term {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Union))]
 pub enum FrequencyValue {
     Rank(i64),
     Occurrence(i64),

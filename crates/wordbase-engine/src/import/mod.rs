@@ -140,7 +140,7 @@ impl Engine {
         &self,
         archive: Bytes,
         send_tracker: oneshot::Sender<ImportStarted>,
-    ) -> Result<(), ImportError> {
+    ) -> Result<DictionaryId, ImportError> {
         debug!("Attempting to determine dictionary kind");
         let kind = kind_of(&archive).await.map_err(ImportError::GetKind)?;
         debug!("Importing as {kind:?} dictionary");
@@ -164,10 +164,10 @@ impl Engine {
         }
 
         _ = send_tracker.send(tracker);
-        import
+        let dictionary_id = import
             .await
             .map_err(|source| ImportError::Import { kind, source })?;
-        Ok(())
+        Ok(dictionary_id)
     }
 }
 

@@ -1,5 +1,5 @@
 use {
-    crate::{Engine, IndexMap},
+    crate::{Engine, IndexMap, NotFound},
     anyhow::{Context, Result, bail},
     derive_more::Deref,
     futures::TryStreamExt,
@@ -49,7 +49,7 @@ impl Engine {
         .execute(&self.db)
         .await?;
         if result.rows_affected() == 0 {
-            bail!("dictionary not found");
+            bail!(NotFound);
         }
 
         self.sync_dictionaries().await?;
@@ -61,7 +61,7 @@ impl Engine {
             .execute(&self.db)
             .await?;
         if result.rows_affected() == 0 {
-            bail!("dictionary not found");
+            bail!(NotFound);
         }
 
         self.sync_dictionaries().await?;
