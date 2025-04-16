@@ -6,17 +6,18 @@
 
 mod dict;
 mod lookup;
+mod profile;
 
 use {
-    futures::{FutureExt, stream::BoxStream},
-    poem::{EndpointExt, Result, http::StatusCode, listener::TcpListener, web::Path},
+    futures::stream::BoxStream,
+    poem::{EndpointExt, Response, Result, http::StatusCode, listener::TcpListener, web::Path},
     poem_openapi::{
         OpenApi, OpenApiService,
         payload::{EventStream, Json},
     },
     std::sync::Arc,
     tokio::net::ToSocketAddrs,
-    wordbase::{Dictionary, DictionaryId},
+    wordbase::{Dictionary, DictionaryId, Profile, ProfileId},
     wordbase_engine::{Engine, NotFound},
 };
 
@@ -31,7 +32,11 @@ pub async fn run(engine: Engine, addr: impl ToSocketAddrs + Send) -> anyhow::Res
     let app = poem::Route::new()
         .nest("/", service)
         .nest("/docs", ui)
-        .catch_error(|_: NotFound| async move { StatusCode::NOT_FOUND });
+        .catch_error(|_: NotFound| async move {
+            Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body("not found")
+        });
 
     poem::Server::new(TcpListener::bind(addr)).run(app).await?;
     Ok(())
@@ -54,7 +59,7 @@ impl Api {
     #[oai(path = "/lookup/lemma", method = "post")]
     async fn lookup_lemma(
         &self,
-        req: Json<lookup::LemmaRequest>,
+        req: Json<lookup::Lemma>,
     ) -> Result<Json<Vec<lookup::RecordLookup>>> {
         lookup::lemma(&self.engine, &req).await.map(Json)
     }
@@ -62,7 +67,7 @@ impl Api {
     #[oai(path = "/lookup/deinflect", method = "post")]
     async fn lookup_deinflect(
         &self,
-        req: Json<lookup::DeinflectRequest>,
+        req: Json<lookup::Deinflect>,
     ) -> Json<Vec<lookup::Deinflection>> {
         Json(lookup::deinflect(&self.engine, &req).await)
     }
@@ -77,12 +82,17 @@ impl Api {
         dict::find(&self.engine, *dict_id).await.map(Json)
     }
 
+    #[oai(path = "/dict/:dict_id", method = "delete")]
+    async fn dict_delete(&self, dict_id: Path<DictionaryId>) -> Result<()> {
+        dict::delete(&self.engine, *dict_id).await
+    }
+
     #[oai(path = "/dict/import", method = "post")]
     async fn dict_import(
         &self,
         req: dict::Import,
     ) -> EventStream<BoxStream<'static, dict::ImportEvent>> {
-        dict::import(&self.engine, req).boxed().await
+        dict::import(&self.engine, req).await
     }
 
     #[oai(path = "/dict/:dict_id/position", method = "post")]
@@ -112,8 +122,26 @@ impl Api {
         dict::disable(&self.engine, *dict_id, &req).await
     }
 
-    #[oai(path = "/dict/:dict_id", method = "delete")]
-    async fn dict_delete(&self, dict_id: Path<DictionaryId>) -> Result<()> {
-        dict::delete(&self.engine, *dict_id).await
+    #[oai(path = "/profile", method = "get")]
+    async fn profile_index(&self) -> Json<Vec<Profile>> {
+        Json(profile::index(&self.engine).await)
+    }
+
+    #[oai(path = "/profile/:profile_id", method = "get")]
+    async fn profile_find(&self, profile_id: Path<ProfileId>) -> Result<Json<Profile>> {
+        profile::find(&self.engine, *profile_id).await.map(Json)
+    }
+
+    #[oai(path = "/profile/:profile_id", method = "delete")]
+    async fn profile_delete(&self, profile_id: Path<ProfileId>) -> Result<()> {
+        profile::delete(&self.engine, *profile_id).await
+    }
+
+    #[oai(path = "/profile/copy", method = "post")]
+    async fn profile_copy(
+        &self,
+        req: Json<profile::CopyRequest>,
+    ) -> Result<Json<profile::CopyResponse>> {
+        profile::copy(&self.engine, &req).await.map(Json)
     }
 }

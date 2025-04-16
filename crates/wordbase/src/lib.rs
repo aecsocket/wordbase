@@ -190,6 +190,7 @@ impl FrequencyValue {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
 pub struct Profile {
     /// Unique identifier for this profile in the database.
     pub id: ProfileId,
@@ -209,6 +210,7 @@ pub struct Profile {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
 pub struct ProfileMeta {
     /// Name of the profile.
     ///
@@ -229,6 +231,11 @@ pub struct ProfileMeta {
 pub struct ProfileId(pub i64);
 
 #[derive(Display, Clone, PartialEq, Eq, Hash, Deref, Serialize)]
+#[cfg_attr(
+    feature = "poem-openapi",
+    derive(poem_openapi::NewType),
+    oai(from_json = false, from_parameter = false, from_multipart = false)
+)]
 pub struct NormString(String);
 
 #[doc(hidden)]

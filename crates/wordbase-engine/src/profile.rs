@@ -1,5 +1,5 @@
 use {
-    crate::{Engine, IndexMap},
+    crate::{Engine, IndexMap, NotFound},
     anyhow::{Context, Result, bail},
     derive_more::Deref,
     foldhash::HashMap,
@@ -193,7 +193,7 @@ impl Engine {
             .execute(&self.db)
             .await?;
         if result.rows_affected() == 0 {
-            bail!("profile not found");
+            bail!(NotFound);
         }
 
         self.sync_profiles().await?;

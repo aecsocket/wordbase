@@ -279,6 +279,18 @@ impl TermPart for &str {
     }
 }
 
+#[cfg(feature = "poem-openapi")]
+const _: () = {
+    use poem_openapi::types::{ParseError, ParseFromJSON, ParseResult};
+
+    impl ParseFromJSON for NormString {
+        fn parse_from_json(value: Option<serde_json::Value>) -> ParseResult<Self> {
+            let raw = String::parse_from_json(value).map_err(ParseError::propagate)?;
+            Self::new(raw).ok_or_else(|| ParseError::custom("string must be non-empty"))
+        }
+    }
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;

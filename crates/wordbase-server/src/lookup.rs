@@ -36,7 +36,7 @@ impl Example for ExprRequest {
     }
 }
 
-pub async fn lemma(engine: &Engine, req: &LemmaRequest) -> Result<Vec<RecordLookup>> {
+pub async fn lemma(engine: &Engine, req: &Lemma) -> Result<Vec<RecordLookup>> {
     Ok(engine
         .lookup_lemma(req.profile_id, &req.lemma, &req.record_kinds)
         .await?
@@ -47,13 +47,13 @@ pub async fn lemma(engine: &Engine, req: &LemmaRequest) -> Result<Vec<RecordLook
 
 #[derive(Debug, Clone, Serialize, Deserialize, Object)]
 #[oai(example)]
-pub struct LemmaRequest {
+pub struct Lemma {
     profile_id: ProfileId,
     lemma: String,
     record_kinds: Vec<RecordKind>,
 }
 
-impl Example for LemmaRequest {
+impl Example for Lemma {
     fn example() -> Self {
         Self {
             profile_id: ProfileId(1),
@@ -63,7 +63,7 @@ impl Example for LemmaRequest {
     }
 }
 
-pub async fn deinflect(engine: &Engine, req: &DeinflectRequest) -> Vec<Deinflection> {
+pub async fn deinflect(engine: &Engine, req: &Deinflect) -> Vec<Deinflection> {
     engine
         .deinflect(&req.text)
         .into_iter()
@@ -73,11 +73,11 @@ pub async fn deinflect(engine: &Engine, req: &DeinflectRequest) -> Vec<Deinflect
 
 #[derive(Debug, Clone, Object)]
 #[oai(example)]
-pub struct DeinflectRequest {
+pub struct Deinflect {
     text: String,
 }
 
-impl Example for DeinflectRequest {
+impl Example for Deinflect {
     fn example() -> Self {
         Self {
             text: "読まなかった".into(),

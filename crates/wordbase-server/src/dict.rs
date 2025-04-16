@@ -26,6 +26,11 @@ pub async fn find(engine: &Engine, dict_id: DictionaryId) -> Result<Arc<Dictiona
         .clone())
 }
 
+pub async fn delete(engine: &Engine, dict_id: DictionaryId) -> Result<()> {
+    engine.remove_dictionary(dict_id).await?;
+    Ok(())
+}
+
 pub async fn import(engine: &Engine, req: Import) -> EventStream<BoxStream<'static, ImportEvent>> {
     let engine = engine.clone();
     let stream = async_stream::stream! {
@@ -143,9 +148,4 @@ impl Example for ToggleEnable {
             profile_id: ProfileId(1),
         }
     }
-}
-
-pub async fn delete(engine: &Engine, dict_id: DictionaryId) -> Result<()> {
-    engine.remove_dictionary(dict_id).await?;
-    Ok(())
 }
