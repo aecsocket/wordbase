@@ -44,6 +44,7 @@ impl DictionaryKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Enum))]
 #[repr(u32)]
 #[non_exhaustive]
 pub enum RecordKind {
@@ -107,6 +108,7 @@ pub trait RecordType:
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::NewType))]
 pub struct RecordId(pub i64);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -152,6 +154,7 @@ pub struct DictionaryMeta {
 
 /// Opaque and unique identifier for a [`Dictionary`] in the engine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::NewType))]
 pub struct DictionaryId(pub i64);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -170,6 +173,7 @@ pub enum Term {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Union))]
 pub enum FrequencyValue {
     Rank(i64),
     Occurrence(i64),
@@ -219,6 +223,7 @@ pub struct ProfileMeta {
 
 /// Opaque and unique identifier for a [`Profile`] in the engine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::NewType))]
 pub struct ProfileId(pub i64);
 
 #[derive(Display, Clone, PartialEq, Eq, Hash, Deref, Serialize)]

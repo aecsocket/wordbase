@@ -207,8 +207,7 @@ async fn init_engine() -> Result<(Engine, notify::RecommendedWatcher)> {
         .await
         .context("failed to create data directory")?;
 
-    let db_path = data_path.join("wordbase.db");
-    let engine = Engine::new(db_path)
+    let engine = Engine::new(wordbase_engine::data_dir()?)
         .await
         .context("failed to create engine")?;
 

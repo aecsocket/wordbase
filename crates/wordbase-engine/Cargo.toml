@@ -17,6 +17,9 @@ workspace = true
 [package.metadata.docs.rs]
 all-features = true
 
+[features]
+poem-openapi = ["dep:poem-openapi"]
+
 [dependencies]
 wordbase = { workspace = true, features = ["render-html"] }
 
@@ -27,6 +30,7 @@ async-tar            = { workspace = true }
 async_zip            = { workspace = true, features = ["deflate"] }
 blocking             = { workspace = true }
 bytes                = { workspace = true }
+directories          = { workspace = true }
 either               = { workspace = true }
 foldhash             = { workspace = true }
 futures              = { workspace = true }
@@ -35,6 +39,7 @@ itertools            = { workspace = true }
 lindera              = { workspace = true, features = ["unidic"] }
 maud                 = { workspace = true }
 paste                = { workspace = true }
+poem-openapi         = { workspace = true, optional = true }
 rayon                = { workspace = true }
 regex                = { workspace = true }
 reqwest              = { workspace = true, default-features = true, features = ["json"] }

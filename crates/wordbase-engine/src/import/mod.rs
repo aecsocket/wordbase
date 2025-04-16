@@ -14,7 +14,9 @@ use {
     },
     tokio::sync::{Mutex, mpsc, oneshot},
     tracing::debug,
-    wordbase::{DictionaryId, DictionaryKind, DictionaryMeta, FrequencyValue, RecordType, Term},
+    wordbase::{
+        DictionaryId, DictionaryKind, DictionaryMeta, FrequencyValue, RecordId, RecordType, Term,
+    },
 };
 
 static FORMATS: LazyLock<HashMap<DictionaryKind, Arc<dyn ImportKind>>> = LazyLock::new(|| {
@@ -168,9 +170,6 @@ impl Engine {
         Ok(())
     }
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct RecordId(pub i64);
 
 async fn insert_record<R: RecordType>(
     tx: &mut Transaction<'_, Sqlite>,

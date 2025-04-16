@@ -7,9 +7,8 @@ mod profile;
 
 use {
     anyhow::{Context, Result},
-    directories::ProjectDirs,
     std::path::PathBuf,
-    tracing::{info, level_filters::LevelFilter},
+    tracing::level_filters::LevelFilter,
     tracing_subscriber::EnvFilter,
     wordbase::{DictionaryId, ProfileId},
     wordbase_engine::Engine,
@@ -18,7 +17,7 @@ use {
 #[derive(Debug, clap::Parser)]
 struct Args {
     #[arg(long)]
-    db_path: Option<PathBuf>,
+    data_dir: Option<PathBuf>,
     #[arg(long, short)]
     profile: Option<i64>,
     #[command(subcommand)]
@@ -183,17 +182,13 @@ async fn main() -> Result<()> {
         .init();
     let args = <Args as clap::Parser>::parse();
 
-    let db_path = if let Some(db_path) = args.db_path {
-        db_path
+    let data_dir = if let Some(data_dir) = args.data_dir {
+        data_dir
     } else {
-        ProjectDirs::from("io.github", "aecsocket", "Wordbase")
-            .context("failed to get default app directories")?
-            .data_dir()
-            .join("wordbase.db")
+        wordbase_engine::data_dir()?
     };
-    info!("Using {db_path:?} as database path");
 
-    let engine = Engine::new(db_path)
+    let engine = Engine::new(data_dir)
         .await
         .context("failed to create engine")?;
     let require_profile = || {

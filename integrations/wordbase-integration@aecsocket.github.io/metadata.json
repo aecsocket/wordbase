@@ -4,5 +4,5 @@
   "description": "Controls window manager functions on behalf of the Wordbase app",
   "url": "https://github.com/aecsocket/wordbase",
   "settings-schema": "org.gnome.shell.extensions.wordbase-integration",
-  "shell-version": ["47"]
+  "shell-version": ["48"]
 }

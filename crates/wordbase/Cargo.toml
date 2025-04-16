@@ -18,16 +18,18 @@ workspace = true
 all-features = true
 
 [features]
-render-html = ["dep:maud", "dep:html-escape"]
+poem-openapi = ["dep:poem-openapi"]
+render-html  = ["dep:maud", "dep:html-escape"]
 
 [dependencies]
-bytes       = { workspace = true, features = ["serde"] }
-foldhash    = { workspace = true }
-html-escape = { workspace = true, optional = true }
-maud        = { workspace = true, optional = true }
-paste       = { workspace = true }
-serde       = { workspace = true, features = ["derive"] }
-serde_json  = { workspace = true }
+bytes        = { workspace = true, features = ["serde"] }
+foldhash     = { workspace = true }
+html-escape  = { workspace = true, optional = true }
+maud         = { workspace = true, optional = true }
+paste        = { workspace = true }
+poem-openapi = { workspace = true, optional = true }
+serde        = { workspace = true, features = ["derive"] }
+serde_json   = { workspace = true }
 
 derive_more = { workspace = true, features = [
   "from",

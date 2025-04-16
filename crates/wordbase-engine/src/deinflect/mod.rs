@@ -3,6 +3,7 @@ mod lindera;
 use {
     crate::{Engine, IndexSet},
     anyhow::{Context, Result},
+    serde::{Deserialize, Serialize},
     std::{
         borrow::Cow,
         hash::{Hash, Hasher},
@@ -41,9 +42,9 @@ impl Engine {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Deinflection<'a> {
-    pub lemma: Cow<'a, str>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Deinflection<'s> {
+    pub lemma: Cow<'s, str>,
     pub scan_len: usize,
 }
 

@@ -11,6 +11,10 @@ pub mod lookup;
 pub mod profile;
 pub mod texthook;
 
+use std::path::{Path, PathBuf};
+
+use directories::ProjectDirs;
+use tracing::info;
 pub use wordbase;
 use {
     anki::Anki,
@@ -22,7 +26,7 @@ use {
     import::Imports,
     profile::Profiles,
     sqlx::{Pool, Sqlite},
-    std::{path::Path, sync::Arc},
+    std::sync::Arc,
     texthook::Texthookers,
     tokio::sync::broadcast,
     wordbase::TexthookerSentence,
@@ -54,8 +58,12 @@ pub type IndexMap<K, V> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
 pub type IndexSet<T> = indexmap::IndexSet<T, foldhash::fast::RandomState>;
 
 impl Engine {
-    pub async fn new(db_path: impl AsRef<Path>) -> Result<Self> {
-        let db = db::setup(db_path.as_ref()).await?;
+    pub async fn new(data_dir: impl AsRef<Path>) -> Result<Self> {
+        let data_dir = data_dir.as_ref();
+        info!("Creating engine using {data_dir:?} as data directory");
+
+        let db_path = data_dir.join("wordbase.db");
+        let db = db::setup(&db_path).await?;
         let (send_event, _) = broadcast::channel(CHANNEL_BUF_CAP);
         let engine = Self(Arc::new(Inner {
             profiles: ArcSwap::from_pointee(
@@ -84,6 +92,12 @@ impl Engine {
     pub fn recv_event(&self) -> broadcast::Receiver<Event> {
         self.send_event.subscribe()
     }
+}
+
+pub fn data_dir() -> Result<PathBuf> {
+    let dirs = ProjectDirs::from("io.github", "aecsocket", "Wordbase")
+        .context("failed to get default app directories")?;
+    Ok(dirs.data_dir().to_path_buf())
 }
 
 const CHANNEL_BUF_CAP: usize = 4;

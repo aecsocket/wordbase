@@ -69,6 +69,8 @@ maud                 = { version = "0.27" }
 mecab                = { version = "0.1.6" }
 notify               = { version = "8.0" }
 paste                = { version = "1.0" }
+poem                 = { version = "3.1.9" }
+poem-openapi         = { version = "5.1" }
 rand                 = { version = "0.9" }
 rayon                = { version = "1.10" }
 regex                = { version = "1.11" }
