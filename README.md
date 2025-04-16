@@ -1,3 +1,41 @@
+# ⚠️ ⚠️ WARNING ⚠️ ⚠️
+
+This project is nowhere near ready for serious use! While some core functionality is implemented and basically complete, other features are still highly subject to change. Database data loss MAY occur, and databases may be incompatible between versions. You have been warned.
+
+Also, I haven't decided on a license yet.
+
+# Features
+
+- Engine (`wordbase-engine`)
+  - Importing and managing dictionaries in various formats
+    - [x] [Yomitan]
+    - [x] [Yomichan Local Audio]
+    - more to come...
+  - Dictionary sorting
+    - [x] User-defined dictionary ordering
+    - [x] Via a frequency dictionary
+    - [x] Sorting within terms in a single dictionary
+  - Language support
+    - [x] Japanese
+      - Deinflection powered by [Lindera] using UniDic
+      - Furigana generation
+    - more to come...
+  - [x] Creating and managing profiles
+  - [x] Connecting to texthookers via the [exSTATic]/[TextractorSender] protocol
+  - [ ] AnkiConnect integration
+
+# Usage
+
+At this point, the only thing you can really use is the core engine functionality, which is intended for developers*. There's no real user-facing app or functionality yet. All of the instructions in this section will change in the future to be more user-friendly. But for now:
+
+- Clone the repo
+- Run `cargo run -p wordbase-engine-cli` to interact with the database (import a dictionary, do a lookup, etc.)
+- If you can program in Rust, you can write a crate which imports `wordbase-engine` and interact with the engine through that
+
+I plan on writing a server (`wordbase-server`) to allow you to interact with the engine via a WebSocket, although I'm not sure if that will be a binary or embedded into the desktop app. Maybe both?
+
+*yes the desktop app crate exists. I do NOT recommend you use it for anything right now. It sucks. I won't even give you instructions to run it.
+
 # Goals
 
 ## Be a *language learning platform*
@@ -8,9 +46,6 @@ As a real-life example, [Yomitan] is a browser extension providing a popup dicti
 
 There's great value in having a single shared database of dictionaries, and a single consistent way to fetch data for some text. This is ultimately the goal of Wordbase - make it stupid simple to integrate a dictionary, and any other language learning tools, into any app.
 
-[Yomitan]: https://github.com/yomidevs/yomitan/
-[Memento]: https://github.com/ripose-jp/memento
-
 ## Be *simple to use*
 
 Following the GNOME philosophy of "every preference has a cost"[^1][^2][^3], Wordbase *the engine* focuses on providing a solid foundation to build language learning tools on top of, favoring robustness over features. Wordbase *the app* focuses on being easy to pick up and use immediately by anyone, rather than being as flexible as possible. Features will be added if they benefit the 90% of users, and don't significantly increase the cognitive complexity of the app.
@@ -19,6 +54,8 @@ Of course, this doesn't mean that Wordbase *the platform* is inflexible. On the 
 
 Perhaps this is a niche goal, considering the typical audience of apps like this are the people who are already more technically inclined - for many people, even getting Anki set up in the first place is a hurdle - but in my opinion, the more accurate viewpoint is that the average language learner doesn't use these tools *because* they're designed for the more technically inclined. Lowering the barrier to entry for language learning is a noble goal in of itself, and one worth pursuing.
 
+TODO: I'm reconsidering the simplicity goal for the engine itself. Perhaps move the complexity into the engine and server, and make the app itself simple (via min-config etc.)
+
 [^1]: https://www.omgubuntu.co.uk/2021/07/why-gnome-does-what-gnome-does-by-tobias-bernard
 [^2]: https://blogs.gnome.org/tbernard/2021/07/13/community-power-4/
 [^3]: https://ometer.com/preferences.html
@@ -26,17 +63,6 @@ Perhaps this is a niche goal, considering the typical audience of apps like this
 ## First-class *Linux/Wayland/Flatpak support*
 
 Out of the existing language learning tools available, a small number have first-class Linux support, and an even smaller number have support for the modern Linux desktop with Wayland and Flatpak. This number drops even further when delving into niches like visual novel texthookers and related tools ([Textractor], [JL]). This is understandable, as Linux is still a small fraction of market share - but it's a steadily growing fraction, and its users deserve something nicer.
-
-[Textractor]: https://github.com/Artikash/Textractor
-[JL]: https://github.com/rampaa/JL
-
-# Installation
-
-TODO
-
-# Getting started
-
-TODO
 
 # Architecture
 
@@ -189,209 +215,11 @@ Unsupported due to platform limitations. Apps can't spawn arbitrary windows on t
 
 TODO: this might not be entirely true...
 
-# notes - temp
-
-## 14 Apr
-
-I think my goals are a bit conflicted here. I want *the app* to be as simple as possible and min-config (see the GNOME stuff), but I want *the platform* to be as flexible as possible. For this reason, I went with the "anti-schema" of record kinds, instead of trying to standardize a single glossary format or whatever. If I take this to its logical extreme, the platform should be able to support:
-- any dictionary format (that's the point of the record kind stuff)
-- texthooker aggregation
-- AnkiConnect integration, and other flashcard apps potentially
-- collecting statistics on words learned/learning
-
-But despite all these features, the apps should stay as simple **to configure** as possible. I think that's the key here - I don't mind *more features*, but I do mind *more config*. It's fine if you want to add a feature to see what words you've looked up the most, but it *shouldn't require extra config*.
-
-In summary: state is cheap, config is expensive. Convention over configuration.
-
-This gives me a good guideline and goal to follow for the project.
-
-What's the original reason I started this project? I got annoyed at how:
-- my Memento and Yomitan dictionaries don't sync
-  - by extension, how I have to configure 2 different tools whenever I set up a PC again (and a new browser)
-- there are no good integrated sentence mining tools for Linux
-
-I've ironed out a bunch of design issues, and AnkiConnect is like almost functioning. Most importantly, I've decided:
-- `wordbase-engine` no longer tracks the current profile - this is left as a responsibility of the app
-- I've figured out the scope of the different crates and the project as a whole - see paragraphs above.
-- `wordbase` and `wordbase-engine` are solid foundations to build on, but `wordbase-desktop` is a lost cause. I've just been hacking on top of it instead of trying to clean anything up. I want to definitely rewrite this without Relm4 at some point.
-
-## Test session 4 - 13 Apr
-
-- I still haven't done the ankiconnect lmao. I've been procrastinating the stylesheet (but at least it's pretty now tho). This ACTUALLY has to be my priority now.
-- The desktop app is a piece of shit and a mess
-  - Where the fuck is all the state managed?!??!?!
-  - I don't think Relm4 is the right fit for this app, since so much of the state is stored outside of the component model.
-  - I want to rewrite this in raw GTK/Adwaita later, but for now I can keep hacking in features
-- IMO the engine shouldn't keep track of a "current profile". Leave this up to the individual app. (But it should still keep track of profiles)
-- If one of my goals is "keep it simple", then why did I add in texthooker support into the core app? This is a niche that only applies to Japanese visual novel language learners. I want to move this out to its own app later.
-  - Move it out of `wordbase` and `wordbase-engine` into... somewhere else
-  - Keep support for overlays in `wordbase-integration` - it's useful, and it means we don't need 2 separate GNOME extensions
-  - Write texthooker listen logic directly in `wordbase-desktop` (and `wordbase-engine-cli`? ehh idk)
-- [ ] Now that I have more dicts, lookups are starting to lag a bit. Currently, requesting a lookup "blocks" the async runtime. If we request a new lookup before the old one completes, it should stop the old lookup and no longer await it.
-- [x] looking up 替える gives results for 変える first - wrong! I know why this happens tho. in the lookup, we sort by `reading matches AND headword matches`, then `reading matches OR headword matches`. this should be `hm AND rm`, `hm`, `rm`, everything else
-  - fuck, this is wrong! if we looked up like "きびす" (踵), we'd get results for 踵<かかと> first. that's wrong
-  - uuughhhh, maybe we detect if we have kana in the lemma and if so look up by reading first? and otherwise headword first?
-  - can't reproduce anymore
-- we should be able to spawn sub-popups from looking up in the popup. maybe? future goal.
-- [ ] the audio should really be in the sticky header, not the meta tag flow box. When pitch accent readings are split onto multiple lines, it's a bit harder to read. They should be kept together. (Frequencies don't matter as much who cares)
-- [x] "（ふぅ…騒がしかった…）" - deinflects as <騒がしかっ>た. could we make this <騒がしかった>?
-- [x] there's a lot of Forvo audio records which have a headword but no reading e.g. 薄情. this makes the forvo audio appear as a separate entry below. I think we can unify this record with the main record by doing this:
-  - if we have a record with a term which has a headword but no reading, it gets cloned into all the other "buckets" for the same headword
-  - i.e. 見る, 観る would contain the same records for みる
-  - this will probably suck if we do this to ALL record kinds. maybe only yomichan audio records?
-- [ ] what would be really cool is, if you click on a sub-query lookup, it opens as a new navigation page in GTK with a new webview
-  - recycle sub-webviews
-  - you can swipe left to go back to the previous page seamlessly, like in epiphany
-- [x] wrong furigana generation - 黄色い声 (きいろいこえ)
-  - added test case - it's the same issue as before. I'll have to fix them together
-- interesting dictionary quirk: ぶいぶいいわせる - we have records for ブイブイ言わす with reading ぶいぶいいわせる - this doesn't match! and even yomitan fails to generate furigana in this case.
-  - [ ] its fallback is better than ours I think, we should use its strat
-
-## Test session 3 - 12 Apr
-
-Now that I've done a bunch of generic bug fixing and improvements, I want to do more targeted high-impact improvements
-- [ ] AnkiConnect!!!!!! (!!!)
-- The first-hover popup experience MUST be perfect, since it's like 90% of the popup use case
-  - [ ] it sometimes just doesn't show up. like, I *know* it scans, I can see the text highlight, but it doesn't appear on top for whatever reason. This has to work perfectly at all costs, even using hacks.
-- [x] Terms like 此処等 are more common in kana as ここら, they should be displayed as such
-  - How does Memento/Yomitan determine what becomes reading-only?
-- [ ] When exiting the overlay, it presents for some reason? I think this is from a previous bugfix
-- [x] "何かを念じるかのようだった。" - "念じる" has wrong order of lookup
-- [x] "こんな図書室には似つかわしくないぐらい、専門的で高価そうな本ばかりだ。" - 高価 has wrong ordering. it's below 高い
-- Future goal: can we get some way of highlighting known/unknown words? I'd like to use AnkiConnect for this tracking ideally, since that gives us the best estimate of how well the user knows a word. Then we can mark new words in a different color in the overlay or something.
-- Future goal: I have a term like 履帯映像, I want to ask AI a question like "break down the kanji in this phrase". I should be able to do this integrated into the dictionary popup.
-
-## Test session 2 - 11 Apr
-
-- IPAex Gothic looks *really* nice
-- [x] まじない -> deinflects as 呪い, and prioritises 呪い (のろい). can we make it prioritse まじない?
-  - fixed with new deinflect algo
-- [ ] my top priority HAS to be making anki notes from lookups
-- [x] 頼りなさげな目を... - scans as <頼りな>さげな... we need extra lindera continuation rules for this case
-  - <肩をおとし>て
-  - <叩きつけ>ていた
-  - <消えてたじゃない> -> <きえてた>じゃない
-- [ ] つまらねぇ - lindera/unidic doesn't seem to be able to turn this into つまらない. do we hardcode some rules like ねぇ -> ない?
-  - handwritten deinflector? 🤔
-- [x] 関係ない furigana is wrong?
-  - [ ] added a test case, but idk how to resolve it. failing test.
-- [x] ともなると - in DOJG, the line breaks are done wrong. \n should be replaced with <br/>. let's do this in the renderer, not the importer.
-- [x] popup should dynamically anchor itself to the topleft/topright/etc. shouldn't be up to the requester. e.g. if it's in the bottom 50% of the screen, anchor it to a top corner
-  - improved positioning algorithm, similar to yomitan's (didn't copy any code tho)
-- 大事 has a lot of pitch accents, will be good for testing PA rendering
-- [ ] 当てられまくる授業だった - need better lookup for 当てられまくる. dicts?
-- [x] I accidentally fullscreened the overlay. this should be impossible!
-- [x] a button in the overlay to copy the sentence
-- [x] a button in the overlay to go to the manager search field immediately, or an inline search? idk exactly
-
-## Test session 1 - 10 Apr
-
-- [ ] sometimes when hovering, the lookup is done, BUT the popup isn't focused maybe?
-- [x] chinese fonts (force switch away from Inter?)
-  - [x] allow switching overlay and dict font
-  - [ ] set `lang=[bcp47 code]` based on current language (hardcoded to JP for now)
-- [x] overlay opacity should update when you modify it
-- [x] incorrect furigana
-  - 聞き流す - ききながす
-  - 言い争い - いいあらそい
-  - 言い直す - いいなおす
-- [x] why do some things get the wrong char length?
-  - ショックでだろう -> should just be ショック
-  - 日常だった -> should just be 日常
-  - "共に" -> chars as 共, but should be 共に
-- [x] add lindera tests for the above
-- [ ] if clicking the mouse while sentence motion, it should NOT lookup
-- [ ] this fails to lookup:
-  - 居たたまれなくなって
-    - because: root form is 居たたまれない
-  - 仕えする
-  - 向き合わせになる
-- [x] click dragging on the overlay popup should let you drag it
-- [ ] I really want a scrollback, but the current sentence goes to the bottom + there's enough padding at the bottom to push the scrollback up out of the way
-- [x] dictionary popup settings button is literally invisible, need to add OSD class somehow
-  - fixed by making the card background transparent
-- [x] changing dictionaries from the popup window?
-  - we don't need this, you have a button to open the manager anyway
-- [ ] 停学処分 - we have lookups for:
-  - (停学処分, ていがくしょぶん) -> jitendex
-  - (停学処分, NULL) -> audio
-  - can we merge the 2 somehow?
-  - 体育会系 as well
-  - won't fix
-  - ok I lied about won't fix. I really do want to fix this somehow.
-- [x] TONS of stack trace errors in journalctl. we need a way to only send them as error messages to the dbus client from the extension
-- [x] イカす is improperly deinflected - lindera thinks it's 活かす/生かす
-  - how about: when we deinflect e.g. イカす to 活かす, we ALSO generate a deinflection which maps to the same substring length as 活かす, BUT is a substring of the original query it self (イカす)?
-  - [x] sorta fixed via a better deinflector + maintain deinflect ordering
-- [ ] the "is ready" popup keeps coming up
-- [ ] sometimes the dictionary IS spawned, but doesnt appear in front of the window. maybe `make_above` is not being applied?
-  - yes, it's as I guessed. it's not being set as `make_above`. maybe related to below?
-- [ ] or maybe it's to do with the window not found error from the extension. we should fix that
-
-- overlay settings: font size, overlay opacity, lookup mode (hover, hold shift, hold ctrl, hold alt)
-- good gnome integration - DONE
-- Better stylesheet
-- AnkiConnect
-- Optional AI integration
-  - Receives context of the looked up sentence (let's say 1 sentence before and after), and asks AI to generate an explanation
-  - Can include extra metadata from the app e.g. video file name, browser tab title, so the AI has more context on what the user is doing
-  - Local-first support via Ramalama
-
-## Misc
-
-TODO:
-- local audio server - SORTA DONE
-- ankiconnect
-
-quick test problems:
-- clicking off the overlay box, then it updates the sentence, and I start hovering back on - it doesn't immediately show popup box until I hover over a different word and back
-- when the app goes full screen, the overlay should appear at the top
-- dictionary popup should always appear above
-
-audio server:
-- i query たべなかった
-- i get the term "食べる (たべる)"
-- i get audio bytes as a record
-
-FUTURE ROADMAP:
-
-I don't like how `Term` is hardcoded to a headword and reading. It's totally possible to have multiple readings for the same headword, i.e. a hiragana katakana and reading for the same kanji. And things like NHK16 Yomichan local audio dict use katakana readings for pronunciation. It'd be really useful to support that, but we just don't right now.
-
-However I also don't want a `reading_1`, `reading_2`, `reading_3` etc columns in the database. It's theoretically possible to do that, but that's really ugly.
-
-I want to rewrite the Yomitan importer to take advantage of async. But how will it affect parsing performance? Since right now we can use multicore to parse all of the entries in parallel. But our bottleneck is inserting them into the database. Need to investigate more.
-
-what happens we import a yomitan dictionary?
-
-- we import (expr 日本語 reading にほんご)
-  - we know for a fact that にほんご is a reading of 日本語
-  - we don't know for certain whether 日本語 is a headword, but it probably is
-
-- or: we import (expr 日本語 reading ())
-  - we don't know what 日本語, it could be a reading or a headword
-  - for now we'll treat it as a headword, but if we get evidence of the contrary (i.e. an entry where reading = 日本語), then we'll change our mind
-
-- or: we import (expr () reading にほんご)
-  - if we've already imported (日本語, にほんご) then this term already exists, skip
-  - else, we don't know if this is a headword or a reading yet. assume it's a headword for now
-
-querying:
-
-CREATE TABLE IF NOT EXISTS term (
-    text      TEXT    NOT NULL CHECK (text <> ''),
-    record    INTEGER REFERENCES record(id),
-    headword  INTEGER REFERENCES term(id),
-    UNIQUE  (text, record)
-);
-
-- if we search for X, our goal is to find any terms where `term.text = X`
-- if we find a bunch of terms, but all their `headword = NULL`, then we ASSUME that X is a headword, not a reading
-- if we find at least 1 `term` for which `headword != NULL`, then X is a READING of 1 or more headwords
-  - where `headword = Y AND headword != NULL`, pull in any terms where `term.text = Y` - and mark Y as the headword
-- TODO: what if those terms pulled in also have `term.headword != NULL`? should that be allowed?
-
-OR: have a headword and term tables
-
-super basic yomitan async becnhmark:
-- async: 65.8 sec
-- sync: 74.6 sec
+[Yomitan]: https://github.com/yomidevs/yomitan
+[Yomichan Local Audio]: https://github.com/yomidevs/local-audio-yomichan
+[Memento]: https://github.com/ripose-jp/memento
+[Lindera]: https://github.com/lindera/lindera
+[Textractor]: https://github.com/Artikash/Textractor
+[JL]: https://github.com/rampaa/JL
+[exSTATic]: https://github.com/KamWithK/exSTATic
+[TextractorSender]: https://github.com/KamWithK/TextractorSender
