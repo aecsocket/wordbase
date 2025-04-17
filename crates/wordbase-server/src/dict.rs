@@ -18,16 +18,16 @@ pub async fn index(engine: &Engine) -> Vec<Arc<Dictionary>> {
     engine.dictionaries().values().cloned().collect()
 }
 
-pub async fn find(engine: &Engine, dict_id: DictionaryId) -> Result<Arc<Dictionary>> {
+pub async fn find(engine: &Engine, dictionary_id: DictionaryId) -> Result<Arc<Dictionary>> {
     Ok(engine
         .dictionaries()
-        .get(&dict_id)
+        .get(&dictionary_id)
         .ok_or(NotFoundError)?
         .clone())
 }
 
-pub async fn delete(engine: &Engine, dict_id: DictionaryId) -> Result<()> {
-    engine.remove_dictionary(dict_id).await?;
+pub async fn delete(engine: &Engine, dictionary_id: DictionaryId) -> Result<()> {
+    engine.remove_dictionary(dictionary_id).await?;
     Ok(())
 }
 
@@ -114,9 +114,13 @@ pub struct ImportErr {
     pub error: String,
 }
 
-pub async fn set_position(engine: &Engine, dict_id: DictionaryId, req: SetPosition) -> Result<()> {
+pub async fn set_position(
+    engine: &Engine,
+    dictionary_id: DictionaryId,
+    req: SetPosition,
+) -> Result<()> {
     engine
-        .set_dictionary_position(dict_id, req.position)
+        .set_dictionary_position(dictionary_id, req.position)
         .await?;
     Ok(())
 }
@@ -126,13 +130,21 @@ pub struct SetPosition {
     pub position: i64,
 }
 
-pub async fn enable(engine: &Engine, dict_id: DictionaryId, req: ToggleEnable) -> Result<()> {
-    engine.enable_dictionary(req.profile_id, dict_id).await?;
+pub async fn enable(engine: &Engine, dictionary_id: DictionaryId, req: ToggleEnable) -> Result<()> {
+    engine
+        .enable_dictionary(req.profile_id, dictionary_id)
+        .await?;
     Ok(())
 }
 
-pub async fn disable(engine: &Engine, dict_id: DictionaryId, req: ToggleEnable) -> Result<()> {
-    engine.enable_dictionary(req.profile_id, dict_id).await?;
+pub async fn disable(
+    engine: &Engine,
+    dictionary_id: DictionaryId,
+    req: ToggleEnable,
+) -> Result<()> {
+    engine
+        .enable_dictionary(req.profile_id, dictionary_id)
+        .await?;
     Ok(())
 }
 

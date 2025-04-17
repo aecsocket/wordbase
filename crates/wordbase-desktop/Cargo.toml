@@ -26,9 +26,9 @@ indexmap    = { workspace = true }
 maud        = { workspace = true }
 notify      = { workspace = true }
 
-base64             = { workspace = true }
 bimap              = { workspace = true }
 bzip2              = { workspace = true, features = ["static"] }
+data-encoding      = { workspace = true }
 derive_more        = { workspace = true, features = ["display"] }
 foldhash           = { workspace = true }
 form_urlencoded    = { workspace = true }

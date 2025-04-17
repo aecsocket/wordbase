@@ -104,6 +104,8 @@ Not all state is separate between profiles - for example, the actual dictionarie
 
 External apps may want to use Wordbase's dictionaries and lookup functions without having to include Wordbase in their app themselves - for example, a video player or web browser extension where you can click on words to see their definitions. To support this, Wordbase apps expose an API for developers to perform lookups.
 
+Currently, the API is exposed to 3rd party apps as an HTTP service running at `http://127.0.0.1:9518`. This is meant to be used only locally, and **never exposed** to other machines - **there is no authentication mechanism**. In the future, we may add a WebSocket API alongside the HTTP API, and possibly platform-specific APIs like DBus, Unix sockets, or Windows named pipes.
+
 Even though external apps can perform lookups, they don't necessarily have to implement all of the logic for rendering those lookup results. Instead, if it is supported on the current platform, they can request the server to spawn a dictionary popup at a specific location relative to the app's own window. This will automatically handle scanning the text, performing the record lookup, creating the popup window, and positioning it. Wordbase's goal is to make it as simple as possible for 3rd party developers to integrate with the dictionary.
 
 ### Texthooker overlay

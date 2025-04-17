@@ -354,8 +354,11 @@ impl TermPart for &str {
 #[cfg(feature = "poem-openapi")]
 const _: () = {
     use poem::web::Field;
-    use poem_openapi::types::{
-        ParseError, ParseFromJSON, ParseFromMultipartField, ParseFromParameter, ParseResult,
+    use poem_openapi::{
+        Object,
+        types::{
+            ParseError, ParseFromJSON, ParseFromMultipartField, ParseFromParameter, ParseResult,
+        },
     };
 
     impl ParseFromJSON for NormString {

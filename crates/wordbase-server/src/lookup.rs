@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use wordbase::{DictionaryId, ProfileId, Record, RecordId, RecordKind};
 use wordbase_engine::Engine;
 
+use crate::Term;
+
 pub async fn expr(engine: &Engine, req: ExprRequest) -> Result<Vec<RecordLookup>> {
     Ok(engine
         .lookup(req.profile_id, &req.sentence, req.cursor, &req.record_kinds)
@@ -121,21 +123,6 @@ impl From<wordbase::RecordLookup> for RecordLookup {
             record: Any(value.record),
             profile_sorting_frequency: value.profile_sorting_frequency.map(FrequencyValue::from),
             source_sorting_frequency: value.source_sorting_frequency.map(FrequencyValue::from),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Object)]
-pub struct Term {
-    pub headword: Option<String>,
-    pub reading: Option<String>,
-}
-
-impl From<wordbase::Term> for Term {
-    fn from(value: wordbase::Term) -> Self {
-        Self {
-            headword: value.headword().map(ToString::to_string),
-            reading: value.reading().map(ToString::to_string),
         }
     }
 }

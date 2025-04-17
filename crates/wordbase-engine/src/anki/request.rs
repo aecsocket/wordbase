@@ -125,7 +125,7 @@ pub struct Asset<'a> {
     pub data: Option<&'a str>,
     pub path: Option<&'a str>,
     pub url: Option<&'a str>,
-    pub skip_hash: &'a str,
+    pub skip_hash: Option<&'a str>,
     pub fields: Vec<&'a str>,
 }
 

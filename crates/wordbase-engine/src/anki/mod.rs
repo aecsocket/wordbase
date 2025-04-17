@@ -4,10 +4,12 @@ use {
     crate::{Engine, IndexMap, IndexSet, lang},
     anyhow::{Context, Result, bail},
     arc_swap::ArcSwapOption,
+    bytes::Bytes,
     client::{AnkiClient, VERSION},
+    data_encoding::BASE64,
     itertools::Itertools,
     maud::html,
-    request::{DeckName, ModelFieldName, ModelName},
+    request::{Asset, DeckName, ModelFieldName, ModelName},
     std::{cmp, fmt::Write as _, sync::Arc},
     wordbase::{
         DictionaryId, FrequencyValue, NormString, ProfileId, Record, RecordKind, Term, dict,
@@ -37,46 +39,49 @@ pub struct Model {
 
 impl Anki {
     pub fn new() -> Result<Self> {
-        let http_client = reqwest::Client::builder()
-            .build()
-            .context("failed to create HTTP client")?;
         Ok(Self {
-            http_client,
-            state: ArcSwapOption::empty(),
+            http_client: reqwest::Client::builder()
+                .build()
+                .context("failed to create HTTP client")?,
+            state: ArcSwapOption::new(None),
         })
     }
 }
 
 impl Engine {
-    #[must_use]
-    pub fn anki_state(&self) -> Option<Arc<AnkiState>> {
-        self.anki.state.load().clone()
-    }
+    // pub async fn connect_anki(
+    //     &self,
+    //     url: impl Into<String>,
+    //     api_key: impl Into<String>,
+    // ) -> Result<()> {
+    //     let url = url.into();
+    //     let api_key = api_key.into();
+    //     sqlx::query!(
+    //         "UPDATE config SET ankiconnect_url = $1, ankiconnect_api_key = $2",
+    //         url,
+    //         api_key
+    //     )
+    //     .execute(&self.db)
+    //     .await
+    //     .context("failed to update AnkiConnect config")?;
 
-    pub async fn connect_anki(
-        &self,
-        url: impl Into<String>,
-        api_key: impl Into<String>,
-    ) -> Result<()> {
-        let url = url.into();
-        let api_key = api_key.into();
-        sqlx::query!(
-            "UPDATE config SET ankiconnect_url = $1, ankiconnect_api_key = $2",
-            url,
-            api_key
-        )
-        .execute(&self.db)
-        .await
-        .context("failed to update AnkiConnect config")?;
+    //     self.sync_anki_state(url, api_key).await
+    // }
 
-        self.sync_anki_state(url, api_key).await
-    }
+    pub async fn anki_state(&self) -> Result<Arc<AnkiState>> {
+        if let Some(state) = self.anki.state.load().clone() {
+            return Ok(state);
+        }
 
-    async fn sync_anki_state(&self, url: String, api_key: String) -> Result<()> {
+        let record = sqlx::query!("SELECT ankiconnect_url, ankiconnect_api_key FROM config")
+            .fetch_one(&self.db)
+            .await
+            .context("failed to fetch config")?;
+
         let client = AnkiClient {
             http_client: self.anki.http_client.clone(),
-            url,
-            api_key,
+            url: record.ankiconnect_url,
+            api_key: record.ankiconnect_api_key,
         };
         let version = client
             .send(&request::Version)
@@ -112,27 +117,28 @@ impl Engine {
             models.insert(model_name, Model { field_names });
         }
 
-        self.anki.state.store(Some(Arc::new(AnkiState {
+        let state = Arc::new(AnkiState {
             client,
             decks,
             models,
-        })));
-        Ok(())
+        });
+        self.anki.state.store(Some(state.clone()));
+        Ok(state)
     }
 
-    pub async fn create_anki_note(
+    pub async fn add_anki_note(
         &self,
         profile_id: ProfileId,
         sentence: &str,
         cursor: usize,
         term: &Term,
+        sentence_audio: Option<&str>,
+        sentence_image: Option<&str>,
     ) -> Result<()> {
         let anki = self
-            .anki
-            .state
-            .load()
-            .clone()
-            .context("no Anki connection")?;
+            .anki_state()
+            .await
+            .context("failed to connect to Anki")?;
         let profile = self
             .profiles()
             .get(&profile_id)
@@ -180,16 +186,6 @@ impl Engine {
         } else {
             ""
         };
-
-        let audio = records.iter().find_map(|record| match &record.record {
-            Record::YomichanAudioForvo(dict::yomichan_audio::Forvo { audio, .. })
-            | Record::YomichanAudioJpod(dict::yomichan_audio::Jpod { audio })
-            | Record::YomichanAudioNhk16(dict::yomichan_audio::Nhk16 { audio })
-            | Record::YomichanAudioShinmeikai8(dict::yomichan_audio::Shinmeikai8 {
-                audio, ..
-            }) => Some(audio),
-            _ => None,
-        });
 
         let pitch_positions = records
             .iter()
@@ -247,6 +243,82 @@ impl Engine {
             ""
         };
 
+        let mut audio = Vec::new();
+        let term_audio = records
+            .iter()
+            .find_map(|record| match &record.record {
+                Record::YomichanAudioForvo(dict::yomichan_audio::Forvo { audio, .. })
+                | Record::YomichanAudioJpod(dict::yomichan_audio::Jpod { audio })
+                | Record::YomichanAudioNhk16(dict::yomichan_audio::Nhk16 { audio })
+                | Record::YomichanAudioShinmeikai8(dict::yomichan_audio::Shinmeikai8 {
+                    audio,
+                    ..
+                }) => Some(audio),
+                _ => None,
+            })
+            .map(|audio| BASE64.encode(&audio.data));
+
+        if let Some(data) = &term_audio {
+            audio.push(Asset {
+                filename: "test",
+                data: Some(data),
+                path: None,
+                url: None,
+                skip_hash: None,
+                fields: vec!["ExpressionAudio"],
+            });
+        }
+
+        if let Some(data) = &sentence_audio {
+            audio.push(Asset {
+                filename: "test",
+                data: Some(data),
+                path: None,
+                url: None,
+                skip_hash: None,
+                fields: vec!["SentenceAudio"],
+            });
+        }
+
+        let glossaries = records
+            .iter()
+            .filter_map(|record| match &record.record {
+                Record::YomitanGlossary(glossary) => Some(html! {
+                    ul {
+                        @for content in &glossary.content {
+                            li {
+                                (content)
+                            }
+                        }
+                    }
+                }),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        let main_glossary = glossaries.first().cloned().map(|s| s.0);
+        let glossaries = html! {
+            ul {
+                @for glossary in &glossaries {
+                    li {
+                        (glossary)
+                    }
+                }
+            }
+        };
+
+        let mut picture = Vec::new();
+        if let Some(data) = sentence_image {
+            picture.push(Asset {
+                filename: "test.png",
+                data: Some(data),
+                path: None,
+                url: None,
+                skip_hash: None,
+                fields: vec!["Picture"],
+            });
+        }
+
         let note = request::Note {
             deck_name,
             model_name,
@@ -254,12 +326,12 @@ impl Engine {
                 ("Expression", as_str(term.headword())),
                 ("ExpressionReading", as_str(term.reading())),
                 ("ExpressionFurigana", &term_ruby_plain),
-                ("ExpressionAudio", ""), // TODO
                 ("Sentence", sentence_cloze),
-                // ("MainDefinition", "to read"),
-                // ("SentenceAudio", ""),
-                // ("Picture", ""),
-                // ("Glossary", "glossary..."),
+                (
+                    "MainDefinition",
+                    main_glossary.as_deref().unwrap_or_default(),
+                ),
+                ("Glossary", &glossaries.0),
                 ("IsWordAndSentenceCard", ""),
                 ("IsClickCard", "x"),
                 ("IsSentenceCard", ""),
@@ -275,9 +347,9 @@ impl Engine {
                 duplicate_scope_options: None,
             },
             tags: vec!["wordbase"],
-            audio: Vec::new(),
+            audio,
             video: Vec::new(),
-            picture: Vec::new(),
+            picture,
         };
         anki.client.send(&request::AddNote { note }).await?;
         Ok(())

@@ -1,6 +1,6 @@
 use {
     super::request::{Request, RequestWrapper},
-    anyhow::Result,
+    anyhow::{Context, Result},
     derive_more::{Display, Error},
     serde::{Deserialize, Serialize},
 };
@@ -26,10 +26,13 @@ impl AnkiClient {
             })
             .bearer_auth(&self.api_key)
             .send()
-            .await?
-            .error_for_status()?
+            .await
+            .context("failed to send")?
+            .error_for_status()
+            .context("HTTP error")?
             .json::<Response<R::Response>>()
-            .await?
+            .await
+            .context("failed to receive JSON response")?
             .into_result()?)
     }
 }
