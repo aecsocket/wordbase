@@ -134,7 +134,7 @@ impl Engine {
 
                     match u32::try_from(record.kind) {
                         $($(
-                            Ok(discrim::[< $dict_kind $record_kind >]) => {
+                        Ok(discrim::[< $dict_kind $record_kind >]) => {
                             let record = db::deserialize(&record.data)
                                 .with_context(|| format!("failed to deserialize {} record", stringify!([< $dict_kind $record_kind >])))?;
                             Record::[< $dict_kind $record_kind >](record)

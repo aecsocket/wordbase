@@ -12,6 +12,102 @@ use {
     std::fmt::Debug,
 };
 
+/// Invokes a macro, passing in all existing dictionary and record kind into the
+/// macro.
+///
+/// This serves as the source of truth for what dictionary and record kinds
+/// exist in the current version of this crate. If you are adding a new kind,
+/// add it here (documentation lives outside of this macro).
+///
+/// # Usage
+///
+/// Your macro will receive the following tokens:
+///
+/// ```text
+/// $(
+///     $dict_kind($dict_path) {
+///         $( $record_kind ),*
+///     }
+/// ),*
+/// ```
+/// where:
+/// - `$dict_kind` is:
+///   - the `ident` of the [`DictionaryKind`] variant
+///     - e.g. `Yomitan` maps to [`DictionaryKind::Yomitan`]
+///   - the 1st half of [`RecordKind`] variant idents
+///     - e.g. the `Yomitan` in [`RecordKind::YomitanGlossary`]
+/// - `$dict_path` is the dictionary kind's `path` in [`dict`]
+///   - e.g. `yomitan`
+/// - `$record_kind` is:
+///   - an `ident` of the type under `$dict_path`
+///     - e.g. `Glossary` maps to `dict::yomitan::Glossary`
+///   - the 2nd half of [`RecordKind`] variant idents
+///     - e.g. the `Glossary` in [`RecordKind::YomitanGlossary`]
+///
+/// Trailing commas may be present in repetitions.
+///
+/// To form a [`DictionaryKind`] variant, you can use
+/// `wordbase::DictionaryKind::$dict_kind`. To form a [`RecordKind`] variant,
+/// you can combine `$dict_kind` and `$record_kind` via [`paste::paste`] like
+/// so: `[< $dict_kind $record_kind >]`
+///
+/// # Examples
+///
+/// Generate top-level items for each record kind:
+///
+/// ```
+/// macro_rules! define_types {
+///     // copy this macro pattern exactly into your own macro
+///     ($($dict_kind:ident($dict_path:ident) { $($record_kind:ident),* $(,)? }),* $(,)?) => {
+///         // use `paste::paste` if you need to access record kinds
+///         paste::paste! {
+///             pub enum DictionaryKind {
+///                 // single level of repetition here
+///                 // to just iterate over the dictionary kinds
+///                 $( $dict_kind, )*
+///             }
+///
+///             pub enum RecordKind {
+///                 // two levels of repetition here
+///                 // to iterate over all record kinds
+///                 $($( [< $dict_kind $record_kind >], )*)*
+///             }
+///         }
+///     }
+/// }
+///
+/// wordbase::for_kinds!(define_types);
+/// ```
+///
+/// Generate code which performs the same action for all record kinds:
+///
+/// ```
+/// # use wordbase::Record;
+/// fn deserialize_record(kind: u32, data: &[u8]) {
+///     macro_rules! deserialize_record { ($($dict_kind:ident($dict_path:ident) { $($record_kind:ident),* $(,)? }),* $(,)?) => { paste::paste! {{
+///         mod discrim {
+///             use wordbase::RecordKind;
+///
+///             $($(
+///             pub const [< $dict_kind $record_kind >]: u32 = RecordKind::[< $dict_kind $record_kind >] as u32;
+///             )*)*
+///         }
+///
+///         match u32::try_from(kind) {
+///             $($(
+///             Ok(discrim::[< $dict_kind $record_kind >]) => {
+///                 let record = deserialize(data);
+///                 Record::[< $dict_kind $record_kind >](record)
+///             }
+///             )*)*
+///             _ => panic!("invalid record kind {kind}"),
+///         }
+///     }}}}
+///
+///     wordbase::for_kinds!(deserialize_record);
+/// }
+/// # fn deserialize<T>(_: &[u8]) -> T { unimplemented!() }
+/// ```
 #[macro_export]
 macro_rules! for_kinds { ($macro:ident) => { $macro!(
     Yomitan(yomitan) {

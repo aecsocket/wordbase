@@ -29,9 +29,13 @@ pub async fn run(engine: Engine, addr: impl ToSocketAddrs + Send) -> anyhow::Res
     )
     .server("http://127.0.0.1:9518");
     let ui = service.swagger_ui();
+    let spec = service.spec_endpoint();
+    let spec_yaml = service.spec_endpoint_yaml();
     let app = poem::Route::new()
         .nest("/", service)
         .nest("/docs", ui)
+        .at("/spec", spec)
+        .at("/spec.yaml", spec_yaml)
         .catch_error(|_: NotFound| async move {
             Response::builder()
                 .status(StatusCode::NOT_FOUND)
