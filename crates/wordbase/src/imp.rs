@@ -10,7 +10,9 @@ use std::{
 
 use serde::Deserialize;
 
-use crate::{DictionaryKind, DictionaryMeta, NormString, Term, TermPart};
+use crate::{
+    DictionaryKind, DictionaryMeta, NormString, Profile, ProfileConfig, ProfileId, Term, TermPart,
+};
 
 impl DictionaryMeta {
     /// Creates a new value with only the required fields.
@@ -23,6 +25,55 @@ impl DictionaryMeta {
             description: None,
             url: None,
             attribution: None,
+        }
+    }
+}
+
+impl Profile {
+    /// Creates a new profile with the default state.
+    #[must_use]
+    pub fn new(id: ProfileId, config: ProfileConfig) -> Self {
+        Self {
+            id,
+            config,
+            enabled_dictionaries: Vec::new(),
+        }
+    }
+}
+
+impl ProfileConfig {
+    /// Creates a new default profile configuration.
+    #[must_use]
+    pub fn new(name: Option<NormString>) -> Self {
+        Self {
+            name,
+            accent_color: None,
+            sorting_dictionary: None,
+            font_family: None,
+            anki_deck: None,
+            anki_model: None,
+        }
+    }
+
+    /// Merges the configuration from `src` into `self`.
+    pub fn merge_from(&mut self, mut src: Self) {
+        if let Some(v) = src.name.take() {
+            self.name = Some(v);
+        }
+        if let Some(v) = src.accent_color.take() {
+            self.accent_color = Some(v);
+        }
+        if let Some(v) = src.sorting_dictionary.take() {
+            self.sorting_dictionary = Some(v);
+        }
+        if let Some(v) = src.font_family.take() {
+            self.font_family = Some(v);
+        }
+        if let Some(v) = src.anki_deck.take() {
+            self.anki_deck = Some(v);
+        }
+        if let Some(v) = src.anki_model.take() {
+            self.anki_model = Some(v);
         }
     }
 }
@@ -302,11 +353,30 @@ impl TermPart for &str {
 
 #[cfg(feature = "poem-openapi")]
 const _: () = {
-    use poem_openapi::types::{ParseError, ParseFromJSON, ParseResult};
+    use poem::web::Field;
+    use poem_openapi::types::{
+        ParseError, ParseFromJSON, ParseFromMultipartField, ParseFromParameter, ParseResult,
+    };
 
     impl ParseFromJSON for NormString {
         fn parse_from_json(value: Option<serde_json::Value>) -> ParseResult<Self> {
             let raw = String::parse_from_json(value).map_err(ParseError::propagate)?;
+            Self::new(raw).ok_or_else(|| ParseError::custom("string must be non-empty"))
+        }
+    }
+
+    impl ParseFromParameter for NormString {
+        fn parse_from_parameter(value: &str) -> ParseResult<Self> {
+            let raw = String::parse_from_parameter(value).map_err(ParseError::propagate)?;
+            Self::new(raw).ok_or_else(|| ParseError::custom("string must be non-empty"))
+        }
+    }
+
+    impl ParseFromMultipartField for NormString {
+        async fn parse_from_multipart(field: Option<Field>) -> ParseResult<Self> {
+            let raw = String::parse_from_multipart(field)
+                .await
+                .map_err(ParseError::propagate)?;
             Self::new(raw).ok_or_else(|| ParseError::custom("string must be non-empty"))
         }
     }

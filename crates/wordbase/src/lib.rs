@@ -348,28 +348,23 @@ pub enum FrequencyValue {
 /// [`DictionaryMeta`] may not.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
+#[non_exhaustive]
 pub struct Profile {
     /// Unique identifier for this profile in the database.
     pub id: ProfileId,
-    /// Metadata.
-    pub meta: ProfileMeta,
+    /// User configuration.
+    pub config: ProfileConfig,
     /// Set of [`Dictionary`] entries which are [enabled] under this profile.
     ///
     /// [enabled]: Dictionary::enabled
     pub enabled_dictionaries: Vec<DictionaryId>,
-    /// Which [`Dictionary`] is used for sorting records by their frequencies.
-    ///
-    /// The user-set dictionary [position] always takes priority over any
-    /// frequency sorting.
-    ///
-    /// [position]: Dictionary::position
-    pub sorting_dictionary: Option<DictionaryId>,
 }
 
-/// User-specified metadata for a [`Profile`].
+/// User-specified configuration for a [`Profile`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
-pub struct ProfileMeta {
+#[non_exhaustive]
+pub struct ProfileConfig {
     /// Name of the profile.
     ///
     /// User-defined profiles will always have a name. If the name is missing,
@@ -382,6 +377,22 @@ pub struct ProfileMeta {
     /// different profiles, and allow users to quickly differentiate between
     /// their profiles by color.
     pub accent_color: Option<[f32; 3]>,
+    /// Which [`Dictionary`] is used for sorting records by their frequencies.
+    ///
+    /// The user-set dictionary [position] always takes priority over any
+    /// frequency sorting.
+    ///
+    /// [position]: Dictionary::position
+    pub sorting_dictionary: Option<DictionaryId>,
+    /// System font family to use for text under this profile.
+    ///
+    /// This is *only* the family, e.g. `Adwaita Sans`, not the face like
+    /// `Adwaita Sans Regular`.
+    pub font_family: Option<NormString>,
+    /// Name of the Anki deck used for AnkiConnect integration.
+    pub anki_deck: Option<NormString>,
+    /// Name of the Anki card model used for AnkiConnect integration.
+    pub anki_model: Option<NormString>,
 }
 
 /// Opaque and unique identifier for a [`Profile`] in the engine.

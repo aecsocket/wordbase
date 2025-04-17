@@ -4,10 +4,10 @@ use anyhow::{Context, Result};
 use ascii_table::AsciiTable;
 use bytes::Bytes;
 use tokio::{fs, sync::oneshot};
-use wordbase::DictionaryId;
-use wordbase_engine::{Engine, import::ImportStarted, profile::ProfileState};
+use wordbase::{DictionaryId, Profile};
+use wordbase_engine::{Engine, import::ImportStarted};
 
-pub fn ls(engine: &Engine, profile: &ProfileState) {
+pub fn ls(engine: &Engine, profile: &Profile) {
     let mut table = AsciiTable::default();
     table.column(0).set_header("Sort");
     table.column(1).set_header("On");
@@ -21,7 +21,7 @@ pub fn ls(engine: &Engine, profile: &ProfileState) {
         .values()
         .map(|dict| {
             vec![
-                (if profile.sorting_dictionary == Some(dict.id) {
+                (if profile.config.sorting_dictionary == Some(dict.id) {
                     "✔"
                 } else {
                     ""
@@ -121,12 +121,12 @@ pub async fn set_position(engine: &Engine, dict_id: DictionaryId, position: i64)
     Ok(())
 }
 
-pub async fn enable(engine: &Engine, profile: &ProfileState, dict_id: DictionaryId) -> Result<()> {
+pub async fn enable(engine: &Engine, profile: &Profile, dict_id: DictionaryId) -> Result<()> {
     engine.enable_dictionary(profile.id, dict_id).await?;
     Ok(())
 }
 
-pub async fn disable(engine: &Engine, profile: &ProfileState, dict_id: DictionaryId) -> Result<()> {
+pub async fn disable(engine: &Engine, profile: &Profile, dict_id: DictionaryId) -> Result<()> {
     engine.disable_dictionary(profile.id, dict_id).await?;
     Ok(())
 }

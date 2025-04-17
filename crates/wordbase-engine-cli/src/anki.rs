@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
-use wordbase::Term;
-use wordbase_engine::{Engine, profile::ProfileState};
+use wordbase::{Profile, Term};
+use wordbase_engine::Engine;
 
 pub async fn create_note(
     engine: &Engine,
-    profile: &ProfileState,
+    profile: &Profile,
     sentence: &str,
     headword: &str,
     reading: &str,

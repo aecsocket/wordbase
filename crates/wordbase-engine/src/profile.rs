@@ -2,34 +2,14 @@ use {
     crate::{Engine, IndexMap, NotFound},
     anyhow::{Context, Result, bail},
     derive_more::Deref,
-    foldhash::HashMap,
     futures::StreamExt,
-    serde::{Deserialize, Serialize},
     sqlx::{Pool, Sqlite},
     std::sync::Arc,
-    wordbase::{DictionaryId, NormString, ProfileId, ProfileMeta},
+    wordbase::{DictionaryId, Profile, ProfileConfig, ProfileId},
 };
 
 #[derive(Debug, Default, Deref)]
-pub struct Profiles(pub IndexMap<ProfileId, Arc<ProfileState>>);
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProfileState {
-    pub id: ProfileId,
-    pub meta: ProfileMeta,
-    pub enabled_dictionaries: Vec<DictionaryId>,
-    pub sorting_dictionary: Option<DictionaryId>,
-    pub config: ProfileConfig,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct ProfileConfig {
-    pub font_family: Option<String>,
-    pub anki_deck: Option<NormString>,
-    pub anki_model: Option<NormString>,
-    #[serde(default)]
-    pub anki_model_fields: HashMap<NormString, NormString>,
-}
+pub struct Profiles(pub IndexMap<ProfileId, Arc<Profile>>);
 
 impl Profiles {
     pub(super) async fn fetch(db: &Pool<Sqlite>) -> Result<Self> {
@@ -57,19 +37,37 @@ impl Engine {
         Ok(())
     }
 
+    pub async fn add_profile(&self, config: ProfileConfig) -> Result<ProfileId> {
+        let config_json = serde_json::to_string(&config).context("failed to serialize config")?;
+        let sorting_dictionary = config.sorting_dictionary.map(|id| id.0);
+
+        let new_id = sqlx::query!(
+            "INSERT INTO profile (config, sorting_dictionary)
+            VALUES ($1, $2)",
+            config_json,
+            sorting_dictionary,
+        )
+        .execute(&self.db)
+        .await
+        .context("failed to insert profile")?
+        .last_insert_rowid();
+        let new_id = ProfileId(new_id);
+
+        self.sync_profiles().await?;
+        Ok(new_id)
+    }
+
     pub async fn copy_profile(
         &self,
         src_id: ProfileId,
-        new_meta: &ProfileMeta,
+        config: ProfileConfig,
     ) -> Result<ProfileId> {
-        let profiles = self.profiles.load();
-        let src = profiles.get(&src_id).context("profile not found")?;
-
-        let meta_json =
-            serde_json::to_string(&new_meta).context("failed to serialize profile meta")?;
+        let src = self.profiles().get(&src_id).cloned().context(NotFound)?;
+        let mut new_config = src.config.clone();
+        new_config.merge_from(config);
         let config_json =
-            serde_json::to_string(&src.config).context("failed to serialize config")?;
-        let sorting_dictionary = src.sorting_dictionary.map(|id| id.0);
+            serde_json::to_string(&new_config).context("failed to serialize config")?;
+        let sorting_dictionary = new_config.sorting_dictionary.map(|id| id.0);
 
         let mut tx = self
             .db
@@ -77,17 +75,17 @@ impl Engine {
             .await
             .context("failed to begin transaction")?;
         let new_id = sqlx::query!(
-            "INSERT INTO profile (meta, config, sorting_dictionary)
-            VALUES ($1, $2, $3)",
-            meta_json,
+            "INSERT INTO profile (config, sorting_dictionary)
+            VALUES ($1, $2)",
             config_json,
-            sorting_dictionary
+            sorting_dictionary,
         )
         .execute(&mut *tx)
         .await
         .context("failed to insert profile")?
         .last_insert_rowid();
         let new_id = ProfileId(new_id);
+
         sqlx::query!(
             "INSERT INTO profile_enabled_dictionary (profile, dictionary)
             SELECT $1, dictionary
@@ -101,26 +99,11 @@ impl Engine {
         .context("failed to copy enabled dictionaries")?;
         tx.commit().await.context("failed to commit transaction")?;
 
-        self.sync_profiles().await?;
         Ok(new_id)
     }
 
-    pub async fn set_profile_meta(&self, id: ProfileId, meta: &ProfileMeta) -> Result<()> {
-        let meta_json = serde_json::to_string(&meta).context("failed to serialize profile meta")?;
-        sqlx::query!(
-            "UPDATE profile SET meta = $1 WHERE id = $2",
-            meta_json,
-            id.0
-        )
-        .execute(&self.db)
-        .await?;
-
-        self.sync_profiles().await?;
-        Ok(())
-    }
-
-    pub async fn set_profile_config(&self, id: ProfileId, config: &ProfileConfig) -> Result<()> {
-        let config_json = serde_json::to_string(config).context("failed to serialize config")?;
+    pub async fn set_profile_config(&self, id: ProfileId, config: ProfileConfig) -> Result<()> {
+        let config_json = serde_json::to_string(&config).context("failed to serialize config")?;
         sqlx::query!(
             "UPDATE profile SET config = $1 WHERE id = $2",
             config_json,
@@ -201,13 +184,12 @@ impl Engine {
     }
 }
 
-async fn fetch_owned(db: &Pool<Sqlite>) -> Result<Vec<ProfileState>> {
-    let mut profiles = Vec::<ProfileState>::new();
+async fn fetch_owned(db: &Pool<Sqlite>) -> Result<Vec<Profile>> {
+    let mut profiles = Vec::<Profile>::new();
 
     let mut records = sqlx::query!(
         "SELECT
             profile.id,
-            profile.meta,
             profile.config,
             profile.sorting_dictionary,
             ped.dictionary
@@ -225,17 +207,9 @@ async fn fetch_owned(db: &Pool<Sqlite>) -> Result<Vec<ProfileState>> {
                 index
             } else {
                 let index = profiles.len();
-                let meta = serde_json::from_str::<ProfileMeta>(&record.meta)
-                    .context("failed to deserialize profile meta")?;
                 let config = serde_json::from_str::<ProfileConfig>(&record.config)
                     .context("failed to deserialize profile config")?;
-                profiles.push(ProfileState {
-                    id,
-                    meta,
-                    enabled_dictionaries: Vec::new(),
-                    sorting_dictionary: record.sorting_dictionary.map(DictionaryId),
-                    config,
-                });
+                profiles.push(Profile::new(id, config));
                 index
             };
 

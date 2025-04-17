@@ -18,7 +18,7 @@ workspace = true
 all-features = true
 
 [features]
-poem-openapi = ["dep:poem-openapi"]
+poem-openapi = ["dep:poem", "dep:poem-openapi"]
 render-html  = ["dep:maud", "dep:html-escape"]
 
 [dependencies]
@@ -27,6 +27,7 @@ foldhash     = { workspace = true }
 html-escape  = { workspace = true, optional = true }
 maud         = { workspace = true, optional = true }
 paste        = { workspace = true }
+poem         = { workspace = true, optional = true }
 poem-openapi = { workspace = true, optional = true }
 serde        = { workspace = true, features = ["derive"] }
 serde_json   = { workspace = true }

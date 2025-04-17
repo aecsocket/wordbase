@@ -14,6 +14,10 @@ pub async fn setup(path: &Path) -> Result<Pool<Sqlite>> {
         .connect_with(connect_options(path))
         .await
         .context("failed to connect to database")?;
+    sqlx::query(include_str!("schema.sql"))
+        .execute(&db)
+        .await
+        .context("failed to setup database")?;
     Ok(db)
 }
 

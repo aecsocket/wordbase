@@ -14,7 +14,8 @@ use {
         adw::{glib::clone, gtk::pango, prelude::*},
         prelude::*,
     },
-    wordbase_engine::{Engine, profile::ProfileConfig},
+    wordbase::NormString,
+    wordbase_engine::Engine,
 };
 
 #[derive(Debug)]
@@ -163,21 +164,17 @@ async fn set_font(model: &Model) -> Result<()> {
         return Ok(());
     };
 
+    let mut config = CURRENT_PROFILE
+        .read()
+        .as_ref()
+        .cloned()
+        .unwrap()
+        .config
+        .clone();
+    config.font_family = NormString::new(font.family().name());
     model
         .engine
-        .set_profile_config(
-            CURRENT_PROFILE_ID.read().unwrap(),
-            &ProfileConfig {
-                font_family: Some(font.family().name().to_string()),
-                ..CURRENT_PROFILE
-                    .read()
-                    .as_ref()
-                    .cloned()
-                    .unwrap()
-                    .config
-                    .clone()
-            },
-        )
+        .set_profile_config(CURRENT_PROFILE_ID.read().unwrap(), config)
         .await
         .context("failed to set font")?;
     _ = APP_EVENTS.send(AppEvent::FontSet);
@@ -185,22 +182,17 @@ async fn set_font(model: &Model) -> Result<()> {
 }
 
 async fn reset_font(model: &Model) -> Result<()> {
-    let profiles = model.engine.profiles();
+    let mut config = CURRENT_PROFILE
+        .read()
+        .as_ref()
+        .cloned()
+        .unwrap()
+        .config
+        .clone();
+    config.font_family = None;
     model
         .engine
-        .set_profile_config(
-            CURRENT_PROFILE_ID.read().unwrap(),
-            &ProfileConfig {
-                font_family: None,
-                ..CURRENT_PROFILE
-                    .read()
-                    .as_ref()
-                    .cloned()
-                    .unwrap()
-                    .config
-                    .clone()
-            },
-        )
+        .set_profile_config(CURRENT_PROFILE_ID.read().unwrap(), config)
         .await
         .context("failed to reset font")?;
     _ = APP_EVENTS.send(AppEvent::FontSet);

@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use ascii_table::AsciiTable;
-use wordbase::{DictionaryId, NormString, ProfileMeta};
-use wordbase_engine::{Engine, profile::ProfileState};
+use wordbase::{DictionaryId, NormString, Profile, ProfileConfig};
+use wordbase_engine::Engine;
 
 pub fn ls(engine: &Engine) {
     let mut table = AsciiTable::default();
@@ -32,6 +32,7 @@ pub fn ls(engine: &Engine) {
                 .join(", ");
 
             let sorting_dictionary = profile
+                .config
                 .sorting_dictionary
                 .map(name_of_dict)
                 .unwrap_or_default();
@@ -39,7 +40,7 @@ pub fn ls(engine: &Engine) {
             vec![
                 format!("{}", profile.id.0),
                 profile
-                    .meta
+                    .config
                     .name
                     .as_ref()
                     .map_or_else(|| "(default)".into(), |s| s.clone().into_inner()),
@@ -57,42 +58,31 @@ pub fn ls(engine: &Engine) {
     table.print(&data);
 }
 
-pub async fn copy(engine: &Engine, profile: &ProfileState, name: String) -> Result<()> {
+pub async fn copy(engine: &Engine, profile: &Profile, name: String) -> Result<()> {
     let name = NormString::new(name).context("invalid new name")?;
     let new_id = engine
-        .copy_profile(
-            profile.id,
-            &ProfileMeta {
-                name: Some(name),
-                accent_color: None,
-            },
-        )
+        .copy_profile(profile.id, ProfileConfig::new(Some(name)))
         .await?;
     println!("{}", new_id.0);
     Ok(())
 }
 
-pub fn info(_engine: &Engine, profile: &ProfileState) {
+pub fn info(_engine: &Engine, profile: &Profile) {
     println!("{profile:#?}");
 }
 
-pub async fn set_name(engine: &Engine, profile: &ProfileState, name: Option<String>) -> Result<()> {
+pub async fn set_name(engine: &Engine, profile: &Profile, name: Option<String>) -> Result<()> {
     let name = name
         .map(|name| NormString::new(name).context("invalid new name"))
         .transpose()?;
-    engine
-        .set_profile_meta(
-            profile.id,
-            &ProfileMeta {
-                name,
-                ..profile.meta.clone()
-            },
-        )
-        .await?;
+    let mut config = profile.config.clone();
+    config.name = name;
+
+    engine.set_profile_config(profile.id, config).await?;
     Ok(())
 }
 
-pub async fn rm(engine: &Engine, profile: &ProfileState) -> Result<()> {
+pub async fn rm(engine: &Engine, profile: &Profile) -> Result<()> {
     engine.remove_profile(profile.id).await?;
     Ok(())
 }

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use wordbase::{DictionaryId, ProfileId, Record, RecordId, RecordKind};
 use wordbase_engine::Engine;
 
-pub async fn expr(engine: &Engine, req: &ExprRequest) -> Result<Vec<RecordLookup>> {
+pub async fn expr(engine: &Engine, req: ExprRequest) -> Result<Vec<RecordLookup>> {
     Ok(engine
         .lookup(req.profile_id, &req.sentence, req.cursor, &req.record_kinds)
         .await?
@@ -36,7 +36,7 @@ impl Example for ExprRequest {
     }
 }
 
-pub async fn lemma(engine: &Engine, req: &Lemma) -> Result<Vec<RecordLookup>> {
+pub async fn lemma(engine: &Engine, req: Lemma) -> Result<Vec<RecordLookup>> {
     Ok(engine
         .lookup_lemma(req.profile_id, &req.lemma, &req.record_kinds)
         .await?
@@ -63,7 +63,7 @@ impl Example for Lemma {
     }
 }
 
-pub async fn deinflect(engine: &Engine, req: &Deinflect) -> Vec<Deinflection> {
+pub async fn deinflect(engine: &Engine, req: Deinflect) -> Vec<Deinflection> {
     engine
         .deinflect(&req.text)
         .into_iter()

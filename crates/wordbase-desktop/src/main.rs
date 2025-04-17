@@ -36,8 +36,8 @@ use {
     tokio::{fs, sync::broadcast},
     tracing::{error, info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
-    wordbase::{DictionaryId, ProfileId},
-    wordbase_engine::{Engine, profile::ProfileState},
+    wordbase::{DictionaryId, Profile, ProfileId},
+    wordbase_engine::Engine,
 };
 
 const APP_ID: &str = "io.github.aecsocket.Wordbase";
@@ -46,7 +46,7 @@ static APP_EVENTS: LazyLock<broadcast::Sender<AppEvent>> =
     LazyLock::new(|| broadcast::channel(CHANNEL_BUF_CAP).0);
 
 static CURRENT_PROFILE_ID: SharedState<Option<ProfileId>> = SharedState::new();
-static CURRENT_PROFILE: SharedState<Option<Arc<ProfileState>>> = SharedState::new();
+static CURRENT_PROFILE: SharedState<Option<Arc<Profile>>> = SharedState::new();
 
 #[derive(Debug, Clone)]
 pub enum AppEvent {

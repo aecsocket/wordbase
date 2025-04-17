@@ -1,6 +1,6 @@
 use anyhow::Result;
-use wordbase::RecordKind;
-use wordbase_engine::{Engine, profile::ProfileState};
+use wordbase::{Profile, RecordKind};
+use wordbase_engine::Engine;
 
 pub fn deinflect(engine: &Engine, text: &str) {
     for lemma in engine.deinflect(text) {
@@ -14,14 +14,14 @@ pub fn deinflect(engine: &Engine, text: &str) {
     }
 }
 
-pub async fn lookup(engine: &Engine, profile: &ProfileState, text: &str) -> Result<()> {
+pub async fn lookup(engine: &Engine, profile: &Profile, text: &str) -> Result<()> {
     for result in engine.lookup(profile.id, text, 0, RecordKind::ALL).await? {
         println!("{result:#?}");
     }
     Ok(())
 }
 
-pub async fn lookup_lemma(engine: &Engine, profile: &ProfileState, lemma: &str) -> Result<()> {
+pub async fn lookup_lemma(engine: &Engine, profile: &Profile, lemma: &str) -> Result<()> {
     for result in engine
         .lookup_lemma(profile.id, &lemma, RecordKind::ALL)
         .await?

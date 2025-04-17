@@ -199,8 +199,13 @@ fn show_enabled(model: &Model, root: &ui::DictionaryRow) {
 }
 
 fn show_sorting(model: &Model, root: &ui::DictionaryRow) {
-    let is_sorting =
-        CURRENT_PROFILE.read().as_ref().unwrap().sorting_dictionary == Some(model.dictionary.id);
+    let is_sorting = CURRENT_PROFILE
+        .read()
+        .as_ref()
+        .unwrap()
+        .config
+        .sorting_dictionary
+        == Some(model.dictionary.id);
     root.is_sorting().set_visible(is_sorting);
 }
 

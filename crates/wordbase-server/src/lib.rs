@@ -17,7 +17,7 @@ use {
     },
     std::sync::Arc,
     tokio::net::ToSocketAddrs,
-    wordbase::{Dictionary, DictionaryId, Profile, ProfileId},
+    wordbase::{Dictionary, DictionaryId, Profile, ProfileConfig, ProfileId},
     wordbase_engine::{Engine, NotFound},
 };
 
@@ -57,7 +57,7 @@ impl Api {
         &self,
         req: Json<lookup::ExprRequest>,
     ) -> Result<Json<Vec<lookup::RecordLookup>>> {
-        lookup::expr(&self.engine, &req).await.map(Json)
+        lookup::expr(&self.engine, req.0).await.map(Json)
     }
 
     #[oai(path = "/lookup/lemma", method = "post")]
@@ -65,7 +65,7 @@ impl Api {
         &self,
         req: Json<lookup::Lemma>,
     ) -> Result<Json<Vec<lookup::RecordLookup>>> {
-        lookup::lemma(&self.engine, &req).await.map(Json)
+        lookup::lemma(&self.engine, req.0).await.map(Json)
     }
 
     #[oai(path = "/lookup/deinflect", method = "post")]
@@ -73,7 +73,7 @@ impl Api {
         &self,
         req: Json<lookup::Deinflect>,
     ) -> Json<Vec<lookup::Deinflection>> {
-        Json(lookup::deinflect(&self.engine, &req).await)
+        Json(lookup::deinflect(&self.engine, req.0).await)
     }
 
     #[oai(path = "/dict", method = "get")]
@@ -83,12 +83,12 @@ impl Api {
 
     #[oai(path = "/dict/:dict_id", method = "get")]
     async fn dict_find(&self, dict_id: Path<DictionaryId>) -> Result<Json<Arc<Dictionary>>> {
-        dict::find(&self.engine, *dict_id).await.map(Json)
+        dict::find(&self.engine, dict_id.0).await.map(Json)
     }
 
     #[oai(path = "/dict/:dict_id", method = "delete")]
     async fn dict_delete(&self, dict_id: Path<DictionaryId>) -> Result<()> {
-        dict::delete(&self.engine, *dict_id).await
+        dict::delete(&self.engine, dict_id.0).await
     }
 
     #[oai(path = "/dict/import", method = "post")]
@@ -105,7 +105,7 @@ impl Api {
         dict_id: Path<DictionaryId>,
         req: Json<dict::SetPosition>,
     ) -> Result<()> {
-        dict::set_position(&self.engine, *dict_id, &req).await
+        dict::set_position(&self.engine, dict_id.0, req.0).await
     }
 
     #[oai(path = "/dict/:dict_id/enable", method = "post")]
@@ -114,7 +114,7 @@ impl Api {
         dict_id: Path<DictionaryId>,
         req: Json<dict::ToggleEnable>,
     ) -> Result<()> {
-        dict::enable(&self.engine, *dict_id, &req).await
+        dict::enable(&self.engine, dict_id.0, req.0).await
     }
 
     #[oai(path = "/dict/:dict_id/disable", method = "post")]
@@ -123,29 +123,46 @@ impl Api {
         dict_id: Path<DictionaryId>,
         req: Json<dict::ToggleEnable>,
     ) -> Result<()> {
-        dict::disable(&self.engine, *dict_id, &req).await
+        dict::disable(&self.engine, dict_id.0, req.0).await
     }
 
     #[oai(path = "/profile", method = "get")]
-    async fn profile_index(&self) -> Json<Vec<Profile>> {
+    async fn profile_index(&self) -> Json<Vec<Arc<Profile>>> {
         Json(profile::index(&self.engine).await)
     }
 
     #[oai(path = "/profile/:profile_id", method = "get")]
-    async fn profile_find(&self, profile_id: Path<ProfileId>) -> Result<Json<Profile>> {
-        profile::find(&self.engine, *profile_id).await.map(Json)
+    async fn profile_find(&self, profile_id: Path<ProfileId>) -> Result<Json<Arc<Profile>>> {
+        profile::find(&self.engine, profile_id.0).await.map(Json)
     }
 
     #[oai(path = "/profile/:profile_id", method = "delete")]
     async fn profile_delete(&self, profile_id: Path<ProfileId>) -> Result<()> {
-        profile::delete(&self.engine, *profile_id).await
+        profile::delete(&self.engine, profile_id.0).await
     }
 
-    #[oai(path = "/profile/copy", method = "post")]
+    #[oai(path = "/profile", method = "put")]
+    async fn profile_add(&self, req: Json<profile::Add>) -> Result<Json<profile::AddResponse>> {
+        profile::add(&self.engine, req.0).await.map(Json)
+    }
+
+    #[oai(path = "/profile/:profile_id/copy", method = "post")]
     async fn profile_copy(
         &self,
-        req: Json<profile::CopyRequest>,
-    ) -> Result<Json<profile::CopyResponse>> {
-        profile::copy(&self.engine, &req).await.map(Json)
+        profile_id: Path<ProfileId>,
+        req: Json<profile::Add>,
+    ) -> Result<Json<profile::AddResponse>> {
+        profile::copy(&self.engine, profile_id.0, req.0)
+            .await
+            .map(Json)
+    }
+
+    #[oai(path = "/profile/:profile_id/config", method = "post")]
+    async fn profile_set_config(
+        &self,
+        profile_id: Path<ProfileId>,
+        req: Json<ProfileConfig>,
+    ) -> Result<()> {
+        profile::set_config(&self.engine, profile_id.0, req.0).await
     }
 }

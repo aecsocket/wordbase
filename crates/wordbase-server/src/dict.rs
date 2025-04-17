@@ -114,7 +114,7 @@ pub struct ImportErr {
     pub error: String,
 }
 
-pub async fn set_position(engine: &Engine, dict_id: DictionaryId, req: &SetPosition) -> Result<()> {
+pub async fn set_position(engine: &Engine, dict_id: DictionaryId, req: SetPosition) -> Result<()> {
     engine
         .set_dictionary_position(dict_id, req.position)
         .await?;
@@ -126,12 +126,12 @@ pub struct SetPosition {
     pub position: i64,
 }
 
-pub async fn enable(engine: &Engine, dict_id: DictionaryId, req: &ToggleEnable) -> Result<()> {
+pub async fn enable(engine: &Engine, dict_id: DictionaryId, req: ToggleEnable) -> Result<()> {
     engine.enable_dictionary(req.profile_id, dict_id).await?;
     Ok(())
 }
 
-pub async fn disable(engine: &Engine, dict_id: DictionaryId, req: &ToggleEnable) -> Result<()> {
+pub async fn disable(engine: &Engine, dict_id: DictionaryId, req: ToggleEnable) -> Result<()> {
     engine.enable_dictionary(req.profile_id, dict_id).await?;
     Ok(())
 }
