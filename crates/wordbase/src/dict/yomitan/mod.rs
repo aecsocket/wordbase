@@ -1,6 +1,9 @@
 //! [Yomitan] dictionary format, specialized for Japanese.
 //!
+//! See the [schemas list].
+//!
 //! [Yomitan]: https://github.com/yomidevs/yomitan/
+//! [schemas list]: https://github.com/yomidevs/yomitan/blob/master/docs/making-yomitan-dictionaries.md#read-the-schemas
 
 #[cfg(feature = "render-html")]
 mod html;
@@ -11,11 +14,15 @@ use {
     serde::{Deserialize, Serialize},
 };
 
+/// What this term means, written in the dictionary's source language.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Glossary {
     /// How frequently this word appears, as a ranking relative to other terms
     /// in this dictionary.
+    ///
+    /// The engine will also use this value for sorting by frequency, so you do
+    /// **not** have to sort by this value on the client side.
     pub popularity: i64,
     /// Tags applied to the glossary content.
     pub tags: Vec<GlossaryTag>,
@@ -23,13 +30,24 @@ pub struct Glossary {
     pub content: Vec<structured::Content>,
 }
 
+/// How often this term appears in this dictionary's corpus.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Frequency {
-    pub rank: Option<FrequencyValue>,
+    /// Raw integer ranking value.
+    ///
+    /// The variant of [`FrequencyValue`] is determined by the [frequency mode]
+    /// of the dictionary.
+    ///
+    /// [frequency mode]: https://github.com/yomidevs/yomitan/blob/d2fd7ec796bf3329abd6b92f2398e734d5042423/ext/data/schemas/dictionary-index-schema.json#L82
+    pub value: Option<FrequencyValue>,
+    /// Human-readable display form of [`Frequency::value`].
+    ///
+    /// Prefer displaying this to users if one is present.
     pub display: Option<String>,
 }
 
+/// Japanese pitch accent information.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Pitch {

@@ -13,6 +13,7 @@ use serde::Deserialize;
 use crate::{DictionaryKind, DictionaryMeta, NormString, Term, TermPart};
 
 impl DictionaryMeta {
+    /// Creates a new value with only the required fields.
     #[must_use]
     pub fn new(kind: DictionaryKind, name: impl Into<String>) -> Self {
         Self {
@@ -27,6 +28,7 @@ impl DictionaryMeta {
 }
 
 impl Term {
+    /// Creates a new value from a headword and reading.
     #[must_use]
     pub fn new(headword: impl TermPart, reading: impl TermPart) -> Option<Self> {
         match (
@@ -40,16 +42,19 @@ impl Term {
         }
     }
 
+    /// Creates a new value from only a headword.
     #[must_use]
     pub fn from_headword<T: TermPart>(headword: T) -> T::IntoTerm {
         headword.into_term_with_headword()
     }
 
+    /// Creates a new value from only a reading.
     #[must_use]
     pub fn from_reading<T: TermPart>(reading: T) -> T::IntoTerm {
         reading.into_term_with_reading()
     }
 
+    /// Gets a reference to the headword if one is present.
     #[must_use]
     pub fn headword(&self) -> Option<&NormString> {
         match self {
@@ -58,6 +63,7 @@ impl Term {
         }
     }
 
+    /// Gets a reference to the reading if one is present.
     #[must_use]
     pub fn reading(&self) -> Option<&NormString> {
         match self {
@@ -66,6 +72,7 @@ impl Term {
         }
     }
 
+    /// Gets a mutable reference to the headword if one is present.
     #[must_use]
     pub fn headword_mut(&mut self) -> Option<&mut NormString> {
         match self {
@@ -74,6 +81,7 @@ impl Term {
         }
     }
 
+    /// Gets a mutable reference to the reading if one is present.
     #[must_use]
     pub fn reading_mut(&mut self) -> Option<&mut NormString> {
         match self {
@@ -82,6 +90,7 @@ impl Term {
         }
     }
 
+    /// Sets the headword, returning the old headword if one was present.
     pub fn set_headword(&mut self, new: NormString) -> Option<NormString> {
         match self {
             Self::Full { headword, .. } | Self::Headword { headword } => {
@@ -99,6 +108,7 @@ impl Term {
         }
     }
 
+    /// Sets the reading, returning the old reading if one was present.
     pub fn set_reading(&mut self, new: NormString) -> Option<NormString> {
         match self {
             Self::Full { reading, .. } | Self::Reading { reading } => {
@@ -116,6 +126,7 @@ impl Term {
         }
     }
 
+    /// Takes ownership of the term and returns the headword, if one was present.
     #[must_use]
     pub fn take_headword(self) -> Option<NormString> {
         match self {
@@ -124,6 +135,7 @@ impl Term {
         }
     }
 
+    /// Takes ownership of the term and returns the reading, if one was present.
     #[must_use]
     pub fn take_reading(self) -> Option<NormString> {
         match self {
@@ -134,6 +146,9 @@ impl Term {
 }
 
 impl NormString {
+    /// Attempts to create a new value from an existing string.
+    ///
+    /// If the string is empty, returns [`None`].
     #[must_use]
     pub fn new(string: impl Into<String>) -> Option<Self> {
         let string: String = string.into();
@@ -149,11 +164,17 @@ impl NormString {
         }
     }
 
+    /// Creates a new value from an existing string without checking for emptiness.
+    ///
+    /// # Correctness
+    ///
+    /// The trimmed string must not be empty.
     #[must_use]
     pub fn new_unchecked(string: String) -> Self {
         Self(string)
     }
 
+    /// Takes the underlying string.
     #[must_use]
     pub fn into_inner(self) -> String {
         self.0

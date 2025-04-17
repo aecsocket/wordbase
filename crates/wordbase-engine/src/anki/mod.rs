@@ -208,10 +208,12 @@ impl Engine {
         let frequencies = records
             .iter()
             .filter_map(|record| match &record.record {
-                Record::YomitanFrequency(dict::yomitan::Frequency { rank, display }) => {
-                    match (rank, display) {
+                Record::YomitanFrequency(dict::yomitan::Frequency { value, display }) => {
+                    match (value, display) {
                         (_, Some(display)) => Some((record, display.clone())),
-                        (Some(rank), None) => Some((record, format!("{}", rank.value()))),
+                        (Some(FrequencyValue::Rank(rank)), None) => {
+                            Some((record, format!("{rank}")))
+                        }
                         _ => None,
                     }
                 }
@@ -231,7 +233,7 @@ impl Engine {
                 .filter_map(|record| match &record.record {
                     Record::YomitanFrequency(dict::yomitan::Frequency {
                         // TODO: how do we handle occurrences?
-                        rank: Some(FrequencyValue::Rank(rank)),
+                        value: Some(FrequencyValue::Rank(rank)),
                         ..
                     }) => Some(*rank),
                     _ => None,

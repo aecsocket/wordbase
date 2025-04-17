@@ -84,6 +84,7 @@ fn toast_error(toaster: &adw::ToastOverlay, err: &anyhow::Error) {
 fn toast_result(toaster: &adw::ToastOverlay, result: Result<()>) {
     if let Err(err) = result {
         toast_error(toaster, &err);
+        error!("{err:?}");
     }
 }
 

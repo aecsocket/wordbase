@@ -5,7 +5,7 @@ use {
     maud::{Markup, PreEscaped, html},
     std::fmt::Write as _,
     wordbase::{
-        Dictionary, DictionaryId, Record, RecordLookup, Term,
+        Dictionary, DictionaryId, FrequencyValue, Record, RecordLookup, Term,
         dict::{self, yomichan_audio::AudioFormat},
     },
     wordbase_engine::lang,
@@ -243,7 +243,10 @@ pub fn render_frequency(frequency: &dict::yomitan::Frequency) -> Markup {
         (frequency
             .display
             .clone()
-            .or_else(|| frequency.rank.map(|rank| format!("{}", rank.value())))
+            .or_else(|| frequency.value.and_then(|value| match value {
+                FrequencyValue::Rank(rank) => Some(format!("{rank}")),
+                FrequencyValue::Occurrence(_) => None,
+            }))
             .unwrap_or_else(|| "?".into()))
     }
 }

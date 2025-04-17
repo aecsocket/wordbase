@@ -1,5 +1,4 @@
 #![doc = include_str!("../README.md")]
-#![allow(missing_docs)]
 
 pub mod dict;
 
@@ -124,6 +123,10 @@ macro_rules! for_kinds { ($macro:ident) => { $macro!(
 ); } }
 
 macro_rules! define_types { ($($dict_kind:ident($dict_path:ident) { $($record_kind:ident),* $(,)? }),* $(,)?) => { paste::paste! {
+/// Kind of [`Dictionary`] that can be imported into the engine.
+///
+/// This is `#[non_exhaustive]`, and new variants may be added in the future
+/// without breaking old code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Enum))]
 #[repr(u32)]
@@ -140,6 +143,11 @@ impl DictionaryKind {
     pub const ALL: &[Self] = &[$(Self::$dict_kind,)*];
 }
 
+/// Kind of [`RecordKind`] that a dictionary can contain, and that a client can
+/// query.
+///
+/// This is `#[non_exhaustive]`, and new variants may be added in the future
+/// without breaking old code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Enum))]
 #[repr(u32)]
@@ -156,6 +164,7 @@ impl RecordKind {
     pub const ALL: &[Self] = &[$($(Self::[< $dict_kind $record_kind >],)*)*];
 }
 
+/// Data that a [`Dictionary`] may store for a specific [`Term`].
 #[derive(Debug, Clone, Serialize, Deserialize, From)]
 #[non_exhaustive]
 pub enum Record {
@@ -189,6 +198,7 @@ mod sealed {
     pub trait RecordType {}
 }
 
+/// Provides bounds on the type of data that can be stored in a [`Record`].
 pub trait RecordType:
     sealed::RecordType
     + Sized
@@ -199,15 +209,23 @@ pub trait RecordType:
     + Serialize
     + DeserializeOwned
     + Into<Record>
+    + 'static
 {
     /// [`RecordKind`] variant of this record type.
     const KIND: RecordKind;
 }
 
+/// Opaque and unique identifier for a [`Record`] in the engine.
+///
+/// Multiple [`Term`]s may link to a single [`Record`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::NewType))]
 pub struct RecordId(pub i64);
 
+/// Imported collection of [`Record`]s in the engine.
+///
+/// This represents a dictionary which has already been imported into the
+/// engine, whereas [`DictionaryMeta`] may not.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
 #[serde(deny_unknown_fields)]
@@ -225,6 +243,21 @@ pub struct Dictionary {
 }
 
 /// Metadata for a [`Dictionary`].
+///
+/// This is `#[non_exhaustive]`, and new fields may be added in the future
+/// without breaking old code. Therefore, to create a new value, you must use
+/// [`DictionaryMeta::new`] to create an initial value, then set fields
+/// explicitly.
+///
+/// # Examples
+///
+/// ```
+/// # use wordbase::DictionaryMeta;
+///
+/// let mut meta = DictionaryMeta::new(DictionaryKind::YomitanDictionary, "My Dictionary");
+/// meta.version = Some("1.0.0".into());
+/// meta.url = Some("https://example.com".into());
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
 #[non_exhaustive]
@@ -256,35 +289,63 @@ pub struct DictionaryMeta {
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::NewType))]
 pub struct DictionaryId(pub i64);
 
+/// Key for [`Record`]s in a [`Dictionary`].
+///
+/// A term consists of at least one of a headword or reading. Both the headword
+/// and reading are guaranteed to be non-empty, enforced by [`NormString`].
+///
+/// For languages without the concept of a reading, only the headword should be
+/// specified ([`Term::Headword`]), as this represents the canonical dictionary
+/// form of this term.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(untagged, deny_unknown_fields)]
 pub enum Term {
+    /// Has both a headword and a reading.
     Full {
+        /// Headword.
         headword: NormString,
+        /// Reading.
         reading: NormString,
     },
+    /// Has only a headword.
     Headword {
+        /// Headword.
         headword: NormString,
     },
+    /// Has only a reading.
     Reading {
+        /// Reading.
         reading: NormString,
     },
 }
 
+/// How often a [`Term`] appears in a single [`Dictionary`].
+///
+/// This value is used for sorting lookup results. However, the value given is
+/// only valid in the context of a **single specific** [`Dictionary`]. That is,
+/// if you take a [`FrequencyValue`] from one [`Dictionary`] and compare it to
+/// another [`FrequencyValue`] from a different [`Dictionary`], the result is
+/// meaningless.
+///
+/// There is explicitly no way to get the [`i64`] from this value while ignoring
+/// the variant, as the value does not make sense without knowing if it's a rank
+/// or an occurrence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum FrequencyValue {
+    /// Lower value represents a [`Term`] which appears more frequently.
     Rank(i64),
+    /// Lower value represents a [`Term`] which appears less frequently.
     Occurrence(i64),
 }
 
-impl FrequencyValue {
-    #[must_use]
-    pub const fn value(self) -> i64 {
-        let (Self::Rank(n) | Self::Occurrence(n)) = self;
-        n
-    }
-}
-
+/// Collection of user-defined settings which can be freely switched between.
+///
+/// The engine does not have a concept of a current profile - instead, it is the
+/// app's responsibility to manage a current profile, and pass that profile ID
+/// into operations which require it (e.g. lookups).
+///
+/// This represents a profile which already exists in the engine, whereas
+/// [`DictionaryMeta`] may not.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
 pub struct Profile {
@@ -305,13 +366,15 @@ pub struct Profile {
     pub sorting_dictionary: Option<DictionaryId>,
 }
 
+/// User-specified metadata for a [`Profile`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
 pub struct ProfileMeta {
     /// Name of the profile.
     ///
     /// User-defined profiles will always have a name. If the name is missing,
-    /// then this is the default profile made on startup.
+    /// then this is the default profile made on startup, and should be labelled
+    /// to the user as "Default Profile" or similar.
     pub name: Option<NormString>,
     /// RGB accent color of the profile.
     ///
@@ -326,6 +389,10 @@ pub struct ProfileMeta {
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::NewType))]
 pub struct ProfileId(pub i64);
 
+/// Normalized string buffer.
+///
+/// This type is guaranteed to be a non-empty string with no trailing or leading
+/// whitespace.
 #[derive(Display, Clone, PartialEq, Eq, Hash, Deref, Serialize)]
 #[cfg_attr(
     feature = "poem-openapi",

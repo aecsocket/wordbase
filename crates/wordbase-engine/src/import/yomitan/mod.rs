@@ -405,8 +405,8 @@ async fn import_term_meta(
                 .await
                 .context("failed to insert frequency term record")?;
 
-            if let Some(rank) = record.rank {
-                insert_frequency(tx, source, &term, rank)
+            if let Some(value) = record.value {
+                insert_frequency(tx, source, &term, value)
                     .await
                     .context("failed to insert frequency sorting record")?;
             }
@@ -459,23 +459,23 @@ fn to_frequency_and_reading(
         schema::TermMetaFrequency::WithReading { reading, frequency } => (Some(reading), frequency),
     };
 
-    let rank_from = |n: i64| match frequency_mode {
+    let value_from = |n: i64| match frequency_mode {
         schema::FrequencyMode::OccurrenceBased => FrequencyValue::Occurrence(n),
         schema::FrequencyMode::RankBased => FrequencyValue::Rank(n),
     };
 
     let frequency = match generic {
         schema::GenericFrequencyData::Number(rank) => Frequency {
-            rank: Some(rank_from(rank)),
+            value: Some(value_from(rank)),
             display: None,
         },
         schema::GenericFrequencyData::String(rank) => rank.trim().parse::<i64>().map_or(
             Frequency {
-                rank: None,
+                value: None,
                 display: Some(rank),
             },
             |rank| Frequency {
-                rank: Some(rank_from(rank)),
+                value: Some(value_from(rank)),
                 display: None,
             },
         ),
@@ -483,7 +483,7 @@ fn to_frequency_and_reading(
             value,
             display_value,
         } => Frequency {
-            rank: Some(rank_from(value)),
+            value: Some(value_from(value)),
             display: display_value,
         },
     };

@@ -132,25 +132,38 @@ impl Engine {
                         )*)*
                     }
 
-                    match u32::try_from(record.kind) {
-                        $($(
-                        Ok(discrim::[< $dict_kind $record_kind >]) => {
-                            let record = db::deserialize(&record.data)
-                                .with_context(|| format!("failed to deserialize {} record", stringify!([< $dict_kind $record_kind >])))?;
-                            Record::[< $dict_kind $record_kind >](record)
+                    (|| {
+                        match u32::try_from(record.kind) {
+                            $($(
+                            Ok(discrim::[< $dict_kind $record_kind >]) => {
+                                let record = db::deserialize(&record.data)
+                                    .with_context(|| format!("failed to deserialize as {}", stringify!([< $dict_kind $record_kind >])))?;
+                                anyhow::Ok(Record::[< $dict_kind $record_kind >](record))
+                            }
+                            )*)*
+                            _ => bail!("invalid record kind {}", record.kind),
                         }
-                        )*)*
-                        _ => bail!("invalid record kind {}", record.kind),
-                    }
+                    })()
                 }}}}
+
+                let source = DictionaryId(record.source);
+                let term = Term::new(record.headword, record.reading)
+                    .context("fetched empty term")?;
+
+                let typed_record = for_kinds!(deserialize_record)
+                    .with_context(|| {
+                        format!(
+                            "failed to deserialize record {term:?} from dictionary {:?} ({source:?})",
+                            self.dictionaries().get(&source).map_or("?", |dict| dict.meta.name.as_str())
+                        )
+                    })?;
 
                 Ok(RecordLookup {
                     bytes_scanned: lemma.len(),
                     source: DictionaryId(record.source),
-                    term: Term::new(record.headword, record.reading)
-                        .context("fetched empty term")?,
                     record_id: RecordId(record.id),
-                    record: for_kinds!(deserialize_record),
+                    term,
+                    record: typed_record,
                     profile_sorting_frequency: to_frequency_value(
                         record.profile_frequency_mode,
                         record.profile_frequency_value,
