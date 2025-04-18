@@ -115,7 +115,7 @@ impl AsyncComponent for Model {
                 record_view::Response::Html(html) => Msg::Html(html),
                 record_view::Response::Query(query) => Msg::SetQuery(query),
             });
-        root.search_view().set_content(Some(record_view.widget()));
+        root.lookup_results().set_child(Some(record_view.widget()));
 
         let toaster = root.toaster();
         let model = Self {
@@ -140,12 +140,7 @@ impl AsyncComponent for Model {
 
         root.dictionaries()
             .add(model.overview_dictionaries.widget());
-        root.search_dictionaries()
-            .set_child(Some(model.search_dictionaries.widget()));
-
         root.themes().add(model.overview_themes.widget());
-        root.search_themes()
-            .set_child(Some(model.search_themes.widget()));
 
         root.quit()
             .connect_activated(|_| relm4::main_application().quit());

@@ -3,210 +3,172 @@ using Adw 1;
 
 template $WdbManager: Adw.Bin {
   Adw.ToastOverlay toaster {
-    Adw.NavigationView {
-      Adw.NavigationPage {
-        tag: "overview";
-        title: _("Overview");
+    Adw.ToolbarView {
+      top-bar-style: raised;
 
-        Adw.ToolbarView {
-          [top]
-          Adw.HeaderBar header_bar {
-            Button {
-              icon-name: "system-search-symbolic";
-              action-name: "navigation.push";
-              action-target: "\"search\"";
-            }
+      [top]
+      Adw.HeaderBar {
+        title-widget: SearchEntry search_entry {
+          hexpand: true;
+        };
 
-            title-widget: DropDown current_profile {
-              model: profiles_model;
-              enable-search: true;
-            };
-          }
+        [start]
+        DropDown current_profile {
+          model: profiles_model;
+        }
 
-          Adw.PreferencesPage {
-            Adw.PreferencesGroup dictionaries {
-              title: _("Dictionaries");
-            }
-
-            Adw.PreferencesGroup themes {
-              title: _("Themes");
-            }
-
-            Adw.PreferencesGroup {
-              title: _("AnkiConnect");
-
-              [header-suffix]
-              Box {
-                spacing: 8;
-
-                Button ankiconnect_connected {
-                  tooltip-text: _("AnkiConnect connected");
-                  icon-name: "check-plain-symbolic";
-
-                  styles ["success", "flat"]
-                }
-
-                Button ankiconnect_disconnected {
-                  tooltip-text: _("AnkiConnect disconnected");
-                  icon-name: "chain-link-loose-symbolic";
-
-                  styles ["dimmed", "flat"]
-                }
-              }
-
-              Adw.ComboRow {
-                title: _("Deck");
-                model: deck_model;
-              }
-
-              Adw.ComboRow {
-                title: _("Note Type");
-                model: note_type_model;
-                selected: 2;
-              }
-
-              Adw.ExpanderRow {
-                title: _("Note Fields");
-
-                Adw.ComboRow {
-                  title: _("Word");
-                  model: field_content_model;
-                  selected: 1;
-                }
-
-                Adw.ComboRow {
-                  title: _("Word Reading");
-                  model: field_content_model;
-                  selected: 2;
-                }
-
-                Adw.ComboRow {
-                  title: _("Word Meaning");
-                  model: field_content_model;
-                  selected: 3;
-                }
-
-                Adw.ComboRow {
-                  title: _("Word Furigana");
-                  model: field_content_model;
-                  selected: 0;
-                }
-              }
-
-              Adw.EntryRow ankiconnect_server_url {
-                title: _("Server URL");
-              }
-
-              Adw.PasswordEntryRow ankiconnect_api_key {
-                title: _("API Key");
-              }
-            }
-
-            Adw.PreferencesGroup {
-              title: _("Advanced");
-
-              Adw.EntryRow texthooker_url {
-                title: _("Texthooker URL");
-
-                [suffix]
-                Button texthooker_connected {
-                  valign: center;
-                  tooltip-text: _("Texthooker connected");
-                  icon-name: "check-plain-symbolic";
-
-                  styles ["success", "flat"]
-                }
-
-                [suffix]
-                Button texthooker_disconnected {
-                  valign: center;
-                  tooltip-text: _("Texthooker disconnected");
-                  icon-name: "chain-link-loose-symbolic";
-
-                  styles ["dimmed", "flat"]
-                }
-              }
-            }
-
-            Adw.PreferencesGroup {
-              Adw.ButtonRow quit {
-                title: _("Quit App");
-
-                styles ["destructive-action"]
-              }
-            }
-          }
+        [end]
+        ToggleButton search_sidebar_toggle {
+          icon-name: "library-symbolic";
         }
       }
 
-      Adw.NavigationPage {
-        tag: "search";
-        title: _("Search");
+      Adw.OverlaySplitView search_view {
+        show-sidebar: bind search_sidebar_toggle.active bidirectional;
+        collapsed: true;
+        max-sidebar-width: 360;
+        sidebar-position: end;
 
-        Adw.ToolbarView {
-          top-bar-style: raised;
+        content: Adw.ViewStack {
+          enable-transitions: true;
 
-          [top]
-          Adw.HeaderBar {
-            title-widget: SearchEntry search_entry {
-              hexpand: true;
+          Adw.ViewStackPage {
+            name: "lookup_results";
+            child: Adw.Bin lookup_results {};
+          }
+
+          Adw.ViewStackPage {
+            name: "landing";
+            child: Adw.StatusPage {
+              icon-name: "system-search-symbolic";
+              title: _("Search");
+              description: _("Start typing to look up results for a word");
             };
+          }
 
-            [end]
-            ToggleButton search_sidebar_toggle {
-              icon-name: "sidebar-show-right-symbolic";
+          Adw.ViewStackPage {
+            name: "no_dictionaries";
+            child: Adw.StatusPage {
+              icon-name: "library-symbolic";
+              title: _("No Dictionaries Found");
+              description: _("Open the sidebar to import dictionaries");
+            };
+          }
+        };
+
+        sidebar: Adw.PreferencesPage {
+          Adw.PreferencesGroup dictionaries {
+            title: _("Dictionaries");
+          }
+
+          Adw.PreferencesGroup themes {
+            title: _("Themes");
+          }
+
+          Adw.PreferencesGroup {
+            title: _("AnkiConnect");
+
+            [header-suffix]
+            Box {
+              spacing: 8;
+
+              Button ankiconnect_connected {
+                tooltip-text: _("AnkiConnect connected");
+                icon-name: "check-plain-symbolic";
+
+                styles ["success", "flat"]
+              }
+
+              Button ankiconnect_disconnected {
+                tooltip-text: _("AnkiConnect disconnected");
+                icon-name: "chain-link-loose-symbolic";
+
+                styles ["dimmed", "flat"]
+              }
+            }
+
+            Adw.ComboRow {
+              title: _("Deck");
+              model: deck_model;
+            }
+
+            Adw.ComboRow {
+              title: _("Note Type");
+              model: note_type_model;
+              selected: 2;
+            }
+
+            Adw.ExpanderRow {
+              title: _("Note Fields");
+
+              Adw.ComboRow {
+                title: _("Word");
+                model: field_content_model;
+                selected: 1;
+              }
+
+              Adw.ComboRow {
+                title: _("Word Reading");
+                model: field_content_model;
+                selected: 2;
+              }
+
+              Adw.ComboRow {
+                title: _("Word Meaning");
+                model: field_content_model;
+                selected: 3;
+              }
+
+              Adw.ComboRow {
+                title: _("Word Furigana");
+                model: field_content_model;
+                selected: 0;
+              }
+            }
+
+            Adw.EntryRow ankiconnect_server_url {
+              title: _("Server URL");
+            }
+
+            Adw.PasswordEntryRow ankiconnect_api_key {
+              title: _("API Key");
             }
           }
 
-          Adw.OverlaySplitView search_view {
-            show-sidebar: bind search_sidebar_toggle.active bidirectional;
-            collapsed: true;
-            max-sidebar-width: 360;
-            sidebar-position: end;
+          Adw.PreferencesGroup {
+            title: _("Advanced");
 
-            sidebar: Adw.ToolbarView {
-              [top]
-              DropDown {
-                margin-start: 8;
-                margin-end: 8;
-                margin-bottom: 8;
-                margin-top: 8;
-                model: profiles_model;
+            Adw.EntryRow texthooker_url {
+              title: _("Texthooker URL");
+
+              [suffix]
+              Button texthooker_connected {
+                valign: center;
+                tooltip-text: _("Texthooker connected");
+                icon-name: "check-plain-symbolic";
+
+                styles ["success", "flat"]
               }
 
-              [bottom]
-              Adw.ViewSwitcherBar {
-                stack: search_sidebar_stack;
-                reveal: true;
+              [suffix]
+              Button texthooker_disconnected {
+                valign: center;
+                tooltip-text: _("Texthooker disconnected");
+                icon-name: "chain-link-loose-symbolic";
+
+                styles ["dimmed", "flat"]
               }
-
-              ScrolledWindow {
-                Adw.ViewStack search_sidebar_stack {
-                  margin-start: 8;
-                  margin-end: 8;
-                  margin-top: 8;
-                  margin-bottom: 8;
-
-                  Adw.ViewStackPage {
-                    name: "dictionaries";
-                    title: _("Dictionaries");
-                    icon-name: "library-symbolic";
-
-                    child: Adw.Bin search_dictionaries {};
-                  }
-
-                  Adw.ViewStackPage {
-                    name: "themes";
-                    title: _("Themes");
-                    icon-name: "larger-brush-symbolic";
-
-                    child: Adw.Bin search_themes {};
-                  }
-                }
-              }
-            };
+            }
           }
-        }
+
+          Adw.PreferencesGroup {
+            Adw.ButtonRow quit {
+              title: _("Quit App");
+
+              styles ["destructive-action"]
+            }
+          }
+        };
       }
     }
   }
@@ -214,9 +176,9 @@ template $WdbManager: Adw.Bin {
 
 StringList profiles_model {
   strings [
-    _("Foo"),
-    _("Bar"),
-    _("Baz"),
+    _("Japanese"),
+    _("Japanese Light Novels"),
+    _("Mandarin"),
   ]
 }
 

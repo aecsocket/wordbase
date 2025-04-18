@@ -35,11 +35,7 @@ mod imp {
         #[template_child]
         pub search_sidebar_toggle: TemplateChild<gtk::ToggleButton>,
         #[template_child]
-        pub search_view: TemplateChild<adw::OverlaySplitView>,
-        #[template_child]
-        pub search_dictionaries: TemplateChild<adw::Bin>,
-        #[template_child]
-        pub search_themes: TemplateChild<adw::Bin>,
+        pub lookup_results: TemplateChild<adw::Bin>,
         #[template_child]
         pub quit: TemplateChild<adw::ButtonRow>,
     }
@@ -145,18 +141,8 @@ impl Manager {
     }
 
     #[must_use]
-    pub fn search_view(&self) -> adw::OverlaySplitView {
-        self.imp().search_view.get()
-    }
-
-    #[must_use]
-    pub fn search_dictionaries(&self) -> adw::Bin {
-        self.imp().search_dictionaries.get()
-    }
-
-    #[must_use]
-    pub fn search_themes(&self) -> adw::Bin {
-        self.imp().search_themes.get()
+    pub fn lookup_results(&self) -> adw::Bin {
+        self.imp().lookup_results.get()
     }
 
     #[must_use]
