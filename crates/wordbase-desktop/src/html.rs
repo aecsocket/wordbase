@@ -1,9 +1,7 @@
 use {
     crate::group::Grouping,
-    data_encoding::BASE64,
     derive_more::{Deref, DerefMut},
     maud::{Markup, PreEscaped, html},
-    std::fmt::Write as _,
     wordbase::{
         Dictionary, DictionaryId, FrequencyValue, Record, RecordLookup, Term,
         dict::{self, yomichan_audio::AudioFormat},
@@ -267,9 +265,8 @@ pub fn render_audio(record: &Audio) -> Markup {
     let mime_type = match audio.format {
         AudioFormat::Opus => "audio/opus",
     };
-    let mut on_click = format!("new Audio('data:{mime_type};base64,");
-    _ = BASE64.encode_write(&audio.data, &mut on_click);
-    _ = write!(&mut on_click, "').play()");
+    let data = &audio.data;
+    let on_click = format!("new Audio('data:{mime_type};base64,{data}').play()");
 
     html! {
         button onclick=(on_click) {

@@ -31,19 +31,19 @@ use {
 /// Errors if there is an unrecoverable server error.
 pub async fn run(engine: Engine, addr: impl ToSocketAddrs + Send + Display) -> anyhow::Result<()> {
     let service = OpenApiService::new(
-        Api { engine },
+        V1 { engine },
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION"),
     )
-    .server(format!("http://{addr}"));
+    .server(format!("http://{addr}/api/v1"));
     let ui = service.swagger_ui();
     let spec = service.spec_endpoint();
     let spec_yaml = service.spec_endpoint_yaml();
     let app = poem::Route::new()
-        .nest("/", service)
-        .nest("/docs", ui)
-        .at("/spec", spec)
-        .at("/spec.yaml", spec_yaml)
+        .nest("/api/v1", service)
+        .nest("/api/docs", ui)
+        .at("/api/spec.json", spec)
+        .at("/api/spec.yaml", spec_yaml)
         .catch_error(|_: NotFound| async move {
             Response::builder()
                 .status(StatusCode::NOT_FOUND)
@@ -54,12 +54,12 @@ pub async fn run(engine: Engine, addr: impl ToSocketAddrs + Send + Display) -> a
     Ok(())
 }
 
-struct Api {
+struct V1 {
     engine: Engine,
 }
 
 #[OpenApi]
-impl Api {
+impl V1 {
     #[oai(path = "/profile", method = "get")]
     async fn profile_index(&self) -> Json<Vec<Arc<Profile>>> {
         Json(profile::index(&self.engine).await)

@@ -30,7 +30,7 @@ impl Engine {
         self.dictionaries.load().clone()
     }
 
-    async fn sync_dictionaries(&self) -> Result<()> {
+    pub(super) async fn sync_dictionaries(&self) -> Result<()> {
         let dictionaries = Dictionaries::fetch(&self.db)
             .await
             .context("failed to sync dictionaries")?;

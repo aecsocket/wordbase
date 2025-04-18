@@ -5310,6 +5310,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "bytes",
+ "clap",
  "derive_more 2.0.1",
  "foldhash",
  "futures",
@@ -5318,6 +5319,8 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "wordbase",
  "wordbase-engine",
 ]

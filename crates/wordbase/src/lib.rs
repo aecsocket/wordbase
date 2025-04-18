@@ -4,11 +4,11 @@ pub mod dict;
 
 mod imp;
 mod protocol;
+use derive_more::Debug;
 pub use protocol::*;
 use {
     derive_more::{Deref, Display, From},
     serde::{Deserialize, Serialize, de::DeserializeOwned},
-    std::fmt::Debug,
 };
 
 /// Invokes a macro, passing in all existing dictionary and record kind into the
@@ -204,7 +204,7 @@ pub trait RecordType:
     + Sized
     + Send
     + Sync
-    + Debug
+    + std::fmt::Debug
     + Clone
     + Serialize
     + DeserializeOwned
@@ -297,10 +297,12 @@ pub struct DictionaryId(pub i64);
 /// For languages without the concept of a reading, only the headword should be
 /// specified ([`Term::Headword`]), as this represents the canonical dictionary
 /// form of this term.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(untagged, deny_unknown_fields)]
 pub enum Term {
     /// Has both a headword and a reading.
+    #[debug("({headword:?}, {reading:?})")]
+    #[display("{headword} ({reading})")]
     Full {
         /// Headword.
         headword: NormString,
@@ -308,11 +310,15 @@ pub enum Term {
         reading: NormString,
     },
     /// Has only a headword.
+    #[debug("({headword:?}, ())")]
+    #[display("{headword}")]
     Headword {
         /// Headword.
         headword: NormString,
     },
     /// Has only a reading.
+    #[debug("((), {reading:?})")]
+    #[display("{reading}")]
     Reading {
         /// Reading.
         reading: NormString,
@@ -404,12 +410,13 @@ pub struct ProfileId(pub i64);
 ///
 /// This type is guaranteed to be a non-empty string with no trailing or leading
 /// whitespace.
-#[derive(Display, Clone, PartialEq, Eq, Hash, Deref, Serialize)]
+#[derive(Debug, Display, Clone, PartialEq, Eq, Hash, Deref, Serialize)]
 #[cfg_attr(
     feature = "poem-openapi",
     derive(poem_openapi::NewType),
     oai(from_json = false, from_parameter = false, from_multipart = false)
 )]
+#[debug("{_0:?}")]
 pub struct NormString(String);
 
 #[doc(hidden)]

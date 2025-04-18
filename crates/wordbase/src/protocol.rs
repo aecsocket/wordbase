@@ -1,5 +1,5 @@
 use {
-    crate::{DictionaryId, FrequencyValue, Record, RecordId, RecordKind, Term},
+    crate::{DictionaryId, FrequencyValue, Record, RecordId, Term},
     serde::{Deserialize, Serialize},
 };
 

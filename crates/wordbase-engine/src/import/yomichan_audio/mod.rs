@@ -7,6 +7,7 @@ use {
     async_compression::futures::bufread::XzDecoder,
     async_tar::EntryType,
     bytes::Bytes,
+    data_encoding::BASE64,
     derive_more::Deref,
     foldhash::{HashMap, HashMapExt},
     futures::{
@@ -420,12 +421,6 @@ pub async fn import_forvo<R: AsyncRead + Unpin>(
         .and_then(|(name, _)| Term::from_headword(name))
         .context("no headword in path")?;
 
-    let mut data = Vec::new();
-    entry
-        .read_to_end(&mut data)
-        .await
-        .context("failed to read audio data into memory")?;
-
     let record_id = insert_record(
         tx,
         source,
@@ -433,7 +428,7 @@ pub async fn import_forvo<R: AsyncRead + Unpin>(
             username,
             audio: Audio {
                 format: AudioFormat::Opus,
-                data: Bytes::from(data),
+                data: encode(scratch, entry).await?,
             },
         },
         scratch,
@@ -472,15 +467,9 @@ where
         return Ok(());
     };
 
-    let mut data = Vec::new();
-    entry
-        .read_to_end(&mut data)
-        .await
-        .context("failed to read audio data into memory")?;
-
     let audio = Audio {
         format: AudioFormat::Opus,
-        data: Bytes::from(data),
+        data: encode(scratch, entry).await?,
     };
     let record = into_record(audio, info);
     let record_id = insert_record(tx, source, &record, scratch)
@@ -493,4 +482,17 @@ where
             .context("failed to insert term record")?;
     }
     Ok(())
+}
+
+async fn encode<R>(scratch: &mut Vec<u8>, entry: &mut async_tar::Entry<R>) -> Result<String>
+where
+    R: AsyncRead + Unpin,
+{
+    scratch.clear();
+    entry
+        .read_to_end(scratch)
+        .await
+        .context("failed to read audio data into memory")?;
+    let data = BASE64.encode(scratch);
+    Ok(data)
 }

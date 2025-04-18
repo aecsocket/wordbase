@@ -3,10 +3,7 @@
 //! This is in a separate module to keep `lib.rs` focused on documenting the
 //! core API.
 
-use std::{
-    fmt::{self, Debug},
-    mem,
-};
+use std::mem;
 
 use serde::Deserialize;
 
@@ -232,12 +229,6 @@ impl NormString {
     }
 }
 
-impl Debug for NormString {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
 impl<'de> Deserialize<'de> for NormString {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -354,11 +345,8 @@ impl TermPart for &str {
 #[cfg(feature = "poem-openapi")]
 const _: () = {
     use poem::web::Field;
-    use poem_openapi::{
-        Object,
-        types::{
-            ParseError, ParseFromJSON, ParseFromMultipartField, ParseFromParameter, ParseResult,
-        },
+    use poem_openapi::types::{
+        ParseError, ParseFromJSON, ParseFromMultipartField, ParseFromParameter, ParseResult,
     };
 
     impl ParseFromJSON for NormString {

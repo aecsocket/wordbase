@@ -5,7 +5,6 @@ use {
     anyhow::{Context, Result, bail},
     arc_swap::ArcSwapOption,
     client::{AnkiClient, VERSION},
-    data_encoding::BASE64,
     itertools::Itertools,
     maud::html,
     request::{Asset, DeckName, ModelFieldName, ModelName},
@@ -255,7 +254,7 @@ impl Engine {
                 }) => Some(audio),
                 _ => None,
             })
-            .map(|audio| BASE64.encode(&audio.data));
+            .map(|audio| audio.data.as_str());
 
         if let Some(data) = &term_audio {
             audio.push(Asset {

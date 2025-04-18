@@ -29,7 +29,7 @@ impl Engine {
         self.profiles.load().clone()
     }
 
-    pub(crate) async fn sync_profiles(&self) -> Result<()> {
+    pub(super) async fn sync_profiles(&self) -> Result<()> {
         let profiles = Profiles::fetch(&self.db)
             .await
             .context("failed to sync profiles")?;

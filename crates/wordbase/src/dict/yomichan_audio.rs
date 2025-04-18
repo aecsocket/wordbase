@@ -6,7 +6,6 @@
 
 use {
     crate::NormString,
-    bytes::Bytes,
     serde::{Deserialize, Serialize},
 };
 
@@ -22,8 +21,8 @@ pub enum AudioFormat {
 pub struct Audio {
     /// File type of [`Audio::data`].
     pub format: AudioFormat,
-    /// Raw audio file data.
-    pub data: Bytes,
+    /// Base64-encoded audio file data.
+    pub data: String,
 }
 
 /// [Forvo] audio.

@@ -167,6 +167,8 @@ impl Engine {
         let dictionary_id = import
             .await
             .map_err(|source| ImportError::Import { kind, source })?;
+
+        self.sync_dictionaries().await?;
         Ok(dictionary_id)
     }
 }
