@@ -207,8 +207,9 @@ async fn fetch_owned(db: &Pool<Sqlite>) -> Result<Vec<Profile>> {
                 index
             } else {
                 let index = profiles.len();
-                let config = serde_json::from_str::<ProfileConfig>(&record.config)
+                let mut config = serde_json::from_str::<ProfileConfig>(&record.config)
                     .context("failed to deserialize profile config")?;
+                config.sorting_dictionary = record.sorting_dictionary.map(DictionaryId);
                 profiles.push(Profile::new(id, config));
                 index
             };
