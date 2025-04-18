@@ -340,7 +340,7 @@ impl Engine {
             .into_iter()
             .collect(),
             options: request::NoteOptions {
-                allow_duplicate: true,
+                allow_duplicate: false,
                 duplicate_scope: None,
                 duplicate_scope_options: None,
             },
