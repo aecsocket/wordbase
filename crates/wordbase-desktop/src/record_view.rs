@@ -1,6 +1,6 @@
 use {
     crate::{
-        APP_ID, AppEvent, CURRENT_PROFILE, SignalHandler, forward_events, html,
+        APP_ID, AppEvent, CURRENT_PROFILE, CURRENT_PROFILE_ID, SignalHandler, forward_events, html,
         theme::{CUSTOM_THEMES, DEFAULT_THEME, ThemeName},
     },
     glib::clone,
@@ -12,7 +12,7 @@ use {
     std::sync::Arc,
     tracing::{debug, info},
     webkit6::prelude::*,
-    wordbase::{RecordKind, RecordLookup},
+    wordbase::{RecordKind, RecordLookup, Term},
     wordbase_engine::Engine,
 };
 
@@ -21,6 +21,8 @@ pub struct Model {
     engine: Engine,
     settings: gio::Settings,
     records: Vec<RecordLookup>,
+    sentence: String,
+    cursor: usize,
     _custom_theme_handler: SignalHandler,
     _accent_color_handler: SignalHandler,
 }
@@ -29,7 +31,13 @@ pub const SUPPORTED_RECORD_KINDS: &[RecordKind] = RecordKind::ALL;
 
 #[derive(Debug)]
 pub enum Msg {
-    Render(Vec<RecordLookup>),
+    Render {
+        records: Vec<RecordLookup>,
+        sentence: String,
+        cursor: usize,
+    },
+    #[doc(hidden)]
+    AddAnkiNote(Term),
     #[doc(hidden)]
     Rerender,
 }
@@ -104,16 +112,26 @@ impl AsyncComponent for Model {
         });
 
         let content_manager = root.user_content_manager().unwrap();
-        content_manager.connect_script_message_received(Some("add_note"), move |_, value| {
-            let json = value.to_json(0);
-            println!("VALUE: {json:?}");
-        });
+        content_manager.connect_script_message_received(
+            Some("add_note"),
+            clone!(
+                #[strong]
+                sender,
+                move |_, value| {
+                    let json = value.to_json(0).unwrap();
+                    let term = serde_json::from_str(&json).unwrap();
+                    sender.input(Msg::AddAnkiNote(term));
+                }
+            ),
+        );
         content_manager.register_script_message_handler("add_note", None);
 
         let model = Self {
             engine,
             settings,
             records: Vec::new(),
+            sentence: String::new(),
+            cursor: 0,
             _custom_theme_handler: custom_theme_handler,
             _accent_color_handler: accent_color_handler,
         };
@@ -141,8 +159,29 @@ impl AsyncComponent for Model {
         sender: AsyncComponentSender<Self>,
         root: &Self::Root,
     ) {
-        if let Msg::Render(records) = message {
-            self.records = records;
+        match message {
+            Msg::Render {
+                records,
+                sentence,
+                cursor,
+            } => {
+                self.records = records;
+                self.sentence = sentence;
+                self.cursor = cursor;
+            }
+            Msg::AddAnkiNote(term) => {
+                self.engine
+                    .add_anki_note(
+                        CURRENT_PROFILE_ID.read().unwrap(),
+                        &self.sentence,
+                        self.cursor,
+                        &term,
+                        None,
+                        None,
+                    )
+                    .await;
+            }
+            Msg::Rerender => {}
         }
         update_view(self, root, &sender);
     }

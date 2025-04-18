@@ -42,6 +42,8 @@ pub struct Model {
 pub enum Msg {
     Render {
         records: Vec<RecordLookup>,
+        sentence: String,
+        cursor: usize,
     },
     Present {
         target_window: WindowFilter,
@@ -141,11 +143,17 @@ impl AsyncComponent for Model {
         root: &Self::Root,
     ) {
         match message {
-            Msg::Render { records } => {
+            Msg::Render {
+                records,
+                sentence,
+                cursor,
+            } => {
                 self.query_override = None;
-                self.record_view
-                    .sender()
-                    .emit(record_view::Msg::Render(records));
+                self.record_view.sender().emit(record_view::Msg::Render {
+                    records,
+                    sentence,
+                    cursor,
+                });
             }
             Msg::Present {
                 target_window,
@@ -187,7 +195,7 @@ impl AsyncComponent for Model {
                     .engine
                     .lookup(
                         CURRENT_PROFILE_ID.read().unwrap(),
-                        query,
+                        &query,
                         0,
                         record_view::SUPPORTED_RECORD_KINDS,
                     )
@@ -195,7 +203,11 @@ impl AsyncComponent for Model {
                 else {
                     return;
                 };
-                sender.input(Msg::Render { records });
+                sender.input(Msg::Render {
+                    records,
+                    sentence: query.clone(),
+                    cursor: 0,
+                });
             }
         }
     }

@@ -388,7 +388,11 @@ impl AsyncComponent for Overlay {
                     origin_nw,
                     origin_se,
                 });
-                self.to_popup.emit(popup::Msg::Render { records });
+                self.to_popup.emit(popup::Msg::Render {
+                    records,
+                    sentence: text.clone(),
+                    cursor: byte_index,
+                });
             }
         }
     }
