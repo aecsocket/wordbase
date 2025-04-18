@@ -4,7 +4,6 @@ use {
     crate::{Engine, IndexMap, IndexSet, lang},
     anyhow::{Context, Result, bail},
     arc_swap::ArcSwapOption,
-    bytes::Bytes,
     client::{AnkiClient, VERSION},
     data_encoding::BASE64,
     itertools::Itertools,

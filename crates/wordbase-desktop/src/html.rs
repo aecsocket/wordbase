@@ -1,6 +1,6 @@
 use {
     crate::group::Grouping,
-    base64::{Engine, prelude::BASE64_STANDARD},
+    data_encoding::BASE64,
     derive_more::{Deref, DerefMut},
     maud::{Markup, PreEscaped, html},
     std::fmt::Write as _,
@@ -268,7 +268,7 @@ pub fn render_audio(record: &Audio) -> Markup {
         AudioFormat::Opus => "audio/opus",
     };
     let mut on_click = format!("new Audio('data:{mime_type};base64,");
-    BASE64_STANDARD.encode_string(&audio.data, &mut on_click);
+    _ = BASE64.encode_write(&audio.data, &mut on_click);
     _ = write!(&mut on_click, "').play()");
 
     html! {

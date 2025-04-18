@@ -54,6 +54,45 @@ template $WdbManager: Adw.Bin {
                 }
               }
 
+              Adw.ComboRow {
+                title: _("Deck");
+                model: deck_model;
+              }
+
+              Adw.ComboRow {
+                title: _("Note Type");
+                model: note_type_model;
+                selected: 2;
+              }
+
+              Adw.ExpanderRow {
+                title: _("Note Fields");
+
+                Adw.ComboRow {
+                  title: _("Word");
+                  model: field_content_model;
+                  selected: 1;
+                }
+
+                Adw.ComboRow {
+                  title: _("Word Reading");
+                  model: field_content_model;
+                  selected: 2;
+                }
+
+                Adw.ComboRow {
+                  title: _("Word Meaning");
+                  model: field_content_model;
+                  selected: 3;
+                }
+
+                Adw.ComboRow {
+                  title: _("Word Furigana");
+                  model: field_content_model;
+                  selected: 0;
+                }
+              }
+
               Adw.EntryRow ankiconnect_server_url {
                 title: _("Server URL");
               }
@@ -181,12 +220,28 @@ StringList profiles_model {
   ]
 }
 
-
-StringList dictionaries_model {
+StringList deck_model {
   strings [
-    _("Foo"),
-    _("Bar"),
-    _("Baz"),
+    _("Mining"),
+  ]
+}
+
+StringList note_type_model {
+  strings [
+    "Lapis",
+    "JPMN",
+    "My Custom Note Type",
+  ]
+}
+
+StringList field_content_model {
+  strings [
+    "-",
+    _("Headword"),
+    _("Reading"),
+    _("Main Glossary"),
+    _("All Glossaries"),
+    _("Frequency"),
   ]
 }
 

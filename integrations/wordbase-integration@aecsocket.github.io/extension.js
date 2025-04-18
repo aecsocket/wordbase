@@ -9,6 +9,7 @@ import Gio from "gi://Gio";
 import GLib from "gi://GLib";
 import Meta from "gi://Meta";
 
+import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import { Extension } from "resource:///org/gnome/shell/extensions/extension.js";
 
 export default class WordbaseIntegrationExtension extends Extension {
@@ -16,6 +17,8 @@ export default class WordbaseIntegrationExtension extends Extension {
     _bus_owner;
     /** @type {Gio.DBusExportedObject} */
     _service_export;
+    /** @type {number} */
+    _bus_filter;
 
     enable() {
         this._bus_owner = Gio.bus_own_name(
@@ -26,6 +29,58 @@ export default class WordbaseIntegrationExtension extends Extension {
             (conn, name) => on_name_acquired(this, conn, name),
             (conn, name) => on_name_lost(this, conn, name),
         );
+
+        // const dbus = Gio.DBus.session;
+        // const objectManagerProxy = new Gio.DBusProxy({
+        //     g_connection: dbus,
+        //     g_interface_name: "org.freedesktop.DBus.ObjectManager",
+        //     g_name: "org.gnome.Mutter.ScreenCast",
+        //     g_object_path: "/org/gnome/Mutter/ScreenCast",
+        //     g_flags: Gio.DBusProxyFlags.NONE,
+        // });
+
+        // objectManagerProxy.connectSignal(
+        //     "InterfacesAdded",
+        //     (connection, sender, path, iface, signal, params) => {
+        //         const [objectPath, interfaces] = params.deepUnpack();
+        //         log(`TODO: New object created: ${objectPath}`);
+        //         if (
+        //             objectPath.startsWith(
+        //                 "/org/gnome/Mutter/ScreenCast/Session",
+        //             )
+        //         ) {
+        //             log(`TODO: New ScreenCast session created: ${objectPath}`);
+        //         }
+        //     },
+        // );
+        // log(`TODO!! Made signal handler`);
+
+        // console.log(
+        //     `TODO!! sess = ${Gio.DBus.session} / add filter = ${Gio.DBus.session.add_filter}`,
+        // );
+        // Gio.DBus.session.add_filter((c, m, i) => null);
+
+        // this._bus_filter = Gio.DBus.session.add_filter(
+        //     (connection, message, incoming) => {
+        //         console.log(`got a msg! ${message}`);
+
+        //         return false;
+        //     },
+        // );
+
+        // <https://gitlab.gnome.org/GNOME/xdg-desktop-portal-gnome/-/blob/main/src/screencastdialog.c>
+        // <https://gitlab.gnome.org/GNOME/xdg-desktop-portal-gnome/-/blob/main/src/screencast.c#L633>
+
+        // from <https://gitlab.gnome.org/GNOME/gnome-shell/-/blob/main/js/ui/status/remoteAccess.js#L16>
+        // global.backend
+        //     .get_remote_access_controller()
+        //     .connect("new-handle", (handle) => {
+        //         // hmm...
+        //     });
+
+        // global.get_window_actors().forEach((actor) => {
+        //     actor.meta_window.cast;
+        // });
     }
 
     disable() {
@@ -37,7 +92,47 @@ export default class WordbaseIntegrationExtension extends Extension {
             this._service_export.unexport();
             this._service_export = undefined;
         }
+        if (this._bus_filter) {
+            Gio.DBus.session.remove_filter(this._bus_filter);
+            this._bus_filter = undefined;
+        }
     }
+
+    /**
+     * @param {Gio.DBusConnection} connection
+     * @param {Gio.DBusMessage} message
+     * @param {boolean} incoming
+     * @returns {Gio.DBusMessage}
+     */
+    dbus_filter(connection, message, incoming) {
+        return message;
+    }
+}
+
+/**
+ * @param {Gio.DBusConnection} connection
+ * @param {Gio.DBusMessage} message
+ * @param {boolean} incoming
+ * @returns {Gio.DBusMessage}
+ */
+function dbus_filter(connection, message, incoming) {
+    return message;
+
+    // if (
+    //     !incoming ||
+    //     message.get_message_type() !== Gio.DBusMessageType.METHOD_CALL ||
+    //     message.get_interface() !== "org.gnome.Mutter.ScreenCast.Session" ||
+    //     message.get_member() !== "RecordWindow"
+    // ) {
+    //     return message;
+    // }
+
+    // const [args_variant] = message.get_body().deep_unpack(); // a{sv}
+    // const args_dict = args_variant.deep_unpack();
+    // const window_id = args_dict["window-id"].get_uint64();
+    // console.log(`OMG FOUND!!! window id = ${window_id}`);
+
+    // return message;
 }
 
 /**
@@ -92,6 +187,13 @@ const INTERFACE = `
             <arg direction="in" type="t" name="parent_id"/>
             <arg direction="in" type="t" name="overlay_id"/>
         </method>
+        <signal name="CloseOverlay">
+            <arg type="t" name="overlay_id"/>
+        </signal>
+        <method name="ScreenshotOverlayParent">
+            <arg direction="in" type="t" name="overlay_id"/>
+            <arg direction="out" type="ay" name="screenshot"/>
+        </method>
         <method name="MovePopupToWindow">
             <arg direction="in" type="t" name="moved_id"/>
             <arg direction="in" type="t" name="to_id"/>
@@ -102,9 +204,6 @@ const INTERFACE = `
             <arg direction="in" type="i" name="offset_se_x"/>
             <arg direction="in" type="i" name="offset_se_y"/>
         </method>
-        <signal name="CloseOverlay">
-            <arg type="t" name="overlay_id"/>
-        </signal>
     </interface>
 </node>`;
 
@@ -294,6 +393,11 @@ class IntegrationService {
             `Attached "${overlay_window.title}" to "${parent_window.title}"`,
         );
     }
+
+    /**
+     * @param {number} overlay_id
+     */
+    ScreenshotOverlayParent(overlay_id) {}
 
     /**
      * @param {number} moved_id

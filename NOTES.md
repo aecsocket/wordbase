@@ -1,5 +1,31 @@
-
 # notes - temp
+
+## 18 Apr
+
+Ok I've tried to get xdg desktop portals to work with this. I think it's fundamentally too limiting. Summary:
+- if we use a Screenshot portal
+  - it always makes a new file in the pictures folder
+  - we can't select the window to screenshot by default
+  - cumbersome for the user
+- if we use a ScreenCast portal
+  - We *could* actually, and take a screenshot of the pipewire node
+  - But we can't get the window ID of the window that we're casting from the GNOME extension, which is super limiting
+    - So the extension would have to guess what window you're casting, or the user would have to select it manually, which is really ass
+
+## 17 Apr
+
+Holy shit! How didn't I know about this!!
+
+https://flatpak.github.io/xdg-desktop-portal/docs/window-identifiers.html
+https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.impl.portal.Screenshot.html
+https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.impl.portal.ScreenCast.html
+
+New flow idea:
+- when we receive a new texthooker sentence,
+- request a screencast
+- user selects the window to attach to
+- we now have a way to screenshot that window (awesome)
+- we get the `parent_window` identifier and forward that to our extension for positioning purposes
 
 ## 14 Apr
 
