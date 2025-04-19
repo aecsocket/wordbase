@@ -7,33 +7,36 @@ template $WdbErrorPage: Adw.Bin {
     Adw.HeaderBar {}
 
     Adw.StatusPage {
-    icon-name: "sad-computer-symbolic";
-    title: _("Fatal Error Occurred");
-    description: _("We're sorry for the inconvenience. Guru Meditation.");
+      icon-name: "sad-computer-symbolic";
+      title: _("Fatal Error Occurred");
+      description: _("We're sorry for the inconvenience. Guru Meditation.");
 
-    Adw.Clamp {
-      maximum-size: 500;
+      Adw.Clamp {
+        maximum-size: 500;
 
-      ScrolledWindow {
-        styles [
-          "card",
-        ]
-
-        Label message {
-          margin-start: 16;
-          margin-end: 16;
-          margin-top: 16;
-          margin-bottom: 16;
-          xalign: 0;
-          yalign: 0;
-          selectable: true;
+        ScrolledWindow {
+          height-request: 200;
 
           styles [
-            "monospace",
+            "card",
           ]
+
+          Label message {
+            margin-start: 16;
+            margin-end: 16;
+            margin-top: 16;
+            margin-bottom: 16;
+            xalign: 0;
+            yalign: 0;
+            selectable: true;
+            label: _("foo\nbar\nbaz");
+
+            styles [
+              "monospace",
+            ]
+          }
         }
       }
     }
-  }
   }
 }

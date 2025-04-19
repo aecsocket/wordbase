@@ -45,12 +45,12 @@ pub struct Inner {
     imports: Imports,
     deinflectors: Deinflectors,
     anki: Anki,
-    send_event: broadcast::Sender<Event>,
+    send_event: broadcast::Sender<EngineEvent>,
     db: Pool<Sqlite>,
 }
 
 #[derive(Debug, Clone)]
-pub enum Event {
+pub enum EngineEvent {
     Profile(ProfileEvent),
     PullTexthookerConnected,
     PullTexthookerDisconnected,
@@ -99,7 +99,7 @@ impl Engine {
     }
 
     #[must_use]
-    pub fn recv_event(&self) -> broadcast::Receiver<Event> {
+    pub fn recv_event(&self) -> broadcast::Receiver<EngineEvent> {
         self.send_event.subscribe()
     }
 }

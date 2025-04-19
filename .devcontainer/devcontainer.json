@@ -3,7 +3,6 @@
   "build": {
     "dockerfile": "Dockerfile"
   },
-  "forwardPorts": [9518],
   "runArgs": [
     "--add-host=host.docker.internal:host-gateway",
     "--device=/dev/dri"

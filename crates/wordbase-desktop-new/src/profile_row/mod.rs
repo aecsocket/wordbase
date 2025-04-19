@@ -3,9 +3,11 @@ use anyhow::Context as _;
 use glib::clone;
 use relm4::prelude::*;
 use wordbase::{NormString, ProfileId};
-use wordbase_engine::{Event, ProfileEvent};
+use wordbase_engine::{EngineEvent, ProfileEvent};
 
-use crate::{engine, forward_as_command, gettext, handle_result};
+use crate::{
+    AppEvent, CURRENT_PROFILE_ID, PROFILE, engine, forward_events, gettext, handle_result, settings,
+};
 
 mod ui;
 
@@ -18,6 +20,7 @@ pub struct ProfileRow {
 #[derive(Debug)]
 #[doc(hidden)]
 pub enum Msg {
+    UpdateMeta,
     AskRemove,
     Remove,
     SetName,
@@ -27,7 +30,7 @@ impl AsyncComponent for ProfileRow {
     type Init = (gtk::Window, ProfileId);
     type Input = Msg;
     type Output = ();
-    type CommandOutput = Event;
+    type CommandOutput = AppEvent;
     type Root = ui::ProfileRow;
     type Widgets = ();
 
@@ -40,7 +43,7 @@ impl AsyncComponent for ProfileRow {
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
-        forward_as_command(&sender);
+        forward_events(&sender);
 
         root.remove().connect_clicked(clone!(
             #[strong]
@@ -61,6 +64,29 @@ impl AsyncComponent for ProfileRow {
             move |_| sender.input(Msg::SetName)
         ));
 
+        let settings = settings();
+        settings
+            .bind(PROFILE, &root.current(), "active")
+            .mapping(move |setting, _| {
+                Some((setting.str() == Some(&format!("{}", profile_id.0))).to_value())
+            })
+            .set_mapping(move |value, _| {
+                if value.get::<bool>().expect("`active` should be a bool") {
+                    Some(format!("{}", profile_id.0).to_variant())
+                } else {
+                    None
+                }
+            })
+            .build();
+        settings.connect_changed(
+            Some(PROFILE),
+            clone!(
+                #[strong]
+                sender,
+                move |_, _| sender.input(Msg::UpdateMeta)
+            ),
+        );
+
         let model = Self { window, profile_id };
         model.update_meta(&root);
         AsyncComponentParts { model, widgets: () }
@@ -73,6 +99,9 @@ impl AsyncComponent for ProfileRow {
         root: &Self::Root,
     ) {
         match msg {
+            Msg::UpdateMeta => {
+                self.update_meta(root);
+            }
             Msg::AskRemove => {
                 root.remove_dialog().present(Some(&self.window));
             }
@@ -115,7 +144,10 @@ impl AsyncComponent for ProfileRow {
         _sender: AsyncComponentSender<Self>,
         root: &Self::Root,
     ) {
-        if let Event::Profile(ProfileEvent::Added(_) | ProfileEvent::Removed(_)) = event {
+        if let AppEvent::Engine(EngineEvent::Profile(
+            ProfileEvent::Added(_) | ProfileEvent::Removed(_),
+        )) = event
+        {
             self.update_meta(root);
         }
     }
@@ -134,7 +166,9 @@ impl ProfileRow {
             .map_or_else(|| gettext("Default Profile"), |s| s.as_str());
         root.name().set_text(name);
 
-        let can_remove = engine().profiles().len() > 1;
-        root.remove().set_visible(can_remove);
+        let is_current = *CURRENT_PROFILE_ID.read() == self.profile_id;
+        let more_than_1_profile = engine().profiles().len() > 1;
+        root.remove()
+            .set_visible(!is_current && more_than_1_profile);
     }
 }

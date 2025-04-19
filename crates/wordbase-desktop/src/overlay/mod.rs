@@ -26,7 +26,7 @@ use {
     },
     tracing::trace,
     wordbase::{TexthookerSentence, WindowFilter},
-    wordbase_engine::{Engine, Event},
+    wordbase_engine::{Engine, EngineEvent},
 };
 
 #[derive(Debug)]
@@ -63,7 +63,7 @@ impl AsyncComponent for Overlays {
             shutdown
                 .register(async move {
                     while let Ok(event) = recv_event.recv().await {
-                        if let Event::TexthookerSentence(event) = event {
+                        if let EngineEvent::TexthookerSentence(event) = event {
                             out.emit(event);
                         }
                     }

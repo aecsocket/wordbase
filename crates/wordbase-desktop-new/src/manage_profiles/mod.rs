@@ -4,11 +4,11 @@ use glib::clone;
 use gtk::prelude::{CheckButtonExt, EditableExt, WidgetExt};
 use relm4::prelude::*;
 use wordbase::{NormString, ProfileId};
-use wordbase_engine::{Event, ProfileEvent};
+use wordbase_engine::{EngineEvent, ProfileEvent};
 
 use crate::{
-    CURRENT_PROFILE_ID, engine, forward_as_command, gettext, handle_result,
-    profile_row::ProfileRow, settings,
+    AppEvent, CURRENT_PROFILE_ID, engine, forward_events, gettext, handle_result,
+    profile_row::ProfileRow,
 };
 
 mod ui;
@@ -30,7 +30,7 @@ impl AsyncComponent for ManageProfiles {
     type Init = gtk::Window;
     type Input = Msg;
     type Output = ();
-    type CommandOutput = Event;
+    type CommandOutput = AppEvent;
     type Root = ui::ManageProfiles;
     type Widgets = ();
 
@@ -43,7 +43,7 @@ impl AsyncComponent for ManageProfiles {
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
-        forward_as_command(&sender);
+        forward_events(&sender);
 
         root.add_profile().connect_activated(clone!(
             #[strong]
@@ -108,8 +108,10 @@ impl AsyncComponent for ManageProfiles {
         root: &Self::Root,
     ) {
         match event {
-            Event::Profile(ProfileEvent::Added(profile_id)) => self.add_row(root, profile_id),
-            Event::Profile(ProfileEvent::Removed(profile_id)) => {
+            AppEvent::Engine(EngineEvent::Profile(ProfileEvent::Added(profile_id))) => {
+                self.add_row(root, profile_id)
+            }
+            AppEvent::Engine(EngineEvent::Profile(ProfileEvent::Removed(profile_id))) => {
                 if let Some(row) = self.rows.remove(&profile_id) {
                     root.list().remove(row.widget());
                 }

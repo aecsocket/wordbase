@@ -1,5 +1,5 @@
 use {
-    crate::{CHANNEL_BUF_CAP, Engine, Event},
+    crate::{CHANNEL_BUF_CAP, Engine, EngineEvent},
     anyhow::{Context, Result},
     arc_swap::ArcSwap,
     futures::{StreamExt, never::Never},
@@ -33,7 +33,7 @@ pub struct Texthookers {
 impl Texthookers {
     pub(super) async fn new(
         db: &Pool<Sqlite>,
-        send_event: broadcast::Sender<Event>,
+        send_event: broadcast::Sender<EngineEvent>,
     ) -> Result<Self> {
         let url = sqlx::query!("SELECT texthooker_url FROM config")
             .fetch_one(db)
@@ -82,7 +82,7 @@ impl Engine {
 }
 
 pub(super) async fn run(
-    send_event: broadcast::Sender<Event>,
+    send_event: broadcast::Sender<EngineEvent>,
     url: Arc<ArcSwap<String>>,
     connected: Arc<AtomicU8>,
     mut recv_new_url: mpsc::Receiver<()>,
@@ -95,13 +95,13 @@ pub(super) async fn run(
         };
 
         connected.store(0, atomic::Ordering::SeqCst);
-        _ = send_event.send(Event::PullTexthookerDisconnected);
+        _ = send_event.send(EngineEvent::PullTexthookerDisconnected);
         current_task = handle_url(&send_event, url.load().clone(), connected.clone());
     }
 }
 
 async fn handle_url(
-    send_event: &broadcast::Sender<Event>,
+    send_event: &broadcast::Sender<EngineEvent>,
     url: Arc<String>,
     connected: Arc<AtomicU8>,
 ) -> ! {
@@ -125,18 +125,18 @@ async fn handle_url(
 
         info!("Connected to {url:?}");
         connected.store(1, atomic::Ordering::SeqCst);
-        _ = send_event.send(Event::PullTexthookerConnected);
+        _ = send_event.send(EngineEvent::PullTexthookerConnected);
 
         let Err(err) = handle_stream(send_event, stream).await;
 
         info!("Disconnected: {err:?}");
         connected.store(0, atomic::Ordering::SeqCst);
-        _ = send_event.send(Event::PullTexthookerDisconnected);
+        _ = send_event.send(EngineEvent::PullTexthookerDisconnected);
     }
 }
 
 async fn handle_stream(
-    send_event: &broadcast::Sender<Event>,
+    send_event: &broadcast::Sender<EngineEvent>,
     mut stream: WebSocketStream<MaybeTlsStream<TcpStream>>,
 ) -> Result<Never> {
     loop {
@@ -148,6 +148,6 @@ async fn handle_stream(
             .into_data();
         let sentence = serde_json::from_slice::<TexthookerSentence>(&message)
             .context("failed to deserialize message as hook sentence")?;
-        _ = send_event.send(Event::TexthookerSentence(sentence));
+        _ = send_event.send(EngineEvent::TexthookerSentence(sentence));
     }
 }

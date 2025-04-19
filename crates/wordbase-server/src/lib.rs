@@ -30,12 +30,13 @@ use {
 ///
 /// Errors if there is an unrecoverable server error.
 pub async fn run(engine: Engine, addr: impl ToSocketAddrs + Send + Display) -> anyhow::Result<()> {
+    let addr_str = addr.to_string();
     let service = OpenApiService::new(
         V1 { engine },
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION"),
     )
-    .server(format!("http://{addr}/api/v1"));
+    .server(format!("http://{addr_str}/api/v1"));
     let ui = service.swagger_ui();
     let spec = service.spec_endpoint();
     let spec_yaml = service.spec_endpoint_yaml();
@@ -50,8 +51,10 @@ pub async fn run(engine: Engine, addr: impl ToSocketAddrs + Send + Display) -> a
                 .body("not found")
         });
 
-    poem::Server::new(TcpListener::bind(addr)).run(app).await?;
-    Ok(())
+    poem::Server::new(TcpListener::bind(addr))
+        .run(app)
+        .await
+        .with_context(|| format!("failed to run server on {addr_str}"))
 }
 
 /// Default port for serving the HTTP server on.

@@ -18,7 +18,7 @@ mod icon_names {
     include!(concat!(env!("OUT_DIR"), "/icon_names.rs"));
 }
 
-use std::sync::OnceLock;
+use std::sync::{LazyLock, OnceLock};
 
 use adw::prelude::*;
 use anyhow::{Context, Result, anyhow};
@@ -28,10 +28,11 @@ use glib::clone;
 use manage_profiles::ManageProfiles;
 use manager::Manager;
 use relm4::{MessageBroker, RelmApp, SharedState, loading_widgets::LoadingWidgets, prelude::*};
+use tokio::sync::broadcast;
 use tracing::{error, level_filters::LevelFilter};
 use tracing_subscriber::EnvFilter;
 use wordbase::ProfileId;
-use wordbase_engine::{Engine, Event};
+use wordbase_engine::{Engine, EngineEvent};
 use wordbase_server::HTTP_PORT;
 
 const APP_ID: &str = "io.github.aecsocket.Wordbase";
@@ -56,6 +57,7 @@ fn main() {
 static ENGINE: OnceLock<Engine> = OnceLock::new();
 static APP_BROKER: MessageBroker<AppMsg> = MessageBroker::new();
 static CURRENT_PROFILE_ID: SharedState<ProfileId> = SharedState::new();
+static EVENTS: LazyLock<broadcast::Sender<AppEvent>> = LazyLock::new(|| broadcast::channel(16).0);
 
 fn engine() -> &'static Engine {
     ENGINE.get().expect("engine should be initialized")
@@ -70,11 +72,11 @@ fn gettext(s: &str) -> &str {
     s
 }
 
-fn forward_as_command<C: AsyncComponent<CommandOutput = Event>>(sender: &AsyncComponentSender<C>) {
+fn forward_events<C: AsyncComponent<CommandOutput = AppEvent>>(sender: &AsyncComponentSender<C>) {
     sender.command(|out, shutdown| {
         shutdown
             .register(async move {
-                let mut recv_event = engine().recv_event();
+                let mut recv_event = EVENTS.subscribe();
                 while let Ok(event) = recv_event.recv().await {
                     if out.send(event).is_err() {
                         return;
@@ -95,6 +97,7 @@ fn handle_result<T>(result: Result<T>) {
 struct App {
     toaster: adw::ToastOverlay,
     manage_profiles: Option<AsyncController<ManageProfiles>>,
+    _manager: Option<AsyncController<Manager>>,
 }
 
 #[derive(Debug)]
@@ -103,6 +106,12 @@ enum AppMsg {
     FatalError(anyhow::Error),
     #[doc(hidden)]
     OpenManageProfiles,
+}
+
+#[derive(Debug, Clone)]
+pub enum AppEvent {
+    Engine(EngineEvent),
+    ProfileSet,
 }
 
 impl AsyncComponent for App {
@@ -142,17 +151,19 @@ impl AsyncComponent for App {
         let toaster = adw::ToastOverlay::new();
         root.set_content(Some(&toaster));
 
-        match init(sender).await {
+        let manager = match init(sender).await {
             Ok(engine) => {
                 ENGINE
                     .set(engine)
                     .expect("engine should not already be set");
                 let manager = Manager::builder().launch(root.clone()).detach();
                 toaster.set_child(Some(manager.widget()));
+                Some(manager)
             }
             Err(err) => {
                 let error_page = ErrorPage::builder().launch(err).detach();
                 toaster.set_child(Some(error_page.widget()));
+                None
             }
         };
 
@@ -160,6 +171,7 @@ impl AsyncComponent for App {
             model: Self {
                 toaster,
                 manage_profiles: None,
+                _manager: manager,
             },
             widgets: (),
         }
@@ -180,8 +192,8 @@ impl AsyncComponent for App {
                 adw::Dialog::builder()
                     .child(manage_profiles.widget())
                     .title(gettext("Manage Profiles"))
-                    .width_request(300)
-                    .height_request(450)
+                    .width_request(400)
+                    .height_request(600)
                     .build()
                     .present(Some(root));
                 self.manage_profiles = Some(manage_profiles);
@@ -214,8 +226,20 @@ async fn init(sender: AsyncComponentSender<App>) -> Result<Engine> {
             let err = match wordbase_server::run(engine, addr).await {
                 Ok(()) => anyhow!("server exited"),
                 Err(err) => err,
-            };
+            }
+            .context("server task failed");
             sender.input(AppMsg::FatalError(err));
+        }
+    ));
+
+    tokio::spawn(clone!(
+        #[strong]
+        engine,
+        async move {
+            let mut recv_event = engine.recv_event();
+            while let Ok(event) = recv_event.recv().await {
+                _ = EVENTS.send(AppEvent::Engine(event));
+            }
         }
     ));
 

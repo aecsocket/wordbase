@@ -1,8 +1,8 @@
 use adw::prelude::*;
 use relm4::prelude::*;
-use wordbase_engine::Event;
+use wordbase_engine::EngineEvent;
 
-use crate::{MANAGE_PROFILES, PROFILE, engine, forward_as_command, gettext};
+use crate::{AppEvent, MANAGE_PROFILES, PROFILE, engine, forward_events, gettext};
 
 mod ui;
 
@@ -15,7 +15,7 @@ impl AsyncComponent for Manager {
     type Init = adw::ApplicationWindow;
     type Input = ();
     type Output = ();
-    type CommandOutput = Event;
+    type CommandOutput = AppEvent;
     type Root = ui::Manager;
     type Widgets = ();
 
@@ -28,7 +28,7 @@ impl AsyncComponent for Manager {
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
-        forward_as_command(&sender);
+        forward_events(&sender);
         update_profiles(&root);
         AsyncComponentParts {
             model: Self { window },
@@ -44,7 +44,7 @@ impl AsyncComponent for Manager {
         root: &Self::Root,
     ) {
         match event {
-            Event::Profile(_) => update_profiles(root),
+            AppEvent::Engine(EngineEvent::Profile(_)) => update_profiles(root),
             _ => {}
         }
     }
