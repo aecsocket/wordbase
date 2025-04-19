@@ -5223,6 +5223,7 @@ dependencies = [
  "foldhash",
  "form_urlencoded",
  "futures",
+ "gio",
  "glib",
  "gtk4",
  "indexmap",
@@ -5232,6 +5233,8 @@ dependencies = [
  "notify",
  "pipewire",
  "rand 0.9.0",
+ "relm4",
+ "relm4-icons",
  "relm4-icons-build",
  "rmp-serde",
  "serde",
@@ -5244,6 +5247,7 @@ dependencies = [
  "webkit6",
  "wordbase",
  "wordbase-engine",
+ "wordbase-server",
  "zbus",
 ]
 

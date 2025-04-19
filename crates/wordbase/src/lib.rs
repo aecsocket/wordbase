@@ -218,7 +218,7 @@ pub trait RecordType:
 /// Opaque and unique identifier for a [`Record`] in the engine.
 ///
 /// Multiple [`Term`]s may link to a single [`Record`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::NewType))]
 pub struct RecordId(pub i64);
 
@@ -285,7 +285,7 @@ pub struct DictionaryMeta {
 }
 
 /// Opaque and unique identifier for a [`Dictionary`] in the engine.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::NewType))]
 pub struct DictionaryId(pub i64);
 
@@ -402,7 +402,7 @@ pub struct ProfileConfig {
 }
 
 /// Opaque and unique identifier for a [`Profile`] in the engine.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::NewType))]
 pub struct ProfileId(pub i64);
 

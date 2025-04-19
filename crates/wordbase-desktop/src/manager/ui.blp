@@ -14,7 +14,14 @@ template $WdbManager: Adw.Bin {
 
         [start]
         DropDown current_profile {
+        visible: false;
           model: profiles_model;
+        }
+
+        [start]
+        MenuButton profile {
+          icon-name: "system-users-symbolic";
+          menu-model: profile_menu;
         }
 
         [end]
@@ -30,8 +37,6 @@ template $WdbManager: Adw.Bin {
         sidebar-position: end;
 
         content: Adw.ViewStack {
-          enable-transitions: true;
-
           Adw.ViewStackPage {
             name: "lookup_results";
             child: Adw.Bin lookup_results {};
@@ -172,6 +177,14 @@ template $WdbManager: Adw.Bin {
       }
     }
   }
+}
+
+menu profile_menu {
+  item("Japanese")
+  item("Japanese Light Novels")
+  item("Mandarin")
+
+  item(_("Manage Profiles"))
 }
 
 StringList profiles_model {

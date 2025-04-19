@@ -54,6 +54,9 @@ pub async fn run(engine: Engine, addr: impl ToSocketAddrs + Send + Display) -> a
     Ok(())
 }
 
+/// Default port for serving the HTTP server on.
+pub const HTTP_PORT: u16 = 9518;
+
 struct V1 {
     engine: Engine,
 }
@@ -177,7 +180,7 @@ impl V1 {
         dict::disable(&self.engine, dictionary_id.0, req.0).await
     }
 
-    #[oai(path = "/anki/note/add", method = "post")]
+    #[oai(path = "/anki/note", method = "put")]
     async fn anki_note_add(&self, req: Json<anki::NoteAdd>) -> Result<()> {
         anki::note_add(&self.engine, req.0).await
     }

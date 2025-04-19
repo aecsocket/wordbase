@@ -1,154 +1,257 @@
-#![doc = include_str!("../README.md")]
+//! TODO
+#![allow(clippy::future_not_send, reason = "`gtk` types aren't `Send`")]
+#![allow(clippy::wildcard_imports, reason = "used for `imp` modules")]
+#![allow(
+    clippy::new_without_default,
+    reason = "`gtk` doesn't follow this convention"
+)]
 
 extern crate gtk4 as gtk;
 extern crate libadwaita as adw;
 
-use std::{os::fd::OwnedFd, thread, time::Duration};
+mod error_page;
+mod manage_profiles;
+mod manager;
+mod profile_row;
 
-use adw::{gio, prelude::*};
-use anyhow::{Context, Result};
-use ashpd::{
-    WindowIdentifier,
-    desktop::{
-        PersistMode,
-        screencast::{CursorMode, Screencast, SourceType},
-        screenshot::Screenshot,
-    },
-};
-use glib::MainLoop;
-use libspa::{pod::Pod, utils::Direction};
-use pipewire::{
-    properties::Properties,
-    stream::StreamFlags,
-    sys::{PW_KEY_MEDIA_CATEGORY, PW_KEY_MEDIA_ROLE, PW_KEY_MEDIA_TYPE},
-};
-use tokio::{sync::oneshot, task};
-use wordbase_engine::Engine;
+mod icon_names {
+    include!(concat!(env!("OUT_DIR"), "/icon_names.rs"));
+}
+
+use std::sync::OnceLock;
+
+use adw::prelude::*;
+use anyhow::{Context, Result, anyhow};
+use derive_more::Debug;
+use error_page::ErrorPage;
+use glib::clone;
+use manage_profiles::ManageProfiles;
+use manager::Manager;
+use relm4::{MessageBroker, RelmApp, SharedState, loading_widgets::LoadingWidgets, prelude::*};
+use tracing::{error, level_filters::LevelFilter};
+use tracing_subscriber::EnvFilter;
+use wordbase::ProfileId;
+use wordbase_engine::{Engine, Event};
+use wordbase_server::HTTP_PORT;
 
 const APP_ID: &str = "io.github.aecsocket.Wordbase";
 
-#[tokio::main]
-async fn main() -> Result<glib::ExitCode> {
+fn main() {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::builder()
+                .with_default_directive(LevelFilter::INFO.into())
+                .from_env_lossy(),
+        )
+        .init();
+    glib::log_set_default_handler(glib::rust_log_handler);
+    relm4_icons::initialize_icons(icon_names::GRESOURCE_BYTES, icon_names::RESOURCE_PREFIX);
+
+    RelmApp::new(APP_ID)
+        .visible_on_activate(false)
+        .with_broker(&APP_BROKER)
+        .run_async::<App>(());
+}
+
+static ENGINE: OnceLock<Engine> = OnceLock::new();
+static APP_BROKER: MessageBroker<AppMsg> = MessageBroker::new();
+static CURRENT_PROFILE_ID: SharedState<ProfileId> = SharedState::new();
+
+fn engine() -> &'static Engine {
+    ENGINE.get().expect("engine should be initialized")
+}
+
+#[must_use]
+fn settings() -> gio::Settings {
+    gio::Settings::new(APP_ID)
+}
+
+fn gettext(s: &str) -> &str {
+    s
+}
+
+fn forward_as_command<C: AsyncComponent<CommandOutput = Event>>(sender: &AsyncComponentSender<C>) {
+    sender.command(|out, shutdown| {
+        shutdown
+            .register(async move {
+                let mut recv_event = engine().recv_event();
+                while let Ok(event) = recv_event.recv().await {
+                    if out.send(event).is_err() {
+                        return;
+                    }
+                }
+            })
+            .drop_on_shutdown()
+    });
+}
+
+fn handle_result<T>(result: Result<T>) {
+    if let Err(err) = result {
+        APP_BROKER.send(AppMsg::Error(err));
+    }
+}
+
+#[derive(Debug)]
+struct App {
+    toaster: adw::ToastOverlay,
+    manage_profiles: Option<AsyncController<ManageProfiles>>,
+}
+
+#[derive(Debug)]
+enum AppMsg {
+    Error(anyhow::Error),
+    FatalError(anyhow::Error),
+    #[doc(hidden)]
+    OpenManageProfiles,
+}
+
+impl AsyncComponent for App {
+    type Init = ();
+    type Input = AppMsg;
+    type Output = ();
+    type CommandOutput = ();
+    type Root = adw::ApplicationWindow;
+    type Widgets = ();
+
+    fn init_root() -> Self::Root {
+        let root = adw::ApplicationWindow::builder()
+            .application(&relm4::main_application())
+            .title("Wordbase")
+            .build();
+
+        let settings = settings();
+        settings
+            .bind("manager-width", &root, "default-width")
+            .build();
+        settings
+            .bind("manager-height", &root, "default-height")
+            .build();
+        root.present();
+        root
+    }
+
+    fn init_loading_widgets(root: Self::Root) -> Option<LoadingWidgets> {
+        None
+    }
+
+    async fn init(
+        (): Self::Init,
+        root: Self::Root,
+        sender: AsyncComponentSender<Self>,
+    ) -> AsyncComponentParts<Self> {
+        let toaster = adw::ToastOverlay::new();
+        root.set_content(Some(&toaster));
+
+        match init(sender).await {
+            Ok(engine) => {
+                ENGINE
+                    .set(engine)
+                    .expect("engine should not already be set");
+                let manager = Manager::builder().launch(root.clone()).detach();
+                toaster.set_child(Some(manager.widget()));
+            }
+            Err(err) => {
+                let error_page = ErrorPage::builder().launch(err).detach();
+                toaster.set_child(Some(error_page.widget()));
+            }
+        };
+
+        AsyncComponentParts {
+            model: Self {
+                toaster,
+                manage_profiles: None,
+            },
+            widgets: (),
+        }
+    }
+
+    async fn update_with_view(
+        &mut self,
+        _widgets: &mut Self::Widgets,
+        message: Self::Input,
+        _sender: AsyncComponentSender<Self>,
+        root: &Self::Root,
+    ) {
+        match message {
+            AppMsg::OpenManageProfiles => {
+                let manage_profiles = ManageProfiles::builder()
+                    .launch(root.clone().upcast())
+                    .detach();
+                adw::Dialog::builder()
+                    .child(manage_profiles.widget())
+                    .title(gettext("Manage Profiles"))
+                    .width_request(300)
+                    .height_request(450)
+                    .build()
+                    .present(Some(root));
+                self.manage_profiles = Some(manage_profiles);
+            }
+            AppMsg::Error(err) => {
+                self.toaster.add_toast(adw::Toast::new(&err.to_string()));
+                error!("{err:?}");
+            }
+            AppMsg::FatalError(err) => {
+                let error_page = ErrorPage::builder().launch(err).detach();
+                root.set_content(Some(error_page.widget()));
+            }
+        }
+    }
+}
+
+async fn init(sender: AsyncComponentSender<App>) -> Result<Engine> {
     let data_dir = wordbase_engine::data_dir().context("failed to get data directory")?;
-    let engine = Engine::new(&data_dir)
+    let engine = Engine::new(data_dir)
         .await
         .context("failed to create engine")?;
-    let app = adw::Application::builder().application_id(APP_ID).build();
 
-    app.connect_activate(move |app| {
-        let window = adw::ApplicationWindow::new(app);
-        window.present();
+    tokio::spawn(clone!(
+        #[strong]
+        engine,
+        #[strong]
+        sender,
+        async move {
+            let addr = format!("127.0.0.1:{HTTP_PORT}");
+            let err = match wordbase_server::run(engine, addr).await {
+                Ok(()) => anyhow!("server exited"),
+                Err(err) => err,
+            };
+            sender.input(AppMsg::FatalError(err));
+        }
+    ));
 
-        glib::spawn_future_local(fun_thing(window.upcast()));
-    });
+    let app = relm4::main_application();
+    let settings = settings();
+    let action = settings.create_action(PROFILE);
+    app.add_action(&action);
 
-    Ok(app.run())
+    if let Ok(profile_id) = settings.string(PROFILE).parse::<i64>().map(ProfileId) {
+        *CURRENT_PROFILE_ID.write() = profile_id;
+    }
+    settings.connect_changed(
+        Some(PROFILE),
+        clone!(
+            #[strong]
+            settings,
+            move |_, _| {
+                let Ok(profile_id) = settings.string(PROFILE).parse::<i64>().map(ProfileId) else {
+                    return;
+                };
+                *CURRENT_PROFILE_ID.write() = profile_id;
+            }
+        ),
+    );
+
+    let manage_profiles = gio::ActionEntryBuilder::new(MANAGE_PROFILES)
+        .activate(clone!(
+            #[strong]
+            sender,
+            move |_, _, _| sender.input(AppMsg::OpenManageProfiles)
+        ))
+        .build();
+    app.add_action_entries([manage_profiles]);
+
+    Ok(engine)
 }
 
-async fn fun_thing(window: gtk::Window) -> Result<()> {
-    let parent_window = WindowIdentifier::from_native(&window)
-        .await
-        .context("failed to get window identifier from window")?;
-    println!("parent win = {parent_window:?}");
-
-    let (send_streams_fd, recv_streams_fd) = oneshot::channel();
-    let (send_node_id, recv_node_id) = oneshot::channel();
-
-    thread::spawn(move || pipewire_thread(recv_streams_fd, recv_node_id).unwrap());
-
-    let screencast = Screencast::new()
-        .await
-        .context("failed to create screencast proxy")?;
-
-    let session = screencast
-        .create_session()
-        .await
-        .context("failed to create screencast session")?;
-
-    screencast
-        .select_sources(
-            &session,
-            CursorMode::Hidden,
-            SourceType::Window | SourceType::Monitor,
-            false,
-            None,
-            PersistMode::DoNot,
-        )
-        .await
-        .context("failed to select sources")?;
-
-    let resp = screencast
-        .start(&session, Some(&parent_window))
-        .await
-        .context("failed to start screencast")?
-        .response()?;
-
-    let streams_fd = screencast
-        .open_pipe_wire_remote(&session)
-        .await
-        .context("failed to get PipeWire remote streams fd")?;
-    _ = send_streams_fd.send(streams_fd);
-
-    let stream = resp.streams().first().context("no streams")?;
-    _ = send_node_id.send(stream.pipe_wire_node_id());
-
-    Ok(())
-}
-
-fn pipewire_thread(
-    recv_streams_fd: oneshot::Receiver<OwnedFd>,
-    recv_node_id: oneshot::Receiver<u32>,
-) -> Result<()> {
-    let main_loop = pipewire::main_loop::MainLoop::new(None)?;
-    let context = pipewire::context::Context::new(&main_loop)?;
-
-    let streams_fd = recv_streams_fd.blocking_recv()?;
-    let core = context.connect_fd(streams_fd, None)?;
-    let _registry = core.get_registry()?;
-
-    let node_id = recv_node_id.blocking_recv()?;
-    println!("node id = {node_id}");
-
-    let mut props = Properties::new();
-    props.insert(PW_KEY_MEDIA_TYPE, "Video");
-    props.insert(PW_KEY_MEDIA_CATEGORY, "Capture");
-    props.insert(PW_KEY_MEDIA_ROLE, "Camera");
-
-    let stream = pipewire::stream::Stream::new(&core, "test-stream", props)?;
-
-    let mut params = [];
-    stream.connect(
-        Direction::Input,
-        Some(node_id),
-        StreamFlags::AUTOCONNECT | StreamFlags::MAP_BUFFERS,
-        &mut params,
-    )?;
-    stream.set_active(true)?;
-    println!("made stream, state = {:?}", stream.state());
-
-    let _listener = stream
-        .add_local_listener::<()>()
-        .state_changed(move |_stream, (), old, new| {
-            println!("old = {old:?}");
-            println!("new = {new:?}");
-        })
-        .process(move |stream, ()| {
-            let mut buf = stream.dequeue_buffer().expect("Failed to dequeue buffer");
-            let data = buf.datas_mut().first().expect("No data found in buffer");
-            let chunk = data.chunk();
-            println!("chunk size = {}", chunk.size());
-        })
-        .register()?;
-
-    // let _listener = registry
-    //     .add_listener_local()
-    //     .global(move |global| {
-    //         if global.id == node_id {
-    //             println!("new node {}", global.id);
-    //         }
-    //     })
-    //     .register();
-
-    main_loop.run();
-    anyhow::Ok(())
-}
+const PROFILE: &str = "profile";
+const MANAGE_PROFILES: &str = "manage-profiles";

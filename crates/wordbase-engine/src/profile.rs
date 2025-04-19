@@ -1,5 +1,5 @@
 use {
-    crate::{Engine, IndexMap, NotFound},
+    crate::{Engine, Event, IndexMap, NotFound, ProfileEvent},
     anyhow::{Context, Result, bail},
     derive_more::Deref,
     futures::StreamExt,
@@ -54,6 +54,9 @@ impl Engine {
         let new_id = ProfileId(new_id);
 
         self.sync_profiles().await?;
+        _ = self
+            .send_event
+            .send(Event::Profile(ProfileEvent::Added(new_id)));
         Ok(new_id)
     }
 
@@ -99,6 +102,10 @@ impl Engine {
         .context("failed to copy enabled dictionaries")?;
         tx.commit().await.context("failed to commit transaction")?;
 
+        self.sync_profiles().await?;
+        _ = self
+            .send_event
+            .send(Event::Profile(ProfileEvent::Added(new_id)));
         Ok(new_id)
     }
 
@@ -113,6 +120,9 @@ impl Engine {
         .await?;
 
         self.sync_profiles().await?;
+        _ = self
+            .send_event
+            .send(Event::Profile(ProfileEvent::ConfigSet(id)));
         Ok(())
     }
 
@@ -180,6 +190,9 @@ impl Engine {
         }
 
         self.sync_profiles().await?;
+        _ = self
+            .send_event
+            .send(Event::Profile(ProfileEvent::Removed(id)));
         Ok(())
     }
 }

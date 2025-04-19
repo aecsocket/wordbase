@@ -36,7 +36,7 @@ wordbase = { path = "crates/wordbase" }
 # wordbase-ankiconnect = { path = "crates/wordbase-ankiconnect" }
 # wordbase-client-tokio = { path = "crates/wordbase-client-tokio" }
 wordbase-engine = { path = "crates/wordbase-engine" }
-# wordbase-server = { path = "crates/wordbase-server" }
+wordbase-server = { path = "crates/wordbase-server" }
 
 ankiconnect          = { version = "0.2" }
 anyhow               = { version = "1.0" }
@@ -60,6 +60,7 @@ either               = { version = "1.15" }
 foldhash             = { version = "0.1.4" }
 form_urlencoded      = { version = "1.2" }
 futures              = { version = "0.3" }
+gio                  = { version = "0.20.9" }
 glib                 = { version = "0.20" }
 gtk4                 = { version = "0.9" }
 html-escape          = { version = "0.2" }

@@ -1,0 +1,244 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $WdbManager: Adw.Bin {
+  Adw.ToolbarView {
+    top-bar-style: raised;
+
+    [top]
+    Adw.HeaderBar {
+      title-widget: SearchEntry search_entry {
+        hexpand: true;
+      };
+
+      [start]
+      MenuButton {
+        icon-name: "people-symbolic";
+        menu-model: profile_menu;
+      }
+
+      [end]
+      ToggleButton search_sidebar_toggle {
+        icon-name: "library-symbolic";
+      }
+    }
+
+    Adw.OverlaySplitView search_view {
+      show-sidebar: bind search_sidebar_toggle.active bidirectional;
+      collapsed: true;
+      max-sidebar-width: 360;
+      sidebar-position: end;
+
+      content: Adw.ViewStack {
+        Adw.ViewStackPage {
+          name: "lookup_results";
+
+          child: Adw.Bin lookup_results {};
+        }
+
+        Adw.ViewStackPage {
+          name: "landing";
+
+          child: Adw.StatusPage {
+            icon-name: "system-search-symbolic";
+            title: _("Search");
+            description: _("Start typing to look up results for a word");
+          };
+        }
+
+        Adw.ViewStackPage {
+          name: "no_dictionaries";
+
+          child: Adw.StatusPage {
+            icon-name: "library-symbolic";
+            title: _("No Dictionaries Found");
+            description: _("Open the sidebar to import dictionaries");
+          };
+        }
+      };
+
+      sidebar: Adw.PreferencesPage {
+        Adw.PreferencesGroup dictionaries {
+          title: _("Dictionaries");
+        }
+
+        Adw.PreferencesGroup themes {
+          title: _("Themes");
+        }
+
+        Adw.PreferencesGroup {
+          title: _("AnkiConnect");
+
+          [header-suffix]
+          Box {
+            spacing: 8;
+
+            Button ankiconnect_connected {
+              tooltip-text: _("AnkiConnect connected");
+              icon-name: "check-plain-symbolic";
+
+              styles [
+                "success",
+                "flat",
+              ]
+            }
+
+            Button ankiconnect_disconnected {
+              tooltip-text: _("AnkiConnect disconnected");
+              icon-name: "chain-link-loose-symbolic";
+
+              styles [
+                "dimmed",
+                "flat",
+              ]
+            }
+          }
+
+          Adw.ComboRow {
+            title: _("Deck");
+            model: deck_model;
+          }
+
+          Adw.ComboRow {
+            title: _("Note Type");
+            model: note_type_model;
+            selected: 2;
+          }
+
+          Adw.ExpanderRow {
+            title: _("Note Fields");
+
+            Adw.ComboRow {
+              title: _("Word");
+              model: field_content_model;
+              selected: 1;
+            }
+
+            Adw.ComboRow {
+              title: _("Word Reading");
+              model: field_content_model;
+              selected: 2;
+            }
+
+            Adw.ComboRow {
+              title: _("Word Meaning");
+              model: field_content_model;
+              selected: 3;
+            }
+
+            Adw.ComboRow {
+              title: _("Word Furigana");
+              model: field_content_model;
+              selected: 0;
+            }
+          }
+
+          Adw.EntryRow ankiconnect_server_url {
+            title: _("Server URL");
+          }
+
+          Adw.PasswordEntryRow ankiconnect_api_key {
+            title: _("API Key");
+          }
+        }
+
+        Adw.PreferencesGroup {
+          title: _("Advanced");
+
+          Adw.EntryRow texthooker_url {
+            title: _("Texthooker URL");
+
+            [suffix]
+            Button texthooker_connected {
+              valign: center;
+              tooltip-text: _("Texthooker connected");
+              icon-name: "check-plain-symbolic";
+
+              styles [
+                "success",
+                "flat",
+              ]
+            }
+
+            [suffix]
+            Button texthooker_disconnected {
+              valign: center;
+              tooltip-text: _("Texthooker disconnected");
+              icon-name: "chain-link-loose-symbolic";
+
+              styles [
+                "dimmed",
+                "flat",
+              ]
+            }
+          }
+        }
+
+        Adw.PreferencesGroup {
+          Adw.ButtonRow quit {
+            title: _("Quit App");
+
+            styles [
+              "destructive-action",
+            ]
+          }
+        }
+      };
+    }
+  }
+}
+
+menu profile_menu {
+  item {
+    label: "Japanese";
+  }
+
+  item {
+    label: "Japanese Light Novels";
+  }
+
+  item {
+    label: "Mandarin";
+  }
+
+  item {
+    label: _("Manage Profiles");
+  }
+}
+
+StringList profiles_model {
+  strings [
+    _("Japanese"),
+    _("Japanese Light Novels"),
+    _("Mandarin"),
+  ]
+}
+
+StringList deck_model {
+  strings [
+    _("Mining"),
+  ]
+}
+
+StringList note_type_model {
+  strings [
+    "Lapis",
+    "JPMN",
+    "My Custom Note Type",
+  ]
+}
+
+StringList field_content_model {
+  strings [
+    "-",
+    _("Headword"),
+    _("Reading"),
+    _("Main Glossary"),
+    _("All Glossaries"),
+    _("Frequency"),
+  ]
+}
+
+FileDialog import_dictionary_dialog {
+  title: _("Pick Dictionary");
+}

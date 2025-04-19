@@ -1,0 +1,34 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $WdbManageProfiles: Adw.Bin {
+  Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    Adw.PreferencesPage {
+      Adw.PreferencesGroup {
+        ListBox list {
+          selection-mode: none;
+
+          styles ["boxed-list"]
+        }
+      }
+
+      Adw.PreferencesGroup {
+        Adw.EntryRow add_profile_name {
+          title: _("Name");
+        }
+
+        Adw.ButtonRow add_profile {
+          title: _("Add Profile");
+          start-icon-name: "list-add-symbolic";
+        }
+      }
+    }
+  }
+}
+
+CheckButton dummy_group {
+  visible: false;
+}

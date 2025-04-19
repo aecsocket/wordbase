@@ -9,6 +9,7 @@ use anyhow::{Context as _, Result};
 use tracing::info;
 use tracing_subscriber::{EnvFilter, filter::LevelFilter};
 use wordbase_engine::Engine;
+use wordbase_server::HTTP_PORT;
 
 /// `wordbase-server` standalone binary
 ///
@@ -25,7 +26,7 @@ struct Args {
     bind_addr: SocketAddr,
 }
 
-const DEFAULT_BIND_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 9518);
+const DEFAULT_BIND_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), HTTP_PORT);
 
 #[tokio::main]
 async fn main() -> Result<()> {

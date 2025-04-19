@@ -17,6 +17,7 @@ use derive_more::{Display, Error};
 use directories::ProjectDirs;
 use tracing::info;
 pub use wordbase;
+use wordbase::ProfileId;
 use {
     anki::Anki,
     anyhow::{Context, Result},
@@ -50,9 +51,17 @@ pub struct Inner {
 
 #[derive(Debug, Clone)]
 pub enum Event {
+    Profile(ProfileEvent),
     PullTexthookerConnected,
     PullTexthookerDisconnected,
     TexthookerSentence(TexthookerSentence),
+}
+
+#[derive(Debug, Clone)]
+pub enum ProfileEvent {
+    Added(ProfileId),
+    ConfigSet(ProfileId),
+    Removed(ProfileId),
 }
 
 pub type IndexMap<K, V> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
