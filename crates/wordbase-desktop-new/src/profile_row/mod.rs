@@ -6,15 +6,16 @@ use wordbase::{NormString, ProfileId};
 use wordbase_engine::{EngineEvent, ProfileEvent};
 
 use crate::{
-    AppEvent, CURRENT_PROFILE_ID, PROFILE, engine, forward_events, gettext, handle_result, settings,
+    AppEvent, CURRENT_PROFILE_ID, PROFILE, SignalHandler, engine, forward_events, gettext,
+    handle_result, settings, with_app_window,
 };
 
 mod ui;
 
 #[derive(Debug)]
 pub struct ProfileRow {
-    window: gtk::Window,
     profile_id: ProfileId,
+    _profile_changed_handler: SignalHandler,
 }
 
 #[derive(Debug)]
@@ -27,7 +28,7 @@ pub enum Msg {
 }
 
 impl AsyncComponent for ProfileRow {
-    type Init = (gtk::Window, ProfileId);
+    type Init = ProfileId;
     type Input = Msg;
     type Output = ();
     type CommandOutput = AppEvent;
@@ -39,7 +40,7 @@ impl AsyncComponent for ProfileRow {
     }
 
     async fn init(
-        (window, profile_id): Self::Init,
+        profile_id: Self::Init,
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
@@ -78,16 +79,21 @@ impl AsyncComponent for ProfileRow {
                 }
             })
             .build();
-        settings.connect_changed(
-            Some(PROFILE),
-            clone!(
-                #[strong]
-                sender,
-                move |_, _| sender.input(Msg::UpdateMeta)
-            ),
-        );
+        let profile_changed_handler = SignalHandler::new(&settings, |it| {
+            it.connect_changed(
+                Some(PROFILE),
+                clone!(
+                    #[strong]
+                    sender,
+                    move |_, _| sender.input(Msg::UpdateMeta)
+                ),
+            )
+        });
 
-        let model = Self { window, profile_id };
+        let model = Self {
+            profile_id,
+            _profile_changed_handler: profile_changed_handler,
+        };
         model.update_meta(&root);
         AsyncComponentParts { model, widgets: () }
     }
@@ -103,7 +109,9 @@ impl AsyncComponent for ProfileRow {
                 self.update_meta(root);
             }
             Msg::AskRemove => {
-                root.remove_dialog().present(Some(&self.window));
+                with_app_window(|window| {
+                    root.remove_dialog().present(Some(window));
+                });
             }
             Msg::Remove => {
                 handle_result(

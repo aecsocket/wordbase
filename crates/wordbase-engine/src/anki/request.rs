@@ -1,9 +1,10 @@
 use {
     foldhash::HashMap,
     serde::{Deserialize, Serialize, de::DeserializeOwned},
+    std::fmt::Debug,
 };
 
-pub trait Request: Send + Sync + Serialize {
+pub trait Request: Send + Sync + Debug + Serialize {
     type Response: DeserializeOwned;
 
     const ACTION: &'static str;

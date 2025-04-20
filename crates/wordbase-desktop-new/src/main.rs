@@ -8,17 +8,23 @@
 
 extern crate gtk4 as gtk;
 extern crate libadwaita as adw;
+extern crate webkit6 as webkit;
 
 mod error_page;
 mod manage_profiles;
 mod manager;
 mod profile_row;
+mod theme;
+// mod record_view;
 
 mod icon_names {
     include!(concat!(env!("OUT_DIR"), "/icon_names.rs"));
 }
 
-use std::sync::{LazyLock, OnceLock};
+use std::{
+    cell::OnceCell,
+    sync::{LazyLock, OnceLock},
+};
 
 use adw::prelude::*;
 use anyhow::{Context, Result, anyhow};
@@ -27,7 +33,10 @@ use error_page::ErrorPage;
 use glib::clone;
 use manage_profiles::ManageProfiles;
 use manager::Manager;
-use relm4::{MessageBroker, RelmApp, SharedState, loading_widgets::LoadingWidgets, prelude::*};
+use relm4::{
+    MessageBroker, RelmApp, SharedState, loading_widgets::LoadingWidgets, prelude::*, view,
+};
+use theme::{CustomTheme, ThemeName};
 use tokio::sync::broadcast;
 use tracing::{error, level_filters::LevelFilter};
 use tracing_subscriber::EnvFilter;
@@ -55,13 +64,25 @@ fn main() {
 }
 
 static ENGINE: OnceLock<Engine> = OnceLock::new();
-static APP_BROKER: MessageBroker<AppMsg> = MessageBroker::new();
-static CURRENT_PROFILE_ID: SharedState<ProfileId> = SharedState::new();
-static EVENTS: LazyLock<broadcast::Sender<AppEvent>> = LazyLock::new(|| broadcast::channel(16).0);
 
 fn engine() -> &'static Engine {
     ENGINE.get().expect("engine should be initialized")
 }
+
+thread_local! {
+    static APP_WINDOW: OnceCell<gtk::Window> = const { OnceCell::new() };
+}
+
+fn with_app_window<R>(f: impl FnOnce(&gtk::Window) -> R) -> R {
+    APP_WINDOW.with(|window_cell| {
+        let window = window_cell.get().expect("window should be initialized");
+        f(window)
+    })
+}
+
+static APP_BROKER: MessageBroker<AppMsg> = MessageBroker::new();
+static CURRENT_PROFILE_ID: SharedState<ProfileId> = SharedState::new();
+static EVENTS: LazyLock<broadcast::Sender<AppEvent>> = LazyLock::new(|| broadcast::channel(16).0);
 
 #[must_use]
 fn settings() -> gio::Settings {
@@ -97,7 +118,6 @@ fn handle_result<T>(result: Result<T>) {
 struct App {
     toaster: adw::ToastOverlay,
     manage_profiles: Option<AsyncController<ManageProfiles>>,
-    _manager: Option<AsyncController<Manager>>,
 }
 
 #[derive(Debug)]
@@ -111,6 +131,8 @@ enum AppMsg {
 #[derive(Debug, Clone)]
 pub enum AppEvent {
     Engine(EngineEvent),
+    ThemeAdded(CustomTheme),
+    ThemeRemoved(ThemeName),
     ProfileSet,
 }
 
@@ -140,7 +162,14 @@ impl AsyncComponent for App {
     }
 
     fn init_loading_widgets(root: Self::Root) -> Option<LoadingWidgets> {
-        None
+        view! {
+            #[local]
+            root {
+                #[name(spinner)]
+                adw::Spinner {}
+            }
+        }
+        Some(LoadingWidgets::new(root, spinner))
     }
 
     async fn init(
@@ -151,19 +180,24 @@ impl AsyncComponent for App {
         let toaster = adw::ToastOverlay::new();
         root.set_content(Some(&toaster));
 
-        let manager = match init(sender).await {
+        match init(sender).await {
             Ok(engine) => {
                 ENGINE
                     .set(engine)
                     .expect("engine should not already be set");
-                let manager = Manager::builder().launch(root.clone()).detach();
+                APP_WINDOW.with(move |window| {
+                    window
+                        .set(root.upcast())
+                        .expect("window should not already be set");
+                });
+
+                let manager = Manager::builder().launch(()).detach();
                 toaster.set_child(Some(manager.widget()));
-                Some(manager)
+                Box::leak(Box::new(manager));
             }
             Err(err) => {
                 let error_page = ErrorPage::builder().launch(err).detach();
                 toaster.set_child(Some(error_page.widget()));
-                None
             }
         };
 
@@ -171,7 +205,6 @@ impl AsyncComponent for App {
             model: Self {
                 toaster,
                 manage_profiles: None,
-                _manager: manager,
             },
             widgets: (),
         }
@@ -186,9 +219,7 @@ impl AsyncComponent for App {
     ) {
         match message {
             AppMsg::OpenManageProfiles => {
-                let manage_profiles = ManageProfiles::builder()
-                    .launch(root.clone().upcast())
-                    .detach();
+                let manage_profiles = ManageProfiles::builder().launch(()).detach();
                 adw::Dialog::builder()
                     .child(manage_profiles.widget())
                     .title(gettext("Manage Profiles"))
@@ -212,7 +243,7 @@ impl AsyncComponent for App {
 
 async fn init(sender: AsyncComponentSender<App>) -> Result<Engine> {
     let data_dir = wordbase_engine::data_dir().context("failed to get data directory")?;
-    let engine = Engine::new(data_dir)
+    let engine = Engine::new(&data_dir)
         .await
         .context("failed to create engine")?;
 
@@ -242,6 +273,11 @@ async fn init(sender: AsyncComponentSender<App>) -> Result<Engine> {
             }
         }
     ));
+
+    let theme_file_watcher = theme::watch_themes(&data_dir)
+        .await
+        .context("failed to get initial themes")?;
+    Box::leak(Box::new(theme_file_watcher));
 
     let app = relm4::main_application();
     let settings = settings();
@@ -279,3 +315,34 @@ async fn init(sender: AsyncComponentSender<App>) -> Result<Engine> {
 
 const PROFILE: &str = "profile";
 const MANAGE_PROFILES: &str = "manage-profiles";
+const CUSTOM_THEME: &str = "custom-theme";
+
+#[derive(Debug)]
+#[must_use]
+struct SignalHandler {
+    object: glib::Object,
+    id: Option<glib::SignalHandlerId>,
+}
+
+impl Drop for SignalHandler {
+    fn drop(&mut self) {
+        self.object.disconnect(
+            self.id
+                .take()
+                .expect("signal handler id should not be taken before drop"),
+        );
+    }
+}
+
+impl SignalHandler {
+    pub fn new<T: IsA<glib::Object>>(
+        object: &T,
+        make_id: impl FnOnce(&T) -> glib::SignalHandlerId,
+    ) -> Self {
+        let id = make_id(object);
+        Self {
+            object: object.upcast_ref().clone(),
+            id: Some(id),
+        }
+    }
+}

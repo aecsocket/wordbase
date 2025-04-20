@@ -3,6 +3,7 @@ use {
     anyhow::{Context, Result},
     derive_more::{Display, Error},
     serde::{Deserialize, Serialize},
+    std::sync::Arc,
 };
 
 pub const VERSION: u32 = 6;
@@ -10,21 +11,21 @@ pub const VERSION: u32 = 6;
 #[derive(Debug, Clone)]
 pub struct AnkiClient {
     pub http_client: reqwest::Client,
-    pub url: String,
-    pub api_key: String,
+    pub url: Arc<str>,
+    pub api_key: Arc<str>,
 }
 
 impl AnkiClient {
     pub async fn send<R: Request>(&self, request: &R) -> Result<R::Response> {
         Ok(self
             .http_client
-            .post(&self.url)
+            .post(&*self.url)
             .json(&RequestWrapper {
                 version: VERSION,
                 action: R::ACTION,
                 params: if R::HAS_PARAMS { Some(request) } else { None },
             })
-            .bearer_auth(&self.api_key)
+            .bearer_auth(&*self.api_key)
             .send()
             .await
             .context("failed to send")?

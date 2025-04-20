@@ -15,7 +15,6 @@ mod ui;
 
 #[derive(Debug)]
 pub struct ManageProfiles {
-    window: gtk::Window,
     rows: HashMap<ProfileId, AsyncController<ProfileRow>>,
 }
 
@@ -27,7 +26,7 @@ pub enum Msg {
 }
 
 impl AsyncComponent for ManageProfiles {
-    type Init = gtk::Window;
+    type Init = ();
     type Input = Msg;
     type Output = ();
     type CommandOutput = AppEvent;
@@ -39,7 +38,7 @@ impl AsyncComponent for ManageProfiles {
     }
 
     async fn init(
-        window: Self::Init,
+        (): Self::Init,
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
@@ -57,7 +56,6 @@ impl AsyncComponent for ManageProfiles {
         ));
 
         let mut model = Self {
-            window,
             rows: HashMap::new(),
         };
         for profile_id in engine().profiles().keys() {
@@ -109,7 +107,7 @@ impl AsyncComponent for ManageProfiles {
     ) {
         match event {
             AppEvent::Engine(EngineEvent::Profile(ProfileEvent::Added(profile_id))) => {
-                self.add_row(root, profile_id)
+                self.add_row(root, profile_id);
             }
             AppEvent::Engine(EngineEvent::Profile(ProfileEvent::Removed(profile_id))) => {
                 if let Some(row) = self.rows.remove(&profile_id) {
@@ -132,9 +130,7 @@ impl ManageProfiles {
     }
 
     fn add_row(&mut self, root: &ui::ManageProfiles, profile_id: ProfileId) {
-        let row = ProfileRow::builder()
-            .launch((self.window.clone(), profile_id))
-            .detach();
+        let row = ProfileRow::builder().launch(profile_id).detach();
         row.widget().current().set_group(Some(&root.dummy_group()));
         root.list().append(row.widget());
         self.rows.insert(profile_id, row);

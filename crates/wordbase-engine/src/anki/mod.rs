@@ -2,12 +2,14 @@
 
 use {
     crate::{Engine, IndexMap, IndexSet, lang},
-    anyhow::{Context, Result, bail},
-    arc_swap::ArcSwapOption,
+    anyhow::{Context, Result, anyhow, bail},
+    arc_swap::ArcSwap,
     client::{AnkiClient, VERSION},
     itertools::Itertools,
     maud::html,
     request::{Asset, DeckName, ModelFieldName, ModelName},
+    serde::{Deserialize, Serialize},
+    sqlx::{Pool, Sqlite},
     std::{cmp, fmt::Write as _, sync::Arc},
     wordbase::{
         DictionaryId, FrequencyValue, NormString, ProfileId, Record, RecordKind, Term, dict,
@@ -20,7 +22,14 @@ mod request;
 #[derive(Debug)]
 pub struct Anki {
     http_client: reqwest::Client,
-    state: ArcSwapOption<AnkiState>,
+    config: ArcSwap<AnkiConfig>,
+    state: ArcSwap<Result<Arc<AnkiState>>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnkiConfig {
+    pub server_url: Arc<str>,
+    pub api_key: Arc<str>,
 }
 
 #[derive(Debug)]
@@ -36,92 +45,62 @@ pub struct Model {
 }
 
 impl Anki {
-    pub fn new() -> Result<Self> {
+    pub async fn new(db: &Pool<Sqlite>) -> Result<Self> {
+        let http_client = reqwest::Client::builder()
+            // AnkiConnect HTTP server seems to eagerly close connections
+            // so to prevent erroring when attempting to reuse a closed connection,
+            // we won't pool connections
+            .pool_max_idle_per_host(0)
+            .build()
+            .context("failed to create HTTP client")?;
+        let config = anki_config(db)
+            .await
+            .context("failed to fetch Anki config")?;
+        let state = fetch_anki_state(http_client.clone(), &config).await;
+
         Ok(Self {
-            http_client: reqwest::Client::builder()
-                .build()
-                .context("failed to create HTTP client")?,
-            state: ArcSwapOption::new(None),
+            http_client,
+            config: ArcSwap::from_pointee(config),
+            state: ArcSwap::from_pointee(state),
         })
     }
 }
 
 impl Engine {
-    // pub async fn connect_anki(
-    //     &self,
-    //     url: impl Into<String>,
-    //     api_key: impl Into<String>,
-    // ) -> Result<()> {
-    //     let url = url.into();
-    //     let api_key = api_key.into();
-    //     sqlx::query!(
-    //         "UPDATE config SET ankiconnect_url = $1, ankiconnect_api_key = $2",
-    //         url,
-    //         api_key
-    //     )
-    //     .execute(&self.db)
-    //     .await
-    //     .context("failed to update AnkiConnect config")?;
+    #[must_use]
+    pub fn anki_config(&self) -> Arc<AnkiConfig> {
+        self.anki.config.load().clone()
+    }
 
-    //     self.sync_anki_state(url, api_key).await
-    // }
-
-    pub async fn anki_state(&self) -> Result<Arc<AnkiState>> {
-        if let Some(state) = self.anki.state.load().clone() {
-            return Ok(state);
+    pub fn anki_state(&self) -> Result<Arc<AnkiState>> {
+        match &*self.anki.state.load().clone() {
+            Ok(state) => Ok(state.clone()),
+            Err(err) => Err(anyhow!("{err:?}")),
         }
+    }
 
-        let record = sqlx::query!("SELECT ankiconnect_url, ankiconnect_api_key FROM config")
-            .fetch_one(&self.db)
-            .await
-            .context("failed to fetch config")?;
+    pub async fn connect_anki(&self, config: Arc<AnkiConfig>) -> Result<()> {
+        let url = &*config.server_url;
+        let api_key = &*config.api_key;
+        sqlx::query!(
+            "UPDATE config SET ankiconnect_url = $1, ankiconnect_api_key = $2",
+            url,
+            api_key
+        )
+        .execute(&self.db)
+        .await
+        .context("failed to update Anki config")?;
+        self.anki.config.store(config);
 
-        let client = AnkiClient {
-            http_client: self.anki.http_client.clone(),
-            url: record.ankiconnect_url,
-            api_key: record.ankiconnect_api_key,
-        };
-        let version = client
-            .send(&request::Version)
-            .await
-            .context("failed to send version request")?;
-        match version.cmp(&VERSION) {
-            cmp::Ordering::Less => {
-                bail!("server version ({version}) is older than ours ({VERSION})");
-            }
-            cmp::Ordering::Greater => {
-                bail!("server version ({version}) is newer than ours ({VERSION})");
-            }
-            cmp::Ordering::Equal => {}
-        }
-
-        let decks = client
-            .send(&request::DeckNames)
-            .await
-            .context("failed to fetch deck names")?;
-
-        let mut models = IndexMap::default();
-        let model_names = client
-            .send(&request::ModelNames)
-            .await
-            .context("failed to fetch model names")?;
-        for model_name in model_names {
-            let field_names = client
-                .send(&request::ModelFieldNames {
-                    model_name: model_name.clone(),
-                })
-                .await
-                .with_context(|| format!("failed to fetch model field names for {model_name:?}"))?;
-            models.insert(model_name, Model { field_names });
-        }
-
-        let state = Arc::new(AnkiState {
-            client,
-            decks,
-            models,
-        });
-        self.anki.state.store(Some(state.clone()));
-        Ok(state)
+        let state = Arc::new(
+            fetch_anki_state(
+                self.anki.http_client.clone(),
+                &self.anki.config.load().clone(),
+            )
+            .await,
+        );
+        self.anki.state.store(state);
+        Ok(())
     }
 
     pub async fn add_anki_note(
@@ -133,10 +112,7 @@ impl Engine {
         sentence_audio: Option<&str>,
         sentence_image: Option<&str>,
     ) -> Result<()> {
-        let anki = self
-            .anki_state()
-            .await
-            .context("failed to connect to Anki")?;
+        let anki = self.anki_state().context("failed to connect to Anki")?;
         let profile = self
             .profiles()
             .get(&profile_id)
@@ -352,6 +328,66 @@ impl Engine {
         anki.client.send(&request::AddNote { note }).await?;
         Ok(())
     }
+}
+
+async fn anki_config(db: &Pool<Sqlite>) -> Result<AnkiConfig> {
+    let record = sqlx::query!("SELECT ankiconnect_url, ankiconnect_api_key FROM config")
+        .fetch_one(db)
+        .await?;
+    Ok(AnkiConfig {
+        server_url: Arc::from(record.ankiconnect_url),
+        api_key: Arc::from(record.ankiconnect_api_key),
+    })
+}
+
+async fn fetch_anki_state(
+    http_client: reqwest::Client,
+    config: &AnkiConfig,
+) -> Result<Arc<AnkiState>> {
+    let client = AnkiClient {
+        http_client,
+        url: config.server_url.clone(),
+        api_key: config.api_key.clone(),
+    };
+    let version = client
+        .send(&request::Version)
+        .await
+        .context("failed to send version request")?;
+    match version.cmp(&VERSION) {
+        cmp::Ordering::Less => {
+            bail!("server version ({version}) is older than ours ({VERSION})");
+        }
+        cmp::Ordering::Greater => {
+            bail!("server version ({version}) is newer than ours ({VERSION})");
+        }
+        cmp::Ordering::Equal => {}
+    }
+
+    let decks = client
+        .send(&request::DeckNames)
+        .await
+        .context("failed to fetch deck names")?;
+
+    let mut models = IndexMap::default();
+    let model_names = client
+        .send(&request::ModelNames)
+        .await
+        .context("failed to fetch model names")?;
+    for model_name in model_names {
+        let field_names = client
+            .send(&request::ModelFieldNames {
+                model_name: model_name.clone(),
+            })
+            .await
+            .with_context(|| format!("failed to fetch model field names for {model_name:?}"))?;
+        models.insert(model_name, Model { field_names });
+    }
+
+    Ok(Arc::new(AnkiState {
+        client,
+        decks,
+        models,
+    }))
 }
 
 const ANKI_RECORD_KINDS: &[RecordKind] = RecordKind::ALL;

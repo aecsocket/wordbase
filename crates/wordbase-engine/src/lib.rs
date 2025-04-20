@@ -91,7 +91,9 @@ impl Engine {
                 .context("failed to create texthooker listener")?,
             imports: Imports::new(),
             deinflectors: Deinflectors::new().context("failed to create deinflectors")?,
-            anki: Anki::new().context("failed to create AnkiConnect integration")?,
+            anki: Anki::new(&db)
+                .await
+                .context("failed to create Anki integration")?,
             send_event,
             db,
         }));
