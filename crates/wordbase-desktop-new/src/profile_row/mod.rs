@@ -1,13 +1,14 @@
-use adw::prelude::*;
-use anyhow::Context as _;
-use glib::clone;
-use relm4::prelude::*;
-use wordbase::{NormString, ProfileId};
-use wordbase_engine::{EngineEvent, ProfileEvent};
-
-use crate::{
-    AppEvent, CURRENT_PROFILE_ID, PROFILE, SignalHandler, engine, forward_events, gettext,
-    handle_result, settings, with_app_window,
+use {
+    crate::{
+        AppEvent, CURRENT_PROFILE_ID, PROFILE, SignalHandler, engine, forward_events, gettext,
+        handle_result, settings, with_app_window,
+    },
+    adw::prelude::*,
+    anyhow::Context as _,
+    glib::clone,
+    relm4::prelude::*,
+    wordbase::{NormString, ProfileId},
+    wordbase_engine::{EngineEvent, ProfileEvent},
 };
 
 mod ui;

@@ -1,10 +1,11 @@
-use std::sync::Arc;
-
-use poem::{Result, error::NotFoundError};
-use poem_openapi::Object;
-use serde::{Deserialize, Serialize};
-use wordbase::{Profile, ProfileConfig, ProfileId};
-use wordbase_engine::Engine;
+use {
+    poem::{Result, error::NotFoundError},
+    poem_openapi::Object,
+    serde::{Deserialize, Serialize},
+    std::sync::Arc,
+    wordbase::{Profile, ProfileConfig, ProfileId},
+    wordbase_engine::Engine,
+};
 
 pub async fn index(engine: &Engine) -> Vec<Arc<Profile>> {
     engine.profiles().values().cloned().collect()

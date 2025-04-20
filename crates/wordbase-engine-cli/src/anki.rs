@@ -1,6 +1,8 @@
-use anyhow::{Context, Result};
-use wordbase::{Profile, Term};
-use wordbase_engine::Engine;
+use {
+    anyhow::{Context, Result},
+    wordbase::{Profile, Term},
+    wordbase_engine::Engine,
+};
 
 pub async fn create_note(
     engine: &Engine,

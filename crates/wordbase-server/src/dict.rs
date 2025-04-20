@@ -1,18 +1,19 @@
-use std::sync::Arc;
-
-use anyhow::Context;
-use bytes::Bytes;
-use futures::{StreamExt, stream::BoxStream};
-use poem::{Result, error::NotFoundError};
-use poem_openapi::{
-    Multipart, Object, Union,
-    payload::EventStream,
-    types::{Example, multipart::Upload},
+use {
+    anyhow::Context,
+    bytes::Bytes,
+    futures::{StreamExt, stream::BoxStream},
+    poem::{Result, error::NotFoundError},
+    poem_openapi::{
+        Multipart, Object, Union,
+        payload::EventStream,
+        types::{Example, multipart::Upload},
+    },
+    serde::{Deserialize, Serialize},
+    std::sync::Arc,
+    tokio::sync::oneshot,
+    wordbase::{Dictionary, DictionaryId, DictionaryMeta, ProfileId},
+    wordbase_engine::Engine,
 };
-use serde::{Deserialize, Serialize};
-use tokio::sync::oneshot;
-use wordbase::{Dictionary, DictionaryId, DictionaryMeta, ProfileId};
-use wordbase_engine::Engine;
 
 pub async fn index(engine: &Engine) -> Vec<Arc<Dictionary>> {
     engine.dictionaries().values().cloned().collect()

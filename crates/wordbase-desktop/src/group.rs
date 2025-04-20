@@ -1,13 +1,14 @@
 // TODO: this should be moved out to a more core crate
 // idk exactly where though yet
 
-use std::{
-    borrow::Borrow,
-    hash::{Hash, Hasher},
+use {
+    derive_more::{Deref, DerefMut},
+    std::{
+        borrow::Borrow,
+        hash::{Hash, Hasher},
+    },
+    wordbase::Term,
 };
-
-use derive_more::{Deref, DerefMut};
-use wordbase::Term;
 
 #[derive(Debug, Clone, Copy, Deref, DerefMut)]
 pub struct Grouping<T: Borrow<Term>>(pub T);

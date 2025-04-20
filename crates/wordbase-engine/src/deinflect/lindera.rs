@@ -1,16 +1,16 @@
-use std::borrow::Cow;
-
-use anyhow::{Context as _, Result};
-use itertools::Itertools;
-use lindera::{
-    dictionary::{DictionaryKind, load_dictionary_from_kind},
-    mode::Mode,
-    segmenter::Segmenter,
-    token::Token,
-    tokenizer::Tokenizer,
+use {
+    super::{Deinflection, Deinflector},
+    anyhow::{Context as _, Result},
+    itertools::Itertools,
+    lindera::{
+        dictionary::{DictionaryKind, load_dictionary_from_kind},
+        mode::Mode,
+        segmenter::Segmenter,
+        token::Token,
+        tokenizer::Tokenizer,
+    },
+    std::borrow::Cow,
 };
-
-use super::{Deinflection, Deinflector};
 
 #[derive(derive_more::Debug)]
 pub struct Lindera {
@@ -184,11 +184,7 @@ fn is_word_continuation(last_lookahead: &Details, token: &Details) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::LazyLock;
-
-    use crate::{IndexSet, deinflect::Deinflector as _};
-
-    use super::*;
+    use {super::*, crate::IndexSet, std::sync::LazyLock};
 
     #[test]
     fn generate_details() {

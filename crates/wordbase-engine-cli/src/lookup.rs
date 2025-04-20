@@ -1,6 +1,8 @@
-use anyhow::Result;
-use wordbase::{Profile, RecordKind};
-use wordbase_engine::Engine;
+use {
+    anyhow::Result,
+    wordbase::{Profile, RecordKind},
+    wordbase_engine::Engine,
+};
 
 pub fn deinflect(engine: &Engine, text: &str) {
     for lemma in engine.deinflect(text) {

@@ -1,7 +1,9 @@
-use anyhow::{Context, Result};
-use ascii_table::AsciiTable;
-use wordbase::{DictionaryId, NormString, Profile, ProfileConfig};
-use wordbase_engine::Engine;
+use {
+    anyhow::{Context, Result},
+    ascii_table::AsciiTable,
+    wordbase::{DictionaryId, NormString, Profile, ProfileConfig},
+    wordbase_engine::Engine,
+};
 
 pub fn ls(engine: &Engine) {
     let mut table = AsciiTable::default();

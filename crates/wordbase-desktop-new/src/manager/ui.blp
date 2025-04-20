@@ -57,89 +57,13 @@ template $WdbManager: Adw.Bin {
         }
       };
 
-      sidebar: Adw.PreferencesPage {
+      sidebar: Adw.PreferencesPage settings {
         Adw.PreferencesGroup dictionaries {
           title: _("Dictionaries");
         }
 
         Adw.PreferencesGroup themes {
           title: _("Themes");
-        }
-
-        Adw.PreferencesGroup {
-          title: _("AnkiConnect");
-
-          [header-suffix]
-          Box {
-            spacing: 8;
-
-            Button ankiconnect_connected {
-              tooltip-text: _("AnkiConnect connected");
-              icon-name: "check-plain-symbolic";
-
-              styles [
-                "success",
-                "flat",
-              ]
-            }
-
-            Button ankiconnect_disconnected {
-              tooltip-text: _("AnkiConnect disconnected");
-              icon-name: "chain-link-loose-symbolic";
-
-              styles [
-                "dimmed",
-                "flat",
-              ]
-            }
-          }
-
-          Adw.ComboRow {
-            title: _("Deck");
-            model: deck_model;
-          }
-
-          Adw.ComboRow {
-            title: _("Note Type");
-            model: note_type_model;
-            selected: 2;
-          }
-
-          Adw.ExpanderRow {
-            title: _("Note Fields");
-
-            Adw.ComboRow {
-              title: _("Word");
-              model: field_content_model;
-              selected: 1;
-            }
-
-            Adw.ComboRow {
-              title: _("Word Reading");
-              model: field_content_model;
-              selected: 2;
-            }
-
-            Adw.ComboRow {
-              title: _("Word Meaning");
-              model: field_content_model;
-              selected: 3;
-            }
-
-            Adw.ComboRow {
-              title: _("Word Furigana");
-              model: field_content_model;
-              selected: 0;
-            }
-          }
-
-          Adw.EntryRow ankiconnect_server_url {
-            title: _("Server URL");
-          }
-
-          Adw.PasswordEntryRow ankiconnect_api_key {
-            title: _("API Key");
-          }
         }
 
         Adw.PreferencesGroup {
@@ -188,56 +112,13 @@ template $WdbManager: Adw.Bin {
   }
 }
 
-menu profile_menu {
-  item {
-    label: "Japanese";
-  }
+menu profile_menu {}
 
-  item {
-    label: "Japanese Light Novels";
-  }
+StringList deck_model {}
 
-  item {
-    label: "Mandarin";
-  }
+StringList note_type_model {}
 
-  item {
-    label: _("Manage Profiles");
-  }
-}
-
-StringList profiles_model {
-  strings [
-    _("Japanese"),
-    _("Japanese Light Novels"),
-    _("Mandarin"),
-  ]
-}
-
-StringList deck_model {
-  strings [
-    _("Mining"),
-  ]
-}
-
-StringList note_type_model {
-  strings [
-    "Lapis",
-    "JPMN",
-    "My Custom Note Type",
-  ]
-}
-
-StringList field_content_model {
-  strings [
-    "-",
-    _("Headword"),
-    _("Reading"),
-    _("Main Glossary"),
-    _("All Glossaries"),
-    _("Frequency"),
-  ]
-}
+StringList field_content_model {}
 
 FileDialog import_dictionary_dialog {
   title: _("Pick Dictionary");

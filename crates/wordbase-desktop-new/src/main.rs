@@ -10,6 +10,7 @@ extern crate gtk4 as gtk;
 extern crate libadwaita as adw;
 extern crate webkit6 as webkit;
 
+mod anki_group;
 mod error_page;
 mod manage_profiles;
 mod manager;
@@ -21,28 +22,29 @@ mod icon_names {
     include!(concat!(env!("OUT_DIR"), "/icon_names.rs"));
 }
 
-use std::{
-    cell::OnceCell,
-    sync::{LazyLock, OnceLock},
+use {
+    adw::prelude::*,
+    anyhow::{Context, Result, anyhow},
+    derive_more::Debug,
+    error_page::ErrorPage,
+    glib::clone,
+    manage_profiles::ManageProfiles,
+    manager::Manager,
+    relm4::{
+        MessageBroker, RelmApp, SharedState, loading_widgets::LoadingWidgets, prelude::*, view,
+    },
+    std::{
+        cell::OnceCell,
+        sync::{LazyLock, OnceLock},
+    },
+    theme::{CustomTheme, ThemeName},
+    tokio::sync::broadcast,
+    tracing::{error, level_filters::LevelFilter},
+    tracing_subscriber::EnvFilter,
+    wordbase::ProfileId,
+    wordbase_engine::{Engine, EngineEvent},
+    wordbase_server::HTTP_PORT,
 };
-
-use adw::prelude::*;
-use anyhow::{Context, Result, anyhow};
-use derive_more::Debug;
-use error_page::ErrorPage;
-use glib::clone;
-use manage_profiles::ManageProfiles;
-use manager::Manager;
-use relm4::{
-    MessageBroker, RelmApp, SharedState, loading_widgets::LoadingWidgets, prelude::*, view,
-};
-use theme::{CustomTheme, ThemeName};
-use tokio::sync::broadcast;
-use tracing::{error, level_filters::LevelFilter};
-use tracing_subscriber::EnvFilter;
-use wordbase::ProfileId;
-use wordbase_engine::{Engine, EngineEvent};
-use wordbase_server::HTTP_PORT;
 
 const APP_ID: &str = "io.github.aecsocket.Wordbase";
 
@@ -81,7 +83,13 @@ fn with_app_window<R>(f: impl FnOnce(&gtk::Window) -> R) -> R {
 }
 
 static APP_BROKER: MessageBroker<AppMsg> = MessageBroker::new();
+
 static CURRENT_PROFILE_ID: SharedState<ProfileId> = SharedState::new();
+
+fn current_profile_id() -> ProfileId {
+    *CURRENT_PROFILE_ID.read()
+}
+
 static EVENTS: LazyLock<broadcast::Sender<AppEvent>> = LazyLock::new(|| broadcast::channel(16).0);
 
 #[must_use]

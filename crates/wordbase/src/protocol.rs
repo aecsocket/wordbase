@@ -5,24 +5,24 @@ use {
 
 // /// Parameters for performing a lookup against the engine's database.
 // ///
-// /// Lookups return a stream of [`RecordLookup`]s. These lookups are pre-sorted
-// /// by the engine based on relevance to the term you're looking up.
-// #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+// /// Lookups return a stream of [`RecordLookup`]s. These lookups are
+// pre-sorted /// by the engine based on relevance to the term you're looking
+// up. #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 // pub struct Lookup {
 //     /// Context text for the lookup.
 //     ///
 //     /// This should include the text you want to look up, as well as all the
-//     /// surrounding content. For example, if looking up text in a video player's
-//     /// subtitles, this can include the previous and next few subtitle lines; or
-//     /// in a web browser, this could be the entire paragraph within which the
-//     /// lookup text is contained.
+//     /// surrounding content. For example, if looking up text in a video
+// player's     /// subtitles, this can include the previous and next few
+// subtitle lines; or     /// in a web browser, this could be the entire
+// paragraph within which the     /// lookup text is contained.
 //     ///
-//     /// If you have no surrounding content, it's fine to only include the lookup
-//     /// text in this field, but some actions (e.g. creating Anki cards) may have
-//     /// less relevant information to work with.
+//     /// If you have no surrounding content, it's fine to only include the
+// lookup     /// text in this field, but some actions (e.g. creating Anki
+// cards) may have     /// less relevant information to work with.
 //     pub context: String,
-//     /// Byte index into [`Lookup::context`] which marks what text you actually
-//     /// want to get lookup results for.
+//     /// Byte index into [`Lookup::context`] which marks what text you
+// actually     /// want to get lookup results for.
 //     ///
 //     /// The index must land on a UTF-8 character boundary.
 //     ///
@@ -108,13 +108,13 @@ pub struct TexthookerSentence {
 //         lookup: Lookup,
 //         /// What kinds of records we want to receive.
 //         ///
-//         /// You must explicitly list what kinds of records you want to receive,
-//         /// as it is possible (and expected!) that you won't be able to
-//         /// process all kinds of records.
+//         /// You must explicitly list what kinds of records you want to
+// receive,         /// as it is possible (and expected!) that you won't be able
+// to         /// process all kinds of records.
 //         ///
-//         /// You can also use this to fetch a small amount of info when doing an
-//         /// initial lookup, then fetch more records (e.g. pronunciation audio)
-//         /// when the user selects a specific term.
+//         /// You can also use this to fetch a small amount of info when doing
+// an         /// initial lookup, then fetch more records (e.g. pronunciation
+// audio)         /// when the user selects a specific term.
 //         record_kinds: Vec<RecordKind>,
 //     },
 // }

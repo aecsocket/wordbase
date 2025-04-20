@@ -1,11 +1,12 @@
-use std::{path::Path, time::Instant};
-
-use anyhow::{Context, Result};
-use ascii_table::AsciiTable;
-use bytes::Bytes;
-use tokio::{fs, sync::oneshot};
-use wordbase::{DictionaryId, Profile};
-use wordbase_engine::{Engine, import::ImportStarted};
+use {
+    anyhow::{Context, Result},
+    ascii_table::AsciiTable,
+    bytes::Bytes,
+    std::{path::Path, time::Instant},
+    tokio::{fs, sync::oneshot},
+    wordbase::{DictionaryId, Profile},
+    wordbase_engine::{Engine, import::ImportStarted},
+};
 
 pub fn ls(engine: &Engine, profile: &Profile) {
     let mut table = AsciiTable::default();

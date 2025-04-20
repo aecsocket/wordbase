@@ -1,4 +1,5 @@
 use {
+    derive_more::{Deref, DerefMut},
     foldhash::HashMap,
     serde::{Deserialize, Serialize, de::DeserializeOwned},
     std::fmt::Debug,
@@ -42,7 +43,7 @@ impl Request for DeckNames {
     const HAS_PARAMS: bool = false;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deref, DerefMut, Serialize, Deserialize)]
 pub struct DeckName(pub String);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,7 +57,7 @@ impl Request for ModelNames {
     const HAS_PARAMS: bool = false;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deref, DerefMut, Serialize, Deserialize)]
 pub struct ModelName(pub String);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -72,7 +73,7 @@ impl Request for ModelFieldNames {
     const HAS_PARAMS: bool = true;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deref, DerefMut, Serialize, Deserialize)]
 pub struct ModelFieldName(pub String);
 
 #[derive(Debug, Clone, Serialize)]
@@ -122,7 +123,7 @@ pub struct DuplicateScopeOptions<'a> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Asset<'a> {
-    pub filename: &'a str,
+    pub filename: String,
     pub data: Option<&'a str>,
     pub path: Option<&'a str>,
     pub url: Option<&'a str>,

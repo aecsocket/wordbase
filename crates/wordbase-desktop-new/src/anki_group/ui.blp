@@ -1,0 +1,59 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $WdbAnkiGroup: Adw.PreferencesGroup {
+  title: _("AnkiConnect");
+
+  [header-suffix]
+  Box {
+    spacing: 8;
+
+    Button connected {
+      tooltip-text: _("AnkiConnect connected");
+      icon-name: "check-plain-symbolic";
+
+      styles [
+        "success",
+        "flat",
+      ]
+    }
+
+    Button disconnected {
+      icon-name: "chain-link-loose-symbolic";
+
+      styles [
+        "dimmed",
+        "flat",
+      ]
+    }
+  }
+
+  Adw.ComboRow deck {
+    title: _("Deck");
+    model: deck_model;
+  }
+
+  Adw.ComboRow note_type {
+    title: _("Note Type");
+    model: note_type_model;
+    selected: 2;
+  }
+
+  Adw.ExpanderRow note_fields {
+    title: _("Note Fields");
+  }
+
+  Adw.EntryRow server_url {
+    title: _("Server URL");
+  }
+
+  Adw.PasswordEntryRow api_key {
+    title: _("API Key");
+  }
+}
+
+StringList deck_model {}
+
+StringList note_type_model {}
+
+StringList field_content_model {}

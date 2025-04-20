@@ -1,19 +1,25 @@
 //! [Local Audio Server for Yomichan][las] audio collection format.
 //!
 //! [las]: https://github.com/yomidevs/local-audio-yomichan
-// TODO: I'll be honest I have no clue where these audio sources actually come from.
-// Docs are my best guess.
+// TODO: I'll be honest I have no clue where these audio sources actually come
+// from. Docs are my best guess.
 
 use {
     crate::NormString,
+    bytes::Bytes,
+    derive_more::Display,
     serde::{Deserialize, Serialize},
 };
 
 /// What file type [`Audio::data`] is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AudioFormat {
     /// Opus audio format.
+    #[display("ogg")]
     Opus,
+    /// MP3 audio format.
+    #[display("mp3")]
+    Mp3,
 }
 
 /// Audio file data.
@@ -21,8 +27,8 @@ pub enum AudioFormat {
 pub struct Audio {
     /// File type of [`Audio::data`].
     pub format: AudioFormat,
-    /// Base64-encoded audio file data.
-    pub data: String,
+    /// Raw audio file data.
+    pub data: Bytes,
 }
 
 /// [Forvo] audio.

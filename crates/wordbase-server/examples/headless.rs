@@ -1,15 +1,16 @@
 //! Headless server binary used for testing.
 
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    path::PathBuf,
+use {
+    anyhow::{Context as _, Result},
+    std::{
+        net::{IpAddr, Ipv4Addr, SocketAddr},
+        path::PathBuf,
+    },
+    tracing::info,
+    tracing_subscriber::{EnvFilter, filter::LevelFilter},
+    wordbase_engine::Engine,
+    wordbase_server::HTTP_PORT,
 };
-
-use anyhow::{Context as _, Result};
-use tracing::info;
-use tracing_subscriber::{EnvFilter, filter::LevelFilter};
-use wordbase_engine::Engine;
-use wordbase_server::HTTP_PORT;
 
 /// `wordbase-server` standalone binary
 ///

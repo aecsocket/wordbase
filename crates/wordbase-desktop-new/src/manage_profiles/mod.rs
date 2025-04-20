@@ -1,14 +1,15 @@
-use anyhow::Context;
-use foldhash::{HashMap, HashMapExt};
-use glib::clone;
-use gtk::prelude::{CheckButtonExt, EditableExt, WidgetExt};
-use relm4::prelude::*;
-use wordbase::{NormString, ProfileId};
-use wordbase_engine::{EngineEvent, ProfileEvent};
-
-use crate::{
-    AppEvent, CURRENT_PROFILE_ID, engine, forward_events, gettext, handle_result,
-    profile_row::ProfileRow,
+use {
+    crate::{
+        AppEvent, current_profile_id, engine, forward_events, gettext, handle_result,
+        profile_row::ProfileRow,
+    },
+    anyhow::Context,
+    foldhash::{HashMap, HashMapExt},
+    glib::clone,
+    gtk::prelude::{CheckButtonExt, EditableExt, WidgetExt},
+    relm4::prelude::*,
+    wordbase::{NormString, ProfileId},
+    wordbase_engine::{EngineEvent, ProfileEvent},
 };
 
 mod ui;
@@ -80,7 +81,7 @@ impl AsyncComponent for ManageProfiles {
                     return;
                 };
 
-                let profile_id = *CURRENT_PROFILE_ID.read();
+                let profile_id = current_profile_id();
                 let Some(profile) = engine().profiles().get(&profile_id).cloned() else {
                     return;
                 };

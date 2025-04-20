@@ -3,12 +3,13 @@
 //! This is in a separate module to keep `lib.rs` focused on documenting the
 //! core API.
 
-use std::mem;
-
-use serde::Deserialize;
-
-use crate::{
-    DictionaryKind, DictionaryMeta, NormString, Profile, ProfileConfig, ProfileId, Term, TermPart,
+use {
+    crate::{
+        DictionaryKind, DictionaryMeta, NormString, Profile, ProfileConfig, ProfileId, Term,
+        TermPart,
+    },
+    serde::Deserialize,
+    std::mem,
 };
 
 impl DictionaryMeta {
@@ -174,7 +175,8 @@ impl Term {
         }
     }
 
-    /// Takes ownership of the term and returns the headword, if one was present.
+    /// Takes ownership of the term and returns the headword, if one was
+    /// present.
     #[must_use]
     pub fn take_headword(self) -> Option<NormString> {
         match self {
@@ -212,7 +214,8 @@ impl NormString {
         }
     }
 
-    /// Creates a new value from an existing string without checking for emptiness.
+    /// Creates a new value from an existing string without checking for
+    /// emptiness.
     ///
     /// # Correctness
     ///
@@ -344,9 +347,11 @@ impl TermPart for &str {
 
 #[cfg(feature = "poem-openapi")]
 const _: () = {
-    use poem::web::Field;
-    use poem_openapi::types::{
-        ParseError, ParseFromJSON, ParseFromMultipartField, ParseFromParameter, ParseResult,
+    use {
+        poem::web::Field,
+        poem_openapi::types::{
+            ParseError, ParseFromJSON, ParseFromMultipartField, ParseFromParameter, ParseResult,
+        },
     };
 
     impl ParseFromJSON for NormString {

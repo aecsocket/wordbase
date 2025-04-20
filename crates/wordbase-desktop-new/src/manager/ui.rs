@@ -7,19 +7,11 @@ mod imp {
     #[template(file = "src/manager/ui.blp")]
     pub struct Manager {
         #[template_child]
-        pub profile_menu: TemplateChild<gio::Menu>,
+        pub settings: TemplateChild<adw::PreferencesPage>,
         #[template_child]
         pub dictionaries: TemplateChild<adw::PreferencesGroup>,
         #[template_child]
         pub themes: TemplateChild<adw::PreferencesGroup>,
-        #[template_child]
-        pub ankiconnect_server_url: TemplateChild<adw::EntryRow>,
-        #[template_child]
-        pub ankiconnect_connected: TemplateChild<gtk::Button>,
-        #[template_child]
-        pub ankiconnect_disconnected: TemplateChild<gtk::Button>,
-        #[template_child]
-        pub ankiconnect_api_key: TemplateChild<adw::EntryRow>,
         #[template_child]
         pub texthooker_url: TemplateChild<adw::EntryRow>,
         #[template_child]
@@ -34,6 +26,8 @@ mod imp {
         pub lookup_results: TemplateChild<adw::Bin>,
         #[template_child]
         pub quit: TemplateChild<adw::ButtonRow>,
+        #[template_child]
+        pub profile_menu: TemplateChild<gio::Menu>,
     }
 
     #[glib::object_subclass]
@@ -72,6 +66,11 @@ impl Manager {
     }
 
     #[must_use]
+    pub fn settings(&self) -> adw::PreferencesPage {
+        self.imp().settings.get()
+    }
+
+    #[must_use]
     pub fn dictionaries(&self) -> adw::PreferencesGroup {
         self.imp().dictionaries.get()
     }
@@ -79,26 +78,6 @@ impl Manager {
     #[must_use]
     pub fn themes(&self) -> adw::PreferencesGroup {
         self.imp().themes.get()
-    }
-
-    #[must_use]
-    pub fn ankiconnect_server_url(&self) -> adw::EntryRow {
-        self.imp().ankiconnect_server_url.get()
-    }
-
-    #[must_use]
-    pub fn ankiconnect_connected(&self) -> gtk::Button {
-        self.imp().ankiconnect_connected.get()
-    }
-
-    #[must_use]
-    pub fn ankiconnect_disconnected(&self) -> gtk::Button {
-        self.imp().ankiconnect_disconnected.get()
-    }
-
-    #[must_use]
-    pub fn ankiconnect_api_key(&self) -> adw::EntryRow {
-        self.imp().ankiconnect_api_key.get()
     }
 
     #[must_use]

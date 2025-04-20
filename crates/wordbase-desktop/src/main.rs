@@ -252,10 +252,10 @@ fn setup_actions(engine: Engine) {
 
     //         let engine = engine.clone();
     //         glib::spawn_future_local(async move {
-    //             if let Err(err) = engine.set_current_profile(ProfileId(profile_id)).await {
-    //                 // todo: app-level notif toast and error handling
-    //                 error!("Failed to set current profile: {err:?}");
-    //             }
+    //             if let Err(err) =
+    // engine.set_current_profile(ProfileId(profile_id)).await {            
+    // // todo: app-level notif toast and error handling                 
+    // error!("Failed to set current profile: {err:?}");             }
     //         });
     //     })
     //     .build();

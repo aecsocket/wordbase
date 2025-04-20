@@ -7,7 +7,6 @@ use {
     async_compression::futures::bufread::XzDecoder,
     async_tar::EntryType,
     bytes::Bytes,
-    data_encoding::BASE64,
     derive_more::Deref,
     foldhash::{HashMap, HashMapExt},
     futures::{
@@ -21,6 +20,7 @@ use {
     sqlx::{Sqlite, Transaction},
     std::{
         any::type_name,
+        path::Path,
         pin::Pin,
         sync::{
             Arc,
@@ -428,7 +428,7 @@ pub async fn import_forvo<R: AsyncRead + Unpin>(
             username,
             audio: Audio {
                 format: AudioFormat::Opus,
-                data: encode(scratch, entry).await?,
+                data: encode(entry).await?,
             },
         },
         scratch,
@@ -467,9 +467,16 @@ where
         return Ok(());
     };
 
+    let format = match Path::new(path).extension().map(|s| s.to_str()) {
+        Some(Some("opus")) => AudioFormat::Opus,
+        Some(Some("mp3")) => AudioFormat::Mp3,
+        Some(Some(ext)) => bail!("unknown audio format `{ext}`"),
+        _ => bail!("invalid file extension"),
+    };
+
     let audio = Audio {
-        format: AudioFormat::Opus,
-        data: encode(scratch, entry).await?,
+        format,
+        data: encode(entry).await?,
     };
     let record = into_record(audio, info);
     let record_id = insert_record(tx, source, &record, scratch)
@@ -484,15 +491,14 @@ where
     Ok(())
 }
 
-async fn encode<R>(scratch: &mut Vec<u8>, entry: &mut async_tar::Entry<R>) -> Result<String>
+async fn encode<R>(entry: &mut async_tar::Entry<R>) -> Result<Bytes>
 where
     R: AsyncRead + Unpin,
 {
-    scratch.clear();
+    let mut scratch = Vec::new();
     entry
-        .read_to_end(scratch)
+        .read_to_end(&mut scratch)
         .await
         .context("failed to read audio data into memory")?;
-    let data = BASE64.encode(scratch);
-    Ok(data)
+    Ok(Bytes::from(scratch))
 }

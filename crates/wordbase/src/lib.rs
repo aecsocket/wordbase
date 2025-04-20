@@ -4,10 +4,9 @@ pub mod dict;
 
 mod imp;
 mod protocol;
-use derive_more::Debug;
 pub use protocol::*;
 use {
-    derive_more::{Deref, Display, From},
+    derive_more::{Debug, Deref, Display, From},
     serde::{Deserialize, Serialize, de::DeserializeOwned},
 };
 

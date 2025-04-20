@@ -1,11 +1,12 @@
-use anyhow::Context;
-use poem::Result;
-use poem_openapi::{Object, types::Example};
-use serde::{Deserialize, Serialize};
-use wordbase::{NormString, ProfileId};
-use wordbase_engine::Engine;
-
-use crate::Term;
+use {
+    crate::Term,
+    anyhow::Context,
+    poem::Result,
+    poem_openapi::{Object, types::Example},
+    serde::{Deserialize, Serialize},
+    wordbase::{NormString, ProfileId},
+    wordbase_engine::Engine,
+};
 
 pub async fn note_add(engine: &Engine, req: NoteAdd) -> Result<()> {
     engine

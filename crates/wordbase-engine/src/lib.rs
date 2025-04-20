@@ -11,27 +11,26 @@ pub mod lookup;
 pub mod profile;
 pub mod texthook;
 
-use std::path::{Path, PathBuf};
-
-use derive_more::{Display, Error};
-use directories::ProjectDirs;
-use tracing::info;
 pub use wordbase;
-use wordbase::ProfileId;
 use {
     anki::Anki,
     anyhow::{Context, Result},
     arc_swap::ArcSwap,
     deinflect::Deinflectors,
-    derive_more::{Deref, DerefMut},
+    derive_more::{Deref, DerefMut, Display, Error},
     dictionary::Dictionaries,
+    directories::ProjectDirs,
     import::Imports,
     profile::Profiles,
     sqlx::{Pool, Sqlite},
-    std::sync::Arc,
+    std::{
+        path::{Path, PathBuf},
+        sync::Arc,
+    },
     texthook::Texthookers,
     tokio::sync::broadcast,
-    wordbase::TexthookerSentence,
+    tracing::info,
+    wordbase::{ProfileId, TexthookerSentence},
 };
 
 #[derive(Debug, Clone, Deref, DerefMut)]

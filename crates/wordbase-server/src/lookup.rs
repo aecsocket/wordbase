@@ -1,13 +1,14 @@
-use poem::Result;
-use poem_openapi::{
-    Object, Union,
-    types::{Any, Example},
+use {
+    crate::Term,
+    poem::Result,
+    poem_openapi::{
+        Object, Union,
+        types::{Any, Example},
+    },
+    serde::{Deserialize, Serialize},
+    wordbase::{DictionaryId, ProfileId, Record, RecordId, RecordKind},
+    wordbase_engine::Engine,
 };
-use serde::{Deserialize, Serialize};
-use wordbase::{DictionaryId, ProfileId, Record, RecordId, RecordKind};
-use wordbase_engine::Engine;
-
-use crate::Term;
 
 pub async fn expr(engine: &Engine, req: ExprRequest) -> Result<Vec<RecordLookup>> {
     Ok(engine
