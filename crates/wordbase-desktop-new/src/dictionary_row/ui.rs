@@ -56,12 +56,13 @@ glib::wrapper! {
     pub struct DictionaryRow(ObjectSubclass<imp::DictionaryRow>) @extends gtk::Widget, gtk::ListBoxRow, adw::PreferencesRow, adw::ExpanderRow;
 }
 
-impl DictionaryRow {
-    #[must_use]
-    pub fn new() -> Self {
+impl Default for DictionaryRow {
+    fn default() -> Self {
         glib::Object::new()
     }
+}
 
+impl DictionaryRow {
     #[must_use]
     pub fn imported(&self) -> gtk::Box {
         self.imp().imported.get()

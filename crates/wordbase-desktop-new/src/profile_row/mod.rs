@@ -1,9 +1,11 @@
 use {
     crate::{
-        AppEvent, CURRENT_PROFILE_ID, PROFILE, SignalHandler, app_window, engine, gettext, settings,
+        AppEvent, CURRENT_PROFILE_ID, PROFILE, SignalHandler, app_window, engine, gettext,
+        settings,
+        util::{AppComponent, impl_component},
     },
     adw::prelude::*,
-    anyhow::Context as _,
+    anyhow::{Context as _, Result},
     glib::clone,
     relm4::prelude::*,
     wordbase::{NormString, ProfileId},
@@ -27,29 +29,24 @@ pub enum Msg {
     SetName,
 }
 
-impl AsyncComponent for ProfileRow {
-    type Init = ProfileId;
-    type Input = Msg;
-    type Output = anyhow::Error;
-    type CommandOutput = AppEvent;
-    type Root = ui::ProfileRow;
-    type Widgets = ();
+impl_component!(ProfileRow);
 
-    fn init_root() -> Self::Root {
-        ui::ProfileRow::new()
-    }
+impl AppComponent for ProfileRow {
+    type Args = ProfileId;
+    type Msg = Msg;
+    type Ui = ui::ProfileRow;
 
     async fn init(
-        profile_id: Self::Init,
-        root: Self::Root,
+        profile_id: Self::Args,
+        ui: Self::Ui,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
-        root.remove().connect_clicked(clone!(
+        ui.remove().connect_clicked(clone!(
             #[strong]
             sender,
             move |_| sender.input(Msg::AskRemove)
         ));
-        root.remove_dialog().connect_response(
+        ui.remove_dialog().connect_response(
             Some("remove_confirm"),
             clone!(
                 #[strong]
@@ -57,7 +54,7 @@ impl AsyncComponent for ProfileRow {
                 move |_, _| sender.input(Msg::Remove)
             ),
         );
-        root.name().connect_changed(clone!(
+        ui.name().connect_changed(clone!(
             #[strong]
             sender,
             move |_| sender.input(Msg::SetName)
@@ -65,7 +62,7 @@ impl AsyncComponent for ProfileRow {
 
         let settings = settings();
         settings
-            .bind(PROFILE, &root.current(), "active")
+            .bind(PROFILE, &ui.current(), "active")
             .mapping(move |setting, _| {
                 Some((setting.str() == Some(&format!("{}", profile_id.0))).to_value())
             })
@@ -92,75 +89,70 @@ impl AsyncComponent for ProfileRow {
             profile_id,
             _profile_changed_handler: profile_changed_handler,
         };
-        model.update_meta(&root);
+        model.update_meta(&ui);
         AsyncComponentParts { model, widgets: () }
     }
 
     async fn update(
         &mut self,
-        msg: Self::Input,
-        sender: AsyncComponentSender<Self>,
-        root: &Self::Root,
-    ) {
+        msg: Self::Msg,
+        _sender: &AsyncComponentSender<Self>,
+        ui: &Self::Ui,
+    ) -> Result<()> {
         match msg {
             Msg::UpdateMeta => {
-                self.update_meta(root);
+                self.update_meta(ui);
             }
             Msg::AskRemove => {
-                root.remove_dialog().present(Some(&app_window()));
+                ui.remove_dialog().present(Some(&app_window()));
             }
             Msg::Remove => {
-                if let Err(err) = engine()
+                engine()
                     .remove_profile(self.profile_id)
                     .await
-                    .with_context(|| gettext("Failed to remove profile"))
-                {
-                    _ = sender.output(err);
-                }
+                    .with_context(|| gettext("Failed to remove profile"))?;
             }
             Msg::SetName => {
-                let name = NormString::new(root.name().text());
+                let name = NormString::new(ui.name().text());
                 let Some(name) = name else {
-                    root.name().set_css_classes(&["error"]);
-                    return;
+                    ui.name().set_css_classes(&["error"]);
+                    return Ok(());
                 };
 
-                root.name().set_css_classes(&[]);
+                ui.name().set_css_classes(&[]);
                 let Some(profile) = engine().profiles().get(&self.profile_id).cloned() else {
-                    return;
+                    return Ok(());
                 };
 
                 let mut config = profile.config.clone();
                 config.name = Some(name);
-                if let Err(err) = engine()
+                engine()
                     .set_profile_config(self.profile_id, config)
                     .await
-                    .with_context(|| gettext("Failed to set profile name"))
-                {
-                    _ = sender.output(err);
-                }
+                    .with_context(|| gettext("Failed to set profile name"))?;
             }
         }
+        Ok(())
     }
 
-    async fn update_cmd_with_view(
+    async fn update_event(
         &mut self,
-        _widgets: &mut Self::Widgets,
-        event: Self::CommandOutput,
-        _sender: AsyncComponentSender<Self>,
-        root: &Self::Root,
-    ) {
+        event: AppEvent,
+        _sender: &AsyncComponentSender<Self>,
+        ui: &Self::Ui,
+    ) -> Result<()> {
         if let AppEvent::Engine(EngineEvent::Profile(
             ProfileEvent::Added(_) | ProfileEvent::Removed(_),
         )) = event
         {
-            self.update_meta(root);
+            self.update_meta(ui);
         }
+        Ok(())
     }
 }
 
 impl ProfileRow {
-    fn update_meta(&self, root: &ui::ProfileRow) {
+    fn update_meta(&self, ui: &ui::ProfileRow) {
         let Some(profile) = engine().profiles().get(&self.profile_id).cloned() else {
             return;
         };
@@ -170,11 +162,10 @@ impl ProfileRow {
             .name
             .as_ref()
             .map_or_else(|| gettext("Default Profile"), |s| s.as_str());
-        root.name().set_text(name);
+        ui.name().set_text(name);
 
         let is_current = *CURRENT_PROFILE_ID.read() == self.profile_id;
         let more_than_1_profile = engine().profiles().len() > 1;
-        root.remove()
-            .set_visible(!is_current && more_than_1_profile);
+        ui.remove().set_visible(!is_current && more_than_1_profile);
     }
 }

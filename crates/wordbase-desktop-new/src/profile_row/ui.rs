@@ -41,12 +41,13 @@ glib::wrapper! {
     pub struct ProfileRow(ObjectSubclass<imp::ProfileRow>) @extends gtk::Widget, gtk::ListBoxRow, adw::PreferencesRow;
 }
 
-impl ProfileRow {
-    #[must_use]
-    pub fn new() -> Self {
+impl Default for ProfileRow {
+    fn default() -> Self {
         glib::Object::new()
     }
+}
 
+impl ProfileRow {
     #[must_use]
     pub fn current(&self) -> gtk::CheckButton {
         self.imp().current.get()

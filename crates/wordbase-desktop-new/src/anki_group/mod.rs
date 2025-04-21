@@ -1,12 +1,16 @@
 use std::sync::Arc;
 
 use adw::prelude::*;
+use anyhow::Result;
 use glib::clone;
 use relm4::prelude::*;
 use tokio_util::task::AbortOnDropHandle;
 use wordbase_engine::anki::AnkiConfig;
 
-use crate::{AppEvent, PROFILE, current_profile_id, engine, forward_events, settings};
+use crate::{
+    AppEvent, PROFILE, current_profile_id, engine, settings,
+    util::{AppComponent, impl_component},
+};
 
 mod ui;
 
@@ -23,34 +27,27 @@ pub enum Msg {
     UpdateRoot,
 }
 
-impl AsyncComponent for AnkiGroup {
-    type Init = ();
-    type Input = Msg;
-    type Output = ();
-    type CommandOutput = AppEvent;
-    type Root = ui::AnkiGroup;
-    type Widgets = ();
+impl_component!(AnkiGroup);
 
-    fn init_root() -> Self::Root {
-        ui::AnkiGroup::new()
-    }
+impl AppComponent for AnkiGroup {
+    type Args = ();
+    type Msg = Msg;
+    type Ui = ui::AnkiGroup;
 
     async fn init(
-        (): Self::Init,
-        root: Self::Root,
+        (): Self::Args,
+        ui: Self::Ui,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
-        forward_events(&sender);
-
         let config = engine().anki_config();
-        root.server_url().set_text(&config.server_url);
-        root.server_url().connect_changed(clone!(
+        ui.server_url().set_text(&config.server_url);
+        ui.server_url().connect_changed(clone!(
             #[strong]
             sender,
             move |_| sender.input(Msg::Connect)
         ));
-        root.api_key().set_text(&config.api_key);
-        root.api_key().connect_changed(clone!(
+        ui.api_key().set_text(&config.api_key);
+        ui.api_key().connect_changed(clone!(
             #[strong]
             sender,
             move |_| sender.input(Msg::UpdateRoot)
@@ -69,35 +66,39 @@ impl AsyncComponent for AnkiGroup {
             connect_task: None,
             note_fields: Vec::new(),
         };
-        model.update_root(&root);
+        model.update_root(&ui);
         AsyncComponentParts { model, widgets: () }
     }
 
-    async fn update_with_view(
+    async fn update(
         &mut self,
-        (): &mut Self::Widgets,
-        msg: Self::Input,
-        sender: AsyncComponentSender<Self>,
-        root: &Self::Root,
-    ) {
+        msg: Self::Msg,
+        sender: &AsyncComponentSender<Self>,
+        ui: &Self::Ui,
+    ) -> Result<()> {
         match msg {
             Msg::Connect => {
-                let server_url = root.server_url().text();
-                let api_key = root.api_key().text();
-                self.connect_task = Some(AbortOnDropHandle::new(tokio::spawn(async move {
-                    _ = engine()
-                        .connect_anki(Arc::new(AnkiConfig {
-                            server_url: Arc::from(server_url.to_string()),
-                            api_key: Arc::from(api_key.to_string()),
-                        }))
-                        .await;
-                    sender.input(Msg::UpdateRoot);
-                })));
+                let server_url = ui.server_url().text();
+                let api_key = ui.api_key().text();
+                self.connect_task = Some(AbortOnDropHandle::new(tokio::spawn(clone!(
+                    #[strong]
+                    sender,
+                    async move {
+                        _ = engine()
+                            .connect_anki(Arc::new(AnkiConfig {
+                                server_url: Arc::from(server_url.to_string()),
+                                api_key: Arc::from(api_key.to_string()),
+                            }))
+                            .await;
+                        sender.input(Msg::UpdateRoot);
+                    }
+                ))));
             }
             Msg::UpdateRoot => {
-                self.update_root(root);
+                self.update_root(ui);
             }
         }
+        Ok(())
     }
 }
 

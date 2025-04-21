@@ -48,11 +48,6 @@ impl Default for ManageProfiles {
 
 impl ManageProfiles {
     #[must_use]
-    pub fn new() -> Self {
-        glib::Object::new()
-    }
-
-    #[must_use]
     pub fn list(&self) -> gtk::ListBox {
         self.imp().list.get()
     }

@@ -1,6 +1,6 @@
 use {
     crate::{
-        AppEvent, current_profile_id, engine, forward_events, gettext,
+        AppEvent, current_profile_id, engine, gettext,
         profile_row::ProfileRow,
         util::{AppComponent, impl_component},
     },
@@ -30,21 +30,21 @@ pub enum Msg {
 impl_component!(ManageProfiles);
 
 impl AppComponent for ManageProfiles {
-    type Init = ();
-    type Input = Msg;
-    type Root = ui::ManageProfiles;
+    type Args = ();
+    type Msg = Msg;
+    type Ui = ui::ManageProfiles;
 
     async fn init(
-        (): (),
-        root: ui::ManageProfiles,
+        (): Self::Args,
+        ui: Self::Ui,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
-        root.add_profile().connect_activated(clone!(
+        ui.add_profile().connect_activated(clone!(
             #[strong]
             sender,
             move |_| sender.input(Msg::AddProfile)
         ));
-        root.add_profile_name().connect_changed(clone!(
+        ui.add_profile_name().connect_changed(clone!(
             #[strong]
             sender,
             move |_| sender.input(Msg::AddProfileName)
@@ -54,9 +54,9 @@ impl AppComponent for ManageProfiles {
             rows: HashMap::new(),
         };
         for &id in engine().profiles().keys() {
-            model.add_row(&root, &sender, id);
+            model.add_row(&ui, &sender, id);
         }
-        Self::update_add_profile_name(&root);
+        Self::update_add_profile_name(&ui);
 
         AsyncComponentParts { model, widgets: () }
     }
@@ -65,11 +65,11 @@ impl AppComponent for ManageProfiles {
         &mut self,
         msg: Msg,
         _sender: &AsyncComponentSender<Self>,
-        root: &ui::ManageProfiles,
+        ui: &Self::Ui,
     ) -> Result<()> {
         match msg {
             Msg::AddProfile => {
-                let name = NormString::new(root.add_profile_name().text());
+                let name = NormString::new(ui.add_profile_name().text());
                 let Some(name) = name else {
                     return Ok(());
                 };
@@ -87,7 +87,7 @@ impl AppComponent for ManageProfiles {
                     .with_context(|| gettext("Failed to add profile"))?;
             }
             Msg::AddProfileName => {
-                Self::update_add_profile_name(root);
+                Self::update_add_profile_name(ui);
             }
         }
         Ok(())
@@ -97,15 +97,15 @@ impl AppComponent for ManageProfiles {
         &mut self,
         event: AppEvent,
         sender: &AsyncComponentSender<Self>,
-        root: &ui::ManageProfiles,
+        ui: &Self::Root,
     ) -> Result<()> {
         match event {
             AppEvent::Engine(EngineEvent::Profile(ProfileEvent::Added(id))) => {
-                self.add_row(root, &sender, id);
+                self.add_row(ui, sender, id);
             }
             AppEvent::Engine(EngineEvent::Profile(ProfileEvent::Removed(id))) => {
                 if let Some(row) = self.rows.remove(&id) {
-                    root.list().remove(row.widget());
+                    ui.list().remove(row.widget());
                 }
             }
             _ => {}
@@ -115,26 +115,26 @@ impl AppComponent for ManageProfiles {
 }
 
 impl ManageProfiles {
-    fn update_add_profile_name(root: &ui::ManageProfiles) {
-        let name = NormString::new(root.add_profile_name().text());
+    fn update_add_profile_name(ui: &ui::ManageProfiles) {
+        let name = NormString::new(ui.add_profile_name().text());
         if name.is_none() {
-            root.add_profile_name().set_css_classes(&["error"]);
+            ui.add_profile_name().set_css_classes(&["error"]);
         } else {
-            root.add_profile_name().set_css_classes(&[]);
+            ui.add_profile_name().set_css_classes(&[]);
         }
     }
 
     fn add_row(
         &mut self,
-        root: &ui::ManageProfiles,
+        ui: &ui::ManageProfiles,
         sender: &AsyncComponentSender<Self>,
         id: ProfileId,
     ) {
         let row = ProfileRow::builder()
             .launch(id)
             .forward(sender.output_sender(), |resp| resp);
-        row.widget().current().set_group(Some(&root.dummy_group()));
-        root.list().append(row.widget());
+        row.widget().current().set_group(Some(&ui.dummy_group()));
+        ui.list().append(row.widget());
         self.rows.insert(id, row);
     }
 }

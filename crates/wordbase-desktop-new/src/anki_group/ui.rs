@@ -56,12 +56,13 @@ glib::wrapper! {
     pub struct AnkiGroup(ObjectSubclass<imp::AnkiGroup>) @extends gtk::Widget, adw::PreferencesGroup;
 }
 
-impl AnkiGroup {
-    #[must_use]
-    pub fn new() -> Self {
+impl Default for AnkiGroup {
+    fn default() -> Self {
         glib::Object::new()
     }
+}
 
+impl AnkiGroup {
     #[must_use]
     pub fn connected(&self) -> gtk::Button {
         self.imp().connected.get()
