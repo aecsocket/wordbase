@@ -1,9 +1,10 @@
 use {
     crate::{
-        AppEvent, current_profile_id, engine, forward_events, gettext, handle_result,
+        AppEvent, current_profile_id, engine, forward_events, gettext,
         profile_row::ProfileRow,
+        util::{AppComponent, impl_component},
     },
-    anyhow::Context,
+    anyhow::{Context, Result},
     foldhash::{HashMap, HashMapExt},
     glib::clone,
     gtk::prelude::{CheckButtonExt, EditableExt, WidgetExt},
@@ -26,25 +27,18 @@ pub enum Msg {
     AddProfileName,
 }
 
-impl AsyncComponent for ManageProfiles {
+impl_component!(ManageProfiles);
+
+impl AppComponent for ManageProfiles {
     type Init = ();
     type Input = Msg;
-    type Output = ();
-    type CommandOutput = AppEvent;
     type Root = ui::ManageProfiles;
-    type Widgets = ();
-
-    fn init_root() -> Self::Root {
-        ui::ManageProfiles::new()
-    }
 
     async fn init(
-        (): Self::Init,
-        root: Self::Root,
+        (): (),
+        root: ui::ManageProfiles,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
-        forward_events(&sender);
-
         root.add_profile().connect_activated(clone!(
             #[strong]
             sender,
@@ -59,64 +53,64 @@ impl AsyncComponent for ManageProfiles {
         let mut model = Self {
             rows: HashMap::new(),
         };
-        for profile_id in engine().profiles().keys() {
-            model.add_row(&root, *profile_id);
+        for &id in engine().profiles().keys() {
+            model.add_row(&root, &sender, id);
         }
         Self::update_add_profile_name(&root);
 
         AsyncComponentParts { model, widgets: () }
     }
 
-    async fn update_with_view(
+    async fn update(
         &mut self,
-        _widgets: &mut Self::Widgets,
-        msg: Self::Input,
-        _sender: AsyncComponentSender<Self>,
-        root: &Self::Root,
-    ) {
+        msg: Msg,
+        _sender: &AsyncComponentSender<Self>,
+        root: &ui::ManageProfiles,
+    ) -> Result<()> {
         match msg {
             Msg::AddProfile => {
                 let name = NormString::new(root.add_profile_name().text());
                 let Some(name) = name else {
-                    return;
+                    return Ok(());
                 };
 
                 let profile_id = current_profile_id();
                 let Some(profile) = engine().profiles().get(&profile_id).cloned() else {
-                    return;
+                    return Ok(());
                 };
 
                 let mut config = profile.config.clone();
                 config.name = Some(name);
-                handle_result(
-                    engine()
-                        .copy_profile(profile_id, config)
-                        .await
-                        .with_context(|| gettext("Failed to add profile")),
-                );
+                engine()
+                    .copy_profile(profile_id, config)
+                    .await
+                    .with_context(|| gettext("Failed to add profile"))?;
             }
-            Msg::AddProfileName => Self::update_add_profile_name(root),
+            Msg::AddProfileName => {
+                Self::update_add_profile_name(root);
+            }
         }
+        Ok(())
     }
 
-    async fn update_cmd_with_view(
+    async fn update_event(
         &mut self,
-        _widgets: &mut Self::Widgets,
-        event: Self::CommandOutput,
-        _sender: AsyncComponentSender<Self>,
-        root: &Self::Root,
-    ) {
+        event: AppEvent,
+        sender: &AsyncComponentSender<Self>,
+        root: &ui::ManageProfiles,
+    ) -> Result<()> {
         match event {
-            AppEvent::Engine(EngineEvent::Profile(ProfileEvent::Added(profile_id))) => {
-                self.add_row(root, profile_id);
+            AppEvent::Engine(EngineEvent::Profile(ProfileEvent::Added(id))) => {
+                self.add_row(root, &sender, id);
             }
-            AppEvent::Engine(EngineEvent::Profile(ProfileEvent::Removed(profile_id))) => {
-                if let Some(row) = self.rows.remove(&profile_id) {
+            AppEvent::Engine(EngineEvent::Profile(ProfileEvent::Removed(id))) => {
+                if let Some(row) = self.rows.remove(&id) {
                     root.list().remove(row.widget());
                 }
             }
             _ => {}
         }
+        Ok(())
     }
 }
 
@@ -130,10 +124,17 @@ impl ManageProfiles {
         }
     }
 
-    fn add_row(&mut self, root: &ui::ManageProfiles, profile_id: ProfileId) {
-        let row = ProfileRow::builder().launch(profile_id).detach();
+    fn add_row(
+        &mut self,
+        root: &ui::ManageProfiles,
+        sender: &AsyncComponentSender<Self>,
+        id: ProfileId,
+    ) {
+        let row = ProfileRow::builder()
+            .launch(id)
+            .forward(sender.output_sender(), |resp| resp);
         row.widget().current().set_group(Some(&root.dummy_group()));
         root.list().append(row.widget());
-        self.rows.insert(profile_id, row);
+        self.rows.insert(id, row);
     }
 }

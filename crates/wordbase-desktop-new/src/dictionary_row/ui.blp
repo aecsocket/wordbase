@@ -1,0 +1,90 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $WdbDictionaryRow: Adw.ExpanderRow {
+  [prefix]
+  Box imported {
+    orientation: horizontal;
+    spacing: 8;
+
+    Image {
+      icon-name: "list-drag-handle-symbolic";
+
+      styles ["dimmed"]
+    }
+
+    CheckButton enabled {
+      halign: center;
+      valign: center;
+      tooltip-text: _("Whether the dictionary is enabled, and will provide results in lookups");
+    }
+  }
+
+  [prefix]
+  Adw.Bin importing {
+    Adw.Spinner {
+      halign: center;
+      valign: center;
+      tooltip-text: _("Dictionary is currently being imported");
+    }
+  }
+
+  [prefix]
+  Button import_error {
+    icon-name: "dialog-warning-symbolic";
+    valign: center;
+    tooltip-text: _("Failed to import this dictionary\nClick for details");
+
+    styles ["error", "flat"]
+  }
+
+  [suffix]
+  ProgressBar progress {
+    valign: center;
+  }
+
+  [suffix]
+  Button is_sorting {
+    valign: center;
+    icon-name: "view-sort-descending-symbolic";
+    tooltip-text: _("This dictionary is used for sorting results by their word frequency\nClick to disable");
+
+    styles ["flat"]
+  }
+
+  Adw.ActionRow action_row {
+    Button set_sorting {
+      valign: center;
+      icon-name: "view-sort-descending-symbolic";
+      tooltip-text: _("Use this dictionary for sorting results by their word frequency");
+    }
+
+    Button visit_website {
+      valign: center;
+      icon-name: "globe-alt2-symbolic";
+      tooltip-text: _("Visit dictionary website");
+    }
+
+    Button remove {
+      valign: center;
+      icon-name: "user-trash-symbolic";
+      tooltip-text: _("Remove dictionary");
+
+      styles ["destructive-action"]
+    }
+  }
+}
+
+SizeGroup {
+  widgets [ importing, import_error ]
+}
+
+Adw.AlertDialog remove_dialog {
+  heading: _("Remove Dictionary?");
+  body: _("Are you sure you want to remove this dictionary?");
+
+  responses [
+    remove_cancel: _("Cancel"),
+    remove_confirm: _("Remove") destructive,
+  ]
+}

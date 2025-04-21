@@ -396,8 +396,8 @@ pub struct ProfileConfig {
     pub font_family: Option<NormString>,
     /// Name of the Anki deck used for AnkiConnect integration.
     pub anki_deck: Option<NormString>,
-    /// Name of the Anki card model used for AnkiConnect integration.
-    pub anki_model: Option<NormString>,
+    /// Name of the Anki note type used for creating new notes.
+    pub anki_note_type: Option<NormString>,
 }
 
 /// Opaque and unique identifier for a [`Profile`] in the engine.

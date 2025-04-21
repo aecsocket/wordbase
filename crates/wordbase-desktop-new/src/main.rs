@@ -11,11 +11,16 @@ extern crate libadwaita as adw;
 extern crate webkit6 as webkit;
 
 mod anki_group;
+// mod dictionary_list;
+// mod dictionary_row;
 mod error_page;
 mod manage_profiles;
 mod manager;
 mod profile_row;
 mod theme;
+mod util;
+// mod theme_list;
+// mod theme_row;
 // mod record_view;
 
 mod icon_names {
@@ -75,10 +80,10 @@ thread_local! {
     static APP_WINDOW: OnceCell<gtk::Window> = const { OnceCell::new() };
 }
 
-fn with_app_window<R>(f: impl FnOnce(&gtk::Window) -> R) -> R {
+fn app_window() -> gtk::Window {
     APP_WINDOW.with(|window_cell| {
         let window = window_cell.get().expect("window should be initialized");
-        f(window)
+        window.clone()
     })
 }
 
@@ -114,12 +119,6 @@ fn forward_events<C: AsyncComponent<CommandOutput = AppEvent>>(sender: &AsyncCom
             })
             .drop_on_shutdown()
     });
-}
-
-fn handle_result<T>(result: Result<T>) {
-    if let Err(err) = result {
-        APP_BROKER.send(AppMsg::Error(err));
-    }
 }
 
 #[derive(Debug)]
@@ -188,7 +187,7 @@ impl AsyncComponent for App {
         let toaster = adw::ToastOverlay::new();
         root.set_content(Some(&toaster));
 
-        match init(sender).await {
+        match init(sender.clone()).await {
             Ok(engine) => {
                 ENGINE
                     .set(engine)
@@ -199,7 +198,9 @@ impl AsyncComponent for App {
                         .expect("window should not already be set");
                 });
 
-                let manager = Manager::builder().launch(()).detach();
+                let manager = Manager::builder()
+                    .launch(())
+                    .forward(sender.input_sender(), AppMsg::Error);
                 toaster.set_child(Some(manager.widget()));
                 Box::leak(Box::new(manager));
             }
@@ -222,12 +223,22 @@ impl AsyncComponent for App {
         &mut self,
         _widgets: &mut Self::Widgets,
         message: Self::Input,
-        _sender: AsyncComponentSender<Self>,
+        sender: AsyncComponentSender<Self>,
         root: &Self::Root,
     ) {
         match message {
+            AppMsg::Error(err) => {
+                self.toaster.add_toast(adw::Toast::new(&err.to_string()));
+                error!("{err:?}");
+            }
+            AppMsg::FatalError(err) => {
+                let error_page = ErrorPage::builder().launch(err).detach();
+                root.set_content(Some(error_page.widget()));
+            }
             AppMsg::OpenManageProfiles => {
-                let manage_profiles = ManageProfiles::builder().launch(()).detach();
+                let manage_profiles = ManageProfiles::builder()
+                    .launch(())
+                    .forward(sender.input_sender(), AppMsg::Error);
                 adw::Dialog::builder()
                     .child(manage_profiles.widget())
                     .title(gettext("Manage Profiles"))
@@ -236,14 +247,6 @@ impl AsyncComponent for App {
                     .build()
                     .present(Some(root));
                 self.manage_profiles = Some(manage_profiles);
-            }
-            AppMsg::Error(err) => {
-                self.toaster.add_toast(adw::Toast::new(&err.to_string()));
-                error!("{err:?}");
-            }
-            AppMsg::FatalError(err) => {
-                let error_page = ErrorPage::builder().launch(err).detach();
-                root.set_content(Some(error_page.widget()));
             }
         }
     }

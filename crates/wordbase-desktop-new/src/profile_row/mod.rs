@@ -1,7 +1,6 @@
 use {
     crate::{
-        AppEvent, CURRENT_PROFILE_ID, PROFILE, SignalHandler, engine, forward_events, gettext,
-        handle_result, settings, with_app_window,
+        AppEvent, CURRENT_PROFILE_ID, PROFILE, SignalHandler, app_window, engine, gettext, settings,
     },
     adw::prelude::*,
     anyhow::Context as _,
@@ -31,7 +30,7 @@ pub enum Msg {
 impl AsyncComponent for ProfileRow {
     type Init = ProfileId;
     type Input = Msg;
-    type Output = ();
+    type Output = anyhow::Error;
     type CommandOutput = AppEvent;
     type Root = ui::ProfileRow;
     type Widgets = ();
@@ -45,8 +44,6 @@ impl AsyncComponent for ProfileRow {
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
-        forward_events(&sender);
-
         root.remove().connect_clicked(clone!(
             #[strong]
             sender,
@@ -102,7 +99,7 @@ impl AsyncComponent for ProfileRow {
     async fn update(
         &mut self,
         msg: Self::Input,
-        _sender: AsyncComponentSender<Self>,
+        sender: AsyncComponentSender<Self>,
         root: &Self::Root,
     ) {
         match msg {
@@ -110,17 +107,16 @@ impl AsyncComponent for ProfileRow {
                 self.update_meta(root);
             }
             Msg::AskRemove => {
-                with_app_window(|window| {
-                    root.remove_dialog().present(Some(window));
-                });
+                root.remove_dialog().present(Some(&app_window()));
             }
             Msg::Remove => {
-                handle_result(
-                    engine()
-                        .remove_profile(self.profile_id)
-                        .await
-                        .with_context(|| gettext("Failed to remove profile")),
-                );
+                if let Err(err) = engine()
+                    .remove_profile(self.profile_id)
+                    .await
+                    .with_context(|| gettext("Failed to remove profile"))
+                {
+                    _ = sender.output(err);
+                }
             }
             Msg::SetName => {
                 let name = NormString::new(root.name().text());
@@ -136,12 +132,13 @@ impl AsyncComponent for ProfileRow {
 
                 let mut config = profile.config.clone();
                 config.name = Some(name);
-                handle_result(
-                    engine()
-                        .set_profile_config(self.profile_id, config)
-                        .await
-                        .with_context(|| gettext("Failed to set profile name")),
-                );
+                if let Err(err) = engine()
+                    .set_profile_config(self.profile_id, config)
+                    .await
+                    .with_context(|| gettext("Failed to set profile name"))
+                {
+                    _ = sender.output(err);
+                }
             }
         }
     }

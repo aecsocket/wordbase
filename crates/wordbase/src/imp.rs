@@ -49,7 +49,7 @@ impl ProfileConfig {
             sorting_dictionary: None,
             font_family: None,
             anki_deck: None,
-            anki_model: None,
+            anki_note_type: None,
         }
     }
 
@@ -70,8 +70,8 @@ impl ProfileConfig {
         if let Some(v) = src.anki_deck.take() {
             self.anki_deck = Some(v);
         }
-        if let Some(v) = src.anki_model.take() {
-            self.anki_model = Some(v);
+        if let Some(v) = src.anki_note_type.take() {
+            self.anki_note_type = Some(v);
         }
     }
 }

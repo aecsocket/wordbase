@@ -32,11 +32,11 @@ impl Engine {
             .anki_deck
             .as_ref()
             .context("no Anki deck name")?;
-        let model_name = profile
+        let note_type_name = profile
             .config
-            .anki_model
+            .anki_note_type
             .as_ref()
-            .context("no Anki model name")?;
+            .context("no Anki note type name")?;
 
         let records = self
             .lookup(profile_id, sentence, cursor, ANKI_RECORD_KINDS)
@@ -205,7 +205,7 @@ impl Engine {
 
         let note = request::Note {
             deck_name,
-            model_name,
+            model_name: note_type_name,
             fields: [
                 ("Expression", as_str(term.headword())),
                 ("ExpressionReading", as_str(term.reading())),
@@ -217,8 +217,8 @@ impl Engine {
                 ),
                 ("Glossary", &glossaries.0),
                 ("IsWordAndSentenceCard", ""),
-                ("IsClickCard", "x"),
-                ("IsSentenceCard", ""),
+                ("IsClickCard", ""),
+                ("IsSentenceCard", "x"),
                 ("PitchPosition", &pitch_positions),
                 ("Frequency", &frequencies),
                 ("FreqSort", frequency_harmonic_mean),

@@ -13,6 +13,7 @@ mod ui;
 #[derive(Debug)]
 pub struct AnkiGroup {
     connect_task: Option<AbortOnDropHandle<()>>,
+    note_fields: Vec<adw::ComboRow>,
 }
 
 #[derive(Debug)]
@@ -54,7 +55,6 @@ impl AsyncComponent for AnkiGroup {
             sender,
             move |_| sender.input(Msg::UpdateRoot)
         ));
-        Self::update_root(&root);
 
         settings().connect_changed(
             Some(PROFILE),
@@ -65,10 +65,12 @@ impl AsyncComponent for AnkiGroup {
             ),
         );
 
-        AsyncComponentParts {
-            model: Self { connect_task: None },
-            widgets: (),
-        }
+        let mut model = Self {
+            connect_task: None,
+            note_fields: Vec::new(),
+        };
+        model.update_root(&root);
+        AsyncComponentParts { model, widgets: () }
     }
 
     async fn update_with_view(
@@ -93,17 +95,14 @@ impl AsyncComponent for AnkiGroup {
                 })));
             }
             Msg::UpdateRoot => {
-                Self::update_root(root);
+                self.update_root(root);
             }
         }
     }
 }
 
 impl AnkiGroup {
-    fn update_root(root: &ui::AnkiGroup) {
-        // TODO
-        clear_string_list(&root.field_content_model());
-
+    fn update_root(&mut self, root: &ui::AnkiGroup) {
         clear_string_list(&root.deck_model());
         clear_string_list(&root.note_type_model());
 
@@ -123,22 +122,30 @@ impl AnkiGroup {
                     if profile.config.anki_deck.as_ref().map(|s| s.as_str())
                         == Some(deck_name.as_str())
                     {
-                        root.deck().set_selected(index as u32);
+                        root.deck().set_selected(
+                            u32::try_from(index).expect("should not exceed `u32::MAX` decks"),
+                        );
                     }
                 }
 
                 let mut model = None;
-                for (index, (model_name, this_model)) in anki.models.iter().enumerate() {
-                    root.note_type_model().append(model_name);
-                    if profile.config.anki_model.as_ref().map(|s| s.as_str())
-                        == Some(model_name.as_str())
+                for (index, (note_type_name, this_model)) in anki.models.iter().enumerate() {
+                    root.note_type_model().append(note_type_name);
+                    if profile.config.anki_note_type.as_ref().map(|s| s.as_str())
+                        == Some(note_type_name.as_str())
                     {
-                        root.note_type().set_selected(index as u32);
+                        root.note_type().set_selected(
+                            u32::try_from(index).expect("should not exceed `u32::MAX` note types"),
+                        );
                         model = Some(this_model);
                     }
                 }
 
                 root.note_fields().set_visible(false);
+                for note_field in self.note_fields.drain(..) {
+                    root.note_fields().remove(&note_field);
+                }
+
                 if let Some(model) = model {
                     root.note_fields().set_visible(true);
                     for field_name in &model.field_names {
@@ -147,6 +154,7 @@ impl AnkiGroup {
                             .model(&root.field_content_model())
                             .build();
                         root.note_fields().add_row(&row);
+                        self.note_fields.push(row);
                     }
                 }
             }

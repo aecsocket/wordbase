@@ -17,7 +17,7 @@ pub struct Manager {
 impl AsyncComponent for Manager {
     type Init = ();
     type Input = ();
-    type Output = ();
+    type Output = anyhow::Error;
     type CommandOutput = AppEvent;
     type Root = ui::Manager;
     type Widgets = ();

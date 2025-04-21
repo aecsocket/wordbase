@@ -40,6 +40,12 @@ glib::wrapper! {
     pub struct ManageProfiles(ObjectSubclass<imp::ManageProfiles>) @extends gtk::Widget, adw::Bin;
 }
 
+impl Default for ManageProfiles {
+    fn default() -> Self {
+        glib::Object::new()
+    }
+}
+
 impl ManageProfiles {
     #[must_use]
     pub fn new() -> Self {

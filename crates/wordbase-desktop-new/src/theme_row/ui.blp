@@ -1,0 +1,30 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $WdbThemeRow: Adw.ActionRow {
+  activatable: true;
+
+  [prefix]
+  CheckButton enabled {
+    valign: center;
+  }
+
+  [suffix]
+  Button remove_button {
+    valign: center;
+    icon-name: "user-trash-symbolic";
+    tooltip-text: _("Remove theme");
+
+    styles ["destructive-action", "flat"]
+  }
+}
+
+Adw.AlertDialog remove_dialog {
+  heading: _("Remove Theme?");
+  body: _("Are you sure you want to remove this theme?");
+
+  responses [
+    remove_cancel: _("Cancel"),
+    remove_confirm: _("Remove") destructive,
+  ]
+}

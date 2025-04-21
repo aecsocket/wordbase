@@ -12,6 +12,7 @@ pub mod profile;
 pub mod texthook;
 
 pub use wordbase;
+use wordbase::DictionaryId;
 use {
     anki::Anki,
     anyhow::{Context, Result},
@@ -51,6 +52,7 @@ pub struct Inner {
 #[derive(Debug, Clone)]
 pub enum EngineEvent {
     Profile(ProfileEvent),
+    Dictionary(DictionaryEvent),
     PullTexthookerConnected,
     PullTexthookerDisconnected,
     TexthookerSentence(TexthookerSentence),
@@ -61,6 +63,12 @@ pub enum ProfileEvent {
     Added(ProfileId),
     ConfigSet(ProfileId),
     Removed(ProfileId),
+}
+
+#[derive(Debug, Clone)]
+pub enum DictionaryEvent {
+    Added(DictionaryId),
+    Removed(DictionaryId),
 }
 
 pub type IndexMap<K, V> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;

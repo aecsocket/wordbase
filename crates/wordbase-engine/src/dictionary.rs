@@ -1,5 +1,5 @@
 use {
-    crate::{Engine, IndexMap, NotFound},
+    crate::{DictionaryEvent, Engine, EngineEvent, IndexMap, NotFound},
     anyhow::{Context, Result, bail},
     derive_more::Deref,
     futures::TryStreamExt,
@@ -65,6 +65,9 @@ impl Engine {
         }
 
         self.sync_dictionaries().await?;
+        _ = self
+            .send_event
+            .send(EngineEvent::Dictionary(DictionaryEvent::Removed(id)));
         Ok(())
     }
 }
