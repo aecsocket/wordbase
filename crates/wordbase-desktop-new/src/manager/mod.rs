@@ -1,6 +1,7 @@
 use {
     crate::{
-        AppEvent, MANAGE_PROFILES, PROFILE, anki_group::AnkiGroup, engine, forward_events, gettext,
+        AppEvent, MANAGE_PROFILES, PROFILE, anki_group::AnkiGroup,
+        dictionary_group::DictionaryGroup, engine, forward_events, gettext,
     },
     adw::prelude::*,
     relm4::prelude::*,
@@ -11,7 +12,8 @@ mod ui;
 
 #[derive(Debug)]
 pub struct Manager {
-    _anki: AsyncController<AnkiGroup>,
+    _dictionary_group: AsyncController<DictionaryGroup>,
+    _anki_group: AsyncController<AnkiGroup>,
 }
 
 impl AsyncComponent for Manager {
@@ -34,17 +36,32 @@ impl AsyncComponent for Manager {
         forward_events(&sender);
         Self::update_profiles(&root);
 
-        let settings_page = root.themes().parent().expect("should have parent");
-        let anki = AnkiGroup::builder().launch(()).detach();
-        anki.widget()
-            .insert_after(&settings_page, Some(&root.themes()));
+        let settings_page = root.advanced().parent().expect("should have parent");
+
+        let dictionary_group = DictionaryGroup::builder()
+            .launch(())
+            .forward(sender.output_sender(), |resp| resp);
+
+        dictionary_group
+            .widget()
+            .insert_before(&settings_page, Some(&root.advanced()));
+
+        let anki_group = AnkiGroup::builder()
+            .launch(())
+            .forward(sender.output_sender(), |resp| resp);
+        anki_group
+            .widget()
+            .insert_after(&settings_page, Some(&root.advanced()));
 
         root.quit().connect_activated(move |_| {
             relm4::main_application().quit();
         });
 
         AsyncComponentParts {
-            model: Self { _anki: anki },
+            model: Self {
+                _dictionary_group: dictionary_group,
+                _anki_group: anki_group,
+            },
             widgets: (),
         }
     }

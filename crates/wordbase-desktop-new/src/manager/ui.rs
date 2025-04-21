@@ -9,9 +9,7 @@ mod imp {
         #[template_child]
         pub settings: TemplateChild<adw::PreferencesPage>,
         #[template_child]
-        pub dictionaries: TemplateChild<adw::PreferencesGroup>,
-        #[template_child]
-        pub themes: TemplateChild<adw::PreferencesGroup>,
+        pub advanced: TemplateChild<adw::PreferencesGroup>,
         #[template_child]
         pub texthooker_url: TemplateChild<adw::EntryRow>,
         #[template_child]
@@ -71,13 +69,8 @@ impl Manager {
     }
 
     #[must_use]
-    pub fn dictionaries(&self) -> adw::PreferencesGroup {
-        self.imp().dictionaries.get()
-    }
-
-    #[must_use]
-    pub fn themes(&self) -> adw::PreferencesGroup {
-        self.imp().themes.get()
+    pub fn advanced(&self) -> adw::PreferencesGroup {
+        self.imp().advanced.get()
     }
 
     #[must_use]

@@ -1,7 +1,9 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $WdbDictionaryList: Adw.Bin {
+template $WdbDictionaryGroup: Adw.PreferencesGroup {
+  title: _("Dictionaries");
+
   ListBox list {
     valign: start;
     selection-mode: none;

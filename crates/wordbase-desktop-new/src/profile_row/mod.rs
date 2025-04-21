@@ -1,14 +1,14 @@
 use {
     crate::{
-        AppEvent, CURRENT_PROFILE_ID, PROFILE, SignalHandler, app_window, engine, gettext,
-        settings,
+        AppEvent, PROFILE, SignalHandler, app_window, current_profile, engine, gettext, settings,
         util::{AppComponent, impl_component},
     },
     adw::prelude::*,
     anyhow::{Context as _, Result},
     glib::clone,
     relm4::prelude::*,
-    wordbase::{NormString, ProfileId},
+    std::sync::Arc,
+    wordbase::{NormString, Profile},
     wordbase_engine::{EngineEvent, ProfileEvent},
 };
 
@@ -16,14 +16,13 @@ mod ui;
 
 #[derive(Debug)]
 pub struct ProfileRow {
-    profile_id: ProfileId,
-    _profile_changed_handler: SignalHandler,
+    profile: Arc<Profile>,
 }
 
 #[derive(Debug)]
 #[doc(hidden)]
 pub enum Msg {
-    UpdateMeta,
+    UpdateUi,
     AskRemove,
     Remove,
     SetName,
@@ -32,12 +31,12 @@ pub enum Msg {
 impl_component!(ProfileRow);
 
 impl AppComponent for ProfileRow {
-    type Args = ProfileId;
+    type Args = Arc<Profile>;
     type Msg = Msg;
     type Ui = ui::ProfileRow;
 
     async fn init(
-        profile_id: Self::Args,
+        profile: Self::Args,
         ui: Self::Ui,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
@@ -61,6 +60,7 @@ impl AppComponent for ProfileRow {
         ));
 
         let settings = settings();
+        let profile_id = profile.id;
         settings
             .bind(PROFILE, &ui.current(), "active")
             .mapping(move |setting, _| {
@@ -74,22 +74,9 @@ impl AppComponent for ProfileRow {
                 }
             })
             .build();
-        let profile_changed_handler = SignalHandler::new(&settings, |it| {
-            it.connect_changed(
-                Some(PROFILE),
-                clone!(
-                    #[strong]
-                    sender,
-                    move |_, _| sender.input(Msg::UpdateMeta)
-                ),
-            )
-        });
 
-        let model = Self {
-            profile_id,
-            _profile_changed_handler: profile_changed_handler,
-        };
-        model.update_meta(&ui);
+        let model = Self { profile };
+        model.update_ui(&ui);
         AsyncComponentParts { model, widgets: () }
     }
 
@@ -100,15 +87,15 @@ impl AppComponent for ProfileRow {
         ui: &Self::Ui,
     ) -> Result<()> {
         match msg {
-            Msg::UpdateMeta => {
-                self.update_meta(ui);
+            Msg::UpdateUi => {
+                self.update_ui(ui);
             }
             Msg::AskRemove => {
                 ui.remove_dialog().present(Some(&app_window()));
             }
             Msg::Remove => {
                 engine()
-                    .remove_profile(self.profile_id)
+                    .remove_profile(self.profile.id)
                     .await
                     .with_context(|| gettext("Failed to remove profile"))?;
             }
@@ -120,14 +107,10 @@ impl AppComponent for ProfileRow {
                 };
 
                 ui.name().set_css_classes(&[]);
-                let Some(profile) = engine().profiles().get(&self.profile_id).cloned() else {
-                    return Ok(());
-                };
-
-                let mut config = profile.config.clone();
+                let mut config = self.profile.config.clone();
                 config.name = Some(name);
                 engine()
-                    .set_profile_config(self.profile_id, config)
+                    .set_profile_config(self.profile.id, config)
                     .await
                     .with_context(|| gettext("Failed to set profile name"))?;
             }
@@ -143,28 +126,29 @@ impl AppComponent for ProfileRow {
     ) -> Result<()> {
         if let AppEvent::Engine(EngineEvent::Profile(
             ProfileEvent::Added(_) | ProfileEvent::Removed(_),
-        )) = event
+        ))
+        | AppEvent::ProfileSet = event
         {
-            self.update_meta(ui);
+            if let Some(profile) = engine().profiles().get(&self.profile.id).cloned() {
+                self.profile = profile;
+                self.update_ui(ui);
+            }
         }
         Ok(())
     }
 }
 
 impl ProfileRow {
-    fn update_meta(&self, ui: &ui::ProfileRow) {
-        let Some(profile) = engine().profiles().get(&self.profile_id).cloned() else {
-            return;
-        };
-
-        let name = profile
+    fn update_ui(&self, ui: &ui::ProfileRow) {
+        let name = self
+            .profile
             .config
             .name
             .as_ref()
             .map_or_else(|| gettext("Default Profile"), |s| s.as_str());
         ui.name().set_text(name);
 
-        let is_current = *CURRENT_PROFILE_ID.read() == self.profile_id;
+        let is_current = current_profile().id == self.profile.id;
         let more_than_1_profile = engine().profiles().len() > 1;
         ui.remove().set_visible(!is_current && more_than_1_profile);
     }

@@ -169,9 +169,15 @@ impl Engine {
             .map_err(|source| ImportError::Import { kind, source })?;
 
         self.sync_dictionaries().await?;
+        let dictionary = self
+            .dictionaries
+            .load()
+            .get(&id)
+            .cloned()
+            .context("newly inserted dictionary is no longer present")?;
         _ = self
             .send_event
-            .send(EngineEvent::Dictionary(DictionaryEvent::Added(id)));
+            .send(EngineEvent::Dictionary(DictionaryEvent::Added(dictionary)));
         Ok(id)
     }
 }

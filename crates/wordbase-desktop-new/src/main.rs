@@ -11,8 +11,8 @@ extern crate libadwaita as adw;
 extern crate webkit6 as webkit;
 
 mod anki_group;
-// mod dictionary_list;
-// mod dictionary_row;
+mod dictionary_group;
+mod dictionary_row;
 mod error_page;
 mod manage_profiles;
 mod manager;
@@ -30,23 +30,22 @@ mod icon_names {
 use {
     adw::prelude::*,
     anyhow::{Context, Result, anyhow},
+    arc_swap::ArcSwap,
     derive_more::Debug,
     error_page::ErrorPage,
     glib::clone,
     manage_profiles::ManageProfiles,
     manager::Manager,
-    relm4::{
-        MessageBroker, RelmApp, SharedState, loading_widgets::LoadingWidgets, prelude::*, view,
-    },
+    relm4::{MessageBroker, RelmApp, loading_widgets::LoadingWidgets, prelude::*, view},
     std::{
         cell::OnceCell,
-        sync::{LazyLock, OnceLock},
+        sync::{Arc, LazyLock, OnceLock},
     },
     theme::{CustomTheme, ThemeName},
     tokio::sync::broadcast,
     tracing::{error, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
-    wordbase::ProfileId,
+    wordbase::{Profile, ProfileId},
     wordbase_engine::{Engine, EngineEvent},
     wordbase_server::HTTP_PORT,
 };
@@ -70,6 +69,9 @@ fn main() {
         .run_async::<App>(());
 }
 
+static APP_BROKER: MessageBroker<AppMsg> = MessageBroker::new();
+static EVENTS: LazyLock<broadcast::Sender<AppEvent>> = LazyLock::new(|| broadcast::channel(16).0);
+
 static ENGINE: OnceLock<Engine> = OnceLock::new();
 
 fn engine() -> &'static Engine {
@@ -87,15 +89,15 @@ fn app_window() -> gtk::Window {
     })
 }
 
-static APP_BROKER: MessageBroker<AppMsg> = MessageBroker::new();
+static CURRENT_PROFILE: OnceLock<ArcSwap<Profile>> = OnceLock::new();
 
-static CURRENT_PROFILE_ID: SharedState<ProfileId> = SharedState::new();
-
-fn current_profile_id() -> ProfileId {
-    *CURRENT_PROFILE_ID.read()
+fn current_profile() -> Arc<Profile> {
+    CURRENT_PROFILE
+        .get()
+        .expect("current profile should be initialized")
+        .load()
+        .clone()
 }
-
-static EVENTS: LazyLock<broadcast::Sender<AppEvent>> = LazyLock::new(|| broadcast::channel(16).0);
 
 #[must_use]
 fn settings() -> gio::Settings {
@@ -186,18 +188,13 @@ impl AsyncComponent for App {
     ) -> AsyncComponentParts<Self> {
         let toaster = adw::ToastOverlay::new();
         root.set_content(Some(&toaster));
+        APP_WINDOW.with(move |cell| {
+            cell.set(root.upcast())
+                .expect("window should not already be set");
+        });
 
         match init(sender.clone()).await {
-            Ok(engine) => {
-                ENGINE
-                    .set(engine)
-                    .expect("engine should not already be set");
-                APP_WINDOW.with(move |window| {
-                    window
-                        .set(root.upcast())
-                        .expect("window should not already be set");
-                });
-
+            Ok(()) => {
                 let manager = Manager::builder()
                     .launch(())
                     .forward(sender.input_sender(), AppMsg::Error);
@@ -252,11 +249,16 @@ impl AsyncComponent for App {
     }
 }
 
-async fn init(sender: AsyncComponentSender<App>) -> Result<Engine> {
+async fn init(sender: AsyncComponentSender<App>) -> Result<()> {
     let data_dir = wordbase_engine::data_dir().context("failed to get data directory")?;
     let engine = Engine::new(&data_dir)
         .await
         .context("failed to create engine")?;
+    ENGINE
+        .set(engine.clone())
+        .expect("engine should not already be set");
+
+    setup_profile();
 
     tokio::spawn(clone!(
         #[strong]
@@ -295,23 +297,6 @@ async fn init(sender: AsyncComponentSender<App>) -> Result<Engine> {
     let action = settings.create_action(PROFILE);
     app.add_action(&action);
 
-    if let Ok(profile_id) = settings.string(PROFILE).parse::<i64>().map(ProfileId) {
-        *CURRENT_PROFILE_ID.write() = profile_id;
-    }
-    settings.connect_changed(
-        Some(PROFILE),
-        clone!(
-            #[strong]
-            settings,
-            move |_, _| {
-                let Ok(profile_id) = settings.string(PROFILE).parse::<i64>().map(ProfileId) else {
-                    return;
-                };
-                *CURRENT_PROFILE_ID.write() = profile_id;
-            }
-        ),
-    );
-
     let manage_profiles = gio::ActionEntryBuilder::new(MANAGE_PROFILES)
         .activate(clone!(
             #[strong]
@@ -321,7 +306,64 @@ async fn init(sender: AsyncComponentSender<App>) -> Result<Engine> {
         .build();
     app.add_action_entries([manage_profiles]);
 
-    Ok(engine)
+    Ok(())
+}
+
+fn setup_profile() {
+    let settings = gio::Settings::new(APP_ID);
+
+    #[expect(clippy::option_if_let_else, reason = "simpler as an if/else")]
+    let current_profile = if let Some(profile) = settings
+        .string(PROFILE)
+        .parse::<i64>()
+        .ok()
+        .map(ProfileId)
+        .and_then(|id| engine().profiles().get(&id).cloned())
+    {
+        profile
+    } else {
+        // reset profile to default if the current one is invalid
+        let first_profile = engine()
+            .profiles()
+            .values()
+            .next()
+            .cloned()
+            .expect("at least 1 profile should exist");
+        settings
+            .set(PROFILE, first_profile.id.0.to_string())
+            .expect("failed to reset current profile");
+        first_profile
+    };
+    CURRENT_PROFILE
+        .set(ArcSwap::new(current_profile))
+        .expect("profile should not already be set");
+
+    settings.connect_changed(
+        Some(PROFILE),
+        clone!(
+            #[strong]
+            settings,
+            move |_, _| {
+                let Some(profile) = settings
+                    .string(PROFILE)
+                    .parse::<i64>()
+                    .ok()
+                    .map(ProfileId)
+                    .and_then(|id| engine().profiles().get(&id).cloned())
+                else {
+                    return;
+                };
+
+                CURRENT_PROFILE
+                    .get()
+                    .expect("profile should be set")
+                    .store(profile);
+                _ = EVENTS.send(AppEvent::ProfileSet);
+            }
+        ),
+    );
+
+    tokio::spawn(async move {});
 }
 
 const PROFILE: &str = "profile";

@@ -1,6 +1,6 @@
 use {
     crate::{
-        AppEvent, current_profile_id, engine, gettext,
+        AppEvent, current_profile, engine, gettext,
         profile_row::ProfileRow,
         util::{AppComponent, impl_component},
     },
@@ -9,8 +9,9 @@ use {
     glib::clone,
     gtk::prelude::{CheckButtonExt, EditableExt, WidgetExt},
     relm4::prelude::*,
-    wordbase::{NormString, ProfileId},
-    wordbase_engine::{EngineEvent, ProfileEvent},
+    std::sync::Arc,
+    wordbase::{NormString, Profile, ProfileId},
+    wordbase_engine::{DictionaryEvent, EngineEvent, ProfileEvent},
 };
 
 mod ui;
@@ -53,8 +54,8 @@ impl AppComponent for ManageProfiles {
         let mut model = Self {
             rows: HashMap::new(),
         };
-        for &id in engine().profiles().keys() {
-            model.add_row(&ui, &sender, id);
+        for profile in engine().profiles().values() {
+            model.add_row(&ui, &sender, profile.clone());
         }
         Self::update_add_profile_name(&ui);
 
@@ -74,15 +75,11 @@ impl AppComponent for ManageProfiles {
                     return Ok(());
                 };
 
-                let profile_id = current_profile_id();
-                let Some(profile) = engine().profiles().get(&profile_id).cloned() else {
-                    return Ok(());
-                };
-
+                let profile = current_profile();
                 let mut config = profile.config.clone();
                 config.name = Some(name);
                 engine()
-                    .copy_profile(profile_id, config)
+                    .copy_profile(profile.id, config)
                     .await
                     .with_context(|| gettext("Failed to add profile"))?;
             }
@@ -100,8 +97,8 @@ impl AppComponent for ManageProfiles {
         ui: &Self::Root,
     ) -> Result<()> {
         match event {
-            AppEvent::Engine(EngineEvent::Profile(ProfileEvent::Added(id))) => {
-                self.add_row(ui, sender, id);
+            AppEvent::Engine(EngineEvent::Profile(ProfileEvent::Added(profile))) => {
+                self.add_row(ui, sender, profile);
             }
             AppEvent::Engine(EngineEvent::Profile(ProfileEvent::Removed(id))) => {
                 if let Some(row) = self.rows.remove(&id) {
@@ -128,13 +125,14 @@ impl ManageProfiles {
         &mut self,
         ui: &ui::ManageProfiles,
         sender: &AsyncComponentSender<Self>,
-        id: ProfileId,
+        profile: Arc<Profile>,
     ) {
+        let profile_id = profile.id;
         let row = ProfileRow::builder()
-            .launch(id)
+            .launch(profile)
             .forward(sender.output_sender(), |resp| resp);
         row.widget().current().set_group(Some(&ui.dummy_group()));
         ui.list().append(row.widget());
-        self.rows.insert(id, row);
+        self.rows.insert(profile_id, row);
     }
 }

@@ -37,6 +37,19 @@ impl Engine {
         Ok(())
     }
 
+    fn sync_new_profile(&self, id: ProfileId) -> Result<()> {
+        let profile = self
+            .profiles
+            .load()
+            .get(&id)
+            .cloned()
+            .context("newly inserted profile is no longer present")?;
+        _ = self
+            .send_event
+            .send(EngineEvent::Profile(ProfileEvent::Added(profile)));
+        Ok(())
+    }
+
     pub async fn add_profile(&self, config: ProfileConfig) -> Result<ProfileId> {
         let config_json = serde_json::to_string(&config).context("failed to serialize config")?;
         let sorting_dictionary = config.sorting_dictionary.map(|id| id.0);
@@ -54,9 +67,7 @@ impl Engine {
         let new_id = ProfileId(new_id);
 
         self.sync_profiles().await?;
-        _ = self
-            .send_event
-            .send(EngineEvent::Profile(ProfileEvent::Added(new_id)));
+        self.sync_new_profile(new_id)?;
         Ok(new_id)
     }
 
@@ -103,9 +114,7 @@ impl Engine {
         tx.commit().await.context("failed to commit transaction")?;
 
         self.sync_profiles().await?;
-        _ = self
-            .send_event
-            .send(EngineEvent::Profile(ProfileEvent::Added(new_id)));
+        self.sync_new_profile(new_id)?;
         Ok(new_id)
     }
 
@@ -123,25 +132,6 @@ impl Engine {
         _ = self
             .send_event
             .send(EngineEvent::Profile(ProfileEvent::ConfigSet(id)));
-        Ok(())
-    }
-
-    pub async fn set_sorting_dictionary(
-        &self,
-        profile_id: ProfileId,
-        dictionary_id: Option<DictionaryId>,
-    ) -> Result<()> {
-        let dictionary_id = dictionary_id.map(|id| id.0);
-        sqlx::query!(
-            "UPDATE profile SET sorting_dictionary = $1
-            WHERE id = $2",
-            dictionary_id,
-            profile_id.0
-        )
-        .execute(&self.db)
-        .await?;
-
-        self.sync_profiles().await?;
         Ok(())
     }
 

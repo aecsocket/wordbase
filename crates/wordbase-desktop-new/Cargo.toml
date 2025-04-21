@@ -27,6 +27,7 @@ indexmap    = { workspace = true }
 maud        = { workspace = true }
 notify      = { workspace = true }
 
+arc-swap           = { workspace = true }
 ashpd              = { workspace = true, features = ["gtk4"] }
 bimap              = { workspace = true }
 bzip2              = { workspace = true, features = ["static"] }

@@ -5,10 +5,10 @@ use anyhow::Result;
 use glib::clone;
 use relm4::prelude::*;
 use tokio_util::task::AbortOnDropHandle;
-use wordbase_engine::anki::AnkiConfig;
+use wordbase_engine::{EngineEvent, anki::AnkiConfig};
 
 use crate::{
-    AppEvent, PROFILE, current_profile_id, engine, settings,
+    AppEvent, current_profile, engine,
     util::{AppComponent, impl_component},
 };
 
@@ -53,15 +53,6 @@ impl AppComponent for AnkiGroup {
             move |_| sender.input(Msg::UpdateRoot)
         ));
 
-        settings().connect_changed(
-            Some(PROFILE),
-            clone!(
-                #[strong]
-                sender,
-                move |_, _| sender.input(Msg::UpdateRoot)
-            ),
-        );
-
         let mut model = Self {
             connect_task: None,
             note_fields: Vec::new(),
@@ -100,30 +91,38 @@ impl AppComponent for AnkiGroup {
         }
         Ok(())
     }
+
+    async fn update_event(
+        &mut self,
+        event: AppEvent,
+        sender: &AsyncComponentSender<Self>,
+        ui: &Self::Ui,
+    ) -> Result<()> {
+        if let AppEvent::ProfileSet | AppEvent::Engine(EngineEvent::Profile(_)) = event {
+            self.update_root(ui);
+        }
+        Ok(())
+    }
 }
 
 impl AnkiGroup {
-    fn update_root(&mut self, root: &ui::AnkiGroup) {
-        clear_string_list(&root.deck_model());
-        clear_string_list(&root.note_type_model());
+    fn update_root(&mut self, ui: &ui::AnkiGroup) {
+        clear_string_list(&ui.deck_model());
+        clear_string_list(&ui.note_type_model());
 
         let engine = engine();
         match engine.anki_state() {
             Ok(anki) => {
-                root.connected().set_visible(true);
-                root.disconnected().set_visible(false);
+                ui.connected().set_visible(true);
+                ui.disconnected().set_visible(false);
 
-                let profiles = engine.profiles();
-                let Some(profile) = profiles.get(&current_profile_id()) else {
-                    return;
-                };
-
+                let profile = current_profile();
                 for (index, deck_name) in anki.decks.iter().enumerate() {
-                    root.deck_model().append(deck_name);
+                    ui.deck_model().append(deck_name);
                     if profile.config.anki_deck.as_ref().map(|s| s.as_str())
                         == Some(deck_name.as_str())
                     {
-                        root.deck().set_selected(
+                        ui.deck().set_selected(
                             u32::try_from(index).expect("should not exceed `u32::MAX` decks"),
                         );
                     }
@@ -131,40 +130,40 @@ impl AnkiGroup {
 
                 let mut model = None;
                 for (index, (note_type_name, this_model)) in anki.models.iter().enumerate() {
-                    root.note_type_model().append(note_type_name);
+                    ui.note_type_model().append(note_type_name);
                     if profile.config.anki_note_type.as_ref().map(|s| s.as_str())
                         == Some(note_type_name.as_str())
                     {
-                        root.note_type().set_selected(
+                        ui.note_type().set_selected(
                             u32::try_from(index).expect("should not exceed `u32::MAX` note types"),
                         );
                         model = Some(this_model);
                     }
                 }
 
-                root.note_fields().set_visible(false);
+                ui.note_fields().set_visible(false);
                 for note_field in self.note_fields.drain(..) {
-                    root.note_fields().remove(&note_field);
+                    ui.note_fields().remove(&note_field);
                 }
 
                 if let Some(model) = model {
-                    root.note_fields().set_visible(true);
+                    ui.note_fields().set_visible(true);
                     for field_name in &model.field_names {
                         let row = adw::ComboRow::builder()
                             .title(field_name.as_str())
-                            .model(&root.field_content_model())
+                            .model(&ui.field_content_model())
                             .build();
-                        root.note_fields().add_row(&row);
+                        ui.note_fields().add_row(&row);
                         self.note_fields.push(row);
                     }
                 }
             }
             Err(err) => {
-                root.connected().set_visible(false);
-                root.disconnected().set_visible(true);
-                root.disconnected()
+                ui.connected().set_visible(false);
+                ui.disconnected().set_visible(true);
+                ui.disconnected()
                     .set_tooltip_text(Some(&format!("{err:?}")));
-                root.note_fields().set_visible(false);
+                ui.note_fields().set_visible(false);
             }
         };
     }

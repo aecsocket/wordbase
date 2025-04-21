@@ -1,6 +1,16 @@
+use std::sync::Arc;
+
+use glib::object::Cast;
+use gtk::prelude::WidgetExt;
 use relm4::adw::{self, glib, gtk, subclass::prelude::*};
+use wordbase::Dictionary;
 
 mod imp {
+    use std::cell::RefCell;
+
+    use arc_swap::ArcSwapOption;
+    use wordbase::Dictionary;
+
     use super::*;
 
     #[derive(Debug, Default, gtk::CompositeTemplate)]
@@ -28,6 +38,8 @@ mod imp {
         pub remove: TemplateChild<gtk::Button>,
         #[template_child]
         pub remove_dialog: TemplateChild<adw::AlertDialog>,
+        pub dictionary: ArcSwapOption<Dictionary>,
+        pub meta_list: RefCell<Option<gtk::ListBox>>,
     }
 
     #[glib::object_subclass]
@@ -58,7 +70,17 @@ glib::wrapper! {
 
 impl Default for DictionaryRow {
     fn default() -> Self {
-        glib::Object::new()
+        let this = glib::Object::new::<Self>();
+        let meta_list = this
+            .imp()
+            .action_row
+            .get()
+            .parent()
+            .expect("action row should have parent")
+            .downcast::<gtk::ListBox>()
+            .expect("action row parent should be a list box");
+        this.imp().meta_list.replace(Some(meta_list));
+        this
     }
 }
 
@@ -116,5 +138,24 @@ impl DictionaryRow {
     #[must_use]
     pub fn remove_dialog(&self) -> adw::AlertDialog {
         self.imp().remove_dialog.get()
+    }
+
+    #[must_use]
+    pub fn dictionary(&self) -> Option<Arc<Dictionary>> {
+        self.imp().dictionary.load().as_ref().cloned()
+    }
+
+    pub fn set_dictionary(&self, dictionary: Arc<Dictionary>) {
+        self.imp().dictionary.store(Some(dictionary));
+    }
+
+    #[must_use]
+    pub fn meta_list(&self) -> gtk::ListBox {
+        self.imp()
+            .meta_list
+            .borrow()
+            .as_ref()
+            .cloned()
+            .expect("meta list should be initialized")
     }
 }

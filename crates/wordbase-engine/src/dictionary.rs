@@ -6,7 +6,7 @@ use {
     sqlx::{Pool, Sqlite},
     std::sync::Arc,
     tokio_stream::StreamExt,
-    wordbase::{Dictionary, DictionaryId, DictionaryMeta},
+    wordbase::{Dictionary, DictionaryId, DictionaryMeta, ProfileId},
 };
 
 #[derive(Debug, Default, Deref)]
@@ -53,6 +53,36 @@ impl Engine {
         }
 
         self.sync_dictionaries().await?;
+        _ = self
+            .send_event
+            .send(EngineEvent::Dictionary(DictionaryEvent::PositionSet(
+                id, position,
+            )));
+        Ok(())
+    }
+
+    pub async fn set_sorting_dictionary(
+        &self,
+        profile_id: ProfileId,
+        dictionary_id: Option<DictionaryId>,
+    ) -> Result<()> {
+        let dictionary_id_raw = dictionary_id.map(|id| id.0);
+        sqlx::query!(
+            "UPDATE profile SET sorting_dictionary = $1
+            WHERE id = $2",
+            dictionary_id_raw,
+            profile_id.0
+        )
+        .execute(&self.db)
+        .await?;
+
+        self.sync_profiles().await?;
+        _ = self
+            .send_event
+            .send(EngineEvent::Dictionary(DictionaryEvent::SortingSet(
+                profile_id,
+                dictionary_id,
+            )));
         Ok(())
     }
 

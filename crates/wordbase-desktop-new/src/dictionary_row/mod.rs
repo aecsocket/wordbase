@@ -1,4 +1,4 @@
 pub mod imported;
-mod ui;
+pub mod ui;
 
 pub use imported::*;

@@ -5214,6 +5214,7 @@ name = "wordbase-desktop-new"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "arc-swap",
  "ashpd",
  "bimap",
  "bzip2",

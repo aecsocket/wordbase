@@ -4,8 +4,8 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, gtk::CompositeTemplate)]
-    #[template(file = "src/dictionary_list/ui.blp")]
-    pub struct DictionaryList {
+    #[template(file = "src/dictionary_group/ui.blp")]
+    pub struct DictionaryGroup {
         #[template_child]
         pub list: TemplateChild<gtk::ListBox>,
         #[template_child]
@@ -15,10 +15,10 @@ mod imp {
     }
 
     #[glib::object_subclass]
-    impl ObjectSubclass for DictionaryList {
-        const NAME: &str = "WdbDictionaryList";
-        type Type = super::DictionaryList;
-        type ParentType = adw::Bin;
+    impl ObjectSubclass for DictionaryGroup {
+        const NAME: &str = "WdbDictionaryGroup";
+        type Type = super::DictionaryGroup;
+        type ParentType = adw::PreferencesGroup;
 
         fn class_init(klass: &mut Self::Class) {
             klass.bind_template();
@@ -29,21 +29,22 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for DictionaryList {}
-    impl WidgetImpl for DictionaryList {}
-    impl BinImpl for DictionaryList {}
+    impl ObjectImpl for DictionaryGroup {}
+    impl WidgetImpl for DictionaryGroup {}
+    impl PreferencesGroupImpl for DictionaryGroup {}
 }
 
 glib::wrapper! {
-    pub struct DictionaryList(ObjectSubclass<imp::DictionaryList>) @extends gtk::Widget, adw::Bin;
+    pub struct DictionaryGroup(ObjectSubclass<imp::DictionaryGroup>) @extends gtk::Widget, adw::PreferencesGroup;
 }
 
-impl DictionaryList {
-    #[must_use]
-    pub fn new() -> Self {
+impl Default for DictionaryGroup {
+    fn default() -> Self {
         glib::Object::new()
     }
+}
 
+impl DictionaryGroup {
     #[must_use]
     pub fn list(&self) -> gtk::ListBox {
         self.imp().list.get()
