@@ -115,20 +115,15 @@ pub struct ImportErr {
     pub error: String,
 }
 
-pub async fn set_position(
-    engine: &Engine,
-    dictionary_id: DictionaryId,
-    req: SetPosition,
-) -> Result<()> {
-    engine
-        .set_dictionary_position(dictionary_id, req.position)
-        .await?;
+pub async fn position_swap(engine: &Engine, req: PositionSwap) -> Result<()> {
+    engine.swap_dictionary_positions(req.a_id, req.b_id).await?;
     Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Object)]
-pub struct SetPosition {
-    pub position: i64,
+pub struct PositionSwap {
+    pub a_id: DictionaryId,
+    pub b_id: DictionaryId,
 }
 
 pub async fn enable(engine: &Engine, dictionary_id: DictionaryId, req: ToggleEnable) -> Result<()> {

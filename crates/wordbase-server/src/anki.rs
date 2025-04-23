@@ -48,3 +48,24 @@ impl Example for NoteAdd {
         }
     }
 }
+
+pub async fn connect(engine: &Engine, req: Connect) -> Result<()> {
+    engine.anki_connect(req.server_url, req.api_key).await?;
+    Ok(())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Object)]
+#[oai(example)]
+pub struct Connect {
+    pub server_url: String,
+    pub api_key: String,
+}
+
+impl Example for Connect {
+    fn example() -> Self {
+        Self {
+            server_url: "http://127.0.0.1:8765".into(),
+            api_key: String::new(),
+        }
+    }
+}

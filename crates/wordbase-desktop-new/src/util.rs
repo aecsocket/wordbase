@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+use adw::prelude::*;
 use anyhow::Result;
 use relm4::prelude::*;
 
@@ -102,3 +103,33 @@ macro_rules! impl_component {
 }
 
 pub(crate) use impl_component;
+
+#[derive(Debug)]
+#[must_use]
+struct SignalHandler {
+    object: glib::Object,
+    id: Option<glib::SignalHandlerId>,
+}
+
+impl Drop for SignalHandler {
+    fn drop(&mut self) {
+        self.object.disconnect(
+            self.id
+                .take()
+                .expect("signal handler id should not be taken before drop"),
+        );
+    }
+}
+
+impl SignalHandler {
+    pub fn new<T: IsA<glib::Object>>(
+        object: &T,
+        make_id: impl FnOnce(&T) -> glib::SignalHandlerId,
+    ) -> Self {
+        let id = make_id(object);
+        Self {
+            object: object.upcast_ref().clone(),
+            id: Some(id),
+        }
+    }
+}

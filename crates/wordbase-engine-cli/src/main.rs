@@ -123,11 +123,6 @@ enum DictCommand {
 
 #[derive(Debug, clap::Parser)]
 enum DictSetCommand {
-    /// Set the sorting position of a dictionary
-    Position {
-        /// New dictionary position
-        position: i64,
-    },
     /// Enable the dictionary for the selected profile
     Enabled,
     /// Disable the dictionary for the selected profile
@@ -238,13 +233,6 @@ async fn main() -> Result<()> {
         Command::Dict {
             command: DictCommand::Import { path },
         } => dict::import(&engine, &path).await?,
-        Command::Dict {
-            command:
-                DictCommand::Set {
-                    dict_id,
-                    command: DictSetCommand::Position { position },
-                },
-        } => dict::set_position(&engine, DictionaryId(dict_id), position).await?,
         Command::Dict {
             command:
                 DictCommand::Set {

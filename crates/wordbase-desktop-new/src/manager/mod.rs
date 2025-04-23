@@ -74,7 +74,11 @@ impl AsyncComponent for Manager {
         root: &Self::Root,
     ) {
         match event {
-            AppEvent::Engine(EngineEvent::Profile(_)) => {
+            AppEvent::Engine(
+                EngineEvent::ProfileAdded { .. }
+                | EngineEvent::ProfileRemoved { .. }
+                | EngineEvent::ProfileNameSet { .. },
+            ) => {
                 Self::update_profiles(root);
             }
             _ => {}

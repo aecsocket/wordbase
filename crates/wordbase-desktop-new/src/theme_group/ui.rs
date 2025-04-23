@@ -4,16 +4,16 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, gtk::CompositeTemplate)]
-    #[template(file = "src/manager/theme_list/ui.blp")]
-    pub struct ThemeList {
+    #[template(file = "src/theme_group/ui.blp")]
+    pub struct ThemeGroup {
         #[template_child]
         pub font_row: TemplateChild<adw::ActionRow>,
         #[template_child]
         pub font_reset: TemplateChild<gtk::Button>,
         #[template_child]
-        pub enabled_dummy: TemplateChild<gtk::CheckButton>,
-        #[template_child]
         pub list: TemplateChild<gtk::ListBox>,
+        #[template_child]
+        pub dummy_group: TemplateChild<gtk::CheckButton>,
         #[template_child]
         pub import_button: TemplateChild<adw::ButtonRow>,
         #[template_child]
@@ -21,10 +21,10 @@ mod imp {
     }
 
     #[glib::object_subclass]
-    impl ObjectSubclass for ThemeList {
-        const NAME: &str = "WdbThemeList";
-        type Type = super::ThemeList;
-        type ParentType = adw::Bin;
+    impl ObjectSubclass for ThemeGroup {
+        const NAME: &str = "WdbThemeGroup";
+        type Type = super::ThemeGroup;
+        type ParentType = adw::PreferencesGroup;
 
         fn class_init(klass: &mut Self::Class) {
             klass.bind_template();
@@ -35,21 +35,22 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for ThemeList {}
-    impl WidgetImpl for ThemeList {}
-    impl BinImpl for ThemeList {}
+    impl ObjectImpl for ThemeGroup {}
+    impl WidgetImpl for ThemeGroup {}
+    impl PreferencesGroupImpl for ThemeGroup {}
 }
 
 glib::wrapper! {
-    pub struct ThemeList(ObjectSubclass<imp::ThemeList>) @extends gtk::Widget, adw::Bin;
+    pub struct ThemeGroup(ObjectSubclass<imp::ThemeGroup>) @extends gtk::Widget, adw::PreferencesGroup;
 }
 
-impl ThemeList {
-    #[must_use]
-    pub fn new() -> Self {
+impl Default for ThemeGroup {
+    fn default() -> Self {
         glib::Object::new()
     }
+}
 
+impl ThemeGroup {
     #[must_use]
     pub fn font_row(&self) -> adw::ActionRow {
         self.imp().font_row.get()
@@ -61,13 +62,13 @@ impl ThemeList {
     }
 
     #[must_use]
-    pub fn enabled_dummy(&self) -> gtk::CheckButton {
-        self.imp().enabled_dummy.get()
+    pub fn list(&self) -> gtk::ListBox {
+        self.imp().list.get()
     }
 
     #[must_use]
-    pub fn list(&self) -> gtk::ListBox {
-        self.imp().list.get()
+    pub fn dummy_group(&self) -> gtk::CheckButton {
+        self.imp().dummy_group.get()
     }
 
     #[must_use]

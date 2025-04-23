@@ -117,8 +117,8 @@ pub async fn import(engine: &Engine, path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub async fn set_position(engine: &Engine, dict_id: DictionaryId, position: i64) -> Result<()> {
-    engine.set_dictionary_position(dict_id, position).await?;
+pub async fn swap_positions(engine: &Engine, a_id: DictionaryId, b_id: DictionaryId) -> Result<()> {
+    engine.swap_dictionary_positions(a_id, b_id).await?;
     Ok(())
 }
 

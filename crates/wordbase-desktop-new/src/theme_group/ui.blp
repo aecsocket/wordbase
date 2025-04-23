@@ -1,7 +1,9 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $WdbThemeList: Adw.Bin {
+template $WdbThemeGroup: Adw.PreferencesGroup {
+  title: _("Themes");
+
   Box {
     orientation: vertical;
     spacing: 16;
@@ -24,10 +26,6 @@ template $WdbThemeList: Adw.Bin {
       }
     }
 
-    CheckButton enabled_dummy {
-      visible: false;
-    }
-
     ListBox list {
       valign: start;
       selection-mode: none;
@@ -40,6 +38,10 @@ template $WdbThemeList: Adw.Bin {
       }
     }
   }
+}
+
+CheckButton dummy_group {
+  visible: false;
 }
 
 FileDialog import_dialog {

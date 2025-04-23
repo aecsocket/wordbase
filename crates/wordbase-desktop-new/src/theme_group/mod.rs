@@ -1,11 +1,11 @@
 mod ui;
 
 use {
-    super::theme_row,
     crate::{
-        APP_EVENTS, AppEvent, CURRENT_PROFILE, CURRENT_PROFILE_ID, forward_events, gettext,
+        AppEvent, CURRENT_PROFILE_ID, forward_events, gettext,
         theme::{CUSTOM_THEMES, ThemeKey, ThemeName},
         toast_result,
+        util::{AppComponent, impl_component},
     },
     anyhow::{Context, Result},
     foldhash::{HashMap, HashMapExt},
@@ -15,16 +15,12 @@ use {
         prelude::*,
     },
     wordbase::NormString,
-    wordbase_engine::Engine,
 };
 
 #[derive(Debug)]
-pub struct Model {
+pub struct ThemeGroup {
     _default_theme: AsyncController<theme_row::Model>,
     custom_themes: HashMap<ThemeName, AsyncController<theme_row::Model>>,
-    engine: Engine,
-    window: gtk::Window,
-    toaster: adw::ToastOverlay,
 }
 
 #[derive(Debug)]
@@ -34,31 +30,24 @@ pub enum Msg {
     ResetFont,
 }
 
-impl AsyncComponent for Model {
-    type Init = (Engine, gtk::Window, adw::ToastOverlay);
-    type Input = Msg;
-    type Output = ();
-    type CommandOutput = AppEvent;
-    type Root = ui::ThemeList;
-    type Widgets = ();
+impl_component!(ThemeGroup);
 
-    fn init_root() -> Self::Root {
-        ui::ThemeList::new()
-    }
+impl AppComponent for ThemeGroup {
+    type Args = ();
+    type Msg = Msg;
+    type Root = ui::ThemeGroup;
 
     async fn init(
-        (engine, window, toaster): Self::Init,
-        root: Self::Root,
+        (): Self::Args,
+        ui: Self::Ui,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
-        forward_events(&sender);
-
-        root.font_row().connect_activated(clone!(
+        ui.font_row().connect_activated(clone!(
             #[strong]
             sender,
             move |_| sender.input(Msg::AskSetFont)
         ));
-        root.font_reset().connect_clicked(clone!(
+        ui.font_reset().connect_clicked(clone!(
             #[strong]
             sender,
             move |_| sender.input(Msg::ResetFont)
@@ -70,9 +59,9 @@ impl AsyncComponent for Model {
         default_theme
             .widget()
             .enabled()
-            .set_group(Some(&root.enabled_dummy()));
-        root.list()
-            .insert(default_theme.widget(), root.import_button().index());
+            .set_group(Some(&ui.enabled_dummy()));
+        ui.list()
+            .insert(default_theme.widget(), ui.import_button().index());
 
         let mut model = Self {
             _default_theme: default_theme,
@@ -82,9 +71,9 @@ impl AsyncComponent for Model {
             toaster,
         };
         for name in CUSTOM_THEMES.read().keys() {
-            add_row(&mut model, &root, name.clone());
+            add_row(&mut model, &ui, name.clone());
         }
-        show_font(&model, &root);
+        show_font(&model, &ui);
         AsyncComponentParts { model, widgets: () }
     }
 
@@ -132,7 +121,7 @@ impl AsyncComponent for Model {
     }
 }
 
-fn add_row(model: &mut Model, root: &ui::ThemeList, name: ThemeName) {
+fn add_row(model: &mut ThemeGroup, root: &ui::ThemeGroup, name: ThemeName) {
     let row = theme_row::Model::builder()
         .launch((model.window.clone(), ThemeKey::Custom(name.clone())))
         .detach();
@@ -144,7 +133,7 @@ fn add_row(model: &mut Model, root: &ui::ThemeList, name: ThemeName) {
     model.custom_themes.insert(name, row);
 }
 
-fn show_font(model: &Model, root: &ui::ThemeList) {
+fn show_font(model: &ThemeGroup, root: &ui::ThemeGroup) {
     let profile = CURRENT_PROFILE.read().as_ref().cloned().unwrap();
     if let Some(family) = &profile.config.font_family {
         let subtitle = format!(r#"<span face="{family}">{family}</span>"#);
@@ -156,7 +145,7 @@ fn show_font(model: &Model, root: &ui::ThemeList) {
     }
 }
 
-async fn set_font(model: &Model) -> Result<()> {
+async fn set_font(model: &ThemeGroup) -> Result<()> {
     let Ok(font) = gtk::FontDialog::new()
         .choose_face_future(Some(&model.window), None::<&pango::FontFace>)
         .await
@@ -181,7 +170,7 @@ async fn set_font(model: &Model) -> Result<()> {
     Ok(())
 }
 
-async fn reset_font(model: &Model) -> Result<()> {
+async fn reset_font(model: &ThemeGroup) -> Result<()> {
     let mut config = CURRENT_PROFILE
         .read()
         .as_ref()

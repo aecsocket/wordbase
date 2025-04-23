@@ -11,7 +11,7 @@ use {
     relm4::prelude::*,
     std::sync::Arc,
     wordbase::{NormString, Profile, ProfileId},
-    wordbase_engine::{DictionaryEvent, EngineEvent, ProfileEvent},
+    wordbase_engine::EngineEvent,
 };
 
 mod ui;
@@ -97,10 +97,18 @@ impl AppComponent for ManageProfiles {
         ui: &Self::Root,
     ) -> Result<()> {
         match event {
-            AppEvent::Engine(EngineEvent::Profile(ProfileEvent::Added(profile))) => {
-                self.add_row(ui, sender, profile);
+            AppEvent::Engine(
+                EngineEvent::ProfileAdded { id }
+                | EngineEvent::ProfileCopied {
+                    src_id: _,
+                    new_id: id,
+                },
+            ) => {
+                if let Some(profile) = engine().profiles().get(&id) {
+                    self.add_row(ui, sender, profile.clone());
+                }
             }
-            AppEvent::Engine(EngineEvent::Profile(ProfileEvent::Removed(id))) => {
+            AppEvent::Engine(EngineEvent::ProfileRemoved { id }) => {
                 if let Some(row) = self.rows.remove(&id) {
                     ui.list().remove(row.widget());
                 }
@@ -114,11 +122,8 @@ impl AppComponent for ManageProfiles {
 impl ManageProfiles {
     fn update_add_profile_name(ui: &ui::ManageProfiles) {
         let name = NormString::new(ui.add_profile_name().text());
-        if name.is_none() {
-            ui.add_profile_name().set_css_classes(&["error"]);
-        } else {
-            ui.add_profile_name().set_css_classes(&[]);
-        }
+        ui.add_profile_name()
+            .set_class_active("error", name.is_none());
     }
 
     fn add_row(

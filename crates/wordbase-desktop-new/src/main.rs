@@ -18,9 +18,9 @@ mod manage_profiles;
 mod manager;
 mod profile_row;
 mod theme;
-mod util;
-// mod theme_list;
+// mod theme_group;
 // mod theme_row;
+mod util;
 // mod record_view;
 
 mod icon_names {
@@ -43,7 +43,7 @@ use {
     },
     theme::{CustomTheme, ThemeName},
     tokio::sync::broadcast,
-    tracing::{error, level_filters::LevelFilter},
+    tracing::{error, level_filters::LevelFilter, warn},
     tracing_subscriber::EnvFilter,
     wordbase::{Profile, ProfileId},
     wordbase_engine::{Engine, EngineEvent},
@@ -89,14 +89,33 @@ fn app_window() -> gtk::Window {
     })
 }
 
-static CURRENT_PROFILE: OnceLock<ArcSwap<Profile>> = OnceLock::new();
+static CURRENT_PROFILE_ID: OnceLock<ArcSwap<ProfileId>> = OnceLock::new();
 
 fn current_profile() -> Arc<Profile> {
-    CURRENT_PROFILE
+    let profile_id = CURRENT_PROFILE_ID
         .get()
         .expect("current profile should be initialized")
-        .load()
-        .clone()
+        .load();
+    engine()
+        .profiles()
+        .get(&**profile_id)
+        .cloned()
+        .unwrap_or_else(|| {
+            let default = engine()
+                .profiles()
+                .values()
+                .next()
+                .cloned()
+                .expect("at least one profile should exist");
+            settings()
+                .set(PROFILE, default.id.0.to_string())
+                .expect("failed to reset profile ID");
+            warn!(
+                "Profile {profile_id:?} does not exist, reset to {:?}",
+                default.id
+            );
+            default
+        })
 }
 
 #[must_use]
@@ -142,7 +161,7 @@ pub enum AppEvent {
     Engine(EngineEvent),
     ThemeAdded(CustomTheme),
     ThemeRemoved(ThemeName),
-    ProfileSet,
+    ProfileIdSet,
 }
 
 impl AsyncComponent for App {
@@ -309,34 +328,24 @@ async fn init(sender: AsyncComponentSender<App>) -> Result<()> {
     Ok(())
 }
 
+fn parse_profile_id(settings: &gio::Settings) -> ProfileId {
+    let profile_str = settings.string(PROFILE);
+    profile_str.parse::<i64>().map(ProfileId).unwrap_or_else(|_| {
+        let default_id = *engine().profiles().keys().next().expect("at least one profile should exist");
+        settings.set(PROFILE, default_id.0.to_string())
+            .expect("failed to reset profile ID");
+        warn!("Profile ID was {profile_str:?} which is not a valid integer, reset to {default_id:?}");
+        default_id
+    })
+}
+
 fn setup_profile() {
     let settings = gio::Settings::new(APP_ID);
 
-    #[expect(clippy::option_if_let_else, reason = "simpler as an if/else")]
-    let current_profile = if let Some(profile) = settings
-        .string(PROFILE)
-        .parse::<i64>()
-        .ok()
-        .map(ProfileId)
-        .and_then(|id| engine().profiles().get(&id).cloned())
-    {
-        profile
-    } else {
-        // reset profile to default if the current one is invalid
-        let first_profile = engine()
-            .profiles()
-            .values()
-            .next()
-            .cloned()
-            .expect("at least 1 profile should exist");
-        settings
-            .set(PROFILE, first_profile.id.0.to_string())
-            .expect("failed to reset current profile");
-        first_profile
-    };
-    CURRENT_PROFILE
-        .set(ArcSwap::new(current_profile))
-        .expect("profile should not already be set");
+    let profile_id = parse_profile_id(&settings);
+    CURRENT_PROFILE_ID
+        .set(ArcSwap::from_pointee(profile_id))
+        .expect("profile should not already be initialized");
 
     settings.connect_changed(
         Some(PROFILE),
@@ -344,58 +353,17 @@ fn setup_profile() {
             #[strong]
             settings,
             move |_, _| {
-                let Some(profile) = settings
-                    .string(PROFILE)
-                    .parse::<i64>()
-                    .ok()
-                    .map(ProfileId)
-                    .and_then(|id| engine().profiles().get(&id).cloned())
-                else {
-                    return;
-                };
-
-                CURRENT_PROFILE
+                let profile_id = parse_profile_id(&settings);
+                CURRENT_PROFILE_ID
                     .get()
-                    .expect("profile should be set")
-                    .store(profile);
-                _ = EVENTS.send(AppEvent::ProfileSet);
+                    .expect("profile should be initialized")
+                    .store(Arc::new(profile_id));
+                _ = EVENTS.send(AppEvent::ProfileIdSet);
             }
         ),
     );
-
-    tokio::spawn(async move {});
 }
 
 const PROFILE: &str = "profile";
 const MANAGE_PROFILES: &str = "manage-profiles";
 const CUSTOM_THEME: &str = "custom-theme";
-
-#[derive(Debug)]
-#[must_use]
-struct SignalHandler {
-    object: glib::Object,
-    id: Option<glib::SignalHandlerId>,
-}
-
-impl Drop for SignalHandler {
-    fn drop(&mut self) {
-        self.object.disconnect(
-            self.id
-                .take()
-                .expect("signal handler id should not be taken before drop"),
-        );
-    }
-}
-
-impl SignalHandler {
-    pub fn new<T: IsA<glib::Object>>(
-        object: &T,
-        make_id: impl FnOnce(&T) -> glib::SignalHandlerId,
-    ) -> Self {
-        let id = make_id(object);
-        Self {
-            object: object.upcast_ref().clone(),
-            id: Some(id),
-        }
-    }
-}

@@ -75,18 +75,27 @@ impl Engine {
         }
     }
 
-    pub async fn connect_anki(&self, config: Arc<AnkiConfig>) -> Result<()> {
-        let url = &*config.server_url;
-        let api_key = &*config.api_key;
+    pub async fn anki_connect(
+        &self,
+        server_url: impl Into<Arc<str>>,
+        api_key: impl Into<Arc<str>>,
+    ) -> Result<()> {
+        let server_url = server_url.into();
+        let api_key = api_key.into();
+        let server_url_str = &*server_url;
+        let api_key_str = &*api_key;
         sqlx::query!(
             "UPDATE config SET ankiconnect_url = $1, ankiconnect_api_key = $2",
-            url,
-            api_key
+            server_url_str,
+            api_key_str
         )
         .execute(&self.db)
         .await
         .context("failed to update Anki config")?;
-        self.anki.config.store(config);
+        self.anki.config.store(Arc::new(AnkiConfig {
+            server_url,
+            api_key,
+        }));
 
         let state = Arc::new(
             fetch_anki_state(

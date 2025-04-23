@@ -257,6 +257,9 @@ fn term_ruby_plain(term: &Term) -> String {
                 if !reading_part.is_empty() {
                     _ = write!(&mut result, "[{reading_part}]");
                 }
+                // Lapis uses a space to separate headword/reading part pairs
+                // todo tdo this properly use this as ref: 落とし穴
+                _ = write!(&mut result, " ");
             }
             result
         }

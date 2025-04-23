@@ -1,11 +1,11 @@
 use {
-    crate::{Engine, EngineEvent, IndexMap, NotFound, ProfileEvent},
+    crate::{Engine, EngineEvent, IndexMap, NotFound},
     anyhow::{Context, Result, bail},
     derive_more::Deref,
     futures::StreamExt,
     sqlx::{Pool, Sqlite},
     std::sync::Arc,
-    wordbase::{DictionaryId, Profile, ProfileConfig, ProfileId},
+    wordbase::{DictionaryId, NormString, Profile, ProfileConfig, ProfileId},
 };
 
 #[derive(Debug, Default, Deref)]
@@ -37,24 +37,11 @@ impl Engine {
         Ok(())
     }
 
-    fn sync_new_profile(&self, id: ProfileId) -> Result<()> {
-        let profile = self
-            .profiles
-            .load()
-            .get(&id)
-            .cloned()
-            .context("newly inserted profile is no longer present")?;
-        _ = self
-            .send_event
-            .send(EngineEvent::Profile(ProfileEvent::Added(profile)));
-        Ok(())
-    }
-
     pub async fn add_profile(&self, config: ProfileConfig) -> Result<ProfileId> {
         let config_json = serde_json::to_string(&config).context("failed to serialize config")?;
         let sorting_dictionary = config.sorting_dictionary.map(|id| id.0);
 
-        let new_id = sqlx::query!(
+        let id = sqlx::query!(
             "INSERT INTO profile (config, sorting_dictionary)
             VALUES ($1, $2)",
             config_json,
@@ -64,11 +51,11 @@ impl Engine {
         .await
         .context("failed to insert profile")?
         .last_insert_rowid();
-        let new_id = ProfileId(new_id);
+        let id = ProfileId(id);
 
         self.sync_profiles().await?;
-        self.sync_new_profile(new_id)?;
-        Ok(new_id)
+        _ = self.send_event.send(EngineEvent::ProfileAdded { id });
+        Ok(id)
     }
 
     pub async fn copy_profile(
@@ -114,61 +101,10 @@ impl Engine {
         tx.commit().await.context("failed to commit transaction")?;
 
         self.sync_profiles().await?;
-        self.sync_new_profile(new_id)?;
-        Ok(new_id)
-    }
-
-    pub async fn set_profile_config(&self, id: ProfileId, config: ProfileConfig) -> Result<()> {
-        let config_json = serde_json::to_string(&config).context("failed to serialize config")?;
-        sqlx::query!(
-            "UPDATE profile SET config = $1 WHERE id = $2",
-            config_json,
-            id.0
-        )
-        .execute(&self.db)
-        .await?;
-
-        self.sync_profiles().await?;
         _ = self
             .send_event
-            .send(EngineEvent::Profile(ProfileEvent::ConfigSet(id)));
-        Ok(())
-    }
-
-    pub async fn enable_dictionary(
-        &self,
-        profile_id: ProfileId,
-        dictionary_id: DictionaryId,
-    ) -> Result<()> {
-        sqlx::query!(
-            "INSERT OR IGNORE INTO profile_enabled_dictionary (profile, dictionary)
-            VALUES ($1, $2)",
-            profile_id.0,
-            dictionary_id.0,
-        )
-        .execute(&self.db)
-        .await?;
-
-        self.sync_profiles().await?;
-        Ok(())
-    }
-
-    pub async fn disable_dictionary(
-        &self,
-        profile_id: ProfileId,
-        dictionary_id: DictionaryId,
-    ) -> Result<()> {
-        sqlx::query!(
-            "DELETE FROM profile_enabled_dictionary
-            WHERE profile = $1 AND dictionary = $2",
-            profile_id.0,
-            dictionary_id.0
-        )
-        .execute(&self.db)
-        .await?;
-
-        self.sync_profiles().await?;
-        Ok(())
+            .send(EngineEvent::ProfileCopied { src_id, new_id });
+        Ok(new_id)
     }
 
     pub async fn remove_profile(&self, id: ProfileId) -> Result<()> {
@@ -180,9 +116,40 @@ impl Engine {
         }
 
         self.sync_profiles().await?;
-        _ = self
-            .send_event
-            .send(EngineEvent::Profile(ProfileEvent::Removed(id)));
+        _ = self.send_event.send(EngineEvent::ProfileRemoved { id });
+        Ok(())
+    }
+
+    pub async fn set_profile_name(&self, id: ProfileId, name: Option<NormString>) -> Result<()> {
+        let mut config = self.profiles().get(&id).context(NotFound)?.config.clone();
+        config.name = name;
+
+        let config_json = serde_json::to_string(&config).context("failed to serialize config")?;
+        sqlx::query!(
+            "UPDATE profile SET config = $1 WHERE id = $2",
+            config_json,
+            id.0
+        )
+        .execute(&self.db)
+        .await?;
+
+        self.sync_profiles().await?;
+        _ = self.send_event.send(EngineEvent::ProfileNameSet { id });
+        Ok(())
+    }
+
+    #[deprecated]
+    pub async fn set_profile_config(&self, id: ProfileId, config: ProfileConfig) -> Result<()> {
+        let config_json = serde_json::to_string(&config).context("failed to serialize config")?;
+        sqlx::query!(
+            "UPDATE profile SET config = $1 WHERE id = $2",
+            config_json,
+            id.0
+        )
+        .execute(&self.db)
+        .await?;
+
+        self.sync_profiles().await?;
         Ok(())
     }
 }

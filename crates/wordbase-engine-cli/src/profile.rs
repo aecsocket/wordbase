@@ -77,10 +77,7 @@ pub async fn set_name(engine: &Engine, profile: &Profile, name: Option<String>) 
     let name = name
         .map(|name| NormString::new(name).context("invalid new name"))
         .transpose()?;
-    let mut config = profile.config.clone();
-    config.name = name;
-
-    engine.set_profile_config(profile.id, config).await?;
+    engine.set_profile_name(profile.id, name).await?;
     Ok(())
 }
 

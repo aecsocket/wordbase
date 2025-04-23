@@ -1,6 +1,6 @@
 use {
     crate::{
-        AppEvent, PROFILE, SignalHandler, app_window, current_profile, engine, gettext, settings,
+        AppEvent, PROFILE, app_window, current_profile, engine, gettext, settings,
         util::{AppComponent, impl_component},
     },
     adw::prelude::*,
@@ -9,7 +9,7 @@ use {
     relm4::prelude::*,
     std::sync::Arc,
     wordbase::{NormString, Profile},
-    wordbase_engine::{EngineEvent, ProfileEvent},
+    wordbase_engine::EngineEvent,
 };
 
 mod ui;
@@ -101,16 +101,13 @@ impl AppComponent for ProfileRow {
             }
             Msg::SetName => {
                 let name = NormString::new(ui.name().text());
+                ui.name().set_class_active("error", name.is_none());
                 let Some(name) = name else {
-                    ui.name().set_css_classes(&["error"]);
                     return Ok(());
                 };
 
-                ui.name().set_css_classes(&[]);
-                let mut config = self.profile.config.clone();
-                config.name = Some(name);
                 engine()
-                    .set_profile_config(self.profile.id, config)
+                    .set_profile_name(self.profile.id, Some(name))
                     .await
                     .with_context(|| gettext("Failed to set profile name"))?;
             }
@@ -124,21 +121,25 @@ impl AppComponent for ProfileRow {
         _sender: &AsyncComponentSender<Self>,
         ui: &Self::Ui,
     ) -> Result<()> {
-        if let AppEvent::Engine(EngineEvent::Profile(
-            ProfileEvent::Added(_) | ProfileEvent::Removed(_),
-        ))
-        | AppEvent::ProfileSet = event
-        {
-            if let Some(profile) = engine().profiles().get(&self.profile.id).cloned() {
-                self.profile = profile;
-                self.update_ui(ui);
+        match event {
+            AppEvent::Engine(EngineEvent::ProfileNameSet { id }) if id == self.profile.id => {
+                self.sync(ui)
             }
+            AppEvent::ProfileIdSet => self.sync(ui),
+            _ => {}
         }
         Ok(())
     }
 }
 
 impl ProfileRow {
+    fn sync(&mut self, ui: &ui::ProfileRow) {
+        if let Some(profile) = engine().profiles().get(&self.profile.id).cloned() {
+            self.profile = profile;
+            self.update_ui(ui);
+        }
+    }
+
     fn update_ui(&self, ui: &ui::ProfileRow) {
         let name = self
             .profile

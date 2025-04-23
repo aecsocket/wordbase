@@ -1,11 +1,8 @@
-use std::sync::Arc;
-
 use adw::prelude::*;
 use anyhow::Result;
 use glib::clone;
 use relm4::prelude::*;
 use tokio_util::task::AbortOnDropHandle;
-use wordbase_engine::{EngineEvent, anki::AnkiConfig};
 
 use crate::{
     AppEvent, current_profile, engine,
@@ -76,10 +73,7 @@ impl AppComponent for AnkiGroup {
                     sender,
                     async move {
                         _ = engine()
-                            .connect_anki(Arc::new(AnkiConfig {
-                                server_url: Arc::from(server_url.to_string()),
-                                api_key: Arc::from(api_key.to_string()),
-                            }))
+                            .anki_connect(server_url.as_str(), api_key.as_str())
                             .await;
                         sender.input(Msg::UpdateRoot);
                     }
@@ -95,10 +89,10 @@ impl AppComponent for AnkiGroup {
     async fn update_event(
         &mut self,
         event: AppEvent,
-        sender: &AsyncComponentSender<Self>,
+        _sender: &AsyncComponentSender<Self>,
         ui: &Self::Ui,
     ) -> Result<()> {
-        if let AppEvent::ProfileSet | AppEvent::Engine(EngineEvent::Profile(_)) = event {
+        if matches!(event, AppEvent::ProfileIdSet) {
             self.update_root(ui);
         }
         Ok(())
@@ -107,6 +101,8 @@ impl AppComponent for AnkiGroup {
 
 impl AnkiGroup {
     fn update_root(&mut self, ui: &ui::AnkiGroup) {
+        let profile = current_profile();
+
         clear_string_list(&ui.deck_model());
         clear_string_list(&ui.note_type_model());
 
@@ -116,7 +112,6 @@ impl AnkiGroup {
                 ui.connected().set_visible(true);
                 ui.disconnected().set_visible(false);
 
-                let profile = current_profile();
                 for (index, deck_name) in anki.decks.iter().enumerate() {
                     ui.deck_model().append(deck_name);
                     if profile.config.anki_deck.as_ref().map(|s| s.as_str())

@@ -20,7 +20,7 @@ use {
     serde::{Deserialize, Serialize},
     std::{fmt::Display, sync::Arc},
     tokio::net::ToSocketAddrs,
-    wordbase::{Dictionary, DictionaryId, NormString, Profile, ProfileConfig, ProfileId},
+    wordbase::{Dictionary, DictionaryId, NormString, Profile, ProfileId},
     wordbase_engine::{Engine, NotFound},
 };
 
@@ -97,15 +97,6 @@ impl V1 {
             .map(Json)
     }
 
-    #[oai(path = "/profile/:profile_id/config", method = "post")]
-    async fn profile_set_config(
-        &self,
-        profile_id: Path<ProfileId>,
-        req: Json<ProfileConfig>,
-    ) -> Result<()> {
-        profile::set_config(&self.engine, profile_id.0, req.0).await
-    }
-
     #[oai(path = "/lookup/expr", method = "post")]
     async fn lookup_expr(
         &self,
@@ -156,13 +147,9 @@ impl V1 {
         dict::import(&self.engine, req).await
     }
 
-    #[oai(path = "/dictionary/:dictionary_id/position", method = "post")]
-    async fn dictionary_set_position(
-        &self,
-        dictionary_id: Path<DictionaryId>,
-        req: Json<dict::SetPosition>,
-    ) -> Result<()> {
-        dict::set_position(&self.engine, dictionary_id.0, req.0).await
+    #[oai(path = "/dictionary/position/swap", method = "post")]
+    async fn dictionary_position_swap(&self, req: Json<dict::PositionSwap>) -> Result<()> {
+        dict::position_swap(&self.engine, req.0).await
     }
 
     #[oai(path = "/dictionary/:dictionary_id/enable", method = "post")]
@@ -181,6 +168,11 @@ impl V1 {
         req: Json<dict::ToggleEnable>,
     ) -> Result<()> {
         dict::disable(&self.engine, dictionary_id.0, req.0).await
+    }
+
+    #[oai(path = "/anki/connect", method = "post")]
+    async fn anki_connect(&self, req: Json<anki::Connect>) -> Result<()> {
+        anki::connect(&self.engine, req.0).await
     }
 
     #[oai(path = "/anki/note", method = "put")]

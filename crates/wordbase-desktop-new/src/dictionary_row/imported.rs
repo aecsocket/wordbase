@@ -224,19 +224,21 @@ impl AppComponent for DictionaryRow {
         _sender: &AsyncComponentSender<Self>,
         ui: &Self::Ui,
     ) -> Result<()> {
-        if let AppEvent::Engine(EngineEvent::Dictionary(_)) | AppEvent::ProfileSet = event {
-            self.sync();
-            self.update_ui(ui);
+        match event {
+            AppEvent::ProfileIdSet => self.sync(ui),
+            AppEvent::Engine(EngineEvent::SortingDictionarySet { .. }) => self.sync(ui),
+            _ => {}
         }
         Ok(())
     }
 }
 
 impl DictionaryRow {
-    fn sync(&self) {
+    fn sync(&mut self, ui: &ui::DictionaryRow) {
         if let Some(dictionary) = engine().dictionaries().get(&self.dictionary.load().id) {
             self.dictionary.store(dictionary.clone());
         }
+        self.update_ui(ui);
     }
 
     fn update_ui(&mut self, ui: &ui::DictionaryRow) {

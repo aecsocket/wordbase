@@ -43,12 +43,3 @@ pub async fn copy(engine: &Engine, profile_id: ProfileId, req: Add) -> Result<Ad
     let new_profile_id = engine.copy_profile(profile_id, req.config).await?;
     Ok(AddResponse { new_profile_id })
 }
-
-pub async fn set_config(
-    engine: &Engine,
-    profile_id: ProfileId,
-    config: ProfileConfig,
-) -> Result<()> {
-    engine.set_profile_config(profile_id, config).await?;
-    Ok(())
-}

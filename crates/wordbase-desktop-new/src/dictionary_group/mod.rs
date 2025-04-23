@@ -15,9 +15,9 @@ use {
         prelude::*,
     },
     std::sync::Arc,
-    tracing::{debug, info, warn},
+    tracing::{debug, warn},
     wordbase::{Dictionary, DictionaryId},
-    wordbase_engine::{DictionaryEvent, EngineEvent},
+    wordbase_engine::EngineEvent,
 };
 
 #[derive(Debug)]
@@ -98,15 +98,17 @@ impl AppComponent for DictionaryGroup {
         ui: &Self::Ui,
     ) -> Result<()> {
         match event {
-            AppEvent::Engine(EngineEvent::Dictionary(DictionaryEvent::Added(dictionary))) => {
-                self.add_row(ui, sender, dictionary);
+            AppEvent::Engine(EngineEvent::DictionaryAdded { id }) => {
+                if let Some(dictionary) = engine().dictionaries().get(&id) {
+                    self.add_row(ui, sender, dictionary.clone());
+                }
             }
-            AppEvent::Engine(EngineEvent::Dictionary(DictionaryEvent::Removed(id))) => {
+            AppEvent::Engine(EngineEvent::DictionaryRemoved { id }) => {
                 if let Some(row) = self.rows.remove(&id) {
                     ui.list().remove(row.widget());
                 }
             }
-            AppEvent::Engine(EngineEvent::Dictionary(DictionaryEvent::PositionSet(_, _))) => {
+            AppEvent::Engine(EngineEvent::DictionaryPositionsSwapped { .. }) => {
                 self.sync(ui, sender);
             }
             _ => {}
@@ -166,9 +168,11 @@ fn drag_drop(
         .context("source row has no dictionary")?;
     let src_index = src_row.index();
 
+    #[expect(clippy::cast_possible_truncation, reason = "truncation is acceptable")]
+    let y = y as i32;
     let dst_row = ui
         .list()
-        .row_at_y(y as i32)
+        .row_at_y(y)
         .context("no destination row at Y position")?
         .downcast::<dictionary_row::ui::DictionaryRow>()
         .ok()
@@ -182,6 +186,11 @@ fn drag_drop(
         return Ok(());
     }
 
+    debug!(
+        "Swapping positions of {:?} and {:?}",
+        src_dict.meta.name, dst_dict.meta.name
+    );
+
     ui.list().remove(&src_row);
     ui.list().insert(&src_row, dst_index);
     src_row.set_state_flags(gtk::StateFlags::NORMAL, true);
@@ -190,40 +199,13 @@ fn drag_drop(
     ui.list().insert(&dst_row, src_index);
 
     glib::spawn_future(async move {
-        if let Err(err) = swap_positions(&src_dict, &dst_dict)
+        if let Err(err) = engine()
+            .swap_dictionary_positions(src_dict.id, dst_dict.id)
             .await
-            .with_context(|| gettext("Failed to set dictionary position"))
+            .with_context(|| gettext("Failed to swap dictionary positions"))
         {
             _ = sender.output(err);
         }
     });
-    Ok(())
-}
-
-async fn swap_positions(src: &Dictionary, dst: &Dictionary) -> Result<()> {
-    let (src_pos, dst_pos) = if src.position == dst.position {
-        warn!(
-            "{:?} and {:?} have the same position {}, bumping the former up one",
-            src.meta.name, dst.meta.name, src.position
-        );
-        (src.position + 1, src.position)
-    } else {
-        (src.position, dst.position)
-    };
-
-    debug!(
-        "Moving {:?} to {}, and {:?} to {}",
-        src.meta.name, dst_pos, dst.meta.name, src_pos
-    );
-
-    engine()
-        .set_dictionary_position(src.id, dst_pos)
-        .await
-        .context("failed to set source dictionary position")?;
-    engine()
-        .set_dictionary_position(dst.id, src_pos)
-        .await
-        .context("failed to set destination dictionary position")?;
-
     Ok(())
 }
