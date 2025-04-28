@@ -168,7 +168,7 @@ async fn set_font(model: &Model) -> Result<()> {
         .engine
         .set_font_family(
             CURRENT_PROFILE_ID.read().unwrap(),
-            NormString::new(font.family().name()),
+            Some(&font.family().name()),
         )
         .await
         .context("failed to set font")?;

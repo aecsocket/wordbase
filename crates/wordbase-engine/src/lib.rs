@@ -66,7 +66,6 @@ pub enum EngineEvent {
     },
     FontFamilySet {
         profile_id: ProfileId,
-        font_family: Option<NormString>,
     },
     DictionaryAdded {
         id: DictionaryId,

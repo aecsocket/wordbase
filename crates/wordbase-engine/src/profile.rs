@@ -133,22 +133,20 @@ impl Engine {
     pub async fn set_font_family(
         &self,
         profile_id: ProfileId,
-        font_family: Option<NormString>,
+        font_family: Option<&str>,
     ) -> Result<()> {
-        let font_family_str = font_family.as_ref().map(|s| s.as_str());
         sqlx::query!(
             "UPDATE profile SET font_family = $1 WHERE id = $2",
-            font_family_str,
+            font_family,
             profile_id.0
         )
         .execute(&self.db)
         .await?;
 
         self.sync_profiles().await?;
-        _ = self.send_event.send(EngineEvent::FontFamilySet {
-            profile_id,
-            font_family,
-        });
+        _ = self
+            .send_event
+            .send(EngineEvent::FontFamilySet { profile_id });
         Ok(())
     }
 }
@@ -182,9 +180,9 @@ async fn fetch_owned(db: &Pool<Sqlite>) -> Result<Vec<Profile>> {
             let mut profile = Profile::new(ProfileId(record.id));
             profile.name = record.name.and_then(NormString::new);
             profile.sorting_dictionary = record.sorting_dictionary.map(DictionaryId);
-            profile.font_family = record.font_family.and_then(NormString::new);
-            profile.anki_deck = record.anki_deck.and_then(NormString::new);
-            profile.anki_note_type = record.anki_note_type.and_then(NormString::new);
+            profile.font_family = record.font_family;
+            profile.anki_deck = record.anki_deck;
+            profile.anki_note_type = record.anki_note_type;
             profiles.push(profile);
             index
         };

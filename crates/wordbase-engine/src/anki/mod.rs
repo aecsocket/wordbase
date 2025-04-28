@@ -9,6 +9,7 @@ use {
     serde::{Deserialize, Serialize},
     sqlx::{Pool, Sqlite},
     std::{cmp, sync::Arc},
+    wordbase::{NormString, ProfileId},
 };
 
 mod client;
@@ -105,6 +106,36 @@ impl Engine {
             .await,
         );
         self.anki.state.store(state);
+        Ok(())
+    }
+
+    pub async fn set_anki_deck(&self, profile_id: ProfileId, deck: Option<&str>) -> Result<()> {
+        sqlx::query!(
+            "UPDATE profile SET anki_deck = $1 WHERE id = $2",
+            deck,
+            profile_id.0
+        )
+        .execute(&self.db)
+        .await?;
+
+        self.sync_profiles().await?;
+        Ok(())
+    }
+
+    pub async fn set_anki_note_type(
+        &self,
+        profile_id: ProfileId,
+        note_type: Option<&str>,
+    ) -> Result<()> {
+        sqlx::query!(
+            "UPDATE profile SET anki_note_type = $1 WHERE id = $2",
+            note_type,
+            profile_id.0
+        )
+        .execute(&self.db)
+        .await?;
+
+        self.sync_profiles().await?;
         Ok(())
     }
 }

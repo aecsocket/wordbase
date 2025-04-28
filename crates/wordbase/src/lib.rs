@@ -374,11 +374,11 @@ pub struct Profile {
     ///
     /// This is *only* the family, e.g. `Adwaita Sans`, not the face like
     /// `Adwaita Sans Regular`.
-    pub font_family: Option<NormString>,
+    pub font_family: Option<String>,
     /// Name of the Anki deck used for AnkiConnect integration.
-    pub anki_deck: Option<NormString>,
+    pub anki_deck: Option<String>,
     /// Name of the Anki note type used for creating new notes.
-    pub anki_note_type: Option<NormString>,
+    pub anki_note_type: Option<String>,
     /// Set of [`Dictionary`] entries which are [enabled] under this profile.
     ///
     /// [enabled]: Dictionary::enabled

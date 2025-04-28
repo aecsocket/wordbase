@@ -45,11 +45,7 @@ pub fn ls(engine: &Engine) {
                     .as_ref()
                     .map_or_else(|| "(default)".into(), |s| s.clone().into_inner()),
                 sorting_dictionary,
-                profile
-                    .anki_deck
-                    .as_ref()
-                    .map(|s| s.clone().into_inner())
-                    .unwrap_or_default(),
+                profile.anki_deck.clone().unwrap_or_default(),
                 format!("({num_dictionaries}) {enabled_dictionaries}"),
             ]
         })

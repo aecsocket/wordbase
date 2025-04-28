@@ -1,11 +1,11 @@
 use adw::prelude::*;
-use anyhow::Result;
-use glib::clone;
+use anyhow::{Context as _, Result};
+use glib::{SignalHandlerId, clone};
 use relm4::prelude::*;
 use tokio_util::task::AbortOnDropHandle;
 
 use crate::{
-    AppEvent, current_profile, engine,
+    AppEvent, current_profile, current_profile_id, engine, gettext,
     util::{AppComponent, impl_component},
 };
 
@@ -15,11 +15,15 @@ mod ui;
 pub struct AnkiGroup {
     connect_task: Option<AbortOnDropHandle<()>>,
     note_fields: Vec<adw::ComboRow>,
+    deck_selected_handler: SignalHandlerId,
+    note_type_selected_handler: SignalHandlerId,
 }
 
 #[derive(Debug)]
 #[doc(hidden)]
 pub enum Msg {
+    ChangeDeck,
+    ChangeNoteType,
     Connect,
     UpdateRoot,
 }
@@ -37,6 +41,18 @@ impl AppComponent for AnkiGroup {
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
         let config = engine().anki_config();
+
+        let deck_selected_handler = ui.deck().connect_selected_notify(clone!(
+            #[strong]
+            sender,
+            move |_| sender.input(Msg::ChangeDeck)
+        ));
+        let note_type_selected_handler = ui.note_type().connect_selected_notify(clone!(
+            #[strong]
+            sender,
+            move |_| sender.input(Msg::ChangeNoteType)
+        ));
+
         ui.server_url().set_text(&config.server_url);
         ui.server_url().connect_changed(clone!(
             #[strong]
@@ -53,6 +69,8 @@ impl AppComponent for AnkiGroup {
         let mut model = Self {
             connect_task: None,
             note_fields: Vec::new(),
+            deck_selected_handler,
+            note_type_selected_handler,
         };
         model.update_root(&ui);
         AsyncComponentParts { model, widgets: () }
@@ -65,6 +83,32 @@ impl AppComponent for AnkiGroup {
         ui: &Self::Ui,
     ) -> Result<()> {
         match msg {
+            Msg::ChangeDeck => {
+                let Ok(anki) = engine().anki_state() else {
+                    return Ok(());
+                };
+                let deck = anki
+                    .decks
+                    .get(ui.deck().selected() as usize)
+                    .with_context(|| gettext("Invalid Anki deck index"))?;
+                engine()
+                    .set_anki_deck(current_profile_id(), Some(&deck.0))
+                    .await
+                    .with_context(|| gettext("Failed to set Anki deck"))?;
+            }
+            Msg::ChangeNoteType => {
+                let Ok(anki) = engine().anki_state() else {
+                    return Ok(());
+                };
+                let (note_type, _) = anki
+                    .models
+                    .get_index(ui.note_type().selected() as usize)
+                    .with_context(|| gettext("Invalid Anki note type index"))?;
+                engine()
+                    .set_anki_note_type(current_profile_id(), Some(&note_type.0))
+                    .await
+                    .with_context(|| gettext("Failed to set Anki note type"))?;
+            }
             Msg::Connect => {
                 let server_url = ui.server_url().text();
                 let api_key = ui.api_key().text();
@@ -112,27 +156,31 @@ impl AnkiGroup {
                 ui.connected().set_visible(true);
                 ui.disconnected().set_visible(false);
 
+                ui.deck().block_signal(&self.deck_selected_handler);
                 for (index, deck_name) in anki.decks.iter().enumerate() {
                     ui.deck_model().append(deck_name);
-                    if profile.anki_deck.as_ref().map(|s| s.as_str()) == Some(deck_name.as_str()) {
+                    if profile.anki_deck.as_deref() == Some(deck_name.as_str()) {
                         ui.deck().set_selected(
                             u32::try_from(index).expect("should not exceed `u32::MAX` decks"),
                         );
                     }
                 }
+                ui.deck().unblock_signal(&self.deck_selected_handler);
 
+                ui.note_type()
+                    .block_signal(&self.note_type_selected_handler);
                 let mut model = None;
                 for (index, (note_type_name, this_model)) in anki.models.iter().enumerate() {
                     ui.note_type_model().append(note_type_name);
-                    if profile.anki_note_type.as_ref().map(|s| s.as_str())
-                        == Some(note_type_name.as_str())
-                    {
+                    if profile.anki_note_type.as_deref() == Some(note_type_name.as_str()) {
                         ui.note_type().set_selected(
                             u32::try_from(index).expect("should not exceed `u32::MAX` note types"),
                         );
                         model = Some(this_model);
                     }
                 }
+                ui.note_type()
+                    .unblock_signal(&self.note_type_selected_handler);
 
                 ui.note_fields().set_visible(false);
                 for note_field in self.note_fields.drain(..) {
