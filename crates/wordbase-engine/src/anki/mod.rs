@@ -1,7 +1,7 @@
 #![allow(dead_code)] // todo
 
 use {
-    crate::{Engine, IndexMap},
+    crate::{Engine, EngineEvent, IndexMap},
     anyhow::{Context, Result, anyhow, bail},
     arc_swap::ArcSwap,
     client::{AnkiClient, VERSION},
@@ -119,6 +119,9 @@ impl Engine {
         .await?;
 
         self.sync_profiles().await?;
+        _ = self
+            .send_event
+            .send(EngineEvent::AnkiDeckSet { profile_id });
         Ok(())
     }
 
@@ -136,6 +139,9 @@ impl Engine {
         .await?;
 
         self.sync_profiles().await?;
+        _ = self
+            .send_event
+            .send(EngineEvent::AnkiNoteTypeSet { profile_id });
         Ok(())
     }
 }

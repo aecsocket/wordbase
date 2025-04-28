@@ -89,6 +89,12 @@ pub enum EngineEvent {
         profile_id: ProfileId,
         dictionary_id: Option<DictionaryId>,
     },
+    AnkiDeckSet {
+        profile_id: ProfileId,
+    },
+    AnkiNoteTypeSet {
+        profile_id: ProfileId,
+    },
     PullTexthookerConnected,
     PullTexthookerDisconnected,
     TexthookerSentence(TexthookerSentence),

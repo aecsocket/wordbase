@@ -3,6 +3,7 @@ use anyhow::{Context as _, Result};
 use glib::{SignalHandlerId, clone};
 use relm4::prelude::*;
 use tokio_util::task::AbortOnDropHandle;
+use wordbase_engine::EngineEvent;
 
 use crate::{
     AppEvent, current_profile, current_profile_id, engine, gettext,
@@ -136,8 +137,13 @@ impl AppComponent for AnkiGroup {
         _sender: &AsyncComponentSender<Self>,
         ui: &Self::Ui,
     ) -> Result<()> {
-        if matches!(event, AppEvent::ProfileIdSet) {
-            self.update_root(ui);
+        match event {
+            AppEvent::ProfileIdSet => self.update_root(ui),
+            AppEvent::Engine(
+                EngineEvent::AnkiDeckSet { profile_id }
+                | EngineEvent::AnkiNoteTypeSet { profile_id },
+            ) if profile_id == current_profile_id() => self.update_root(ui),
+            _ => {}
         }
         Ok(())
     }
@@ -146,6 +152,10 @@ impl AppComponent for AnkiGroup {
 impl AnkiGroup {
     fn update_root(&mut self, ui: &ui::AnkiGroup) {
         let profile = current_profile();
+
+        ui.deck().block_signal(&self.deck_selected_handler);
+        ui.note_type()
+            .block_signal(&self.note_type_selected_handler);
 
         clear_string_list(&ui.deck_model());
         clear_string_list(&ui.note_type_model());
@@ -156,7 +166,6 @@ impl AnkiGroup {
                 ui.connected().set_visible(true);
                 ui.disconnected().set_visible(false);
 
-                ui.deck().block_signal(&self.deck_selected_handler);
                 for (index, deck_name) in anki.decks.iter().enumerate() {
                     ui.deck_model().append(deck_name);
                     if profile.anki_deck.as_deref() == Some(deck_name.as_str()) {
@@ -165,10 +174,7 @@ impl AnkiGroup {
                         );
                     }
                 }
-                ui.deck().unblock_signal(&self.deck_selected_handler);
 
-                ui.note_type()
-                    .block_signal(&self.note_type_selected_handler);
                 let mut model = None;
                 for (index, (note_type_name, this_model)) in anki.models.iter().enumerate() {
                     ui.note_type_model().append(note_type_name);
@@ -179,8 +185,6 @@ impl AnkiGroup {
                         model = Some(this_model);
                     }
                 }
-                ui.note_type()
-                    .unblock_signal(&self.note_type_selected_handler);
 
                 ui.note_fields().set_visible(false);
                 for note_field in self.note_fields.drain(..) {
@@ -207,6 +211,10 @@ impl AnkiGroup {
                 ui.note_fields().set_visible(false);
             }
         };
+
+        ui.deck().unblock_signal(&self.deck_selected_handler);
+        ui.note_type()
+            .unblock_signal(&self.note_type_selected_handler);
     }
 }
 
