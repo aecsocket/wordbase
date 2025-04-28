@@ -114,9 +114,7 @@ impl AnkiGroup {
 
                 for (index, deck_name) in anki.decks.iter().enumerate() {
                     ui.deck_model().append(deck_name);
-                    if profile.config.anki_deck.as_ref().map(|s| s.as_str())
-                        == Some(deck_name.as_str())
-                    {
+                    if profile.anki_deck.as_ref().map(|s| s.as_str()) == Some(deck_name.as_str()) {
                         ui.deck().set_selected(
                             u32::try_from(index).expect("should not exceed `u32::MAX` decks"),
                         );
@@ -126,7 +124,7 @@ impl AnkiGroup {
                 let mut model = None;
                 for (index, (note_type_name, this_model)) in anki.models.iter().enumerate() {
                     ui.note_type_model().append(note_type_name);
-                    if profile.config.anki_note_type.as_ref().map(|s| s.as_str())
+                    if profile.anki_note_type.as_ref().map(|s| s.as_str())
                         == Some(note_type_name.as_str())
                     {
                         ui.note_type().set_selected(

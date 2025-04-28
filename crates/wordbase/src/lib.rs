@@ -357,31 +357,12 @@ pub enum FrequencyValue {
 pub struct Profile {
     /// Unique identifier for this profile in the database.
     pub id: ProfileId,
-    /// User configuration.
-    pub config: ProfileConfig,
-    /// Set of [`Dictionary`] entries which are [enabled] under this profile.
-    ///
-    /// [enabled]: Dictionary::enabled
-    pub enabled_dictionaries: Vec<DictionaryId>,
-}
-
-/// User-specified configuration for a [`Profile`].
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
-#[non_exhaustive]
-pub struct ProfileConfig {
     /// Name of the profile.
     ///
     /// User-defined profiles will always have a name. If the name is missing,
     /// then this is the default profile made on startup, and should be labelled
     /// to the user as "Default Profile" or similar.
     pub name: Option<NormString>,
-    /// RGB accent color of the profile.
-    ///
-    /// This is purely aesthetic, but you can use this to style output for
-    /// different profiles, and allow users to quickly differentiate between
-    /// their profiles by color.
-    pub accent_color: Option<[f32; 3]>,
     /// Which [`Dictionary`] is used for sorting records by their frequencies.
     ///
     /// The user-set dictionary [position] always takes priority over any
@@ -398,6 +379,10 @@ pub struct ProfileConfig {
     pub anki_deck: Option<NormString>,
     /// Name of the Anki note type used for creating new notes.
     pub anki_note_type: Option<NormString>,
+    /// Set of [`Dictionary`] entries which are [enabled] under this profile.
+    ///
+    /// [enabled]: Dictionary::enabled
+    pub enabled_dictionaries: Vec<DictionaryId>,
 }
 
 /// Opaque and unique identifier for a [`Profile`] in the engine.

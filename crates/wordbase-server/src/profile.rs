@@ -3,7 +3,7 @@ use {
     poem_openapi::Object,
     serde::{Deserialize, Serialize},
     std::sync::Arc,
-    wordbase::{Profile, ProfileConfig, ProfileId},
+    wordbase::{NormString, Profile, ProfileId},
     wordbase_engine::Engine,
 };
 
@@ -25,13 +25,13 @@ pub async fn delete(engine: &Engine, profile_id: ProfileId) -> Result<()> {
 }
 
 pub async fn add(engine: &Engine, req: Add) -> Result<AddResponse> {
-    let new_profile_id = engine.add_profile(req.config).await?;
+    let new_profile_id = engine.add_profile(req.name).await?;
     Ok(AddResponse { new_profile_id })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Object)]
 pub struct Add {
-    pub config: ProfileConfig,
+    pub name: Option<NormString>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Object)]
@@ -40,6 +40,6 @@ pub struct AddResponse {
 }
 
 pub async fn copy(engine: &Engine, profile_id: ProfileId, req: Add) -> Result<AddResponse> {
-    let new_profile_id = engine.copy_profile(profile_id, req.config).await?;
+    let new_profile_id = engine.copy_profile(profile_id, req.name).await?;
     Ok(AddResponse { new_profile_id })
 }

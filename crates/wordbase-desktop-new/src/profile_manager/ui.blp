@@ -1,28 +1,29 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $WdbManageProfiles: Adw.Bin {
+template $WdbProfileManager: Adw.Bin {
   Adw.ToolbarView {
     [top]
     Adw.HeaderBar {}
 
     Adw.PreferencesPage {
       Adw.PreferencesGroup {
+        title: _("Profiles");
+
         ListBox list {
           selection-mode: none;
 
           styles ["boxed-list"]
         }
-      }
 
-      Adw.PreferencesGroup {
-        Adw.EntryRow add_profile_name {
-          title: _("Name");
-        }
+        [header-suffix]
+        Button create {
+          child: Adw.ButtonContent {
+            icon-name: "list-add-symbolic";
+            label: _("Create");
+          };
 
-        Adw.ButtonRow add_profile {
-          title: _("Add Profile");
-          start-icon-name: "list-add-symbolic";
+          styles ["flat", "image-text-button"]
         }
       }
     }

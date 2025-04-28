@@ -12,7 +12,7 @@ pub mod profile;
 pub mod texthook;
 
 pub use wordbase;
-use wordbase::DictionaryId;
+use wordbase::{DictionaryId, NormString};
 use {
     anki::Anki,
     anyhow::{Context, Result},
@@ -63,6 +63,10 @@ pub enum EngineEvent {
     },
     ProfileNameSet {
         id: ProfileId,
+    },
+    FontFamilySet {
+        profile_id: ProfileId,
+        font_family: Option<NormString>,
     },
     DictionaryAdded {
         id: DictionaryId,

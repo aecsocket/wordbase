@@ -4,6 +4,8 @@ This project is nowhere near ready for serious use! While some core functionalit
 
 Also, I haven't decided on a license yet.
 
+- The GNOME extension is licensed under GPL 3 due to GNOME Shell being licensed under GPL 2 or later ([source](https://gjs.guide/extensions/review-guidelines/review-guidelines.html#legal-restrictions))
+
 # Features
 
 - Engine (`wordbase-engine`)

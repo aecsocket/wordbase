@@ -5,7 +5,7 @@ use {
     },
     adw::prelude::*,
     anyhow::{Context as _, Result},
-    glib::clone,
+    glib::{SignalHandlerId, clone},
     relm4::prelude::*,
     std::sync::Arc,
     wordbase::{NormString, Profile},
@@ -17,6 +17,7 @@ mod ui;
 #[derive(Debug)]
 pub struct ProfileRow {
     profile: Arc<Profile>,
+    name_changed_handler: SignalHandlerId,
 }
 
 #[derive(Debug)]
@@ -53,7 +54,7 @@ impl AppComponent for ProfileRow {
                 move |_, _| sender.input(Msg::Remove)
             ),
         );
-        ui.name().connect_changed(clone!(
+        let name_changed_handler = ui.name().connect_changed(clone!(
             #[strong]
             sender,
             move |_| sender.input(Msg::SetName)
@@ -75,7 +76,10 @@ impl AppComponent for ProfileRow {
             })
             .build();
 
-        let model = Self { profile };
+        let model = Self {
+            profile,
+            name_changed_handler,
+        };
         model.update_ui(&ui);
         AsyncComponentParts { model, widgets: () }
     }
@@ -122,9 +126,9 @@ impl AppComponent for ProfileRow {
         ui: &Self::Ui,
     ) -> Result<()> {
         match event {
-            AppEvent::Engine(EngineEvent::ProfileNameSet { id }) if id == self.profile.id => {
-                self.sync(ui)
-            }
+            // AppEvent::Engine(EngineEvent::ProfileNameSet { id }) if id == self.profile.id => {
+            //     self.sync(ui);
+            // }
             AppEvent::ProfileIdSet => self.sync(ui),
             _ => {}
         }
@@ -141,16 +145,20 @@ impl ProfileRow {
     }
 
     fn update_ui(&self, ui: &ui::ProfileRow) {
-        let name = self
-            .profile
-            .config
-            .name
-            .as_ref()
-            .map_or_else(|| gettext("Default Profile"), |s| s.as_str());
-        ui.name().set_text(name);
+        let name = name_of(&self.profile);
+        ui.name().block_signal(&self.name_changed_handler);
+        ui.name().set_text(&name);
+        ui.name().unblock_signal(&self.name_changed_handler);
 
         let is_current = current_profile().id == self.profile.id;
         let more_than_1_profile = engine().profiles().len() > 1;
         ui.remove().set_visible(!is_current && more_than_1_profile);
     }
+}
+
+pub fn name_of(profile: &Profile) -> String {
+    profile.name.as_ref().map_or_else(
+        || gettext("Default Profile").into(),
+        |s| s.clone().into_inner(),
+    )
 }

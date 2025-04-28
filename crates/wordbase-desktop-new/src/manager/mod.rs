@@ -91,7 +91,6 @@ impl Manager {
         root.profile_menu().remove_all();
         for (profile_id, profile) in engine().profiles().iter() {
             let name = profile
-                .config
                 .name
                 .as_ref()
                 .map_or_else(|| gettext("Default Profile"), |s| s.as_str());

@@ -1,7 +1,7 @@
 use {
     anyhow::{Context, Result},
     ascii_table::AsciiTable,
-    wordbase::{DictionaryId, NormString, Profile, ProfileConfig},
+    wordbase::{DictionaryId, NormString, Profile},
     wordbase_engine::Engine,
 };
 
@@ -34,7 +34,6 @@ pub fn ls(engine: &Engine) {
                 .join(", ");
 
             let sorting_dictionary = profile
-                .config
                 .sorting_dictionary
                 .map(name_of_dict)
                 .unwrap_or_default();
@@ -42,13 +41,11 @@ pub fn ls(engine: &Engine) {
             vec![
                 format!("{}", profile.id.0),
                 profile
-                    .config
                     .name
                     .as_ref()
                     .map_or_else(|| "(default)".into(), |s| s.clone().into_inner()),
                 sorting_dictionary,
                 profile
-                    .config
                     .anki_deck
                     .as_ref()
                     .map(|s| s.clone().into_inner())
@@ -62,9 +59,7 @@ pub fn ls(engine: &Engine) {
 
 pub async fn copy(engine: &Engine, profile: &Profile, name: String) -> Result<()> {
     let name = NormString::new(name).context("invalid new name")?;
-    let new_id = engine
-        .copy_profile(profile.id, ProfileConfig::new(Some(name)))
-        .await?;
+    let new_id = engine.copy_profile(profile.id, Some(name)).await?;
     println!("{}", new_id.0);
     Ok(())
 }

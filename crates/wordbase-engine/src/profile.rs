@@ -5,7 +5,7 @@ use {
     futures::StreamExt,
     sqlx::{Pool, Sqlite},
     std::sync::Arc,
-    wordbase::{DictionaryId, NormString, Profile, ProfileConfig, ProfileId},
+    wordbase::{DictionaryId, NormString, Profile, ProfileId},
 };
 
 #[derive(Debug, Default, Deref)]
@@ -37,20 +37,13 @@ impl Engine {
         Ok(())
     }
 
-    pub async fn add_profile(&self, config: ProfileConfig) -> Result<ProfileId> {
-        let config_json = serde_json::to_string(&config).context("failed to serialize config")?;
-        let sorting_dictionary = config.sorting_dictionary.map(|id| id.0);
-
-        let id = sqlx::query!(
-            "INSERT INTO profile (config, sorting_dictionary)
-            VALUES ($1, $2)",
-            config_json,
-            sorting_dictionary,
-        )
-        .execute(&self.db)
-        .await
-        .context("failed to insert profile")?
-        .last_insert_rowid();
+    pub async fn add_profile(&self, name: Option<NormString>) -> Result<ProfileId> {
+        let name = name.as_ref().map(|s| s.as_str());
+        let id = sqlx::query!("INSERT INTO profile (name) VALUES ($1)", name)
+            .execute(&self.db)
+            .await
+            .context("failed to insert profile")?
+            .last_insert_rowid();
         let id = ProfileId(id);
 
         self.sync_profiles().await?;
@@ -61,25 +54,21 @@ impl Engine {
     pub async fn copy_profile(
         &self,
         src_id: ProfileId,
-        config: ProfileConfig,
+        new_name: Option<NormString>,
     ) -> Result<ProfileId> {
-        let src = self.profiles().get(&src_id).cloned().context(NotFound)?;
-        let mut new_config = src.config.clone();
-        new_config.merge_from(config);
-        let config_json =
-            serde_json::to_string(&new_config).context("failed to serialize config")?;
-        let sorting_dictionary = new_config.sorting_dictionary.map(|id| id.0);
-
+        let new_name = new_name.as_ref().map(|s| s.as_str());
         let mut tx = self
             .db
             .begin()
             .await
             .context("failed to begin transaction")?;
         let new_id = sqlx::query!(
-            "INSERT INTO profile (config, sorting_dictionary)
-            VALUES ($1, $2)",
-            config_json,
-            sorting_dictionary,
+            "INSERT INTO profile (name, sorting_dictionary, font_family, anki_deck, anki_note_type)
+            SELECT $1, sorting_dictionary, font_family, anki_deck, anki_note_type
+            FROM profile
+            WHERE id = $2",
+            new_name,
+            src_id.0,
         )
         .execute(&mut *tx)
         .await
@@ -120,36 +109,46 @@ impl Engine {
         Ok(())
     }
 
-    pub async fn set_profile_name(&self, id: ProfileId, name: Option<NormString>) -> Result<()> {
-        let mut config = self.profiles().get(&id).context(NotFound)?.config.clone();
-        config.name = name;
-
-        let config_json = serde_json::to_string(&config).context("failed to serialize config")?;
+    pub async fn set_profile_name(
+        &self,
+        profile_id: ProfileId,
+        name: Option<NormString>,
+    ) -> Result<()> {
+        let name = name.as_ref().map(|s| s.as_str());
         sqlx::query!(
-            "UPDATE profile SET config = $1 WHERE id = $2",
-            config_json,
-            id.0
+            "UPDATE profile SET name = $1 WHERE id = $2",
+            name,
+            profile_id.0
         )
         .execute(&self.db)
         .await?;
 
         self.sync_profiles().await?;
-        _ = self.send_event.send(EngineEvent::ProfileNameSet { id });
+        _ = self
+            .send_event
+            .send(EngineEvent::ProfileNameSet { id: profile_id });
         Ok(())
     }
 
-    #[deprecated]
-    pub async fn set_profile_config(&self, id: ProfileId, config: ProfileConfig) -> Result<()> {
-        let config_json = serde_json::to_string(&config).context("failed to serialize config")?;
+    pub async fn set_font_family(
+        &self,
+        profile_id: ProfileId,
+        font_family: Option<NormString>,
+    ) -> Result<()> {
+        let font_family_str = font_family.as_ref().map(|s| s.as_str());
         sqlx::query!(
-            "UPDATE profile SET config = $1 WHERE id = $2",
-            config_json,
-            id.0
+            "UPDATE profile SET font_family = $1 WHERE id = $2",
+            font_family_str,
+            profile_id.0
         )
         .execute(&self.db)
         .await?;
 
         self.sync_profiles().await?;
+        _ = self.send_event.send(EngineEvent::FontFamilySet {
+            profile_id,
+            font_family,
+        });
         Ok(())
     }
 }
@@ -160,8 +159,11 @@ async fn fetch_owned(db: &Pool<Sqlite>) -> Result<Vec<Profile>> {
     let mut records = sqlx::query!(
         "SELECT
             profile.id,
-            profile.config,
+            profile.name,
             profile.sorting_dictionary,
+            profile.font_family,
+            profile.anki_deck,
+            profile.anki_note_type,
             ped.dictionary
         FROM profile
         LEFT JOIN profile_enabled_dictionary ped ON profile.id = ped.profile
@@ -172,17 +174,20 @@ async fn fetch_owned(db: &Pool<Sqlite>) -> Result<Vec<Profile>> {
         let record = record.context("failed to fetch record")?;
         let id = ProfileId(record.id);
 
-        let profile_index =
-            if let Some(index) = profiles.iter_mut().position(|profile| profile.id == id) {
-                index
-            } else {
-                let index = profiles.len();
-                let mut config = serde_json::from_str::<ProfileConfig>(&record.config)
-                    .context("failed to deserialize profile config")?;
-                config.sorting_dictionary = record.sorting_dictionary.map(DictionaryId);
-                profiles.push(Profile::new(id, config));
-                index
-            };
+        let profile_index = profiles.iter_mut().position(|profile| profile.id == id);
+        let profile_index = if let Some(index) = profile_index {
+            index
+        } else {
+            let index = profiles.len();
+            let mut profile = Profile::new(ProfileId(record.id));
+            profile.name = record.name.and_then(NormString::new);
+            profile.sorting_dictionary = record.sorting_dictionary.map(DictionaryId);
+            profile.font_family = record.font_family.and_then(NormString::new);
+            profile.anki_deck = record.anki_deck.and_then(NormString::new);
+            profile.anki_note_type = record.anki_note_type.and_then(NormString::new);
+            profiles.push(profile);
+            index
+        };
 
         if let Some(dictionary) = record.dictionary {
             profiles[profile_index]

@@ -4,10 +4,7 @@
 //! core API.
 
 use {
-    crate::{
-        DictionaryKind, DictionaryMeta, NormString, Profile, ProfileConfig, ProfileId, Term,
-        TermPart,
-    },
+    crate::{DictionaryKind, DictionaryMeta, NormString, Profile, ProfileId, Term, TermPart},
     serde::Deserialize,
     std::mem,
 };
@@ -30,48 +27,15 @@ impl DictionaryMeta {
 impl Profile {
     /// Creates a new profile with the default state.
     #[must_use]
-    pub fn new(id: ProfileId, config: ProfileConfig) -> Self {
+    pub fn new(id: ProfileId) -> Self {
         Self {
             id,
-            config,
-            enabled_dictionaries: Vec::new(),
-        }
-    }
-}
-
-impl ProfileConfig {
-    /// Creates a new default profile configuration.
-    #[must_use]
-    pub fn new(name: Option<NormString>) -> Self {
-        Self {
-            name,
-            accent_color: None,
+            name: None,
             sorting_dictionary: None,
             font_family: None,
             anki_deck: None,
             anki_note_type: None,
-        }
-    }
-
-    /// Merges the configuration from `src` into `self`.
-    pub fn merge_from(&mut self, mut src: Self) {
-        if let Some(v) = src.name.take() {
-            self.name = Some(v);
-        }
-        if let Some(v) = src.accent_color.take() {
-            self.accent_color = Some(v);
-        }
-        if let Some(v) = src.sorting_dictionary.take() {
-            self.sorting_dictionary = Some(v);
-        }
-        if let Some(v) = src.font_family.take() {
-            self.font_family = Some(v);
-        }
-        if let Some(v) = src.anki_deck.take() {
-            self.anki_deck = Some(v);
-        }
-        if let Some(v) = src.anki_note_type.take() {
-            self.anki_note_type = Some(v);
+            enabled_dictionaries: Vec::new(),
         }
     }
 }

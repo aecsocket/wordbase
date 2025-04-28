@@ -274,7 +274,7 @@ impl DictionaryRow {
         ui.enabled()
             .set_active(profile.enabled_dictionaries.contains(&dictionary.id));
         ui.is_sorting()
-            .set_visible(profile.config.sorting_dictionary == Some(dictionary.id));
+            .set_visible(profile.sorting_dictionary == Some(dictionary.id));
     }
 }
 

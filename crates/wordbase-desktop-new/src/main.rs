@@ -14,8 +14,8 @@ mod anki_group;
 mod dictionary_group;
 mod dictionary_row;
 mod error_page;
-mod manage_profiles;
 mod manager;
+mod profile_manager;
 mod profile_row;
 mod theme;
 // mod theme_group;
@@ -34,8 +34,8 @@ use {
     derive_more::Debug,
     error_page::ErrorPage,
     glib::clone,
-    manage_profiles::ManageProfiles,
     manager::Manager,
+    profile_manager::ProfileManager,
     relm4::{MessageBroker, RelmApp, loading_widgets::LoadingWidgets, prelude::*, view},
     std::{
         cell::OnceCell,
@@ -91,14 +91,18 @@ fn app_window() -> gtk::Window {
 
 static CURRENT_PROFILE_ID: OnceLock<ArcSwap<ProfileId>> = OnceLock::new();
 
-fn current_profile() -> Arc<Profile> {
-    let profile_id = CURRENT_PROFILE_ID
+fn current_profile_id() -> ProfileId {
+    **CURRENT_PROFILE_ID
         .get()
-        .expect("current profile should be initialized")
-        .load();
+        .expect("current profile ID should be initialized")
+        .load()
+}
+
+fn current_profile() -> Arc<Profile> {
+    let profile_id = current_profile_id();
     engine()
         .profiles()
-        .get(&**profile_id)
+        .get(&profile_id)
         .cloned()
         .unwrap_or_else(|| {
             let default = engine()
@@ -145,7 +149,7 @@ fn forward_events<C: AsyncComponent<CommandOutput = AppEvent>>(sender: &AsyncCom
 #[derive(Debug)]
 struct App {
     toaster: adw::ToastOverlay,
-    manage_profiles: Option<AsyncController<ManageProfiles>>,
+    manage_profiles: Option<AsyncController<ProfileManager>>,
 }
 
 #[derive(Debug)]
@@ -252,7 +256,7 @@ impl AsyncComponent for App {
                 root.set_content(Some(error_page.widget()));
             }
             AppMsg::OpenManageProfiles => {
-                let manage_profiles = ManageProfiles::builder()
+                let manage_profiles = ProfileManager::builder()
                     .launch(())
                     .forward(sender.input_sender(), AppMsg::Error);
                 adw::Dialog::builder()

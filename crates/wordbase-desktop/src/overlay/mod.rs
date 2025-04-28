@@ -415,7 +415,7 @@ impl Overlay {
         let mut font_desc = pango::FontDescription::new();
 
         let profile = CURRENT_PROFILE.read().as_ref().cloned().unwrap();
-        if let Some(family) = &profile.config.font_family {
+        if let Some(family) = &profile.font_family {
             font_desc.set_family(family);
         }
 

@@ -146,7 +146,7 @@ fn add_row(model: &mut Model, root: &ui::ThemeList, name: ThemeName) {
 
 fn show_font(model: &Model, root: &ui::ThemeList) {
     let profile = CURRENT_PROFILE.read().as_ref().cloned().unwrap();
-    if let Some(family) = &profile.config.font_family {
+    if let Some(family) = &profile.font_family {
         let subtitle = format!(r#"<span face="{family}">{family}</span>"#);
         root.font_row().set_subtitle(&subtitle);
         root.font_reset().set_visible(true);
@@ -164,17 +164,12 @@ async fn set_font(model: &Model) -> Result<()> {
         return Ok(());
     };
 
-    let mut config = CURRENT_PROFILE
-        .read()
-        .as_ref()
-        .cloned()
-        .unwrap()
-        .config
-        .clone();
-    config.font_family = NormString::new(font.family().name());
     model
         .engine
-        .set_profile_config(CURRENT_PROFILE_ID.read().unwrap(), config)
+        .set_font_family(
+            CURRENT_PROFILE_ID.read().unwrap(),
+            NormString::new(font.family().name()),
+        )
         .await
         .context("failed to set font")?;
     _ = APP_EVENTS.send(AppEvent::FontSet);
@@ -182,17 +177,9 @@ async fn set_font(model: &Model) -> Result<()> {
 }
 
 async fn reset_font(model: &Model) -> Result<()> {
-    let mut config = CURRENT_PROFILE
-        .read()
-        .as_ref()
-        .cloned()
-        .unwrap()
-        .config
-        .clone();
-    config.font_family = None;
     model
         .engine
-        .set_profile_config(CURRENT_PROFILE_ID.read().unwrap(), config)
+        .set_font_family(CURRENT_PROFILE_ID.read().unwrap(), None)
         .await
         .context("failed to reset font")?;
     _ = APP_EVENTS.send(AppEvent::FontSet);

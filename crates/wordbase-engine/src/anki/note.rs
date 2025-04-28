@@ -27,13 +27,8 @@ impl Engine {
             .get(&profile_id)
             .cloned()
             .context("profile not found")?;
-        let deck_name = profile
-            .config
-            .anki_deck
-            .as_ref()
-            .context("no Anki deck name")?;
+        let deck_name = profile.anki_deck.as_ref().context("no Anki deck name")?;
         let note_type_name = profile
-            .config
             .anki_note_type
             .as_ref()
             .context("no Anki note type name")?;

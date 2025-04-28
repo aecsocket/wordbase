@@ -1,13 +1,13 @@
 use {
     crate::{
-        AppEvent, current_profile, engine, gettext,
-        profile_row::ProfileRow,
+        AppEvent, current_profile, current_profile_id, engine, gettext,
+        profile_row::{self, ProfileRow},
         util::{AppComponent, impl_component},
     },
+    adw::prelude::*,
     anyhow::{Context, Result},
     foldhash::{HashMap, HashMapExt},
     glib::clone,
-    gtk::prelude::{CheckButtonExt, EditableExt, WidgetExt},
     relm4::prelude::*,
     std::sync::Arc,
     wordbase::{NormString, Profile, ProfileId},
@@ -17,38 +17,32 @@ use {
 mod ui;
 
 #[derive(Debug)]
-pub struct ManageProfiles {
+pub struct ProfileManager {
     rows: HashMap<ProfileId, AsyncController<ProfileRow>>,
 }
 
 #[derive(Debug)]
 #[doc(hidden)]
 pub enum Msg {
-    AddProfile,
-    AddProfileName,
+    Create,
 }
 
-impl_component!(ManageProfiles);
+impl_component!(ProfileManager);
 
-impl AppComponent for ManageProfiles {
+impl AppComponent for ProfileManager {
     type Args = ();
     type Msg = Msg;
-    type Ui = ui::ManageProfiles;
+    type Ui = ui::ProfileManager;
 
     async fn init(
         (): Self::Args,
         ui: Self::Ui,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
-        ui.add_profile().connect_activated(clone!(
+        ui.create().connect_clicked(clone!(
             #[strong]
             sender,
-            move |_| sender.input(Msg::AddProfile)
-        ));
-        ui.add_profile_name().connect_changed(clone!(
-            #[strong]
-            sender,
-            move |_| sender.input(Msg::AddProfileName)
+            move |_| sender.input(Msg::Create),
         ));
 
         let mut model = Self {
@@ -57,7 +51,6 @@ impl AppComponent for ManageProfiles {
         for profile in engine().profiles().values() {
             model.add_row(&ui, &sender, profile.clone());
         }
-        Self::update_add_profile_name(&ui);
 
         AsyncComponentParts { model, widgets: () }
     }
@@ -69,22 +62,15 @@ impl AppComponent for ManageProfiles {
         ui: &Self::Ui,
     ) -> Result<()> {
         match msg {
-            Msg::AddProfile => {
-                let name = NormString::new(ui.add_profile_name().text());
-                let Some(name) = name else {
-                    return Ok(());
-                };
-
-                let profile = current_profile();
-                let mut config = profile.config.clone();
-                config.name = Some(name);
+            Msg::Create => {
+                let current_profile = current_profile();
+                let new_name = format!("{}*", profile_row::name_of(&current_profile));
+                let new_name = NormString::new(new_name)
+                    .expect("new name should be a valid normalized string");
                 engine()
-                    .copy_profile(profile.id, config)
+                    .copy_profile(current_profile_id(), Some(new_name))
                     .await
                     .with_context(|| gettext("Failed to add profile"))?;
-            }
-            Msg::AddProfileName => {
-                Self::update_add_profile_name(ui);
             }
         }
         Ok(())
@@ -119,16 +105,10 @@ impl AppComponent for ManageProfiles {
     }
 }
 
-impl ManageProfiles {
-    fn update_add_profile_name(ui: &ui::ManageProfiles) {
-        let name = NormString::new(ui.add_profile_name().text());
-        ui.add_profile_name()
-            .set_class_active("error", name.is_none());
-    }
-
+impl ProfileManager {
     fn add_row(
         &mut self,
-        ui: &ui::ManageProfiles,
+        ui: &ui::ProfileManager,
         sender: &AsyncComponentSender<Self>,
         profile: Arc<Profile>,
     ) {

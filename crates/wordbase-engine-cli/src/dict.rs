@@ -22,7 +22,7 @@ pub fn ls(engine: &Engine, profile: &Profile) {
         .values()
         .map(|dict| {
             vec![
-                (if profile.config.sorting_dictionary == Some(dict.id) {
+                (if profile.sorting_dictionary == Some(dict.id) {
                     "✔"
                 } else {
                     ""

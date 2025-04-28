@@ -192,7 +192,7 @@ fn update_view(model: &Model, root: &webkit6::WebView, sender: &AsyncComponentSe
     let settings = webkit6::Settings::new();
     settings.set_enable_page_cache(false);
     settings.set_enable_smooth_scrolling(false);
-    if let Some(family) = &profile.config.font_family {
+    if let Some(family) = &profile.font_family {
         settings.set_default_font_family(family);
     }
     root.set_settings(&settings);
