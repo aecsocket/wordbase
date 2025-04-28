@@ -18,27 +18,23 @@ template $WdbManager: Adw.Bin {
       }
 
       [end]
-      ToggleButton search_sidebar_toggle {
+      ToggleButton sidebar_toggle {
         icon-name: "library-symbolic";
       }
     }
 
-    Adw.OverlaySplitView search_view {
-      show-sidebar: bind search_sidebar_toggle.active bidirectional;
+    Adw.OverlaySplitView {
+      show-sidebar: bind sidebar_toggle.active bidirectional;
       collapsed: true;
       max-sidebar-width: 360;
       sidebar-position: end;
 
-      content: Adw.ViewStack {
-        Adw.ViewStackPage {
-          name: "lookup_results";
-
+      content: Adw.ViewStack content_stack {
+        Adw.ViewStackPage page_lookup {
           child: Adw.Bin lookup_results {};
         }
 
-        Adw.ViewStackPage {
-          name: "landing";
-
+        Adw.ViewStackPage page_landing {
           child: Adw.StatusPage {
             icon-name: "system-search-symbolic";
             title: _("Search");
@@ -46,9 +42,7 @@ template $WdbManager: Adw.Bin {
           };
         }
 
-        Adw.ViewStackPage {
-          name: "no_dictionaries";
-
+        Adw.ViewStackPage page_no_dictionaries {
           child: Adw.StatusPage {
             icon-name: "library-symbolic";
             title: _("No Dictionaries Found");

@@ -157,7 +157,7 @@ enum AppMsg {
     Error(anyhow::Error),
     FatalError(anyhow::Error),
     #[doc(hidden)]
-    OpenManageProfiles,
+    OpenProfileManager,
 }
 
 #[derive(Debug, Clone)]
@@ -255,7 +255,7 @@ impl AsyncComponent for App {
                 let error_page = ErrorPage::builder().launch(err).detach();
                 root.set_content(Some(error_page.widget()));
             }
-            AppMsg::OpenManageProfiles => {
+            AppMsg::OpenProfileManager => {
                 let manage_profiles = ProfileManager::builder()
                     .launch(())
                     .forward(sender.input_sender(), AppMsg::Error);
@@ -324,7 +324,7 @@ async fn init(sender: AsyncComponentSender<App>) -> Result<()> {
         .activate(clone!(
             #[strong]
             sender,
-            move |_, _, _| sender.input(AppMsg::OpenManageProfiles)
+            move |_, _, _| sender.input(AppMsg::OpenProfileManager)
         ))
         .build();
     app.add_action_entries([manage_profiles]);

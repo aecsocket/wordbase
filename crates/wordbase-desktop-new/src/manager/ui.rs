@@ -7,6 +7,15 @@ mod imp {
     #[template(file = "src/manager/ui.blp")]
     pub struct Manager {
         #[template_child]
+        pub content_stack: TemplateChild<adw::ViewStack>,
+        #[template_child]
+        pub page_lookup: TemplateChild<adw::ViewStackPage>,
+        #[template_child]
+        pub page_landing: TemplateChild<adw::ViewStackPage>,
+        #[template_child]
+        pub page_no_dictionaries: TemplateChild<adw::ViewStackPage>,
+
+        #[template_child]
         pub settings: TemplateChild<adw::PreferencesPage>,
         #[template_child]
         pub advanced: TemplateChild<adw::PreferencesGroup>,
@@ -18,8 +27,6 @@ mod imp {
         pub texthooker_disconnected: TemplateChild<gtk::Widget>,
         #[template_child]
         pub search_entry: TemplateChild<gtk::SearchEntry>,
-        #[template_child]
-        pub search_sidebar_toggle: TemplateChild<gtk::ToggleButton>,
         #[template_child]
         pub lookup_results: TemplateChild<adw::Bin>,
         #[template_child]
@@ -59,6 +66,26 @@ impl Manager {
     }
 
     #[must_use]
+    pub fn content_stack(&self) -> adw::ViewStack {
+        self.imp().content_stack.get()
+    }
+
+    #[must_use]
+    pub fn page_lookup(&self) -> adw::ViewStackPage {
+        self.imp().page_lookup.get()
+    }
+
+    #[must_use]
+    pub fn page_landing(&self) -> adw::ViewStackPage {
+        self.imp().page_landing.get()
+    }
+
+    #[must_use]
+    pub fn page_no_dictionaries(&self) -> adw::ViewStackPage {
+        self.imp().page_no_dictionaries.get()
+    }
+
+    #[must_use]
     pub fn profile_menu(&self) -> gio::Menu {
         self.imp().profile_menu.get()
     }
@@ -91,11 +118,6 @@ impl Manager {
     #[must_use]
     pub fn search_entry(&self) -> gtk::SearchEntry {
         self.imp().search_entry.get()
-    }
-
-    #[must_use]
-    pub fn search_sidebar_toggle(&self) -> gtk::ToggleButton {
-        self.imp().search_sidebar_toggle.get()
     }
 
     #[must_use]
