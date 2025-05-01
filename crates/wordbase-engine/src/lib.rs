@@ -12,7 +12,7 @@ pub mod profile;
 pub mod texthook;
 
 pub use wordbase;
-use wordbase::{DictionaryId, NormString};
+use wordbase::DictionaryId;
 use {
     anki::Anki,
     anyhow::{Context, Result},
@@ -51,39 +51,10 @@ pub struct Inner {
 
 #[derive(Debug, Clone)]
 pub enum EngineEvent {
-    ProfileAdded {
-        id: ProfileId,
-    },
-    ProfileCopied {
-        src_id: ProfileId,
-        new_id: ProfileId,
-    },
-    ProfileRemoved {
-        id: ProfileId,
-    },
-    ProfileNameSet {
-        id: ProfileId,
-    },
+    Profile(ProfileEvent),
+    Dictionary(DictionaryEvent),
     FontFamilySet {
         profile_id: ProfileId,
-    },
-    DictionaryAdded {
-        id: DictionaryId,
-    },
-    DictionaryRemoved {
-        id: DictionaryId,
-    },
-    DictionaryPositionsSwapped {
-        a_id: DictionaryId,
-        b_id: DictionaryId,
-    },
-    DictionaryEnabled {
-        profile_id: ProfileId,
-        dictionary_id: DictionaryId,
-    },
-    DictionaryDisabled {
-        profile_id: ProfileId,
-        dictionary_id: DictionaryId,
     },
     SortingDictionarySet {
         profile_id: ProfileId,
@@ -98,6 +69,45 @@ pub enum EngineEvent {
     PullTexthookerConnected,
     PullTexthookerDisconnected,
     TexthookerSentence(TexthookerSentence),
+}
+
+#[derive(Debug, Clone)]
+pub enum ProfileEvent {
+    Added {
+        id: ProfileId,
+    },
+    Copied {
+        src_id: ProfileId,
+        new_id: ProfileId,
+    },
+    Removed {
+        id: ProfileId,
+    },
+    NameSet {
+        id: ProfileId,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub enum DictionaryEvent {
+    Added {
+        id: DictionaryId,
+    },
+    Removed {
+        id: DictionaryId,
+    },
+    PositionsSwapped {
+        a_id: DictionaryId,
+        b_id: DictionaryId,
+    },
+    Enabled {
+        profile_id: ProfileId,
+        dictionary_id: DictionaryId,
+    },
+    Disabled {
+        profile_id: ProfileId,
+        dictionary_id: DictionaryId,
+    },
 }
 
 pub type IndexMap<K, V> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;

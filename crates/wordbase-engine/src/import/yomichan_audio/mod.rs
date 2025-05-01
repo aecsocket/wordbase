@@ -263,7 +263,10 @@ async fn import(
                     &mut entry,
                     &nhk16_rev_index,
                     |info| info.terms.iter(),
-                    |audio, _info| Nhk16 { audio },
+                    |audio, info| Nhk16 {
+                        audio,
+                        pitch_positions: info.pitch_positions.clone(),
+                    },
                 )
                 .await?;
             } else if let Some(path) = path.strip_prefix(SHINMEIKAI8_MEDIA) {
@@ -370,6 +373,7 @@ impl TryFrom<schema::generic::Index> for RevIndex<GenericInfo> {
 #[derive(Debug, Default)]
 struct Nhk16Info {
     terms: Vec<Term>,
+    pitch_positions: Vec<u64>,
 }
 
 impl TryFrom<schema::nhk16::Index> for RevIndex<Nhk16Info> {
@@ -387,13 +391,18 @@ impl TryFrom<schema::nhk16::Index> for RevIndex<Nhk16Info> {
                 .collect::<Vec<_>>();
 
             for accent in entry.accents {
-                if let Some(sound_file) = accent.sound_file {
-                    for_path
-                        .entry(sound_file)
-                        .or_default()
-                        .terms
-                        .extend_from_slice(&terms);
-                }
+                let Some(sound_file) = accent.sound_file else {
+                    continue;
+                };
+                let entry = for_path.entry(sound_file).or_default();
+                entry.terms.extend_from_slice(&terms);
+
+                entry.pitch_positions.extend(
+                    accent
+                        .accent
+                        .iter()
+                        .filter_map(|accent| u64::try_from(accent.pitch_accent).ok()),
+                );
             }
 
             // subentries are usually just conjugations of top-level entries,

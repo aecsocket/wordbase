@@ -1,5 +1,5 @@
 use {
-    crate::{Engine, EngineEvent, IndexMap, NotFound},
+    crate::{Engine, EngineEvent, IndexMap, NotFound, ProfileEvent},
     anyhow::{Context, Result, bail},
     derive_more::Deref,
     futures::StreamExt,
@@ -47,7 +47,9 @@ impl Engine {
         let id = ProfileId(id);
 
         self.sync_profiles().await?;
-        _ = self.send_event.send(EngineEvent::ProfileAdded { id });
+        _ = self
+            .send_event
+            .send(EngineEvent::Profile(ProfileEvent::Added { id }));
         Ok(id)
     }
 
@@ -92,7 +94,10 @@ impl Engine {
         self.sync_profiles().await?;
         _ = self
             .send_event
-            .send(EngineEvent::ProfileCopied { src_id, new_id });
+            .send(EngineEvent::Profile(ProfileEvent::Copied {
+                src_id,
+                new_id,
+            }));
         Ok(new_id)
     }
 
@@ -105,7 +110,9 @@ impl Engine {
         }
 
         self.sync_profiles().await?;
-        _ = self.send_event.send(EngineEvent::ProfileRemoved { id });
+        _ = self
+            .send_event
+            .send(EngineEvent::Profile(ProfileEvent::Removed { id }));
         Ok(())
     }
 
@@ -126,7 +133,9 @@ impl Engine {
         self.sync_profiles().await?;
         _ = self
             .send_event
-            .send(EngineEvent::ProfileNameSet { id: profile_id });
+            .send(EngineEvent::Profile(ProfileEvent::NameSet {
+                id: profile_id,
+            }));
         Ok(())
     }
 

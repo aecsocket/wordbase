@@ -1,5 +1,5 @@
 use {
-    crate::{Engine, EngineEvent, IndexMap, NotFound},
+    crate::{DictionaryEvent, Engine, EngineEvent, IndexMap, NotFound},
     anyhow::{Context, Result, bail},
     derive_more::Deref,
     futures::TryStreamExt,
@@ -47,7 +47,9 @@ impl Engine {
         }
 
         self.sync_dictionaries().await?;
-        _ = self.send_event.send(EngineEvent::DictionaryRemoved { id });
+        _ = self
+            .send_event
+            .send(EngineEvent::Dictionary(DictionaryEvent::Removed { id }));
         Ok(())
     }
 
@@ -81,7 +83,10 @@ impl Engine {
         self.sync_dictionaries().await?;
         _ = self
             .send_event
-            .send(EngineEvent::DictionaryPositionsSwapped { a_id, b_id });
+            .send(EngineEvent::Dictionary(DictionaryEvent::PositionsSwapped {
+                a_id,
+                b_id,
+            }));
         Ok(())
     }
 
@@ -123,10 +128,12 @@ impl Engine {
         .await?;
 
         self.sync_profiles().await?;
-        _ = self.send_event.send(EngineEvent::DictionaryEnabled {
-            profile_id,
-            dictionary_id,
-        });
+        _ = self
+            .send_event
+            .send(EngineEvent::Dictionary(DictionaryEvent::Enabled {
+                profile_id,
+                dictionary_id,
+            }));
         Ok(())
     }
 
@@ -145,10 +152,12 @@ impl Engine {
         .await?;
 
         self.sync_profiles().await?;
-        _ = self.send_event.send(EngineEvent::DictionaryDisabled {
-            profile_id,
-            dictionary_id,
-        });
+        _ = self
+            .send_event
+            .send(EngineEvent::Dictionary(DictionaryEvent::Disabled {
+                profile_id,
+                dictionary_id,
+            }));
         Ok(())
     }
 }

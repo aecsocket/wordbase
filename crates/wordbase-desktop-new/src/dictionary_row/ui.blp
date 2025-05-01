@@ -21,11 +21,10 @@ template $WdbDictionaryRow: Adw.ExpanderRow {
   }
 
   [prefix]
-  Adw.Bin importing {
+  Adw.Bin processing {
     Adw.Spinner {
       halign: center;
       valign: center;
-      tooltip-text: _("Dictionary is currently being imported");
     }
   }
 
@@ -76,7 +75,7 @@ template $WdbDictionaryRow: Adw.ExpanderRow {
 }
 
 SizeGroup {
-  widgets [ importing, import_error ]
+  widgets [ processing, import_error ]
 }
 
 Adw.AlertDialog remove_dialog {

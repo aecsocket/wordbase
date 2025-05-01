@@ -3,7 +3,7 @@ use {
     serde::{Deserialize, Serialize},
     sqlx::{
         Pool, Sqlite,
-        sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+        sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
     },
     std::{io, path::Path},
 };
@@ -27,6 +27,7 @@ fn connect_options(path: &Path) -> SqliteConnectOptions {
     SqliteConnectOptions::new()
         .filename(path)
         .create_if_missing(true)
+        .journal_mode(SqliteJournalMode::Wal)
         .pragma("foreign_keys", "ON")
 }
 

@@ -58,6 +58,12 @@ pub struct Jpod {
 pub struct Nhk16 {
     /// Audio data.
     pub audio: Audio,
+    /// Pitch positions of this pronunciation.
+    ///
+    /// See [`yomitan::Pitch::position`].
+    ///
+    /// [`yomitan::Pitch::position`]: crate::dict::yomitan::Pitch::position
+    pub pitch_positions: Vec<u64>,
 }
 
 /// [Shin Meikai] version 8 audio.

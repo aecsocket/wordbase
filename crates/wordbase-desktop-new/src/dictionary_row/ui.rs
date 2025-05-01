@@ -21,7 +21,7 @@ mod imp {
         #[template_child]
         pub enabled: TemplateChild<gtk::CheckButton>,
         #[template_child]
-        pub importing: TemplateChild<adw::Bin>,
+        pub processing: TemplateChild<adw::Bin>,
         #[template_child]
         pub import_error: TemplateChild<gtk::Button>,
         #[template_child]
@@ -96,8 +96,8 @@ impl DictionaryRow {
     }
 
     #[must_use]
-    pub fn importing(&self) -> adw::Bin {
-        self.imp().importing.get()
+    pub fn processing(&self) -> adw::Bin {
+        self.imp().processing.get()
     }
 
     #[must_use]

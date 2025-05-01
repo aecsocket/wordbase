@@ -26,6 +26,7 @@ directories = { workspace = true }
 indexmap    = { workspace = true }
 maud        = { workspace = true }
 notify      = { workspace = true }
+bytes = { workspace = true }
 
 arc-swap           = { workspace = true }
 ashpd              = { workspace = true, features = ["gtk4"] }

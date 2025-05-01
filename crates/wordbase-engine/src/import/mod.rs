@@ -2,7 +2,7 @@ mod yomichan_audio;
 mod yomitan;
 
 use {
-    crate::{Engine, EngineEvent, db},
+    crate::{DictionaryEvent, Engine, EngineEvent, db},
     anyhow::{Context, Result},
     bytes::Bytes,
     derive_more::{Display, Error, From},
@@ -169,7 +169,9 @@ impl Engine {
             .map_err(|source| ImportError::Import { kind, source })?;
 
         self.sync_dictionaries().await?;
-        _ = self.send_event.send(EngineEvent::DictionaryAdded { id });
+        _ = self
+            .send_event
+            .send(EngineEvent::Dictionary(DictionaryEvent::Added { id }));
         Ok(id)
     }
 }

@@ -11,6 +11,10 @@ pub trait AppComponent: Sized + AsyncComponent + 'static {
     type Msg: Debug + 'static;
     type Ui: Debug + Default + Clone;
 
+    fn init_ui() -> Self::Ui {
+        Self::Ui::default()
+    }
+
     async fn init(
         args: Self::Args,
         ui: Self::Ui,
@@ -56,7 +60,7 @@ macro_rules! impl_component {
                 type Widgets = ();
 
                 fn init_root() -> Self::Root {
-                    <$T as AppComponent>::Ui::default()
+                    <$T as AppComponent>::init_ui()
                 }
 
                 async fn init(

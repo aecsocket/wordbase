@@ -1,7 +1,7 @@
 use {
     super::ui,
     crate::{
-        AppEvent, app_window, current_profile, engine, gettext,
+        AppEvent, app_window, current_profile, current_profile_id, engine, gettext,
         util::{AppComponent, impl_component},
     },
     anyhow::{Context, Result},
@@ -84,7 +84,7 @@ impl AppComponent for DictionaryRow {
         ));
 
         ui.imported().set_visible(true);
-        ui.importing().set_visible(false);
+        ui.processing().set_visible(false);
         ui.import_error().set_visible(false);
         ui.progress().set_visible(false);
 
@@ -209,6 +209,9 @@ impl AppComponent for DictionaryRow {
                 ui.remove_dialog().present(Some(&app_window()));
             }
             Msg::Remove => {
+                ui.imported().set_visible(false);
+                ui.processing().set_visible(true);
+
                 engine()
                     .remove_dictionary(dictionary.id)
                     .await
@@ -226,7 +229,11 @@ impl AppComponent for DictionaryRow {
     ) -> Result<()> {
         match event {
             AppEvent::ProfileIdSet => self.sync(ui),
-            AppEvent::Engine(EngineEvent::SortingDictionarySet { .. }) => self.sync(ui),
+            AppEvent::Engine(EngineEvent::SortingDictionarySet { profile_id, .. })
+                if profile_id == current_profile_id() =>
+            {
+                self.sync(ui);
+            }
             _ => {}
         }
         Ok(())

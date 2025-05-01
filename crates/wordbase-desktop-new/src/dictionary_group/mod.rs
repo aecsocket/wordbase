@@ -17,7 +17,7 @@ use {
     std::sync::Arc,
     tracing::{debug, warn},
     wordbase::{Dictionary, DictionaryId},
-    wordbase_engine::EngineEvent,
+    wordbase_engine::{DictionaryEvent, EngineEvent},
 };
 
 #[derive(Debug)]
@@ -98,17 +98,19 @@ impl AppComponent for DictionaryGroup {
         ui: &Self::Ui,
     ) -> Result<()> {
         match event {
-            AppEvent::Engine(EngineEvent::DictionaryAdded { id }) => {
+            AppEvent::Engine(EngineEvent::Dictionary(DictionaryEvent::Added { id })) => {
                 if let Some(dictionary) = engine().dictionaries().get(&id) {
                     self.add_row(ui, sender, dictionary.clone());
                 }
             }
-            AppEvent::Engine(EngineEvent::DictionaryRemoved { id }) => {
+            AppEvent::Engine(EngineEvent::Dictionary(DictionaryEvent::Removed { id })) => {
                 if let Some(row) = self.rows.remove(&id) {
                     ui.list().remove(row.widget());
                 }
             }
-            AppEvent::Engine(EngineEvent::DictionaryPositionsSwapped { .. }) => {
+            AppEvent::Engine(EngineEvent::Dictionary(DictionaryEvent::PositionsSwapped {
+                ..
+            })) => {
                 self.sync(ui, sender);
             }
             _ => {}
@@ -149,6 +151,14 @@ impl DictionaryGroup {
         else {
             return;
         };
+
+        for file in &files {
+            let file = file
+                .expect("list should not be mutated while iterating")
+                .downcast::<gio::File>()
+                .expect("list item should be a file");
+            let archive = file.load_bytes_future().await;
+        }
 
         todo!();
     }

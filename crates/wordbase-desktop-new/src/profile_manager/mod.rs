@@ -11,7 +11,7 @@ use {
     relm4::prelude::*,
     std::sync::Arc,
     wordbase::{NormString, Profile, ProfileId},
-    wordbase_engine::EngineEvent,
+    wordbase_engine::{EngineEvent, ProfileEvent},
 };
 
 mod ui;
@@ -83,18 +83,18 @@ impl AppComponent for ProfileManager {
         ui: &Self::Root,
     ) -> Result<()> {
         match event {
-            AppEvent::Engine(
-                EngineEvent::ProfileAdded { id }
-                | EngineEvent::ProfileCopied {
+            AppEvent::Engine(EngineEvent::Profile(
+                ProfileEvent::Added { id }
+                | ProfileEvent::Copied {
                     src_id: _,
                     new_id: id,
                 },
-            ) => {
+            )) => {
                 if let Some(profile) = engine().profiles().get(&id) {
                     self.add_row(ui, sender, profile.clone());
                 }
             }
-            AppEvent::Engine(EngineEvent::ProfileRemoved { id }) => {
+            AppEvent::Engine(EngineEvent::Profile(ProfileEvent::Removed { id })) => {
                 if let Some(row) = self.rows.remove(&id) {
                     ui.list().remove(row.widget());
                 }

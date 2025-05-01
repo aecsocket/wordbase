@@ -14,14 +14,16 @@ mod anki_group;
 mod dictionary_group;
 mod dictionary_row;
 mod error_page;
+mod group;
 mod manager;
 mod profile_manager;
 mod profile_row;
 mod theme;
 // mod theme_group;
 // mod theme_row;
+mod html;
+mod record_view;
 mod util;
-// mod record_view;
 
 mod icon_names {
     include!(concat!(env!("OUT_DIR"), "/icon_names.rs"));

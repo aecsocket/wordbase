@@ -127,7 +127,7 @@ impl Engine {
             .find_map(|record| match &record.record {
                 Record::YomichanAudioForvo(dict::yomichan_audio::Forvo { audio, .. })
                 | Record::YomichanAudioJpod(dict::yomichan_audio::Jpod { audio })
-                | Record::YomichanAudioNhk16(dict::yomichan_audio::Nhk16 { audio })
+                | Record::YomichanAudioNhk16(dict::yomichan_audio::Nhk16 { audio, .. })
                 | Record::YomichanAudioShinmeikai8(dict::yomichan_audio::Shinmeikai8 {
                     audio,
                     ..
