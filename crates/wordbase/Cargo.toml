@@ -18,8 +18,8 @@ workspace = true
 all-features = true
 
 [features]
-poem-openapi = ["dep:poem", "dep:poem-openapi"]
-render-html  = ["dep:maud", "dep:html-escape"]
+poem        = ["dep:poem", "dep:poem-openapi"]
+render-html = ["dep:maud", "dep:html-escape"]
 
 [dependencies]
 bytes        = { workspace = true, features = ["serde"] }

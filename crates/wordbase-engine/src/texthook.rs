@@ -3,7 +3,7 @@ use {
     anyhow::{Context, Result},
     arc_swap::ArcSwap,
     futures::{StreamExt, never::Never},
-    sqlx::{Pool, Sqlite},
+    sqlx::{Pool, Sqlite, query},
     std::{
         sync::{
             Arc,
@@ -35,7 +35,7 @@ impl Texthookers {
         db: &Pool<Sqlite>,
         send_event: broadcast::Sender<EngineEvent>,
     ) -> Result<Self> {
-        let url = sqlx::query!("SELECT texthooker_url FROM config")
+        let url = query!("SELECT texthooker_url FROM config")
             .fetch_one(db)
             .await
             .context("failed to fetch initial URL")?
@@ -72,7 +72,7 @@ impl Engine {
 
     pub async fn set_texthooker_url(&self, url: impl Into<String>) -> Result<()> {
         let url = url.into();
-        sqlx::query!("UPDATE config SET texthooker_url = $1", url)
+        query!("UPDATE config SET texthooker_url = $1", url)
             .execute(&self.db)
             .await?;
         self.texthookers.url.store(Arc::new(url));

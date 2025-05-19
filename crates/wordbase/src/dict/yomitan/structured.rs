@@ -1,7 +1,7 @@
 //! Glossary structured content schema.
 //!
 //! See [`structured-content.d.ts`](https://github.com/yomidevs/yomitan/blob/master/types/ext/structured-content.d.ts).
-// Implementation note: a lot of these fields are never used.
+// Implementation note: a lot of these fields are left as `null` or unspecified.
 // However, we can't add #[serde(skip_serializing_if)], because:
 // - we import from JSON and serialize into the database as MessagePack
 //   - this is stored with no field names, the field index determines its role

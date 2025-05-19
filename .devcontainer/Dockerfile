@@ -21,10 +21,11 @@ RUN yay -Syu --noconfirm \
     rustup default stable && \
     rustup install nightly && \
     curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | sh && \
-    cargo binstall cargo-shear
+    cargo binstall -y cargo-shear
 
 # install extra tools
-RUN yay -Syu --noconfirm websocat
+RUN yay -Syu --noconfirm websocat sqlite && \
+    cargo binstall -y sqlx-cli
 
 # install UI development libraries
 RUN yay -Syu --noconfirm \
@@ -38,5 +39,7 @@ RUN yay -Syu --noconfirm \
     gstreamer gst-libav gst-plugins-base gst-plugins-good gst-plugins-bad
 
 # install GNOME extension development tools
-RUN yay -Syu --noconfirm \
-    npm gnome-shell zip
+RUN yay -Syu --noconfirm npm gnome-shell zip
+
+# Rust -> Kotlin binding tools
+RUN yay -Syu --noconfirm ktlint

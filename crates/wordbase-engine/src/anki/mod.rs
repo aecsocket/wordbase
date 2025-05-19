@@ -9,7 +9,7 @@ use {
     serde::{Deserialize, Serialize},
     sqlx::{Pool, Sqlite},
     std::{cmp, sync::Arc},
-    wordbase::{NormString, ProfileId},
+    wordbase::ProfileId,
 };
 
 mod client;

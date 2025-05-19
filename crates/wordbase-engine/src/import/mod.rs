@@ -2,17 +2,17 @@ mod yomichan_audio;
 mod yomitan;
 
 use {
-    crate::{DictionaryEvent, Engine, EngineEvent, db},
+    crate::{CHANNEL_BUF_CAP, DictionaryEvent, Engine, EngineEvent, db},
     anyhow::{Context, Result},
     bytes::Bytes,
     derive_more::{Display, Error, From},
-    futures::{StreamExt, future::BoxFuture, stream::FuturesUnordered},
+    futures::{Stream, StreamExt, future::BoxFuture, stream::FuturesUnordered},
     sqlx::{Pool, Sqlite, Transaction},
     std::{
         collections::HashMap,
         sync::{Arc, LazyLock},
     },
-    tokio::sync::{Mutex, mpsc, oneshot},
+    tokio::sync::{Mutex, mpsc},
     tracing::debug,
     wordbase::{
         DictionaryId, DictionaryKind, DictionaryMeta, FrequencyValue, RecordId, RecordType, Term,
@@ -40,10 +40,19 @@ pub trait ImportKind: Send + Sync {
         &'a self,
         engine: &'a Engine,
         archive: Bytes,
-    ) -> BoxFuture<'a, Result<(ImportStarted, ImportContinue<'a>)>>;
+        send_progress: mpsc::Sender<f64>,
+    ) -> BoxFuture<'a, Result<(DictionaryMeta, ImportContinue<'a>)>>;
 }
 
 pub type ImportContinue<'a> = BoxFuture<'a, Result<DictionaryId>>;
+
+#[derive(Debug)]
+pub enum ImportEvent {
+    DeterminedKind(DictionaryKind),
+    ParsedMeta(DictionaryMeta),
+    Progress(f64),
+    Done(DictionaryId),
+}
 
 #[derive(Debug, Display, Error)]
 pub enum GetKindError {
@@ -136,43 +145,50 @@ pub enum ImportError {
 }
 
 impl Engine {
-    pub async fn import_dictionary(
+    pub fn import_dictionary(
         &self,
         archive: Bytes,
-        send_tracker: oneshot::Sender<ImportStarted>,
-    ) -> Result<DictionaryId, ImportError> {
-        debug!("Attempting to determine dictionary kind");
-        let kind = kind_of(&archive).await.map_err(ImportError::GetKind)?;
-        debug!("Importing as {kind:?} dictionary");
+    ) -> impl Stream<Item = Result<ImportEvent, ImportError>> {
+        async_stream::try_stream! {
+            debug!("Attempting to determine dictionary kind");
+            let kind = kind_of(&archive).await.map_err(ImportError::GetKind)?;
+            debug!("Importing as {kind:?} dictionary");
+            yield ImportEvent::DeterminedKind(kind);
 
-        let importer = FORMATS.get(&kind).ok_or(ImportError::NoImporter { kind })?;
-        let (tracker, import) = importer
-            .start_import(self, archive)
-            .await
-            .map_err(|source| ImportError::ParseMeta { kind, source })?;
-        let meta = &tracker.meta;
-        debug!(
-            "Importing {:?} dictionary {:?} version {:?}",
-            meta.kind, meta.name, meta.version
-        );
+            let importer = FORMATS.get(&kind).ok_or(ImportError::NoImporter { kind })?;
+            let (send_progress, mut recv_progress) = mpsc::channel(CHANNEL_BUF_CAP);
 
-        let already_exists = dictionary_exists_by_name(&self.db, &meta.name)
-            .await
-            .context("failed to fetch if this dictionary already exists")?;
-        if already_exists {
-            return Err(ImportError::AlreadyExists);
+            let (meta, continue_task) = importer
+                .start_import(self, archive, send_progress)
+                .await
+                .map_err(|source| ImportError::ParseMeta { kind, source })?;
+            debug!(
+                "Importing {:?} dictionary {:?} version {:?}",
+                meta.kind, meta.name, meta.version
+            );
+
+            let already_exists = dictionary_exists_by_name(&self.db, &meta.name)
+                .await
+                .context("failed to fetch if this dictionary already exists")?;
+            if already_exists {
+                Err(ImportError::AlreadyExists)?;
+                return;
+            }
+            yield ImportEvent::ParsedMeta(meta);
+
+            while let Some(progress) = recv_progress.recv().await {
+                yield ImportEvent::Progress(progress);
+            }
+
+            let id = continue_task
+                .await
+                .map_err(|source| ImportError::Import { kind, source })?;
+
+            self.sync_dictionaries().await?;
+            _ = self
+                .send_event
+                .send(EngineEvent::Dictionary(DictionaryEvent::Added { id }));
         }
-
-        _ = send_tracker.send(tracker);
-        let id = import
-            .await
-            .map_err(|source| ImportError::Import { kind, source })?;
-
-        self.sync_dictionaries().await?;
-        _ = self
-            .send_event
-            .send(EngineEvent::Dictionary(DictionaryEvent::Added { id }));
-        Ok(id)
     }
 }
 

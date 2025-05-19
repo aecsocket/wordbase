@@ -1,11 +1,8 @@
 mod schema;
 
 use {
-    super::{
-        ImportContinue, ImportKind, ImportStarted, insert_frequency, insert_record,
-        insert_term_record,
-    },
-    crate::{CHANNEL_BUF_CAP, Engine, import::insert_dictionary},
+    super::{ImportContinue, ImportKind, insert_frequency, insert_record, insert_term_record},
+    crate::{Engine, import::insert_dictionary},
     anyhow::{Context, Result, bail},
     async_zip::base::read::seek::ZipFileReader,
     bytes::Bytes,
@@ -42,10 +39,11 @@ impl ImportKind for Yomitan {
         &'a self,
         engine: &'a Engine,
         archive: Bytes,
-    ) -> BoxFuture<'a, Result<(ImportStarted, ImportContinue<'a>)>> {
+        send_progress: mpsc::Sender<f64>,
+    ) -> BoxFuture<'a, Result<(DictionaryMeta, ImportContinue<'a>)>> {
         Box::pin(async move {
-            let (result, continuation) = start_import(engine, archive).await?;
-            Ok((result, Box::pin(continuation) as ImportContinue))
+            let (meta, continuation) = start_import(engine, archive, send_progress).await?;
+            Ok((meta, Box::pin(continuation) as ImportContinue))
         })
     }
 }
@@ -71,7 +69,8 @@ async fn validate(archive: Bytes) -> Result<()> {
 async fn start_import(
     engine: &Engine,
     archive: Bytes,
-) -> Result<(ImportStarted, impl Future<Output = Result<DictionaryId>>)> {
+    send_progress: mpsc::Sender<f64>,
+) -> Result<(DictionaryMeta, impl Future<Output = Result<DictionaryId>>)> {
     let mut zip = ZipFileReader::new(Cursor::new(&archive))
         .await
         .context("failed to open zip archive")?;
@@ -106,12 +105,8 @@ async fn start_import(
     index.url.clone_into(&mut meta.url);
     index.attribution.clone_into(&mut meta.attribution);
 
-    let (send_progress, recv_progress) = mpsc::channel(CHANNEL_BUF_CAP);
     Ok((
-        ImportStarted {
-            meta: meta.clone(),
-            recv_progress,
-        },
+        meta.clone(),
         continue_import(engine, archive, meta, index, send_progress),
     ))
 }

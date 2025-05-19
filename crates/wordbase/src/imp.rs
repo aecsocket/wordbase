@@ -309,7 +309,7 @@ impl TermPart for &str {
     }
 }
 
-#[cfg(feature = "poem-openapi")]
+#[cfg(feature = "poem")]
 const _: () = {
     use {
         poem::web::Field,

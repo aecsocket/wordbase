@@ -1,8 +1,8 @@
 mod schema;
 
 use {
-    super::{ImportContinue, ImportKind, ImportStarted, insert_record, insert_term_record},
-    crate::{CHANNEL_BUF_CAP, Engine, import::insert_dictionary},
+    super::{ImportContinue, ImportKind, insert_record, insert_term_record},
+    crate::{Engine, import::insert_dictionary},
     anyhow::{Context, Result, bail},
     async_compression::futures::bufread::XzDecoder,
     async_tar::EntryType,
@@ -47,19 +47,16 @@ impl ImportKind for YomichanAudio {
         &'a self,
         engine: &'a Engine,
         archive: Bytes,
-    ) -> BoxFuture<'a, Result<(ImportStarted, ImportContinue<'a>)>> {
+        send_progress: mpsc::Sender<f64>,
+    ) -> BoxFuture<'a, Result<(DictionaryMeta, ImportContinue<'a>)>> {
         Box::pin(async move {
             let mut meta = DictionaryMeta::new(
                 DictionaryKind::YomichanAudio,
                 "Yomichan Japanese Local Audio",
             );
             meta.url = Some("https://github.com/yomidevs/local-audio-yomichan".into());
-            let (send_progress, recv_progress) = mpsc::channel(CHANNEL_BUF_CAP);
             Ok((
-                ImportStarted {
-                    meta: meta.clone(),
-                    recv_progress,
-                },
+                meta.clone(),
                 Box::pin(import(engine, archive, meta, send_progress)) as ImportContinue,
             ))
         })

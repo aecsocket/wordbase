@@ -123,11 +123,8 @@ macro_rules! for_kinds { ($macro:ident) => { $macro!(
 
 macro_rules! define_types { ($($dict_kind:ident($dict_path:ident) { $($record_kind:ident),* $(,)? }),* $(,)?) => { paste::paste! {
 /// Kind of [`Dictionary`] that can be imported into the engine.
-///
-/// This is `#[non_exhaustive]`, and new variants may be added in the future
-/// without breaking old code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Enum))]
+#[cfg_attr(feature = "poem", derive(poem_openapi::Enum))]
 #[repr(u32)]
 #[non_exhaustive]
 pub enum DictionaryKind {
@@ -144,11 +141,8 @@ impl DictionaryKind {
 
 /// Kind of [`RecordKind`] that a dictionary can contain, and that a client can
 /// query.
-///
-/// This is `#[non_exhaustive]`, and new variants may be added in the future
-/// without breaking old code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Enum))]
+#[cfg_attr(feature = "poem", derive(poem_openapi::Enum))]
 #[repr(u32)]
 #[non_exhaustive]
 pub enum RecordKind {
@@ -218,7 +212,7 @@ pub trait RecordType:
 ///
 /// Multiple [`Term`]s may link to a single [`Record`].
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::NewType))]
+#[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
 pub struct RecordId(pub i64);
 
 /// Imported collection of [`Record`]s in the engine.
@@ -226,7 +220,7 @@ pub struct RecordId(pub i64);
 /// This represents a dictionary which has already been imported into the
 /// engine, whereas [`DictionaryMeta`] may not.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
+#[cfg_attr(feature = "poem", derive(poem_openapi::Object))]
 #[serde(deny_unknown_fields)]
 pub struct Dictionary {
     /// Unique identifier for this dictionary in the database.
@@ -243,8 +237,7 @@ pub struct Dictionary {
 
 /// Metadata for a [`Dictionary`].
 ///
-/// This is `#[non_exhaustive]`, and new fields may be added in the future
-/// without breaking old code. Therefore, to create a new value, you must use
+/// This is `#[non_exhaustive]`: to create a new value, you must use
 /// [`DictionaryMeta::new`] to create an initial value, then set fields
 /// explicitly.
 ///
@@ -258,7 +251,7 @@ pub struct Dictionary {
 /// meta.url = Some("https://example.com".into());
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
+#[cfg_attr(feature = "poem", derive(poem_openapi::Object))]
 #[non_exhaustive]
 pub struct DictionaryMeta {
     /// What kind of dictionary this was imported from.
@@ -285,7 +278,7 @@ pub struct DictionaryMeta {
 
 /// Opaque and unique identifier for a [`Dictionary`] in the engine.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::NewType))]
+#[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
 pub struct DictionaryId(pub i64);
 
 /// Key for [`Record`]s in a [`Dictionary`].
@@ -350,9 +343,9 @@ pub enum FrequencyValue {
 /// into operations which require it (e.g. lookups).
 ///
 /// This represents a profile which already exists in the engine, whereas
-/// [`DictionaryMeta`] may not.
+/// [`ProfileMeta`] may not.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
+#[cfg_attr(feature = "poem", derive(poem_openapi::Object))]
 #[non_exhaustive]
 pub struct Profile {
     /// Unique identifier for this profile in the database.
@@ -387,7 +380,7 @@ pub struct Profile {
 
 /// Opaque and unique identifier for a [`Profile`] in the engine.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::NewType))]
+#[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
 pub struct ProfileId(pub i64);
 
 /// Normalized string buffer.
@@ -396,7 +389,7 @@ pub struct ProfileId(pub i64);
 /// whitespace.
 #[derive(Debug, Display, Clone, PartialEq, Eq, Hash, Deref, Serialize)]
 #[cfg_attr(
-    feature = "poem-openapi",
+    feature = "poem",
     derive(poem_openapi::NewType),
     oai(from_json = false, from_parameter = false, from_multipart = false)
 )]

@@ -11,7 +11,7 @@ use {
     serde::{Deserialize, Serialize},
     std::sync::Arc,
     tokio::sync::oneshot,
-    wordbase::{Dictionary, DictionaryId, DictionaryMeta, ProfileId},
+    wordbase::{Dictionary, DictionaryId, DictionaryKind, DictionaryMeta, ProfileId},
     wordbase_engine::Engine,
 };
 
@@ -39,30 +39,33 @@ pub async fn import(engine: &Engine, req: Import) -> EventStream<BoxStream<'stat
             .archive
             .into_vec()
             .await
+            .context("failed to read into memory")
         {
             Ok(archive) => Bytes::from(archive),
             Err(err) => {
-                yield ImportEvent::ReadIntoMemoryErr(ImportErr {
+                yield ImportEvent::Err(ImportErr {
                     error: err.to_string(),
                 });
                 return;
             }
         };
-        yield ImportEvent::ReadIntoMemoryOk(ReadIntoMemory {});
+        yield ImportEvent::ReadIntoMemory(ReadIntoMemory {});
+
+        // for await event in engine
+        //     .import_dictionary(archive, send_tracker)
+        //     .await {
+
+        //     }
 
         let (send_tracker, recv_tracker) = oneshot::channel();
         let task = tokio::spawn({
             let engine = engine.clone();
             async move {
-                engine
-                    .import_dictionary(archive, send_tracker)
-                    .await
-                    .map_err(anyhow::Error::new)
             }
         });
 
         if let Ok(mut tracker) = recv_tracker.await {
-            yield ImportEvent::ReadMeta(tracker.meta);
+            yield ImportEvent::ParsedMeta(tracker.meta);
 
             while let Some(progress) = tracker.recv_progress.recv().await {
                 yield ImportEvent::Progress(Progress { progress });
@@ -70,7 +73,7 @@ pub async fn import(engine: &Engine, req: Import) -> EventStream<BoxStream<'stat
         };
 
         yield match task.await.context("import task canceled") {
-            Ok(Ok(dictionary_id)) => ImportEvent::Ok(ImportOk { dictionary_id }),
+            Ok(Ok(dictionary_id)) => ImportEvent::Done(ImportDone { dictionary_id }),
             Ok(Err(err)) | Err(err) => {
                 ImportEvent::Err(ImportErr {
                     error: format!("{err:?}"),
@@ -89,11 +92,11 @@ pub struct Import {
 #[derive(Debug, Clone, Serialize, Deserialize, Union)]
 #[oai(discriminator_name = "event_kind")]
 pub enum ImportEvent {
-    ReadIntoMemoryOk(ReadIntoMemory),
-    ReadIntoMemoryErr(ImportErr),
-    ReadMeta(DictionaryMeta),
+    ReadIntoMemory(ReadIntoMemory),
+    DeterminedKind(DictionaryKind),
+    ParsedMeta(DictionaryMeta),
     Progress(Progress),
-    Ok(ImportOk),
+    Done(ImportDone),
     Err(ImportErr),
 }
 
@@ -106,7 +109,7 @@ pub struct Progress {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Object)]
-pub struct ImportOk {
+pub struct ImportDone {
     pub dictionary_id: DictionaryId,
 }
 

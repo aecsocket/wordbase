@@ -15,7 +15,6 @@
     "WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS": "1"
   },
   "onCreateCommand": "sudo chown dev:dev /run/user/1000",
-  "postCreateCommand": [".devcontainer/setup-schema-db.sh"],
   "mounts": [
     {
       "type": "volume",

@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Wordbase</string>
+    <string name="open_menu">Open menu</string>
+    <string name="dictionary_description">Description</string>
+    <string name="dictionary_attribution">Attribution</string>
+    <string name="dictionary_set_sorting">Set as sorting dictionary</string>
+    <string name="dictionary_visit_website">Visit website</string>
+    <string name="dictionary_delete">Delete</string>
+    <string name="dictionary_import">Import</string>
+</resources>
