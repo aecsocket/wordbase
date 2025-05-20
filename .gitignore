@@ -1,6 +1,4 @@
 /target
-/lindera_cache
+/lindera-cache
 .env
-wordbase.db
-wordbase.db-shm
-wordbase.db-wal
+.direnv

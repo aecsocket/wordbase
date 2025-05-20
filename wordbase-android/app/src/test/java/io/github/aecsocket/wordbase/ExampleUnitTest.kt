@@ -1,5 +1,6 @@
 package io.github.aecsocket.wordbase
 
+import com.sun.jna.Native
 import org.junit.Test
 
 import org.junit.Assert.*

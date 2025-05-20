@@ -44,7 +44,7 @@ paste                = { workspace = true }
 poem-openapi         = { workspace = true, optional = true }
 rayon                = { workspace = true }
 regex                = { workspace = true }
-reqwest              = { workspace = true, default-features = true, features = ["json"] }
+reqwest              = { workspace = true, features = ["json"] }
 rmp-serde            = { workspace = true }
 serde                = { workspace = true, features = ["derive"] }
 serde_json           = { workspace = true }

@@ -21,9 +21,10 @@ crate-type = ["cdylib"]
 name       = "wordbase"
 
 [dependencies]
-wordbase        = { workspace = true }
-wordbase-engine = { workspace = true }
+# wordbase        = { workspace = true }
+# wordbase-engine = { workspace = true }
 
+# openssl = { version = "0.10", features = ["vendored"] }
 uniffi = { workspace = true }
 
 [build-dependencies]

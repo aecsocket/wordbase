@@ -355,7 +355,7 @@ impl TryFrom<schema::generic::Index> for RevIndex<GenericInfo> {
                 None => {
                     entry.term = Term::from_reading(reading);
                 }
-            };
+            }
             if let Some(pitch_pattern) = pitch_pattern {
                 entry.pitch_pattern = Some(pitch_pattern);
             }

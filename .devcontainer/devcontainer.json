@@ -3,69 +3,28 @@
   "build": {
     "dockerfile": "Dockerfile"
   },
-  "runArgs": [
-    "--add-host=host.docker.internal:host-gateway",
-    "--device=/dev/dri"
-  ],
-  "securityOpt": ["seccomp=unconfined"],
   "containerEnv": {
-    "XDG_RUNTIME_DIR": "/run/user/1000",
-    "WAYLAND_DISPLAY": "wayland-0",
-    "LINDERA_CACHE": "${containerWorkspaceFolder}/lindera_cache",
-    "WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS": "1"
+    "LINDERA_CACHE": "${containerWorkspaceFolder}/lindera-cache"
   },
-  "onCreateCommand": "sudo chown dev:dev /run/user/1000",
   "mounts": [
     {
       "type": "volume",
       "source": "wordbase-profile",
-      "target": "/home/dev"
+      "target": "/home/vscode"
     },
     {
-      "type": "bind",
-      "source": "${localEnv:XDG_RUNTIME_DIR}/${localEnv:WAYLAND_DISPLAY}",
-      "target": "/run/user/1000/wayland-0"
-    },
-    {
-      "type": "bind",
-      "source": "${localEnv:XDG_RUNTIME_DIR}/bus",
-      "target": "/run/user/1000/bus"
-    },
-    {
-      "type": "bind",
-      "source": "${localEnv:XDG_RUNTIME_DIR}/at-spi/bus",
-      "target": "/run/user/1000/at-spi/bus"
-    },
-    {
-      "type": "bind",
-      "source": "${localEnv:XDG_RUNTIME_DIR}/pipewire-0",
-      "target": "/run/user/1000/pipewire-0"
-    },
-    {
-      "type": "bind",
-      "source": "${localEnv:HOME}/.local/share/gnome-shell/extensions/",
-      "target": "/workspaces/gnome-shell-extensions"
-    },
-    {
-      "type": "bind",
-      "source": "${localEnv:HOME}/.local/share/glib-2.0/schemas/",
-      "target": "/home/dev/.local/share/glib-2.0/schemas"
+      "type": "volume",
+      "source": "nix",
+      "target": "/nix"
     }
   ],
   "customizations": {
     "vscode": {
       "extensions": [
-        "ms-azuretools.vscode-docker",
-        "GitHub.vscode-pull-request-github",
         "rust-lang.rust-analyzer",
-        "vadimcn.vscode-lldb",
-        "tamasfe.even-better-toml",
         "fill-labs.dependi",
-        "bodil.blueprint-gtk",
-        "qwtel.sqlite-viewer",
-        "esbenp.prettier-vscode",
-        "dbaeumer.vscode-eslint",
-        "redhat.vscode-xml"
+        "vadimcn.vscode-lldb",
+        "jnoortheen.nix-ide"
       ]
     }
   }

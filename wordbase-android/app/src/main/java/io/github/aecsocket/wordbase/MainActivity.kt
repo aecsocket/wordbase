@@ -235,7 +235,7 @@ fun ManagePage() {
     ) {
         item {
             Text(
-                "Dictionaries",
+                "Dictionaries add=${uniffi.wordbase.add(3u, 4u)}",
                 style = MaterialTheme.typography.headlineLarge
             )
         }

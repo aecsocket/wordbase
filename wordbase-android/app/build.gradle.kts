@@ -40,6 +40,7 @@ android {
     }
 
     sourceSets.getByName("main") {
+        jniLibs.srcDir(layout.buildDirectory.dir("generated/lib"))
         kotlin.srcDir(layout.buildDirectory.dir("generated/uniffi/wordbase"))
     }
 }
@@ -64,5 +65,10 @@ dependencies {
 
     implementation(libs.compose.webview)
     implementation(libs.reorderable)
-    implementation(libs.jna)
+    implementation(libs.jna) {
+        artifact {
+            type = "aar"
+        }
+    }
 }
+
