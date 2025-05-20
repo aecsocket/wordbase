@@ -13,6 +13,7 @@ use {
 
 /// What file type [`Audio::data`] is.
 #[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum AudioFormat {
     /// Opus audio format.
     #[display("ogg")]
@@ -35,6 +36,7 @@ pub struct Audio {
 ///
 /// [Forvo]: https://forvo.com/
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Forvo {
     /// Username of the speaker.
     pub username: String,
@@ -46,6 +48,7 @@ pub struct Forvo {
 ///
 /// [jpod]: https://www.japanesepod101.com/
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Jpod {
     /// Audio data.
     pub audio: Audio,
@@ -55,6 +58,7 @@ pub struct Jpod {
 ///
 /// [NHK]: https://www.nhk.or.jp/
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Nhk16 {
     /// Audio data.
     pub audio: Audio,
@@ -70,6 +74,7 @@ pub struct Nhk16 {
 ///
 /// [Shin Meikai]: https://en.wikipedia.org/wiki/Shin_Meikai_kokugo_jiten
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Shinmeikai8 {
     /// Audio data.
     pub audio: Audio,
@@ -84,3 +89,20 @@ pub struct Shinmeikai8 {
     /// The downstep is indicated by a `＼`, for example `読＼む`.
     pub pitch_pattern: Option<NormString>,
 }
+
+#[cfg(feature = "uniffi")]
+const _: () = {
+    #[derive(uniffi::Record)]
+    pub struct AudioFfi {
+        pub format: AudioFormat,
+        pub data: Vec<u8>,
+    }
+
+    uniffi::custom_type!(Audio, AudioFfi, {
+        lower: |x| AudioFfi { format: x.format, data: x.data.to_vec() },
+        try_lift: |x| Ok(Audio {
+            format: x.format,
+            data: Bytes::from(x.data),
+        })
+    });
+};

@@ -44,10 +44,11 @@ use {
 
 /// Single record returned in response to a [`Lookup`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct RecordLookup {
     /// How far along [`Lookup::context`] the engine scanned to find the
     /// [`Term`] in this record.
-    pub bytes_scanned: usize,
+    pub bytes_scanned: u64,
     /// ID of the [`Dictionary`] from which the record was retrieved.
     pub source: DictionaryId,
     /// [`Term`] that this record is for.

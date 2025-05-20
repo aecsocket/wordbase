@@ -13,8 +13,8 @@
 
 use {
     derive_more::{Deref, DerefMut, Display},
-    foldhash::HashMap,
     serde::{Deserialize, Serialize},
+    std::collections::HashMap,
     std::fmt,
 };
 
@@ -26,9 +26,39 @@ pub enum Content {
     Content(Vec<Content>),
 }
 
+#[cfg(feature = "uniffi")]
+const _: () = {
+    #[derive(uniffi::Enum)]
+    pub enum ContentFfi {
+        String(String),
+        Element(Vec<Element>),
+        Content(Vec<Content>),
+    }
+
+    uniffi::custom_type!(Content, ContentFfi, {
+        lower: |c| match c {
+            Content::String(s) => ContentFfi::String(s),
+            Content::Element(e) => ContentFfi::Element(vec![*e]),
+            Content::Content(v) => ContentFfi::Content(v),
+        },
+        try_lift: |c| Ok(match c {
+            ContentFfi::String(s) => Content::String(s),
+            ContentFfi::Element(e) => {
+                let [elem] = <[Element; 1]>::try_from(e).map_err(|_| NoElement)?;
+                Content::Element(Box::new(elem))
+            }
+            ContentFfi::Content(v) => Content::Content(v),
+        })
+    });
+
+    #[derive(Debug, Display, derive_more::Error)]
+    #[display("`Content.Element` must contain exactly 1 element in list")]
+    pub struct NoElement;
+};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[serde(tag = "tag", rename_all = "kebab-case", deny_unknown_fields)]
-#[expect(clippy::large_enum_variant, reason = "most variants will be large")]
 pub enum Element {
     Br(LineBreakElement),
     Ruby(UnstyledElement),
@@ -53,12 +83,14 @@ pub enum Element {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LineBreakElement {
     pub data: Option<Data>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UnstyledElement {
     pub content: Option<Content>,
@@ -67,6 +99,7 @@ pub struct UnstyledElement {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TableElement {
     pub content: Option<Content>,
@@ -78,6 +111,7 @@ pub struct TableElement {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StyledElement {
     pub content: Option<Content>,
@@ -89,6 +123,7 @@ pub struct StyledElement {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[serde(rename_all = "camelCase")]
 pub struct ImageElement {
     #[serde(flatten)]
@@ -100,6 +135,7 @@ pub struct ImageElement {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[serde(rename_all = "camelCase")]
 pub struct ImageElementBase {
     pub data: Option<Data>,
@@ -120,6 +156,7 @@ pub struct ImageElementBase {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LinkElement {
     pub content: Option<Content>,
@@ -130,6 +167,7 @@ pub struct LinkElement {
 // styling
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ContentStyle {
     pub font_style: Option<FontStyle>,
@@ -183,6 +221,7 @@ macro_rules! display_as_serialize {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[serde(rename_all = "kebab-case")]
 pub enum VerticalAlign {
     Baseline,
@@ -198,6 +237,7 @@ pub enum VerticalAlign {
 display_as_serialize!(VerticalAlign);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[serde(rename_all = "kebab-case")]
 pub enum TextDecorationLine {
     Underline,
@@ -208,6 +248,7 @@ pub enum TextDecorationLine {
 display_as_serialize!(TextDecorationLine);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[serde(rename_all = "kebab-case")]
 pub enum TextDecorationStyle {
     Solid,
@@ -220,6 +261,7 @@ pub enum TextDecorationStyle {
 display_as_serialize!(TextDecorationStyle);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[serde(rename_all = "kebab-case")]
 pub enum FontStyle {
     Normal,
@@ -229,6 +271,7 @@ pub enum FontStyle {
 display_as_serialize!(FontStyle);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[serde(rename_all = "kebab-case")]
 pub enum FontWeight {
     Normal,
@@ -238,6 +281,7 @@ pub enum FontWeight {
 display_as_serialize!(FontWeight);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[serde(rename_all = "kebab-case")]
 pub enum WordBreak {
     Normal,
@@ -248,6 +292,7 @@ pub enum WordBreak {
 display_as_serialize!(WordBreak);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[serde(rename_all = "kebab-case")]
 pub enum TextAlign {
     Start,
@@ -261,6 +306,7 @@ pub enum TextAlign {
 display_as_serialize!(TextAlign);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[serde(rename_all = "kebab-case")]
 pub enum SizeUnits {
     Px,
@@ -270,6 +316,7 @@ pub enum SizeUnits {
 display_as_serialize!(SizeUnits);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[serde(rename_all = "kebab-case")]
 pub enum ImageRendering {
     Auto,
@@ -280,6 +327,7 @@ pub enum ImageRendering {
 display_as_serialize!(ImageRendering);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[serde(rename_all = "kebab-case")]
 pub enum ImageAppearance {
     Auto,
@@ -289,6 +337,7 @@ pub enum ImageAppearance {
 display_as_serialize!(ImageAppearance);
 
 #[derive(Debug, Display, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[serde(untagged)]
 pub enum NumberOrString {
     Number(f64),
@@ -297,6 +346,9 @@ pub enum NumberOrString {
 
 #[derive(Debug, Clone, Default, Deref, DerefMut, Serialize, Deserialize)]
 pub struct Data(pub HashMap<String, String>);
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_newtype!(Data, HashMap<String, String>);
 
 // utils
 

@@ -41,7 +41,7 @@ android {
 
     sourceSets.getByName("main") {
         jniLibs.srcDir(layout.buildDirectory.dir("generated/lib"))
-        kotlin.srcDir(layout.buildDirectory.dir("generated/uniffi/wordbase"))
+        kotlin.srcDir(layout.buildDirectory.dir("generated/uniffi"))
     }
 }
 
@@ -63,7 +63,7 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 
-    implementation(libs.compose.webview)
+    implementation(libs.webview)
     implementation(libs.reorderable)
     implementation(libs.jna) {
         artifact {
@@ -71,4 +71,3 @@ dependencies {
         }
     }
 }
-

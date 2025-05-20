@@ -159,7 +159,7 @@ impl Engine {
                     })?;
 
                 Ok(RecordLookup {
-                    bytes_scanned: lemma.len(),
+                    bytes_scanned: lemma.len() as u64, // TODO proper
                     source: DictionaryId(record.source),
                     record_id: RecordId(record.id),
                     term,
@@ -199,7 +199,7 @@ impl Engine {
             {
                 if seen_record_ids.insert(result.record_id) {
                     records.push(RecordLookup {
-                        bytes_scanned: deinflection.scan_len,
+                        bytes_scanned: deinflection.scan_len as u64, // TODO properly
                         ..result
                     });
                 }

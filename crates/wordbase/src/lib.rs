@@ -4,9 +4,12 @@ pub mod dict;
 
 mod imp;
 mod protocol;
+use std::str::FromStr;
+
 pub use protocol::*;
+
 use {
-    derive_more::{Debug, Deref, Display, From},
+    derive_more::{Debug, Deref, Display, Error, From},
     serde::{Deserialize, Serialize, de::DeserializeOwned},
 };
 
@@ -125,13 +128,12 @@ macro_rules! define_types { ($($dict_kind:ident($dict_path:ident) { $($record_ki
 /// Kind of [`Dictionary`] that can be imported into the engine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem", derive(poem_openapi::Enum))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[repr(u32)]
 #[non_exhaustive]
+#[expect(missing_docs, reason = "self-explanatory")]
 pub enum DictionaryKind {
-    $(
-    #[doc = concat!("See [`dict::", stringify!($dict_path), "`].")]
-    $dict_kind,
-    )*
+    $($dict_kind,)*
 }
 
 impl DictionaryKind {
@@ -143,13 +145,12 @@ impl DictionaryKind {
 /// query.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem", derive(poem_openapi::Enum))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[repr(u32)]
 #[non_exhaustive]
+#[expect(missing_docs, reason = "self-explanatory")]
 pub enum RecordKind {
-    $($(
-    #[doc = concat!("See [`dict::", stringify!($dict_path), "::", stringify!($record_kind), "`].")]
-    [< $dict_kind $record_kind >],
-    )*)*
+    $($([< $dict_kind $record_kind >],)*)*
 }
 
 impl RecordKind {
@@ -159,12 +160,11 @@ impl RecordKind {
 
 /// Data that a [`Dictionary`] may store for a specific [`Term`].
 #[derive(Debug, Clone, Serialize, Deserialize, From)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[non_exhaustive]
+#[expect(missing_docs, reason = "self-explanatory")]
 pub enum Record {
-    $($(
-    #[doc = concat!("See [`dict::", stringify!($dict_path), "::", stringify!($record_kind), "`].")]
-    [< $dict_kind $record_kind >](dict::$dict_path::$record_kind),
-    )*)*
+    $($([< $dict_kind $record_kind >](dict::$dict_path::$record_kind),)*)*
 }
 
 impl Record {
@@ -215,12 +215,16 @@ pub trait RecordType:
 #[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
 pub struct RecordId(pub i64);
 
+#[cfg(feature = "uniffi")]
+uniffi::custom_newtype!(RecordId, i64);
+
 /// Imported collection of [`Record`]s in the engine.
 ///
 /// This represents a dictionary which has already been imported into the
 /// engine, whereas [`DictionaryMeta`] may not.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem", derive(poem_openapi::Object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[serde(deny_unknown_fields)]
 pub struct Dictionary {
     /// Unique identifier for this dictionary in the database.
@@ -252,6 +256,7 @@ pub struct Dictionary {
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem", derive(poem_openapi::Object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[non_exhaustive]
 pub struct DictionaryMeta {
     /// What kind of dictionary this was imported from.
@@ -280,6 +285,9 @@ pub struct DictionaryMeta {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
 pub struct DictionaryId(pub i64);
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_newtype!(DictionaryId, i64);
 
 /// Key for [`Record`]s in a [`Dictionary`].
 ///
@@ -317,6 +325,27 @@ pub enum Term {
     },
 }
 
+#[cfg(feature = "uniffi")]
+const _: () = {
+    #[derive(uniffi::Record)]
+    pub struct TermFfi {
+        headword: Option<NormString>,
+        reading: Option<NormString>,
+    }
+
+    #[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Error)]
+    #[display("no headword or reading")]
+    pub struct NoHeadwordOrReading;
+
+    uniffi::custom_type!(Term, TermFfi, {
+        lower: |term| TermFfi {
+            headword: term.headword().cloned(),
+            reading: term.reading().cloned(),
+        },
+        try_lift: |ffi| Term::new(ffi.headword, ffi.reading).ok_or_else(|| NoHeadwordOrReading.into()),
+    });
+};
+
 /// How often a [`Term`] appears in a single [`Dictionary`].
 ///
 /// This value is used for sorting lookup results. However, the value given is
@@ -329,6 +358,7 @@ pub enum Term {
 /// the variant, as the value does not make sense without knowing if it's a rank
 /// or an occurrence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum FrequencyValue {
     /// Lower value represents a [`Term`] which appears more frequently.
     Rank(i64),
@@ -346,6 +376,7 @@ pub enum FrequencyValue {
 /// [`ProfileMeta`] may not.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem", derive(poem_openapi::Object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[non_exhaustive]
 pub struct Profile {
     /// Unique identifier for this profile in the database.
@@ -383,6 +414,9 @@ pub struct Profile {
 #[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
 pub struct ProfileId(pub i64);
 
+#[cfg(feature = "uniffi")]
+uniffi::custom_newtype!(ProfileId, i64);
+
 /// Normalized string buffer.
 ///
 /// This type is guaranteed to be a non-empty string with no trailing or leading
@@ -396,6 +430,33 @@ pub struct ProfileId(pub i64);
 #[debug("{_0:?}")]
 pub struct NormString(String);
 
+/// Attempted to turn a string into a [`NormString`], but the string was empty.
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Error)]
+#[display("string empty")]
+pub struct StringEmpty;
+
+impl TryFrom<String> for NormString {
+    type Error = StringEmpty;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new(value).ok_or(StringEmpty)
+    }
+}
+
+impl FromStr for NormString {
+    type Err = StringEmpty;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::new(s).ok_or(StringEmpty)
+    }
+}
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(NormString, String, {
+    lower: |s| s.0,
+    try_lift: |s| NormString::try_from(s).map_err(Into::into),
+});
+
 #[doc(hidden)]
 pub trait TermPart: Sized {
     type IntoTerm;
@@ -406,3 +467,6 @@ pub trait TermPart: Sized {
 
     fn into_term_with_reading(self) -> Self::IntoTerm;
 }
+
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();

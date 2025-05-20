@@ -20,10 +20,10 @@ all-features = true
 [features]
 poem        = ["dep:poem", "dep:poem-openapi"]
 render-html = ["dep:maud", "dep:html-escape"]
+uniffi      = ["dep:uniffi"]
 
 [dependencies]
 bytes        = { workspace = true, features = ["serde"] }
-foldhash     = { workspace = true }
 html-escape  = { workspace = true, optional = true }
 maud         = { workspace = true, optional = true }
 paste        = { workspace = true }
@@ -31,10 +31,12 @@ poem         = { workspace = true, optional = true }
 poem-openapi = { workspace = true, optional = true }
 serde        = { workspace = true, features = ["derive"] }
 serde_json   = { workspace = true }
+uniffi       = { workspace = true, optional = true }
 
 derive_more = { workspace = true, features = [
   "from",
   "display",
+  "error",
   "deref",
   "deref_mut",
 ] }

@@ -54,7 +54,7 @@ impl Engine {
 
         // based on Lapis
         let term_ruby_plain = term_ruby_plain(term);
-        let scan_end = cursor + byte_scan_len;
+        let scan_end = cursor + (byte_scan_len as usize); // TODO proper checks
         let sentence_cloze = if let (Some(cloze_prefix), Some(cloze_body), Some(cloze_suffix)) = (
             sentence.get(..cursor),
             sentence.get(cursor..scan_end),

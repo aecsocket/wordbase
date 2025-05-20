@@ -4306,7 +4306,6 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "derive_more 2.0.1",
- "foldhash",
  "html-escape",
  "maud",
  "paste",
@@ -4314,6 +4313,7 @@ dependencies = [
  "poem-openapi",
  "serde",
  "serde_json",
+ "uniffi",
 ]
 
 [[package]]
@@ -4358,10 +4358,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "wordbase-sys"
+name = "wordbase-engine-sys"
 version = "0.0.0"
 dependencies = [
  "uniffi",
+ "wordbase",
+ "wordbase-engine",
 ]
 
 [[package]]

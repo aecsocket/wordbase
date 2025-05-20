@@ -16,6 +16,7 @@ use {
 
 /// What this term means, written in the dictionary's source language.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[serde(deny_unknown_fields)]
 pub struct Glossary {
     /// How frequently this word appears, as a ranking relative to other terms
@@ -32,6 +33,7 @@ pub struct Glossary {
 
 /// How often this term appears in this dictionary's corpus.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[serde(deny_unknown_fields)]
 pub struct Frequency {
     /// Raw integer ranking value.
@@ -49,6 +51,7 @@ pub struct Frequency {
 
 /// Japanese pitch accent information.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[serde(deny_unknown_fields)]
 pub struct Pitch {
     /// What [mora] position the [downstep] is located on.
@@ -79,6 +82,7 @@ pub struct Pitch {
 ///
 /// [`Term`]: crate::Term
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[serde(deny_unknown_fields)]
 pub struct GlossaryTag {
     /// Human-readable name for this tag.

@@ -3,9 +3,6 @@
   "build": {
     "dockerfile": "Dockerfile"
   },
-  "containerEnv": {
-    "LINDERA_CACHE": "${containerWorkspaceFolder}/lindera-cache"
-  },
   "mounts": [
     {
       "type": "volume",

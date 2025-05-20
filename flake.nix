@@ -17,6 +17,8 @@
       in {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
+            just
+
             # Nix
             nixd
             nil
@@ -29,6 +31,9 @@
             openssl
             sqlx-cli
             sqlite
+
+            # Binding generation
+            ktlint
           ];
           # LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath buildInputs;
         };

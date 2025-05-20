@@ -59,6 +59,7 @@ import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.compose.ui.unit.dp
 import androidx.core.view.HapticFeedbackConstantsCompat
 import androidx.core.view.ViewCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.window.core.layout.WindowWidthSizeClass
 import com.kevinnzou.web.WebView
 import com.kevinnzou.web.rememberWebViewStateWithHTMLData
@@ -67,11 +68,20 @@ import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableCollectionItemScope
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import uniffi.wordbase.Dictionary
+import uniffi.wordbase.DictionaryKind
+import uniffi.wordbase.DictionaryMeta
+import uniffi.wordbase.RecordKind
+
+lateinit var Engine: uniffi.wordbase_engine.Wordbase
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        lifecycleScope.launch {
+//            Engine = uniffi.wordbase_engine.engine()
+        }
         setContent {
             WordbaseTheme {
                 Ui()
@@ -174,6 +184,7 @@ fun SearchPage(padding: PaddingValues) {
         val webViewState = rememberWebViewStateWithHTMLData(
             """
             <h1>Hello world!</h1>
+            ${RecordKind.entries}
             <p>some text</p>
             """.trimIndent()
         )
@@ -194,19 +205,27 @@ fun ManagePage() {
             listOf(
                 Dictionary(
                     id = 1,
-                    name = "Jitendex",
-                    version = "1.0.0",
-                    enabled = true,
-                    description = "Jitendex foo bar whatever blah. Lorem ipsum dolor sit amet, just fill space so it wraps on a new line",
-                    attribution = "attribution info..."
+                    meta = DictionaryMeta(
+                        kind = DictionaryKind.YOMITAN,
+                        name = "Jitendex",
+                        version = "1.0.0",
+                        description = "Jitendex foo bar whatever blah. Lorem ipsum dolor sit amet, just fill space so it wraps on a new line",
+                        url = "https://example.com",
+                        attribution = "attribution info..."
+                    ),
+                    position = 1
                 ),
                 Dictionary(
                     id = 2,
-                    name = "JPDB",
-                    version = "0.1.0",
-                    enabled = false,
-                    description = "desc",
-                    attribution = null,
+                    meta = DictionaryMeta(
+                        kind = DictionaryKind.YOMITAN,
+                        name = "JPDB",
+                        version = "0.1.0",
+                        description = "desc",
+                        url = null,
+                        attribution = null,
+                    ),
+                    position = 2
                 )
             )
         )
@@ -235,7 +254,7 @@ fun ManagePage() {
     ) {
         item {
             Text(
-                "Dictionaries add=${uniffi.wordbase.add(3u, 4u)}",
+                "Dictionaries",
                 style = MaterialTheme.typography.headlineLarge
             )
         }
@@ -270,15 +289,6 @@ fun ManagePage() {
         }
     }
 }
-
-data class Dictionary(
-    val id: Long,
-    val name: String,
-    val version: String?,
-    var enabled: Boolean,
-    val description: String?,
-    val attribution: String?,
-)
 
 @PreviewScreenSizes
 @Preview
@@ -320,11 +330,11 @@ fun ReorderableCollectionItemScope.DictionaryRow(dict: Dictionary) {
 
                 Column {
                     Text(
-                        dict.name,
+                        dict.meta.name,
                         style = MaterialTheme.typography.bodyLarge
                     )
 
-                    dict.version?.let { version ->
+                    dict.meta.version?.let { version ->
                         Text(
                             version,
                             style = MaterialTheme.typography.bodyMedium
@@ -338,8 +348,8 @@ fun ReorderableCollectionItemScope.DictionaryRow(dict: Dictionary) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Switch(
-                        checked = dict.enabled,
-                        onCheckedChange = { dict.enabled = it }
+                        checked = true,
+                        onCheckedChange = {}
                     )
                 }
             }
@@ -349,14 +359,14 @@ fun ReorderableCollectionItemScope.DictionaryRow(dict: Dictionary) {
             modifier = Modifier.padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            dict.description?.let { description ->
+            dict.meta.description?.let { description ->
                 DictionaryMetaItem(
                     key = stringResource(R.string.dictionary_description),
                     value = description
                 )
             }
 
-            dict.attribution?.let { attribution ->
+            dict.meta.attribution?.let { attribution ->
                 DictionaryMetaItem(
                     key = stringResource(R.string.dictionary_attribution),
                     value = attribution
