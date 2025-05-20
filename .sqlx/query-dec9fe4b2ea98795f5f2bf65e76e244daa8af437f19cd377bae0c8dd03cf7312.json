@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE config SET ankiconnect_url = $1, ankiconnect_api_key = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "dec9fe4b2ea98795f5f2bf65e76e244daa8af437f19cd377bae0c8dd03cf7312"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO dictionary (meta, position)\n        VALUES ($1, (SELECT COALESCE(MAX(position), 0) + 1 FROM dictionary))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "7676d09f16c242e3ca8f3a1684bfdc14c0bcc6bba7fb8a45a73b99c153b8a052"
+}

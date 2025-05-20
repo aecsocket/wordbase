@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT texthooker_url FROM config",
+  "describe": {
+    "columns": [
+      {
+        "name": "texthooker_url",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "555852e2c1ea306dc0cc27d0884d58536b4129aac5bdc12778cfcb76fa23b31f"
+}

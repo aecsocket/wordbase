@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM profile_enabled_dictionary\n            WHERE profile = $1 AND dictionary = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "ba2cd2a27bd055d7b5c391f059aadd5936b93043bcefe0fa13cf211bfcb21358"
+}

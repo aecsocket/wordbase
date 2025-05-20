@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT\n            profile.id,\n            profile.name,\n            profile.sorting_dictionary,\n            profile.font_family,\n            profile.anki_deck,\n            profile.anki_note_type,\n            ped.dictionary\n        FROM profile\n        LEFT JOIN profile_enabled_dictionary ped ON profile.id = ped.profile\n        ORDER BY profile.id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "sorting_dictionary",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "font_family",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "anki_deck",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "anki_note_type",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "dictionary",
+        "ordinal": 6,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "5356950a4949417851af5993037f9ff488b859a4b84530873fef7ea73d6e059d"
+}

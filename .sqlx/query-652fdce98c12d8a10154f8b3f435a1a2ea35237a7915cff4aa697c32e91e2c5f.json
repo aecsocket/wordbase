@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE profile SET sorting_dictionary = $1\n            WHERE id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "652fdce98c12d8a10154f8b3f435a1a2ea35237a7915cff4aa697c32e91e2c5f"
+}

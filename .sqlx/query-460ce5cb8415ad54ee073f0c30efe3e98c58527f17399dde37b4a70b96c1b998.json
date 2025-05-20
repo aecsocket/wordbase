@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO profile (name, sorting_dictionary, font_family, anki_deck, anki_note_type)\n            SELECT $1, sorting_dictionary, font_family, anki_deck, anki_note_type\n            FROM profile\n            WHERE id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "460ce5cb8415ad54ee073f0c30efe3e98c58527f17399dde37b4a70b96c1b998"
+}

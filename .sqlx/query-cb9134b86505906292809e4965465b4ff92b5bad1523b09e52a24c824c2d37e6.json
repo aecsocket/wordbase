@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO profile_enabled_dictionary (profile, dictionary)\n            SELECT $1, dictionary\n            FROM profile_enabled_dictionary\n            WHERE profile = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "cb9134b86505906292809e4965465b4ff92b5bad1523b09e52a24c824c2d37e6"
+}

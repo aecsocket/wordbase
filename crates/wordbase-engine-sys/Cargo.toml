@@ -1,0 +1,30 @@
+[package]
+name    = "wordbase-engine-sys"
+publish = false
+
+authors.workspace      = true
+categories.workspace   = true
+edition.workspace      = true
+keywords.workspace     = true
+license.workspace      = true
+repository.workspace   = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lib]
+crate-type = ["cdylib"]
+name       = "wordbase_engine"
+
+[dependencies]
+wordbase        = { workspace = true, features = ["uniffi"] }
+wordbase-engine = { workspace = true }
+
+uniffi = { workspace = true }
+
+[build-dependencies]
+uniffi = { workspace = true, features = ["build"] }

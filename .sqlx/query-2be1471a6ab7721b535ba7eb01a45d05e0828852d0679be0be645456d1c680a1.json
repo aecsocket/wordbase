@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT OR IGNORE INTO profile_enabled_dictionary (profile, dictionary)\n            VALUES ($1, $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "2be1471a6ab7721b535ba7eb01a45d05e0828852d0679be0be645456d1c680a1"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "WITH positions AS (\n                SELECT\n                    (SELECT position FROM dictionary WHERE id = $1) AS pos1,\n                    (SELECT position FROM dictionary WHERE id = $2) AS pos2\n            )\n            UPDATE dictionary\n            SET position = CASE\n                WHEN id = $1 THEN (SELECT pos2 FROM positions)\n                WHEN id = $2 THEN (SELECT pos1 FROM positions)\n                ELSE position\n            END\n            WHERE id IN ($1, $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "680b022f568df8ff6e53360921072c8acf57887fdc222422680f3e3deff85662"
+}
