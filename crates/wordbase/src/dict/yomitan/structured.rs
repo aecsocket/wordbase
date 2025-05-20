@@ -28,32 +28,51 @@ pub enum Content {
 
 #[cfg(feature = "uniffi")]
 const _: () = {
+    pub struct ElementFfi(Element);
+
+    uniffi::custom_newtype!(ElementFfi, Element);
+
     #[derive(uniffi::Enum)]
     pub enum ContentFfi {
         String(String),
-        Element(Vec<Element>),
-        Content(Vec<Content>),
+        Element(Vec<ElementFfi>),
+        Content(Vec<ContentFfi>),
     }
 
-    uniffi::custom_type!(Content, ContentFfi, {
-        lower: |c| match c {
-            Content::String(s) => ContentFfi::String(s),
-            Content::Element(e) => ContentFfi::Element(vec![*e]),
-            Content::Content(v) => ContentFfi::Content(v),
-        },
-        try_lift: |c| Ok(match c {
-            ContentFfi::String(s) => Content::String(s),
-            ContentFfi::Element(e) => {
-                let [elem] = <[Element; 1]>::try_from(e).map_err(|_| NoElement)?;
-                Content::Element(Box::new(elem))
+    impl From<Content> for ContentFfi {
+        fn from(value: Content) -> Self {
+            match value {
+                Content::String(s) => Self::String(s),
+                Content::Element(e) => Self::Element(vec![ElementFfi(*e)]),
+                Content::Content(v) => Self::Content(v.into_iter().map(Self::from).collect()),
             }
-            ContentFfi::Content(v) => Content::Content(v),
-        })
-    });
+        }
+    }
+
+    impl TryFrom<ContentFfi> for Content {
+        type Error = InvalidElement;
+
+        fn try_from(value: ContentFfi) -> Result<Self, Self::Error> {
+            Ok(match value {
+                ContentFfi::String(s) => Self::String(s),
+                ContentFfi::Element(e) => {
+                    let [elem] = <[ElementFfi; 1]>::try_from(e).map_err(|_| InvalidElement)?;
+                    Self::Element(Box::new(elem.0))
+                }
+                ContentFfi::Content(v) => Self::Content(
+                    v.into_iter()
+                        .map(Self::try_from)
+                        .collect::<Result<Vec<_>, _>>()?,
+                ),
+            })
+        }
+    }
 
     #[derive(Debug, Display, derive_more::Error)]
     #[display("`Content.Element` must contain exactly 1 element in list")]
-    pub struct NoElement;
+    pub struct InvalidElement;
+
+    uniffi::custom_type!(Content, ContentFfi);
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

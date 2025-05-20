@@ -18,7 +18,8 @@ workspace = true
 all-features = true
 
 [features]
-poem-openapi = ["dep:poem-openapi"]
+poem   = ["wordbase/poem", "dep:poem-openapi"]
+uniffi = ["wordbase/uniffi", "dep:uniffi"]
 
 [dependencies]
 wordbase = { workspace = true, features = ["render-html"] }
@@ -56,13 +57,13 @@ tokio-tungstenite    = { workspace = true }
 tokio-util           = { workspace = true, features = ["rt"] }
 tracing              = { workspace = true }
 unicode-segmentation = { workspace = true }
+uniffi               = { workspace = true, optional = true, features = ["tokio"] }
 
 derive_more = { workspace = true, features = [
   "debug",
   "from",
   "display",
   "error",
+  "deref",
+  "deref_mut",
 ] }
-
-[dev-dependencies]
-tokio = { workspace = true, features = ["full"] }

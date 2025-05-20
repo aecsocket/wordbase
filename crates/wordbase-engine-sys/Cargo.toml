@@ -18,11 +18,10 @@ all-features = true
 
 [lib]
 crate-type = ["cdylib"]
-name       = "wordbase_engine"
+name       = "wordbase"
 
 [dependencies]
-wordbase        = { workspace = true, features = ["uniffi"] }
-wordbase-engine = { workspace = true }
+wordbase-engine = { workspace = true, features = ["uniffi"] }
 
 uniffi = { workspace = true }
 

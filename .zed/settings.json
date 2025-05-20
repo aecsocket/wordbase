@@ -12,21 +12,6 @@
           "command": "clippy"
         }
       }
-    },
-    "nil": {
-      "binary": {
-        "path": "nil"
-      }
-    },
-    "nixd": {
-      "binary": {
-        "path": "nixd"
-      }
-    },
-    "languages": {
-      "Nix": {
-        "language_servers": ["nil", "!nixd"]
-      }
     }
   }
 }

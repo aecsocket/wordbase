@@ -107,9 +107,13 @@ zbus = { version = "5.5", default-features = false }
 [workspace.metadata.cargo-shear]
 ignored = ["bzip2"]
 
+[workspace.metadata.cross.build.env]
+volumes = ["LINDERA_CACHE_VOL=lindera-cache"]
+
 [workspace.metadata.cross.target.aarch64-linux-android]
-# Install libssl-dev:arm64, see <https://github.com/cross-rs/cross/blob/main/docs/custom_images.md#adding-dependencies-to-existing-images>
 pre-build = [
-  # "dpkg --add-architecture $CROSS_DEB_ARCH",
+  "dpkg --add-architecture $CROSS_DEB_ARCH",
   "apt-get update && apt-get --assume-yes install libssl-dev:$CROSS_DEB_ARCH",
+  "export LINDERA_CACHE=/lindera-cache",
+  "echo \"hello wrold\" > \"$LINDERA_CACHE_VOL/temp.txt\"",
 ]

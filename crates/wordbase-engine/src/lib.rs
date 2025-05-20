@@ -35,10 +35,11 @@ use {
 };
 
 #[derive(Debug, Clone, Deref, DerefMut)]
-pub struct Engine(Arc<Inner>);
+pub struct SharedEngine(Arc<Engine>);
 
 #[derive(Debug)]
-pub struct Inner {
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+pub struct Engine {
     profiles: ArcSwap<Profiles>,
     dictionaries: ArcSwap<Dictionaries>,
     texthookers: Texthookers,
@@ -121,7 +122,7 @@ impl Engine {
         let db_path = data_dir.join("wordbase.db");
         let db = db::setup(&db_path).await?;
         let (send_event, _) = broadcast::channel(CHANNEL_BUF_CAP);
-        let engine = Self(Arc::new(Inner {
+        Ok(Self {
             profiles: ArcSwap::from_pointee(
                 Profiles::fetch(&db)
                     .await
@@ -142,8 +143,7 @@ impl Engine {
                 .context("failed to create Anki integration")?,
             send_event,
             db,
-        }));
-        Ok(engine)
+        })
     }
 
     #[must_use]
@@ -163,3 +163,12 @@ pub fn data_dir() -> Result<PathBuf> {
 pub struct NotFound;
 
 const CHANNEL_BUF_CAP: usize = 4;
+
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn engine(data_dir: &str) -> Engine {
+    Engine::new(data_dir).await.unwrap()
+}

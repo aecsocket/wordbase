@@ -1,5 +1,7 @@
 package io.github.aecsocket.wordbase
 
+import android.content.Context
+import android.content.ContextWrapper
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -73,14 +75,14 @@ import uniffi.wordbase.DictionaryKind
 import uniffi.wordbase.DictionaryMeta
 import uniffi.wordbase.RecordKind
 
-lateinit var Engine: uniffi.wordbase_engine.Wordbase
+lateinit var Wordbase: uniffi.wordbase_engine.Engine
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         lifecycleScope.launch {
-//            Engine = uniffi.wordbase_engine.engine()
+            Wordbase = uniffi.wordbase_engine.engine(filesDir.absolutePath)
         }
         setContent {
             WordbaseTheme {
