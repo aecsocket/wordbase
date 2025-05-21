@@ -1,10 +1,8 @@
 use {
     anyhow::{Context, Result},
     ascii_table::AsciiTable,
-    bytes::Bytes,
     futures::TryStreamExt,
     std::{path::Path, time::Instant},
-    tokio::fs,
     wordbase::{DictionaryId, Engine, Profile, import::ImportEvent},
 };
 
@@ -82,12 +80,7 @@ pub fn info(engine: &Engine, dict_id: DictionaryId) -> Result<()> {
 pub async fn import(engine: &Engine, path: &Path) -> Result<()> {
     let start = Instant::now();
 
-    let data = fs::read(path)
-        .await
-        .map(Bytes::from)
-        .context("failed to read dictionary file into memory")?;
-
-    let mut import_events = Box::pin(engine.import_dictionary(data));
+    let mut import_events = Box::pin(engine.import_dictionary(path));
     while let Some(event) = import_events
         .try_next()
         .await

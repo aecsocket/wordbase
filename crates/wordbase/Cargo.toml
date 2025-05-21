@@ -26,10 +26,10 @@ wordbase-api = { workspace = true, features = ["render-html"] }
 
 anyhow               = { workspace = true }
 arc-swap             = { workspace = true }
-async-compression    = { workspace = true, features = ["futures-io", "xz"] }
+async-compression    = { workspace = true, features = ["tokio", "xz"] }
 async-stream         = { workspace = true }
 async-tar            = { workspace = true }
-async_zip            = { workspace = true, features = ["deflate"] }
+async_zip            = { workspace = true, features = ["deflate", "tokio"] }
 blocking             = { workspace = true }
 bytes                = { workspace = true }
 data-encoding        = { workspace = true }

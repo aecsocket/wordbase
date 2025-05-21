@@ -1,16 +1,16 @@
 mod insert;
-mod yomichan_audio;
+// mod yomichan_audio;
 mod yomitan;
 
 use {
     crate::{CHANNEL_BUF_CAP, DictionaryEvent, Engine, EngineEvent},
     anyhow::{Context, Result},
-    bytes::Bytes,
     derive_more::{Display, Error, From},
-    futures::{Stream, StreamExt, future::BoxFuture, stream::FuturesUnordered},
+    futures::{Stream, TryStreamExt, future::BoxFuture, stream::FuturesUnordered},
     sqlx::{Pool, Sqlite, Transaction},
     std::{
         collections::HashMap,
+        path::{Path, PathBuf},
         sync::{Arc, LazyLock},
     },
     tokio::sync::mpsc,
@@ -25,21 +25,21 @@ static FORMATS: LazyLock<HashMap<DictionaryKind, Arc<dyn ImportKind>>> = LazyLoc
             DictionaryKind::Yomitan,
             Arc::new(yomitan::Yomitan) as Arc<dyn ImportKind>,
         ),
-        (
-            DictionaryKind::YomichanAudio,
-            Arc::new(yomichan_audio::YomichanAudio),
-        ),
+        // (
+        //     DictionaryKind::YomichanAudio,
+        //     Arc::new(yomichan_audio::YomichanAudio),
+        // ),
     ]
     .into()
 });
 
 pub trait ImportKind: Send + Sync {
-    fn is_of_kind(&self, archive: Bytes) -> BoxFuture<'_, Result<()>>;
+    fn is_of_kind(&self, path: Arc<Path>) -> BoxFuture<'_, Result<()>>;
 
     fn start_import(
         &self,
         db: Pool<Sqlite>,
-        archive: Bytes,
+        path: Arc<Path>,
         progress_tx: mpsc::Sender<f64>,
     ) -> BoxFuture<Result<(DictionaryMeta, ImportContinue)>>;
 }
@@ -73,19 +73,23 @@ fn format_errors(errors: &HashMap<DictionaryKind, anyhow::Error>) -> String {
         .join("\n")
 }
 
-pub async fn kind_of(archive: &Bytes) -> Result<DictionaryKind, GetKindError> {
+pub async fn kind_of(archive_path: impl IntoArcPath) -> Result<DictionaryKind, GetKindError> {
+    let archive_path = archive_path.into_arc_path();
     let mut valid_formats = Vec::<DictionaryKind>::new();
     let mut format_errors = HashMap::<DictionaryKind, anyhow::Error>::new();
 
     let format_results = FORMATS
         .iter()
-        .map(|(format, importer)| async move {
-            let result = importer.is_of_kind(archive.clone()).await;
-            (*format, result)
+        .map(|(format, importer)| {
+            let archive_path = archive_path.clone();
+            async move {
+                let result = importer.is_of_kind(archive_path).await;
+                Ok((*format, result))
+            }
         })
         .collect::<FuturesUnordered<_>>()
-        .collect::<HashMap<_, _>>()
-        .await;
+        .try_collect::<HashMap<_, _>>()
+        .await?;
     for (format, result) in format_results {
         match result {
             Ok(()) => valid_formats.push(format),
@@ -134,11 +138,13 @@ pub enum ImportError {
 impl Engine {
     pub fn import_dictionary(
         &self,
-        archive: Bytes,
+        archive_path: impl IntoArcPath,
     ) -> impl Stream<Item = Result<ImportEvent, ImportError>> {
         async_stream::try_stream! {
+            let archive_path = archive_path.into_arc_path();
+
             debug!("Attempting to determine dictionary kind");
-            let kind = kind_of(&archive).await.map_err(ImportError::GetKind)?;
+            let kind = kind_of(archive_path.clone()).await.map_err(ImportError::GetKind)?;
             debug!("Importing as {kind:?} dictionary");
             yield ImportEvent::DeterminedKind(kind);
 
@@ -146,7 +152,7 @@ impl Engine {
             let (progress_tx, mut progress_rx) = mpsc::channel(CHANNEL_BUF_CAP);
 
             let (meta, continue_task) = importer
-                .start_import(self.db.clone(), archive, progress_tx)
+                .start_import(self.db.clone(), archive_path, progress_tx)
                 .await
                 .map_err(|source| ImportError::ParseMeta { kind, source })?;
             debug!(
@@ -206,4 +212,38 @@ async fn insert_dictionary(
     .await?
     .last_insert_rowid();
     Ok(DictionaryId(new_id))
+}
+
+pub trait IntoArcPath {
+    fn into_arc_path(self) -> Arc<Path>;
+}
+
+impl IntoArcPath for Arc<Path> {
+    fn into_arc_path(self) -> Arc<Path> {
+        self
+    }
+}
+
+impl IntoArcPath for PathBuf {
+    fn into_arc_path(self) -> Arc<Path> {
+        Arc::from(self)
+    }
+}
+
+impl IntoArcPath for String {
+    fn into_arc_path(self) -> Arc<Path> {
+        PathBuf::from(self).into_arc_path()
+    }
+}
+
+impl IntoArcPath for &Path {
+    fn into_arc_path(self) -> Arc<Path> {
+        self.to_path_buf().into_arc_path()
+    }
+}
+
+impl IntoArcPath for &str {
+    fn into_arc_path(self) -> Arc<Path> {
+        PathBuf::from(self).into_arc_path()
+    }
 }

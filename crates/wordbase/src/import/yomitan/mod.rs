@@ -5,8 +5,7 @@ use {
     crate::import::{insert::Insert, insert_dictionary},
     anyhow::{Context, Result, bail},
     async_zip::base::read::seek::ZipFileReader,
-    bytes::Bytes,
-    futures::{future::BoxFuture, io::Cursor},
+    futures::future::BoxFuture,
     schema::{
         FrequencyMode, INDEX_PATH, KANJI_BANK_PATTERN, KANJI_META_BANK_PATTERN, TAG_BANK_PATTERN,
         TERM_BANK_PATTERN, TERM_META_BANK_PATTERN,
@@ -15,12 +14,14 @@ use {
     sqlx::{Pool, Sqlite, Transaction},
     std::{
         iter,
+        path::Path,
         sync::{
             Arc,
             atomic::{self, AtomicUsize},
         },
     },
-    tokio::{sync::mpsc, task::JoinSet},
+    tokio::{fs::File, io::BufReader, sync::mpsc, task::JoinSet},
+    tokio_util::compat::Compat,
     tracing::{debug, trace},
     wordbase_api::{
         DictionaryId, DictionaryKind, DictionaryMeta, FrequencyValue, NormString, Record, Term,
@@ -34,28 +35,36 @@ use {
 pub struct Yomitan;
 
 impl ImportKind for Yomitan {
-    fn is_of_kind(&self, archive: Bytes) -> BoxFuture<'_, Result<()>> {
-        Box::pin(validate(archive))
+    fn is_of_kind(&self, archive_path: Arc<Path>) -> BoxFuture<'_, Result<()>> {
+        Box::pin(validate(archive_path))
     }
 
     fn start_import(
         &self,
         db: Pool<Sqlite>,
-        archive: Bytes,
+        archive_path: Arc<Path>,
         progress_tx: mpsc::Sender<f64>,
     ) -> BoxFuture<Result<(DictionaryMeta, ImportContinue)>> {
         Box::pin(async move {
-            let (meta, continuation) = start_import(db, archive, progress_tx).await?;
+            let (meta, continuation) = start_import(db, archive_path, progress_tx).await?;
             Ok((meta, Box::pin(continuation) as ImportContinue))
         })
     }
 }
 
-async fn validate(archive: Bytes) -> Result<()> {
-    let archive = ZipFileReader::new(Cursor::new(&archive))
+async fn open_archive(archive_path: &Path) -> Result<ZipFileReader<Compat<BufReader<File>>>> {
+    let file = File::open(archive_path)
+        .await
+        .context("failed to open file")?;
+    let archive = ZipFileReader::with_tokio(BufReader::new(file))
         .await
         .context("failed to open zip archive")?;
-    archive
+    Ok(archive)
+}
+
+async fn validate(archive_path: Arc<Path>) -> Result<()> {
+    open_archive(&archive_path)
+        .await?
         .file()
         .entries()
         .iter()
@@ -71,13 +80,11 @@ async fn validate(archive: Bytes) -> Result<()> {
 
 async fn start_import(
     db: Pool<Sqlite>,
-    archive: Bytes,
+    archive_path: Arc<Path>,
     progress_tx: mpsc::Sender<f64>,
 ) -> Result<(DictionaryMeta, impl Future<Output = Result<DictionaryId>>)> {
-    let mut zip = ZipFileReader::new(Cursor::new(&archive))
-        .await
-        .context("failed to open zip archive")?;
-    let index_index = zip
+    let mut archive = open_archive(&archive_path).await?;
+    let index_index = archive
         .file()
         .entries()
         .iter()
@@ -91,7 +98,7 @@ async fn start_import(
         .map(|(index, _)| index)
         .next()
         .with_context(|| format!("no `{INDEX_PATH}` in archive"))?;
-    let mut index_entry = zip
+    let mut index_entry = archive
         .reader_with_entry(index_index)
         .await
         .context("failed to start reading index")?;
@@ -110,28 +117,28 @@ async fn start_import(
 
     Ok((
         meta.clone(),
-        continue_import(db, archive, meta, index, progress_tx),
+        continue_import(db, archive_path, meta, index, progress_tx),
     ))
 }
 
 async fn continue_import(
     db: Pool<Sqlite>,
-    archive: Bytes,
+    archive_path: Arc<Path>,
     meta: DictionaryMeta,
     index: schema::Index,
     progress_tx: mpsc::Sender<f64>,
 ) -> Result<DictionaryId> {
     trace!("Importing Yomitan");
-    let zip = ZipFileReader::new(Cursor::new(&archive))
-        .await
-        .context("failed to open zip archive")?;
+
+    // stage 1: meta
+    let archive = open_archive(&archive_path).await?;
 
     let mut tag_bank_paths = Vec::<(usize, String)>::new();
     let mut term_bank_paths = Vec::<(usize, String)>::new();
     let mut term_meta_bank_paths = Vec::<(usize, String)>::new();
     let mut kanji_bank_paths = Vec::<(usize, String)>::new();
     let mut kanji_meta_bank_paths = Vec::<(usize, String)>::new();
-    for (index, entry) in zip.file().entries().iter().enumerate() {
+    for (index, entry) in archive.file().entries().iter().enumerate() {
         let filename = entry.filename();
         let path = filename
             .as_str()
@@ -151,6 +158,7 @@ async fn continue_import(
         }
     }
 
+    // stage 2: banks
     let num_banks = tag_bank_paths.len()
         + term_bank_paths.len()
         + term_meta_bank_paths.len()
@@ -160,35 +168,35 @@ async fn continue_import(
     let (tag_bank, term_bank, term_meta_bank, kanji_bank, kanji_meta_bank) = tokio::try_join!(
         spawn_flatten(parse_all_banks::<schema::Tag>(
             tag_bank_paths,
-            archive.clone(),
+            archive_path.clone(),
             banks_parsed.clone(),
             num_banks,
             progress_tx.clone()
         )),
         spawn_flatten(parse_all_banks::<schema::Term>(
             term_bank_paths,
-            archive.clone(),
+            archive_path.clone(),
             banks_parsed.clone(),
             num_banks,
             progress_tx.clone(),
         )),
         spawn_flatten(parse_all_banks::<schema::TermMeta>(
             term_meta_bank_paths,
-            archive.clone(),
+            archive_path.clone(),
             banks_parsed.clone(),
             num_banks,
             progress_tx.clone(),
         )),
         spawn_flatten(parse_all_banks::<schema::Kanji>(
             kanji_bank_paths,
-            archive.clone(),
+            archive_path.clone(),
             banks_parsed.clone(),
             num_banks,
             progress_tx.clone(),
         )),
         spawn_flatten(parse_all_banks::<schema::KanjiMeta>(
             kanji_meta_bank_paths,
-            archive.clone(),
+            archive_path.clone(),
             banks_parsed.clone(),
             num_banks,
             progress_tx.clone(),
@@ -214,6 +222,9 @@ async fn continue_import(
             _ = progress_tx.try_send(progress.mul_add(0.5, 0.5));
         }
     };
+
+    println!("tm = {} / tmb = {}", term_bank.len(), term_meta_bank.len());
+    loop {}
 
     debug!("Importing records");
     let mut tx = db.begin().await.context("failed to begin transaction")?;
@@ -283,7 +294,7 @@ where
 
 async fn parse_all_banks<T>(
     bank_paths: impl IntoIterator<Item = (usize, String)>,
-    archive: Bytes,
+    archive_path: Arc<Path>,
     banks_parsed: Arc<AtomicUsize>,
     num_banks: usize,
     progress_tx: mpsc::Sender<f64>,
@@ -294,9 +305,9 @@ where
 {
     let mut parse_tasks = JoinSet::new();
     for (index, path) in bank_paths {
-        let archive = archive.clone();
+        let archive_path = archive_path.clone();
         parse_tasks.spawn(async move {
-            parse_bank::<T>(&archive, index)
+            parse_bank::<T>(&archive_path, index)
                 .await
                 .with_context(|| format!("failed to parse `{path}` as tag bank"))
         });
@@ -314,14 +325,12 @@ where
     Ok(total_bank)
 }
 
-async fn parse_bank<T>(archive: &[u8], entry_index: usize) -> Result<Vec<T>>
+async fn parse_bank<T>(path: &Path, entry_index: usize) -> Result<Vec<T>>
 where
     Vec<T>: DeserializeOwned,
 {
-    let mut zip = ZipFileReader::new(Cursor::new(archive))
-        .await
-        .context("failed to open zip archive")?;
-    let mut entry = zip
+    let mut archive = open_archive(path).await?;
+    let mut entry = archive
         .reader_with_entry(entry_index)
         .await
         .context("failed to read entry")?;

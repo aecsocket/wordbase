@@ -9,9 +9,7 @@ use {
     bytes::Bytes,
     derive_more::Deref,
     foldhash::{HashMap, HashMapExt},
-    futures::{
-        AsyncBufRead, AsyncRead, AsyncReadExt, AsyncSeek, StreamExt, future::BoxFuture, io::Cursor,
-    },
+    futures::{StreamExt, future::BoxFuture, io::Cursor},
     schema::{
         FORVO_PATH, JPOD_INDEX, JPOD_MEDIA, MARKER_PATHS, NHK16_AUDIO, NHK16_INDEX,
         SHINMEIKAI8_INDEX, SHINMEIKAI8_MEDIA,
@@ -28,7 +26,7 @@ use {
         },
         task::Poll,
     },
-    tokio::sync::mpsc,
+    tokio::{fs::File, io::AsyncReadExt, sync::mpsc},
     tracing::{debug, trace},
     wordbase_api::{
         DictionaryId, DictionaryKind, DictionaryMeta, NormString, RecordType, Term,
@@ -144,7 +142,7 @@ impl<T: AsRef<[u8]> + Unpin> AsyncBufRead for CountCursor<T> {
 
 async fn import(
     db: Pool<Sqlite>,
-    archive: Bytes,
+    archive: File,
     meta: DictionaryMeta,
     progress_tx: mpsc::Sender<f64>,
 ) -> Result<DictionaryId> {
@@ -158,7 +156,13 @@ async fn import(
     let mut nhk16_rev_index = None::<RevIndex<Nhk16Info>>;
     let mut shinmeikai8_rev_index = None::<RevIndex<GenericInfo>>;
 
-    let archive_len = archive.len();
+    archive.read_to_string(dst);
+
+    let archive_len = archive
+        .metadata()
+        .await
+        .context("failed to read file metadata")?
+        .len();
     let cursor = CountCursor::new(&archive);
     let cursor_pos = cursor.position.clone();
 
