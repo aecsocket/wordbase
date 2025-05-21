@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO frequency (source, headword, reading, mode, value)\n            VALUES ($1, $2, $3, $4, $5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "8be23b15eb11f0184c93a0caf79c5c26e04d3e162ecbecf7f3636d1da683be97"
+}

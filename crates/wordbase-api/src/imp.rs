@@ -157,6 +157,15 @@ impl Term {
             Self::Headword { .. } => None,
         }
     }
+
+    #[must_use]
+    pub fn take_pair(self) -> (Option<NormString>, Option<NormString>) {
+        match self {
+            Self::Full { headword, reading } => (Some(headword), Some(reading)),
+            Self::Headword { headword } => (Some(headword), None),
+            Self::Reading { reading } => (None, Some(reading)),
+        }
+    }
 }
 
 impl NormString {

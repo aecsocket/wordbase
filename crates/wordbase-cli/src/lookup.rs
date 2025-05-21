@@ -1,5 +1,6 @@
 use {
     anyhow::Result,
+    std::time::Instant,
     wordbase::{Engine, Profile, RecordKind},
 };
 
@@ -16,9 +17,13 @@ pub fn deinflect(engine: &Engine, text: &str) {
 }
 
 pub async fn lookup(engine: &Engine, profile: &Profile, text: &str) -> Result<()> {
-    for result in engine.lookup(profile.id, text, 0, RecordKind::ALL).await? {
+    let start = Instant::now();
+    let records = engine.lookup(profile.id, text, 0, RecordKind::ALL).await?;
+    let end = Instant::now();
+    for result in records {
         println!("{result:#?}");
     }
+    println!("Fetched records in {:?}", end.duration_since(start));
     Ok(())
 }
 

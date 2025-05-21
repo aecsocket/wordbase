@@ -1,8 +1,9 @@
+mod insert;
 mod yomichan_audio;
 mod yomitan;
 
 use {
-    crate::{CHANNEL_BUF_CAP, DictionaryEvent, Engine, EngineEvent, db},
+    crate::{CHANNEL_BUF_CAP, DictionaryEvent, Engine, EngineEvent},
     anyhow::{Context, Result},
     bytes::Bytes,
     derive_more::{Display, Error, From},
@@ -15,9 +16,7 @@ use {
     tokio::sync::mpsc,
     tokio_util::task::AbortOnDropHandle,
     tracing::{debug, trace},
-    wordbase_api::{
-        DictionaryId, DictionaryKind, DictionaryMeta, FrequencyValue, RecordId, RecordType, Term,
-    },
+    wordbase_api::{DictionaryId, DictionaryKind, DictionaryMeta},
 };
 
 static FORMATS: LazyLock<HashMap<DictionaryKind, Arc<dyn ImportKind>>> = LazyLock::new(|| {
@@ -181,76 +180,6 @@ impl Engine {
                 .send(EngineEvent::Dictionary(DictionaryEvent::Added { id }));
         }
     }
-}
-
-async fn insert_record<R: RecordType>(
-    tx: &mut Transaction<'_, Sqlite>,
-    source: DictionaryId,
-    record: &R,
-    scratch: &mut Vec<u8>,
-) -> Result<RecordId> {
-    scratch.clear();
-    db::serialize(record, &mut *scratch).context("failed to serialize record")?;
-
-    let data = &scratch[..];
-    let record_id = sqlx::query!(
-        "INSERT INTO record (source, kind, data)
-        VALUES ($1, $2, $3)",
-        source.0,
-        R::KIND as u16,
-        data,
-    )
-    .execute(&mut **tx)
-    .await?
-    .last_insert_rowid();
-    Ok(RecordId(record_id))
-}
-
-async fn insert_term_record(
-    tx: &mut Transaction<'_, Sqlite>,
-    source: DictionaryId,
-    record_id: RecordId,
-    term: &Term,
-) -> Result<()> {
-    let headword = term.headword().map(|s| &**s);
-    let reading = term.reading().map(|s| &**s);
-    sqlx::query!(
-        "INSERT OR IGNORE INTO term_record (source, record, headword, reading)
-        VALUES ($1, $2, $3, $4)",
-        source.0,
-        record_id.0,
-        headword,
-        reading,
-    )
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
-}
-
-async fn insert_frequency(
-    tx: &mut Transaction<'_, Sqlite>,
-    source: DictionaryId,
-    term: &Term,
-    frequency: FrequencyValue,
-) -> Result<()> {
-    let headword = term.headword().map(|s| &**s);
-    let reading = term.reading().map(|s| &**s);
-    let (mode, value) = match frequency {
-        FrequencyValue::Rank(n) => (0, n),
-        FrequencyValue::Occurrence(n) => (1, n),
-    };
-    sqlx::query!(
-        "INSERT OR IGNORE INTO frequency (source, headword, reading, mode, value)
-        VALUES ($1, $2, $3, $4, $5)",
-        source.0,
-        headword,
-        reading,
-        mode,
-        value,
-    )
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
 }
 
 async fn dictionary_exists_by_name(db: &Pool<Sqlite>, name: &str) -> Result<bool> {

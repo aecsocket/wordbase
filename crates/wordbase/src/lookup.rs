@@ -33,10 +33,10 @@ impl Engine {
             "SELECT
                 record.id,
                 record.source,
+                record.headword,
+                record.reading,
                 record.kind,
                 record.data,
-                term_record.headword,
-                term_record.reading,
                 profile_frequency.mode AS 'profile_frequency_mode?',
                 profile_frequency.value AS 'profile_frequency_value?',
                 source_frequency.mode AS 'source_frequency_mode?',
@@ -48,12 +48,6 @@ impl Engine {
             INNER JOIN profile_enabled_dictionary ped
                 ON (ped.profile = $1 AND ped.dictionary = dictionary.id)
 
-            -- find which terms reference this record, either through the headword or reading
-            INNER JOIN term_record ON (
-                term_record.record = record.id
-                AND (term_record.headword = $2 OR term_record.reading = $2)
-            )
-
             -- join on profile-global frequency information, for the `ORDER BY` below
             LEFT JOIN frequency profile_frequency ON (
                 -- only use frequency info from the currently selected sorting dict in this profile
@@ -61,19 +55,22 @@ impl Engine {
                     SELECT sorting_dictionary FROM profile
                     WHERE id = $1
                 )
-                AND profile_frequency.headword = term_record.headword
-                AND profile_frequency.reading = term_record.reading
+                AND profile_frequency.headword = record.headword
+                AND profile_frequency.reading = record.reading
             )
 
             -- join on frequency information for this source
             LEFT JOIN frequency source_frequency ON (
                 source_frequency.source = record.source
-                AND source_frequency.headword = term_record.headword
-                AND source_frequency.reading = term_record.reading
+                AND source_frequency.headword = record.headword
+                AND source_frequency.reading = record.reading
             )
 
-            -- only include records for the given record kinds
-            WHERE kind IN (SELECT value FROM json_each($3))
+            WHERE
+                -- only include records for the given record kinds
+                kind IN (SELECT value FROM json_each($3))
+                -- find records which match the term
+                AND (record.headword = $2 OR record.reading = $2)
 
             ORDER BY
                 CASE
@@ -81,12 +78,12 @@ impl Engine {
                     -- e.g. if you typed あらゆる:
                     -- - the first results would be for the kana あらゆる
                     -- - then the kanji like 汎ゆる
-                    WHEN term_record.reading = $2 AND term_record.headword = $2 THEN 0
+                    WHEN record.reading = $2 AND record.headword = $2 THEN 0
                     -- then prioritize results where at least the reading or headword are an exact match
                     -- e.g. in 念じる, usually 念ずる comes up first
                     -- but this is obviously a different reading
                     -- so we want to prioritize 念じる
-                    WHEN term_record.reading = $2 OR term_record.headword = $2 THEN 1
+                    WHEN record.reading = $2 OR record.headword = $2 THEN 1
                     -- all other results at the end
                     ELSE 2
                 END,

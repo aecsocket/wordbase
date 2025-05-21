@@ -34,7 +34,6 @@ CREATE TABLE profile_enabled_dictionary (
     dictionary  INTEGER NOT NULL REFERENCES dictionary(id)  ON DELETE CASCADE,
     UNIQUE      (profile, dictionary)
 );
--- CREATE INDEX profile_enabled_dictionary_idx ON profile_enabled_dictionary(dictionary);
 
 CREATE TABLE config (
     id                      INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
@@ -52,20 +51,15 @@ END;
 CREATE TABLE record (
     id          INTEGER NOT NULL PRIMARY KEY,
     source      INTEGER NOT NULL REFERENCES dictionary(id) ON DELETE CASCADE,
-    kind        INTEGER NOT NULL,
-    data        BLOB    NOT NULL
-);
-
-CREATE TABLE term_record (
-    source      INTEGER NOT NULL REFERENCES dictionary(id) ON DELETE CASCADE,
-    record      INTEGER NOT NULL REFERENCES record(id) ON DELETE CASCADE,
     headword    TEXT,
     reading     TEXT,
-    UNIQUE (record, headword, reading),
+    kind        INTEGER NOT NULL,
+    data        BLOB    NOT NULL,
+    asset       INTEGER REFERENCES asset(id),
     CHECK (headword IS NOT NULL OR reading IS NOT NULL)
 );
--- CREATE INDEX term_record_idx1 ON term_record(reading, record);
--- CREATE INDEX term_record_idx2 ON term_record(headword);
+CREATE INDEX record_headword ON record(headword);
+CREATE INDEX record_reading ON record(reading);
 
 CREATE TABLE frequency (
     source      INTEGER NOT NULL REFERENCES dictionary(id) ON DELETE CASCADE,
@@ -75,4 +69,10 @@ CREATE TABLE frequency (
     value       INTEGER NOT NULL,
     UNIQUE (source, headword, reading)
     CHECK (headword IS NOT NULL OR reading IS NOT NULL)
+);
+
+CREATE TABLE asset (
+    id      INTEGER NOT NULL PRIMARY KEY,
+    source  INTEGER NOT NULL REFERENCES dictionary(id) ON DELETE CASCADE,
+    data    BLOB NOT NULL
 );

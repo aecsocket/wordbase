@@ -18,6 +18,7 @@
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             just
+            fish
 
             # Nix
             nixd

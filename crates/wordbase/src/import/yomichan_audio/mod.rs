@@ -1,7 +1,7 @@
 mod schema;
 
 use {
-    super::{ImportContinue, ImportKind, insert_record, insert_term_record},
+    super::{ImportContinue, ImportKind},
     crate::import::insert_dictionary,
     anyhow::{Context, Result, bail},
     async_compression::futures::bufread::XzDecoder,
@@ -431,23 +431,23 @@ pub async fn import_forvo<R: AsyncRead + Unpin>(
         .and_then(|(name, _)| Term::from_headword(name))
         .context("no headword in path")?;
 
-    let record_id = insert_record(
-        tx,
-        source,
-        &Forvo {
-            username,
-            audio: Audio {
-                format: AudioFormat::Opus,
-                data: encode(entry).await?,
-            },
-        },
-        scratch,
-    )
-    .await
-    .context("failed to insert record")?;
-    insert_term_record(tx, source, record_id, &headword)
-        .await
-        .context("failed to insert headword term")?;
+    // let record_id = insert_record(
+    //     tx,
+    //     source,
+    //     &Forvo {
+    //         username,
+    //         audio: Audio {
+    //             format: AudioFormat::Opus,
+    //             data: encode(entry).await?,
+    //         },
+    //     },
+    //     scratch,
+    // )
+    // .await
+    // .context("failed to insert record")?;
+    // insert_term_record(tx, source, record_id, &headword)
+    //     .await
+    //     .context("failed to insert headword term")?;
     Ok(())
 }
 
@@ -489,15 +489,15 @@ where
         data: encode(entry).await?,
     };
     let record = into_record(audio, info);
-    let record_id = insert_record(tx, source, &record, scratch)
-        .await
-        .context("failed to insert record")?;
+    // let record_id = insert_record(tx, source, &record, scratch)
+    //     .await
+    //     .context("failed to insert record")?;
 
-    for term in terms_of(info) {
-        insert_term_record(tx, source, record_id, term)
-            .await
-            .context("failed to insert term record")?;
-    }
+    // for term in terms_of(info) {
+    //     insert_term_record(tx, source, record_id, term)
+    //         .await
+    //         .context("failed to insert term record")?;
+    // }
     Ok(())
 }
 
