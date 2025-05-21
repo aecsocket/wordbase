@@ -1,5 +1,5 @@
 mod insert;
-// mod yomichan_audio;
+mod yomichan_audio;
 mod yomitan;
 
 use {
@@ -25,10 +25,10 @@ static FORMATS: LazyLock<HashMap<DictionaryKind, Arc<dyn ImportKind>>> = LazyLoc
             DictionaryKind::Yomitan,
             Arc::new(yomitan::Yomitan) as Arc<dyn ImportKind>,
         ),
-        // (
-        //     DictionaryKind::YomichanAudio,
-        //     Arc::new(yomichan_audio::YomichanAudio),
-        // ),
+        (
+            DictionaryKind::YomichanAudio,
+            Arc::new(yomichan_audio::YomichanAudio),
+        ),
     ]
     .into()
 });

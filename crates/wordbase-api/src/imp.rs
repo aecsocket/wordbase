@@ -158,6 +158,7 @@ impl Term {
         }
     }
 
+    /// Takes ownership of both the headword and reading.
     #[must_use]
     pub fn take_pair(self) -> (Option<NormString>, Option<NormString>) {
         match self {

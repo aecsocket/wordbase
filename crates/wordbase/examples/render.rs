@@ -3,6 +3,7 @@
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use data_encoding::BASE64;
 use derive_more::{Deref, DerefMut};
 use maud::Render;
 use serde::Serialize;
@@ -10,7 +11,11 @@ use tera::Tera;
 use tokio::fs;
 use wordbase::{
     DictionaryId, Engine, IndexMap, ProfileId, Record, RecordKind, RecordLookup, Term,
-    dict::{self, jpn::PitchPosition},
+    dict::{
+        self,
+        jpn::{PitchCategory, PitchPosition},
+        yomichan_audio::AudioFormat,
+    },
 };
 
 #[tokio::main]
@@ -90,34 +95,43 @@ fn group_terms(records: &[RecordLookup]) -> RecordTerms {
                 info.pitches.entry(pitch.position).or_default().info = Some(pitch);
             }
             Record::YomichanAudioForvo(audio) => {
-                info.audio_no_pitch.push((source, Audio::Forvo(audio)));
+                info.audio_no_pitch.entry(source).or_default().push(Audio {
+                    blob: audio_blob(&audio.audio),
+                    kind: RecordKind::YomichanAudioForvo,
+                });
             }
             Record::YomichanAudioJpod(audio) => {
-                info.audio_no_pitch.push((source, Audio::Jpod(audio)));
+                info.audio_no_pitch.entry(source).or_default().push(Audio {
+                    blob: audio_blob(&audio.audio),
+                    kind: RecordKind::YomichanAudioJpod,
+                });
             }
             Record::YomichanAudioNhk16(audio) => {
+                let conv = Audio {
+                    blob: audio_blob(&audio.audio),
+                    kind: RecordKind::YomichanAudioNhk16,
+                };
                 if audio.pitch_positions.is_empty() {
-                    info.audio_no_pitch.push((source, Audio::Nhk16(audio)));
+                    info.audio_no_pitch.entry(source).or_default().push(conv);
                 } else {
                     for &pos in &audio.pitch_positions {
                         info.pitches
                             .entry(pos)
                             .or_default()
                             .audio
-                            .push(Audio::Nhk16(audio));
+                            .push(conv.clone());
                     }
                 }
             }
             Record::YomichanAudioShinmeikai8(audio) => {
+                let conv = Audio {
+                    blob: audio_blob(&audio.audio),
+                    kind: RecordKind::YomichanAudioShinmeikai8,
+                };
                 if let Some(pos) = audio.pitch_number {
-                    info.pitches
-                        .entry(pos)
-                        .or_default()
-                        .audio
-                        .push(Audio::Shinmeikai8(audio));
+                    info.pitches.entry(pos).or_default().audio.push(conv);
                 } else {
-                    info.audio_no_pitch
-                        .push((source, Audio::Shinmeikai8(audio)));
+                    info.audio_no_pitch.entry(source).or_default().push(conv);
                 }
             }
             _ => {}
@@ -134,7 +148,7 @@ struct TermInfo<'a> {
     glossary_groups: IndexMap<DictionaryId, Vec<Glossary<'a>>>,
     frequencies: IndexMap<DictionaryId, Vec<&'a dict::yomitan::Frequency>>,
     pitches: IndexMap<PitchPosition, Pitch<'a>>,
-    audio_no_pitch: Vec<(DictionaryId, Audio<'a>)>,
+    audio_no_pitch: IndexMap<DictionaryId, Vec<Audio>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -146,13 +160,20 @@ struct Glossary<'a> {
 #[derive(Debug, Default, Serialize)]
 struct Pitch<'a> {
     info: Option<&'a dict::yomitan::Pitch>,
-    audio: Vec<Audio<'a>>,
+    audio: Vec<Audio>,
 }
 
-#[derive(Debug, Serialize)]
-enum Audio<'a> {
-    Forvo(&'a dict::yomichan_audio::Forvo),
-    Jpod(&'a dict::yomichan_audio::Jpod),
-    Nhk16(&'a dict::yomichan_audio::Nhk16),
-    Shinmeikai8(&'a dict::yomichan_audio::Shinmeikai8),
+#[derive(Debug, Clone, Serialize)]
+struct Audio {
+    blob: String,
+    kind: RecordKind,
+}
+
+fn audio_blob(audio: &dict::yomichan_audio::Audio) -> String {
+    let mime_type = match audio.format {
+        AudioFormat::Opus => "audio/opus",
+        AudioFormat::Mp3 => "audio/mp3",
+    };
+    let data = BASE64.encode(&audio.data);
+    format!("data:{mime_type};base64,{data}")
 }

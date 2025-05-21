@@ -26,7 +26,7 @@ wordbase-api = { workspace = true, features = ["render-html"] }
 
 anyhow               = { workspace = true }
 arc-swap             = { workspace = true }
-async-compression    = { workspace = true, features = ["tokio", "xz"] }
+async-compression    = { workspace = true, features = ["xz"] }
 async-stream         = { workspace = true }
 async-tar            = { workspace = true }
 async_zip            = { workspace = true, features = ["deflate", "tokio"] }

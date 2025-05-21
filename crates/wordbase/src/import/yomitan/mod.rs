@@ -3,8 +3,9 @@ mod schema;
 use {
     super::{ImportContinue, ImportKind},
     crate::import::{insert::Insert, insert_dictionary},
-    anyhow::{Context, Result, bail},
+    anyhow::{Context, Result},
     async_zip::base::read::seek::ZipFileReader,
+    derive_more::From,
     futures::future::BoxFuture,
     schema::{
         FrequencyMode, INDEX_PATH, KANJI_BANK_PATTERN, KANJI_META_BANK_PATTERN, TAG_BANK_PATTERN,
@@ -12,15 +13,13 @@ use {
     },
     serde::de::DeserializeOwned,
     sqlx::{Pool, Sqlite, Transaction},
-    std::{
-        iter,
-        path::Path,
-        sync::{
-            Arc,
-            atomic::{self, AtomicUsize},
-        },
+    std::{iter, path::Path, sync::Arc},
+    tokio::{
+        fs::File,
+        io::BufReader,
+        sync::{Semaphore, mpsc},
+        task::JoinSet,
     },
-    tokio::{fs::File, io::BufReader, sync::mpsc, task::JoinSet},
     tokio_util::compat::Compat,
     tracing::{debug, trace},
     wordbase_api::{
@@ -121,6 +120,9 @@ async fn start_import(
     ))
 }
 
+// TODO: make this configurable somehow
+const BANK_BUF_CAP: usize = 1;
+
 async fn continue_import(
     db: Pool<Sqlite>,
     archive_path: Arc<Path>,
@@ -130,7 +132,7 @@ async fn continue_import(
 ) -> Result<DictionaryId> {
     trace!("Importing Yomitan");
 
-    // stage 1: meta
+    // stage 1: read dictionary meta and find what banks we have
     let archive = open_archive(&archive_path).await?;
 
     let mut tag_bank_paths = Vec::<(usize, String)>::new();
@@ -157,115 +159,136 @@ async fn continue_import(
             kanji_meta_bank_paths.push((index, path));
         }
     }
-
-    // stage 2: banks
-    let num_banks = tag_bank_paths.len()
-        + term_bank_paths.len()
+    let num_banks = term_bank_paths.len()
         + term_meta_bank_paths.len()
         + kanji_bank_paths.len()
         + kanji_meta_bank_paths.len();
-    let banks_parsed = Arc::new(AtomicUsize::new(0));
-    let (tag_bank, term_bank, term_meta_bank, kanji_bank, kanji_meta_bank) = tokio::try_join!(
-        spawn_flatten(parse_all_banks::<schema::Tag>(
-            tag_bank_paths,
-            archive_path.clone(),
-            banks_parsed.clone(),
-            num_banks,
-            progress_tx.clone()
-        )),
-        spawn_flatten(parse_all_banks::<schema::Term>(
-            term_bank_paths,
-            archive_path.clone(),
-            banks_parsed.clone(),
-            num_banks,
-            progress_tx.clone(),
-        )),
-        spawn_flatten(parse_all_banks::<schema::TermMeta>(
-            term_meta_bank_paths,
-            archive_path.clone(),
-            banks_parsed.clone(),
-            num_banks,
-            progress_tx.clone(),
-        )),
-        spawn_flatten(parse_all_banks::<schema::Kanji>(
-            kanji_bank_paths,
-            archive_path.clone(),
-            banks_parsed.clone(),
-            num_banks,
-            progress_tx.clone(),
-        )),
-        spawn_flatten(parse_all_banks::<schema::KanjiMeta>(
-            kanji_meta_bank_paths,
-            archive_path.clone(),
-            banks_parsed.clone(),
-            num_banks,
-            progress_tx.clone(),
-        )),
-    )
-    .context("failed to parse banks")?;
 
-    // explicitly exclude tags, since we don't insert tags as a record
-    let records_len =
-        term_bank.len() + term_meta_bank.len() + kanji_bank.len() + kanji_meta_bank.len();
-    if records_len == 0 {
-        bail!("no records to insert");
+    // stage 2: spawn tasks to parse banks
+    // - parse a bank in another task
+    // - send that bank to this thread, so we can insert it into the tx
+    // - keep up to `BANK_BUF_CAP` banks parsed at once
+    // - do NOT parse all banks first, then insert them in bulk -
+    //   this will use a lot of memory! (Jitendex would use ~4 GB)
+    let parse_permits = Arc::new(Semaphore::new(BANK_BUF_CAP));
+    let (to_insert_tx, mut to_insert_rx) = mpsc::channel::<Bank>(BANK_BUF_CAP * 2);
+    let mut tasks = JoinSet::new();
+
+    spawn_parse_tasks::<schema::Term>(
+        term_bank_paths,
+        &archive_path,
+        &parse_permits,
+        &to_insert_tx,
+        &mut tasks,
+    );
+    spawn_parse_tasks::<schema::TermMeta>(
+        term_meta_bank_paths,
+        &archive_path,
+        &parse_permits,
+        &to_insert_tx,
+        &mut tasks,
+    );
+    spawn_parse_tasks::<schema::Kanji>(
+        kanji_bank_paths,
+        &archive_path,
+        &parse_permits,
+        &to_insert_tx,
+        &mut tasks,
+    );
+    spawn_parse_tasks::<schema::KanjiMeta>(
+        kanji_meta_bank_paths,
+        &archive_path,
+        &parse_permits,
+        &to_insert_tx,
+        &mut tasks,
+    );
+    drop(to_insert_tx);
+
+    // stage 3: parse tag banks manually
+    // since we need them for inserting term banks later
+    let mut tag_bank = Vec::new();
+    for (entry_index, entry_path) in tag_bank_paths {
+        let mut bank = parse_bank::<schema::Tag>(&archive_path, entry_index)
+            .await
+            .with_context(|| format!("failed to parse tag bank `{entry_path}`"))?;
+        tag_bank.append(&mut bank);
     }
-
     let mut all_tags = tag_bank.into_iter().map(to_term_tag).collect::<Vec<_>>();
     all_tags.sort_by_key(|tag| tag.name.len());
 
-    let records_done = AtomicUsize::new(0);
-    let notify_inserted = || {
-        let records_done = records_done.fetch_add(1, atomic::Ordering::SeqCst) + 1;
-        if records_done % 2000 == 0 {
-            let progress = (records_done as f64) / (records_len as f64);
-            _ = progress_tx.try_send(progress.mul_add(0.5, 0.5));
-        }
-    };
-
-    println!("tm = {} / tmb = {}", term_bank.len(), term_meta_bank.len());
-    loop {}
-
-    debug!("Importing records");
+    // stage 4: start inserting
     let mut tx = db.begin().await.context("failed to begin transaction")?;
+    let mut records = Insert::<Record>::new();
+    let mut frequencies = Insert::<FrequencyValue>::new();
     let dictionary_id = insert_dictionary(&mut tx, &meta)
         .await
         .context("failed to insert dictionary")?;
 
-    let mut records = Insert::<Record>::new();
-    let mut frequencies = Insert::<FrequencyValue>::new();
+    let notify_progress = |banks_done: usize, rows_done: usize, rows_len: usize| {
+        // +1 to not trigger on the first row
+        if (rows_done + 1) % 500 == 0 {
+            let bank_progress = rows_done as f64 / rows_len as f64;
+            let progress = (banks_done as f64 + bank_progress) / (num_banks as f64);
+            _ = progress_tx.try_send(progress);
+        }
+    };
 
-    for term in term_bank {
-        let headword = term.expression.clone();
-        let reading = term.reading.clone();
-        import_term(
-            dictionary_id,
-            &mut tx,
-            &mut records,
-            &mut frequencies,
-            term,
-            &all_tags,
-        )
-        .await
-        .with_context(|| format!("failed to import term ({headword:?}, {reading:?})"))?;
-        notify_inserted();
+    let mut banks_done = 0usize;
+    while let Some(to_insert) = to_insert_rx.recv().await {
+        match to_insert {
+            Bank::TermMeta(bank) => {
+                let rows_len = bank.len();
+                for (row_idx, term_meta) in bank.into_iter().enumerate() {
+                    let headword = term_meta.expression.clone();
+                    import_term_meta(
+                        dictionary_id,
+                        &mut tx,
+                        &mut records,
+                        &mut frequencies,
+                        &index,
+                        term_meta,
+                    )
+                    .await
+                    .with_context(|| format!("failed to import term meta {headword:?}"))?;
+                    notify_progress(banks_done, row_idx, rows_len);
+                }
+            }
+            Bank::Term(bank) => {
+                let rows_len = bank.len();
+                for (row_idx, term) in bank.into_iter().enumerate() {
+                    let headword = term.expression.clone();
+                    let reading = term.reading.clone();
+                    import_term(
+                        dictionary_id,
+                        &mut tx,
+                        &mut records,
+                        &mut frequencies,
+                        term,
+                        &all_tags,
+                    )
+                    .await
+                    .with_context(|| {
+                        format!("failed to import term ({headword:?}, {reading:?})")
+                    })?;
+                    notify_progress(banks_done, row_idx, rows_len);
+                }
+            }
+            Bank::Kanji(bank) => {
+                _ = bank;
+            }
+            Bank::KanjiMeta(bank) => {
+                _ = bank;
+            }
+        }
+        banks_done += 1;
+        let progress = banks_done as f64 / num_banks as f64;
+        _ = progress_tx.try_send(progress);
+    }
+    while let Some(res) = tasks.join_next().await {
+        res.context("task canceled")??;
     }
 
-    for term_meta in term_meta_bank {
-        let headword = term_meta.expression.clone();
-        import_term_meta(
-            dictionary_id,
-            &mut tx,
-            &mut records,
-            &mut frequencies,
-            &index,
-            term_meta,
-        )
-        .await
-        .with_context(|| format!("failed to import term meta {headword:?}"))?;
-        notify_inserted();
-    }
-
+    debug!("Insert complete, flushing");
     records
         .flush(&mut tx)
         .await
@@ -274,72 +297,58 @@ async fn continue_import(
         .flush(&mut tx)
         .await
         .context("failed to flush frequencies")?;
-
-    drop(progress_tx);
-
     tx.commit().await.context("failed to commit transaction")?;
     Ok(dictionary_id)
 }
 
-async fn spawn_flatten<F, T>(fut: F) -> Result<T>
-where
-    F: Future<Output = Result<T>> + Send + 'static,
-    T: Send + 'static,
-{
-    match tokio::spawn(fut).await.context("task canceled") {
-        Ok(Ok(t)) => Ok(t),
-        Ok(Err(err)) | Err(err) => Err(err),
-    }
+#[derive(Debug, From)]
+enum Bank {
+    Term(Vec<schema::Term>),
+    TermMeta(Vec<schema::TermMeta>),
+    Kanji(Vec<schema::Kanji>),
+    KanjiMeta(Vec<schema::KanjiMeta>),
 }
 
-async fn parse_all_banks<T>(
-    bank_paths: impl IntoIterator<Item = (usize, String)>,
-    archive_path: Arc<Path>,
-    banks_parsed: Arc<AtomicUsize>,
-    num_banks: usize,
-    progress_tx: mpsc::Sender<f64>,
-) -> Result<Vec<T>>
-where
-    T: Clone + Send + Sync + 'static,
+fn spawn_parse_tasks<T>(
+    bank_entries: impl IntoIterator<Item = (usize, String)>,
+    archive_path: &Arc<Path>,
+    parse_permits: &Arc<Semaphore>,
+    to_insert_tx: &mpsc::Sender<Bank>,
+    tasks: &mut JoinSet<Result<()>>,
+) where
+    Bank: From<Vec<T>>,
     Vec<T>: DeserializeOwned,
 {
-    let mut parse_tasks = JoinSet::new();
-    for (index, path) in bank_paths {
+    for (entry_index, entry_path) in bank_entries {
         let archive_path = archive_path.clone();
-        parse_tasks.spawn(async move {
-            parse_bank::<T>(&archive_path, index)
+        let parse_permits = parse_permits.clone();
+        let to_insert_tx = to_insert_tx.clone();
+        tasks.spawn(async move {
+            let _permit = parse_permits.acquire().await?;
+            let bank = parse_bank::<T>(&archive_path, entry_index)
                 .await
-                .with_context(|| format!("failed to parse `{path}` as tag bank"))
+                .with_context(|| format!("failed to parse bank `{entry_path}`"))?;
+            to_insert_tx.send(Bank::from(bank)).await?;
+            anyhow::Ok(())
         });
     }
-
-    let mut total_bank = Vec::<T>::new();
-    while let Some(bank) = parse_tasks.join_next().await {
-        let bank = bank.context("import task canceled")??;
-        total_bank.extend_from_slice(&bank);
-
-        let banks_parsed = banks_parsed.fetch_add(1, atomic::Ordering::SeqCst) + 1;
-        let progress = (banks_parsed as f64) / (num_banks as f64);
-        _ = progress_tx.try_send(0.5 * progress);
-    }
-    Ok(total_bank)
 }
 
-async fn parse_bank<T>(path: &Path, entry_index: usize) -> Result<Vec<T>>
+async fn parse_bank<T>(archive_path: &Path, entry_index: usize) -> Result<Vec<T>>
 where
     Vec<T>: DeserializeOwned,
 {
-    let mut archive = open_archive(path).await?;
+    let mut archive = open_archive(archive_path).await?;
     let mut entry = archive
         .reader_with_entry(entry_index)
         .await
         .context("failed to read entry")?;
-    let mut bank = Vec::new();
+    let mut bank_data = Vec::new();
     entry
-        .read_to_end_checked(&mut bank)
+        .read_to_end_checked(&mut bank_data)
         .await
-        .context("failed to read into memory")?;
-    let bank = serde_json::from_slice::<Vec<T>>(&bank).context("failed to parse bank")?;
+        .context("failed to read bank into memory")?;
+    let bank = serde_json::from_slice::<Vec<T>>(&bank_data).context("failed to parse bank")?;
     Ok(bank)
 }
 

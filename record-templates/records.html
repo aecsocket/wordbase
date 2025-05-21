@@ -6,6 +6,11 @@
   }
 
   :root {
+    font-family: Inter, sans-serif;
+    line-height: 1.5;
+  }
+
+  :root {
     --button-radius: 9px;
     --card-radius: 12px;
     --dim-opacity: 55%;
@@ -43,8 +48,45 @@
   :root {
     color: var(--window-fg-color);
     background-color: var(--window-bg-color);
+    --accent-color: green; /* todo */
     /** for Jitendex */
     --text-color: var(--window-fg-color);
+  }
+
+  a {
+    color: var(--accent-color);
+  }
+
+  button {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+    background: var(--button-color);
+    border: none;
+    border-radius: var(--button-radius);
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    line-height: 1;
+    margin: 0;
+    padding: 8px 14px;
+    text-align: center;
+    text-decoration: none;
+    font-weight: 700;
+    transition: background-color 0.2s ease;
+  }
+  button:hover {
+    background: var(--button-hover-color);
+  }
+
+  button:focus {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+  }
+
+  button:active {
+    background-color: var(--button-active-color);
   }
 
   .card {
@@ -56,35 +98,112 @@
       0 1px 3px 1px rgb(0 0 6 / 7%),
       0 2px 6px 2px rgb(0 0 6 / 3%);
   }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    background-color: var(--button-color);
+    border-radius: 9999px;
+    padding: 6px 12px;
+  }
+
+  .pill-flow {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: stretch;
+  }
+
+  .dimmed {
+    opacity: var(--dim-opacity);
+  }
+
+  .caption-header {
+    font-size: var(--caption-font-size);
+    font-weight: var(--caption-font-weight);
+  }
+
+  .content {
+    margin: 0 16px;
+  }
 </style>
 
-<h2>num terms: {{ terms | length }}</h2>
-
-<div>
+<div style="display: flex; flex-direction: column; gap: 32px">
   {% for group in terms %}
-  <div class="group">
-    <div class="meta">
-      <ruby> {{ group.term.headword }}<rt>{{ group.term.reading }}</rt> </ruby>
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <div style="background-color: var(--headerbar-shade-color)">
+      <div class="content" style="padding: 16px 0">
+        <ruby>
+          {{ group.term.headword }}
+          <rt>{{ group.term.reading | default(value="") }}</rt>
+        </ruby>
+      </div>
     </div>
 
-    <div>
-      {% for source, frequency in group.frequencies %} {{ source }} {% endfor %}
+    <span class="content pill-flow">
+      {% for position, pitch in group.pitches %} {% if group.term.reading %}
+      <span class="pill" style="gap: 6px">
+        <span>{{ group.term.reading }}</span>
+        {% for audio in pitch.audio %}
+        <button
+          class="pill"
+          onclick="new Audio('{{ audio.blob | safe }}').play()"
+        >
+          🔈
+        </button>
+        {% endfor %}
+      </span>
+      {% endif %} {% endfor %}
 
-      <div>
-        {% for source, glossary_group in group.glossary_groups %}
-        <div>
-          {% for glossary in glossary_group %}
-          <div class="card">
-            {% for content in glossary.content %} {{ content | safe }} {% endfor
-            %}
-          </div>
+      <!-- -->
+
+      {% for source, audio_group in group.audio_no_pitch %} {% for audio in
+      audio_group %}
+      <button onclick="new Audio('{{ audio.blob | safe }}').play()">
+        🔈 {{ audio.kind }}
+      </button>
+      {% endfor %} {% endfor %}
+
+      <!-- -->
+
+      {% for source, frequency_group in group.frequencies %}
+      <span class="pill dimmed" style="gap: 12px">
+        <span>{{ dictionaries[source].meta.name }}</span>
+        {% for frequency in frequency_group %}
+        <span style="font-weight: 700">{{ frequency.display }}</span>
+        {% endfor %}
+      </span>
+      {% endfor %}
+    </span>
+
+    <div
+      class="content"
+      style="display: flex; flex-direction: column; gap: 16px"
+    >
+      {% for source, glossary_group in group.glossary_groups %}
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <span class="caption-header">
+          {{ dictionaries[source].meta.name }}
+        </span>
+
+        {% for glossary in glossary_group %}
+        <div class="card" style="padding: 8px">
+          <span class="pill-flow">
+            {% for tag in glossary.tags %}
+            <span class="pill" title="{{ tag.description }}">
+              {{ tag.name }}
+            </span>
+            {% endfor %}
+          </span>
+
+          {% for content in glossary.content %}
+          <p>{{ content | safe }}</p>
           {% endfor %}
         </div>
         {% endfor %}
       </div>
+      {% endfor %}
     </div>
-
-    <li>{{ group | json_encode }}</li>
   </div>
   {% endfor %}
 </div>

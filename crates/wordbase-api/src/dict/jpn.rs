@@ -10,3 +10,11 @@ pub struct PitchPosition(pub u64);
 
 #[cfg(feature = "uniffi")]
 uniffi::custom_newtype!(PitchPosition, u64);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum PitchCategory {
+    Heiban,
+    Atamadaka,
+    Odaka,
+    Nakadaka,
+}

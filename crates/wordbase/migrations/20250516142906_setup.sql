@@ -55,7 +55,6 @@ CREATE TABLE record (
     reading     TEXT,
     kind        INTEGER NOT NULL,
     data        BLOB    NOT NULL,
-    asset       INTEGER REFERENCES asset(id),
     CHECK (headword IS NOT NULL OR reading IS NOT NULL)
 );
 CREATE INDEX record_headword ON record(headword);
@@ -69,10 +68,4 @@ CREATE TABLE frequency (
     value       INTEGER NOT NULL,
     UNIQUE (source, headword, reading)
     CHECK (headword IS NOT NULL OR reading IS NOT NULL)
-);
-
-CREATE TABLE asset (
-    id      INTEGER NOT NULL PRIMARY KEY,
-    source  INTEGER NOT NULL REFERENCES dictionary(id) ON DELETE CASCADE,
-    data    BLOB NOT NULL
 );

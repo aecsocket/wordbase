@@ -1,15 +1,18 @@
 mod schema;
 
 use {
-    super::{ImportContinue, ImportKind},
-    crate::import::insert_dictionary,
+    super::{ImportContinue, ImportKind, insert::Insert},
+    crate::{db, import::insert_dictionary},
     anyhow::{Context, Result, bail},
     async_compression::futures::bufread::XzDecoder,
     async_tar::EntryType,
     bytes::Bytes,
     derive_more::Deref,
     foldhash::{HashMap, HashMapExt},
-    futures::{StreamExt, future::BoxFuture, io::Cursor},
+    futures::{
+        AsyncBufRead, AsyncRead, AsyncReadExt as _, AsyncSeek, StreamExt, future::BoxFuture,
+        io::Cursor,
+    },
     schema::{
         FORVO_PATH, JPOD_INDEX, JPOD_MEDIA, MARKER_PATHS, NHK16_AUDIO, NHK16_INDEX,
         SHINMEIKAI8_INDEX, SHINMEIKAI8_MEDIA,
@@ -26,10 +29,15 @@ use {
         },
         task::Poll,
     },
-    tokio::{fs::File, io::AsyncReadExt, sync::mpsc},
+    tokio::{
+        fs::File,
+        io::{AsyncReadExt, BufReader},
+        sync::mpsc,
+    },
+    tokio_util::compat::{Compat, TokioAsyncReadCompatExt},
     tracing::{debug, trace},
     wordbase_api::{
-        DictionaryId, DictionaryKind, DictionaryMeta, NormString, RecordType, Term,
+        DictionaryId, DictionaryKind, DictionaryMeta, NormString, Record, RecordType, Term,
         dict::{
             jpn::PitchPosition,
             yomichan_audio::{Audio, AudioFormat, Forvo, Jpod, Nhk16, Shinmeikai8},
@@ -40,14 +48,14 @@ use {
 pub struct YomichanAudio;
 
 impl ImportKind for YomichanAudio {
-    fn is_of_kind(&self, archive: Bytes) -> BoxFuture<'_, Result<()>> {
-        Box::pin(validate(archive))
+    fn is_of_kind(&self, archive_path: Arc<Path>) -> BoxFuture<'_, Result<()>> {
+        Box::pin(validate(archive_path))
     }
 
     fn start_import(
         &self,
         db: Pool<Sqlite>,
-        archive: Bytes,
+        archive_path: Arc<Path>,
         progress_tx: mpsc::Sender<f64>,
     ) -> BoxFuture<Result<(DictionaryMeta, ImportContinue)>> {
         Box::pin(async move {
@@ -58,14 +66,24 @@ impl ImportKind for YomichanAudio {
             meta.url = Some("https://github.com/yomidevs/local-audio-yomichan".into());
             Ok((
                 meta.clone(),
-                Box::pin(import(db, archive, meta, progress_tx)) as ImportContinue,
+                Box::pin(import(db, archive_path, meta, progress_tx)) as ImportContinue,
             ))
         })
     }
 }
 
-async fn validate(archive: Bytes) -> Result<()> {
-    let archive = async_tar::Archive::new(XzDecoder::new(Cursor::new(archive)));
+async fn open_archive(
+    archive_path: &Path,
+) -> Result<async_tar::Archive<XzDecoder<Compat<BufReader<File>>>>> {
+    let file = File::open(archive_path)
+        .await
+        .context("failed to open file")?;
+    let archive = async_tar::Archive::new(XzDecoder::new(BufReader::new(file).compat()));
+    Ok(archive)
+}
+
+async fn validate(archive_path: Arc<Path>) -> Result<()> {
+    let archive = open_archive(&archive_path).await?;
     let mut entries = archive
         .entries()
         .context("failed to read archive entries")?;
@@ -142,11 +160,12 @@ impl<T: AsRef<[u8]> + Unpin> AsyncBufRead for CountCursor<T> {
 
 async fn import(
     db: Pool<Sqlite>,
-    archive: File,
+    archive_path: Arc<Path>,
     meta: DictionaryMeta,
     progress_tx: mpsc::Sender<f64>,
 ) -> Result<DictionaryId> {
     let mut tx = db.begin().await.context("failed to begin transaction")?;
+    let mut records = Insert::<Record>::new();
     let dictionary_id = insert_dictionary(&mut tx, &meta)
         .await
         .context("failed to insert dictionary")?;
@@ -156,17 +175,19 @@ async fn import(
     let mut nhk16_rev_index = None::<RevIndex<Nhk16Info>>;
     let mut shinmeikai8_rev_index = None::<RevIndex<GenericInfo>>;
 
-    archive.read_to_string(dst);
+    let archive = open_archive(&archive_path).await?;
 
-    let archive_len = archive
-        .metadata()
-        .await
-        .context("failed to read file metadata")?
-        .len();
-    let cursor = CountCursor::new(&archive);
-    let cursor_pos = cursor.position.clone();
+    // archive.read_to_string(dst);
 
-    let mut entries = async_tar::Archive::new(XzDecoder::new(cursor))
+    // let archive_len = archive
+    //     .metadata()
+    //     .await
+    //     .context("failed to read file metadata")?
+    //     .len();
+    // let cursor = CountCursor::new(&archive);
+    // let cursor_pos = cursor.position.clone();
+
+    let mut entries = archive
         .entries()
         .context("failed to read archive entries")?;
     let mut num_entries = 0usize;
@@ -206,9 +227,10 @@ async fn import(
 
         num_entries += 1;
         if num_entries % 2000 == 0 {
-            let progress =
-                (cursor_pos.load(atomic::Ordering::SeqCst) as f64) / (archive_len as f64);
-            _ = progress_tx.try_send(progress * 0.5);
+            println!("e = {num_entries}");
+            // let progress =
+            //     (cursor_pos.load(atomic::Ordering::SeqCst) as f64) / (archive_len as f64);
+            // _ = progress_tx.try_send(progress * 0.5);
         }
     }
     debug!("{num_entries} total entries");
@@ -220,11 +242,11 @@ async fn import(
     let shinmeikai8_rev_index = shinmeikai8_rev_index
         .with_context(|| format!("no Shinmeikai index at `{SHINMEIKAI8_INDEX}`"))?;
 
-    let mut entries = async_tar::Archive::new(XzDecoder::new(Cursor::new(&archive)))
+    let mut entries = open_archive(&archive_path)
+        .await?
         .entries()
         .context("failed to read archive entries")?;
     let mut entries_done = 0usize;
-    let mut scratch = Vec::new();
     while let Some(entry) = entries.next().await {
         let mut entry = entry.context("failed to read archive entry")?;
         if entry.header().entry_type() != EntryType::Regular {
@@ -239,14 +261,14 @@ async fn import(
 
         (async {
             if let Some(path) = path.strip_prefix(FORVO_PATH) {
-                import_forvo(&mut tx, dictionary_id, &mut scratch, path, &mut entry)
+                import_forvo(&mut tx, &mut records, dictionary_id, path, &mut entry)
                     .await
                     .context("failed to import Forvo file")?;
             } else if let Some(path) = path.strip_prefix(JPOD_MEDIA) {
                 import_by_rev_index(
                     &mut tx,
+                    &mut records,
                     dictionary_id,
-                    &mut scratch,
                     path,
                     &mut entry,
                     &jpod_rev_index,
@@ -257,8 +279,8 @@ async fn import(
             } else if let Some(path) = path.strip_prefix(NHK16_AUDIO) {
                 import_by_rev_index(
                     &mut tx,
+                    &mut records,
                     dictionary_id,
-                    &mut scratch,
                     path,
                     &mut entry,
                     &nhk16_rev_index,
@@ -277,8 +299,8 @@ async fn import(
             } else if let Some(path) = path.strip_prefix(SHINMEIKAI8_MEDIA) {
                 import_by_rev_index(
                     &mut tx,
+                    &mut records,
                     dictionary_id,
-                    &mut scratch,
                     path,
                     &mut entry,
                     &shinmeikai8_rev_index,
@@ -303,6 +325,10 @@ async fn import(
         }
     }
 
+    records
+        .flush(&mut tx)
+        .await
+        .context("failed to flush records")?;
     tx.commit().await.context("failed to commit transaction")?;
     Ok(dictionary_id)
 }
@@ -419,8 +445,8 @@ impl TryFrom<schema::nhk16::Index> for RevIndex<Nhk16Info> {
 
 pub async fn import_forvo<R: AsyncRead + Unpin>(
     tx: &mut Transaction<'_, Sqlite>,
+    records: &mut Insert<Record>,
     source: DictionaryId,
-    scratch: &mut Vec<u8>,
     path: &str,
     entry: &mut async_tar::Entry<R>,
 ) -> Result<()> {
@@ -429,37 +455,44 @@ pub async fn import_forvo<R: AsyncRead + Unpin>(
         .next()
         .map(ToOwned::to_owned)
         .context("no Forvo username in path")?;
-    let headword = parts
+    let term = parts
         .next()
         .and_then(|part| part.rsplit_once('.'))
         .and_then(|(name, _)| Term::from_headword(name))
         .context("no headword in path")?;
 
-    // let record_id = insert_record(
-    //     tx,
-    //     source,
-    //     &Forvo {
-    //         username,
-    //         audio: Audio {
-    //             format: AudioFormat::Opus,
-    //             data: encode(entry).await?,
-    //         },
-    //     },
-    //     scratch,
-    // )
-    // .await
-    // .context("failed to insert record")?;
-    // insert_term_record(tx, source, record_id, &headword)
-    //     .await
-    //     .context("failed to insert headword term")?;
+    records
+        .insert(
+            tx,
+            source,
+            term,
+            &Forvo {
+                username,
+                audio: Audio {
+                    format: format_of(path)?,
+                    data: encode(entry).await?,
+                },
+            },
+        )
+        .await
+        .context("failed to insert record")?;
     Ok(())
+}
+
+fn format_of(path: &str) -> Result<AudioFormat> {
+    Ok(match Path::new(path).extension().map(|s| s.to_str()) {
+        Some(Some("opus")) => AudioFormat::Opus,
+        Some(Some("mp3")) => AudioFormat::Mp3,
+        Some(Some(ext)) => bail!("unknown audio format `{ext}`"),
+        _ => bail!("invalid file extension"),
+    })
 }
 
 #[expect(clippy::future_not_send, reason = "we don't care about non-send here")]
 async fn import_by_rev_index<'a, R, Rev, T, Terms>(
     tx: &mut Transaction<'_, Sqlite>,
+    records: &mut Insert<Record>,
     source: DictionaryId,
-    scratch: &mut Vec<u8>,
     path: &str,
     entry: &mut async_tar::Entry<R>,
     index: &'a RevIndex<Rev>,
@@ -481,27 +514,17 @@ where
         return Ok(());
     };
 
-    let format = match Path::new(path).extension().map(|s| s.to_str()) {
-        Some(Some("opus")) => AudioFormat::Opus,
-        Some(Some("mp3")) => AudioFormat::Mp3,
-        Some(Some(ext)) => bail!("unknown audio format `{ext}`"),
-        _ => bail!("invalid file extension"),
-    };
-
     let audio = Audio {
-        format,
+        format: format_of(path)?,
         data: encode(entry).await?,
     };
     let record = into_record(audio, info);
-    // let record_id = insert_record(tx, source, &record, scratch)
-    //     .await
-    //     .context("failed to insert record")?;
-
-    // for term in terms_of(info) {
-    //     insert_term_record(tx, source, record_id, term)
-    //         .await
-    //         .context("failed to insert term record")?;
-    // }
+    for term in terms_of(info) {
+        records
+            .insert(tx, source, term.clone(), &record)
+            .await
+            .context("failed to insert record")?;
+    }
     Ok(())
 }
 
