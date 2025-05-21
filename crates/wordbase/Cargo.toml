@@ -1,5 +1,5 @@
 [package]
-description = "Dictionary and word lookup service - API types"
+description = "Dictionary and word lookup service"
 name        = "wordbase"
 version     = "0.1.0"
 
@@ -18,25 +18,57 @@ workspace = true
 all-features = true
 
 [features]
-poem        = ["dep:poem", "dep:poem-openapi"]
-render-html = ["dep:maud", "dep:html-escape"]
-uniffi      = ["dep:uniffi"]
+poem   = ["wordbase-api/poem", "dep:poem-openapi"]
+uniffi = ["wordbase-api/uniffi", "dep:uniffi"]
 
 [dependencies]
-bytes        = { workspace = true, features = ["serde"] }
-html-escape  = { workspace = true, optional = true }
-maud         = { workspace = true, optional = true }
-paste        = { workspace = true }
-poem         = { workspace = true, optional = true }
-poem-openapi = { workspace = true, optional = true }
-serde        = { workspace = true, features = ["derive"] }
-serde_json   = { workspace = true }
-uniffi       = { workspace = true, optional = true }
+wordbase-api = { workspace = true, features = ["render-html"] }
+
+anyhow               = { workspace = true }
+arc-swap             = { workspace = true }
+async-compression    = { workspace = true, features = ["futures-io", "xz"] }
+async-stream         = { workspace = true }
+async-tar            = { workspace = true }
+async_zip            = { workspace = true, features = ["deflate"] }
+blocking             = { workspace = true }
+bytes                = { workspace = true }
+data-encoding        = { workspace = true }
+directories          = { workspace = true }
+either               = { workspace = true }
+foldhash             = { workspace = true }
+futures              = { workspace = true }
+indexmap             = { workspace = true, features = ["serde"] }
+itertools            = { workspace = true }
+lindera              = { workspace = true, features = ["unidic"] }
+maud                 = { workspace = true }
+paste                = { workspace = true }
+poem-openapi         = { workspace = true, optional = true }
+rayon                = { workspace = true }
+regex                = { workspace = true }
+reqwest              = { workspace = true, features = ["json"] }
+rmp-serde            = { workspace = true }
+serde                = { workspace = true, features = ["derive"] }
+serde_json           = { workspace = true }
+serde_repr           = { workspace = true }
+sqlx                 = { workspace = true, features = ["runtime-tokio", "sqlite"] }
+tera                 = { workspace = true }
+tokio                = { workspace = true, features = ["sync", "macros"] }
+tokio-stream         = { workspace = true }
+tokio-tungstenite    = { workspace = true }
+tokio-util           = { workspace = true, features = ["rt"] }
+tracing              = { workspace = true }
+unicode-segmentation = { workspace = true }
+uniffi               = { workspace = true, optional = true, features = ["tokio"] }
 
 derive_more = { workspace = true, features = [
+  "debug",
   "from",
   "display",
   "error",
   "deref",
   "deref_mut",
 ] }
+
+[dev-dependencies]
+clap  = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, features = ["full"] }

@@ -1,0 +1,42 @@
+[package]
+description = "Dictionary and word lookup service - API types"
+name        = "wordbase-api"
+version     = "0.1.0"
+
+authors.workspace      = true
+categories.workspace   = true
+edition.workspace      = true
+keywords.workspace     = true
+license.workspace      = true
+repository.workspace   = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+poem        = ["dep:poem", "dep:poem-openapi"]
+render-html = ["dep:maud", "dep:html-escape"]
+uniffi      = ["dep:uniffi"]
+
+[dependencies]
+bytes        = { workspace = true, features = ["serde"] }
+html-escape  = { workspace = true, optional = true }
+maud         = { workspace = true, optional = true }
+paste        = { workspace = true }
+poem         = { workspace = true, optional = true }
+poem-openapi = { workspace = true, optional = true }
+serde        = { workspace = true, features = ["derive"] }
+serde_json   = { workspace = true }
+uniffi       = { workspace = true, optional = true }
+
+derive_more = { workspace = true, features = [
+  "from",
+  "display",
+  "error",
+  "deref",
+  "deref_mut",
+] }

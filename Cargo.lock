@@ -1848,6 +1848,7 @@ checksum = "3954d50fe15b02142bf25d3b8bdadb634ec3948f103d04ffe3031bc8fe9d7058"
 dependencies = [
  "equivalent",
  "hashbrown 0.15.2",
+ "serde",
 ]
 
 [[package]]
@@ -4822,22 +4823,6 @@ dependencies = [
 name = "wordbase"
 version = "0.1.0"
 dependencies = [
- "bytes",
- "derive_more 2.0.1",
- "html-escape",
- "maud",
- "paste",
- "poem",
- "poem-openapi",
- "serde",
- "serde_json",
- "uniffi",
-]
-
-[[package]]
-name = "wordbase-engine"
-version = "0.1.0"
-dependencies = [
  "anyhow",
  "arc-swap",
  "async-compression",
@@ -4875,11 +4860,27 @@ dependencies = [
  "tracing",
  "unicode-segmentation",
  "uniffi",
- "wordbase",
+ "wordbase-api",
 ]
 
 [[package]]
-name = "wordbase-engine-cli"
+name = "wordbase-api"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "derive_more 2.0.1",
+ "html-escape",
+ "maud",
+ "paste",
+ "poem",
+ "poem-openapi",
+ "serde",
+ "serde_json",
+ "uniffi",
+]
+
+[[package]]
+name = "wordbase-cli"
 version = "0.0.0"
 dependencies = [
  "anyhow",
@@ -4891,15 +4892,14 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wordbase",
- "wordbase-engine",
 ]
 
 [[package]]
-name = "wordbase-engine-sys"
+name = "wordbase-sys"
 version = "0.0.0"
 dependencies = [
  "uniffi",
- "wordbase-engine",
+ "wordbase",
 ]
 
 [[package]]

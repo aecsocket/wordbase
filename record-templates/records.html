@@ -1,20 +1,90 @@
 <!doctype html>
 <style>
-    :root {
-        color: red;
-    }
+  body {
+    padding: 0;
+    margin: 0;
+  }
 
+  :root {
+    --button-radius: 9px;
+    --card-radius: 12px;
+    --dim-opacity: 55%;
+    --caption-font-size: 82%;
+    --caption-font-weight: 700;
+    --button-color: color-mix(in srgb, currentColor 10%, transparent);
+    --button-hover-color: color-mix(in srgb, currentColor 15%, transparent);
+    --button-active-color: color-mix(in srgb, currentColor 30%, transparent);
+  }
+
+  :root {
+    --window-bg-color: #fafafb;
+    --window-fg-color: rgb(0 0 6 / 80%);
+    --view-bg-color: #ffffff;
+    --view-fg-color: rgb(0 0 6 / 80%);
+    --card-bg-color: #ffffff;
+    --card-fg-color: rgb(0 0 6 / 80%);
+    --headerbar-shade-color: rgba(0 0 6 / 12%);
+    --headerbar-darker-shade-color: rgb(0 0 6 / 12%);
+  }
+
+  :root {
     @media (prefers-color-scheme: dark) {
-        :root {
-            color: blue;
-        }
+      --window-bg-color: #222226;
+      --window-fg-color: #ffffff;
+      --view-bg-color: #1d1d20;
+      --view-fg-color: #ffffff;
+      --card-bg-color: rgb(255 255 255 / 8%);
+      --card-fg-color: #ffffff;
+      --headerbar-shade-color: rgba(0 0 6 / 36%);
+      --headerbar-darker-shade-color: rgba(0 0 6 / 90%);
     }
+  }
+
+  :root {
+    color: var(--window-fg-color);
+    background-color: var(--window-bg-color);
+    /** for Jitendex */
+    --text-color: var(--window-fg-color);
+  }
+
+  .card {
+    color: var(--card-fg-color);
+    background-color: var(--card-bg-color);
+    border-radius: var(--card-radius);
+    box-shadow:
+      0 0 0 1px rgb(0 0 6 / 3%),
+      0 1px 3px 1px rgb(0 0 6 / 7%),
+      0 2px 6px 2px rgb(0 0 6 / 3%);
+  }
 </style>
 
-<h1>goodbye world</h1>
-<h2>num records: {{ records | length }}</h2>
+<h2>num terms: {{ terms | length }}</h2>
 
-<p>
-    num records: {{ records | length }} {% for record in records %} hello {%
-    endfor %}
-</p>
+<div>
+  {% for group in terms %}
+  <div class="group">
+    <div class="meta">
+      <ruby> {{ group.term.headword }}<rt>{{ group.term.reading }}</rt> </ruby>
+    </div>
+
+    <div>
+      {% for source, frequency in group.frequencies %} {{ source }} {% endfor %}
+
+      <div>
+        {% for source, glossary_group in group.glossary_groups %}
+        <div>
+          {% for glossary in glossary_group %}
+          <div class="card">
+            {% for content in glossary.content %} {{ content | safe }} {% endfor
+            %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <li>{{ group | json_encode }}</li>
+  </div>
+  {% endfor %}
+</div>
