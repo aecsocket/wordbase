@@ -1,0 +1,20 @@
+<!doctype html>
+<style>
+    :root {
+        color: red;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        :root {
+            color: blue;
+        }
+    }
+</style>
+
+<h1>goodbye world</h1>
+<h2>num records: {{ records | length }}</h2>
+
+<p>
+    num records: {{ records | length }} {% for record in records %} hello {%
+    endfor %}
+</p>

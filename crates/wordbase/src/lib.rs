@@ -1,16 +1,14 @@
 #![doc = include_str!("../README.md")]
 
 pub mod dict;
-
 mod imp;
 mod protocol;
-use std::str::FromStr;
 
 pub use protocol::*;
-
 use {
     derive_more::{Debug, Deref, Display, Error, From},
     serde::{Deserialize, Serialize, de::DeserializeOwned},
+    std::str::FromStr,
 };
 
 /// Invokes a macro, passing in all existing dictionary and record kind into the

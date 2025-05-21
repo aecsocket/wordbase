@@ -104,6 +104,7 @@ pub struct WindowFilter {
 /// [TextractorSender]: https://github.com/KamWithK/TextractorSender
 /// [exSTATic]: https://github.com/KamWithK/exSTATic/
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct TexthookerSentence {
     /// Path of the process from which this texthooker sentence was extracted.
     ///

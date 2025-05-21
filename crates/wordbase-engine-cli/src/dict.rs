@@ -2,10 +2,14 @@ use {
     anyhow::{Context, Result},
     ascii_table::AsciiTable,
     bytes::Bytes,
+    futures::{StreamExt, TryStreamExt},
     std::{path::Path, time::Instant},
     tokio::{fs, sync::oneshot},
     wordbase::{DictionaryId, Profile},
-    wordbase_engine::{Engine, import::ImportStarted},
+    wordbase_engine::{
+        Engine,
+        import::{ImportEvent, ImportStarted},
+    },
 };
 
 pub fn ls(engine: &Engine, profile: &Profile) {
@@ -87,30 +91,27 @@ pub async fn import(engine: &Engine, path: &Path) -> Result<()> {
         .map(Bytes::from)
         .context("failed to read dictionary file into memory")?;
 
-    let (send_tracker, recv_tracker) = oneshot::channel::<ImportStarted>();
-    let import_task = tokio::spawn({
-        let engine = engine.clone();
-        async move { engine.import_dictionary(data, send_tracker).await }
-    });
-    let tracker_task = async move {
-        let Ok(mut tracker) = recv_tracker.await else {
-            return;
-        };
-
-        println!(
-            "Importing {:?} version {:?}",
-            tracker.meta.name, tracker.meta.version
-        );
-
-        while let Some(progress) = tracker.recv_progress.recv().await {
-            println!("{:.02}% imported", progress * 100.0);
+    let mut import_events = Box::pin(engine.import_dictionary(data));
+    while let Some(event) = import_events
+        .try_next()
+        .await
+        .context("failed to import dictionary")?
+    {
+        match event {
+            ImportEvent::DeterminedKind(kind) => {
+                println!("Kind: {kind:?}");
+            }
+            ImportEvent::ParsedMeta(meta) => {
+                println!("Importing {:?} version {:?}", meta.name, meta.version);
+            }
+            ImportEvent::Progress(progress) => {
+                println!("{:.02}% imported", progress * 100.0);
+            }
+            ImportEvent::Done(id) => {
+                println!("Imported as {id:?}");
+            }
         }
-    };
-
-    let (result, ()) = tokio::join!(import_task, tracker_task);
-    result
-        .context("import task canceled")?
-        .context("failed to import dictionary")?;
+    }
 
     let elapsed = Instant::now().duration_since(start);
     println!("Import complete in {elapsed:?}");

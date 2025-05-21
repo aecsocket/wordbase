@@ -15,13 +15,14 @@ use {
     sqlx::{Sqlite, Transaction},
     std::{
         iter,
+        os::fd::FromRawFd,
         sync::{
             Arc,
             atomic::{self, AtomicUsize},
         },
     },
-    tokio::{sync::mpsc, task::JoinSet},
-    tracing::debug,
+    tokio::{fs::File, sync::mpsc, task::JoinSet},
+    tracing::{debug, trace},
     wordbase::{
         DictionaryId, DictionaryKind, DictionaryMeta, FrequencyValue, NormString, Term,
         dict::yomitan::{Frequency, Glossary, GlossaryTag, Pitch, structured},
@@ -118,6 +119,7 @@ async fn continue_import(
     index: schema::Index,
     send_progress: mpsc::Sender<f64>,
 ) -> Result<DictionaryId> {
+    trace!("Importing Yomitan");
     let zip = ZipFileReader::new(Cursor::new(&archive))
         .await
         .context("failed to open zip archive")?;
@@ -283,6 +285,7 @@ where
 
         let banks_parsed = banks_parsed.fetch_add(1, atomic::Ordering::SeqCst) + 1;
         let progress = (banks_parsed as f64) / (num_banks as f64);
+        println!(">> SEND PROG");
         _ = send_progress.try_send(0.5 * progress);
     }
     Ok(total_bank)

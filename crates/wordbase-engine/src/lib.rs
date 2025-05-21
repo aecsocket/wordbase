@@ -51,6 +51,7 @@ pub struct Engine {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum EngineEvent {
     Profile(ProfileEvent),
     Dictionary(DictionaryEvent),
@@ -73,6 +74,7 @@ pub enum EngineEvent {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum ProfileEvent {
     Added {
         id: ProfileId,
@@ -90,6 +92,7 @@ pub enum ProfileEvent {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum DictionaryEvent {
     Added {
         id: DictionaryId,
@@ -152,12 +155,6 @@ impl Engine {
     }
 }
 
-pub fn data_dir() -> Result<PathBuf> {
-    let dirs = ProjectDirs::from("io.github", "aecsocket", "Wordbase")
-        .context("failed to get default app directories")?;
-    Ok(dirs.data_dir().to_path_buf())
-}
-
 #[derive(Debug, Clone, Display, Error)]
 #[display("not found")]
 pub struct NotFound;
@@ -168,7 +165,19 @@ const CHANNEL_BUF_CAP: usize = 4;
 uniffi::setup_scaffolding!();
 
 #[cfg(feature = "uniffi")]
-#[uniffi::export(async_runtime = "tokio")]
-pub async fn engine(data_dir: &str) -> Engine {
-    Engine::new(data_dir).await.unwrap()
+const _: () = {
+    #[uniffi::export(async_runtime = "tokio")]
+    pub async fn engine(data_dir: &str) -> Result<Engine, FfiError> {
+        Engine::new(data_dir).await.map_err(FfiError)
+    }
+
+    #[derive(Debug, Display, Error, uniffi::Object)]
+    #[display("{_0:?}")]
+    pub struct FfiError(pub anyhow::Error);
+};
+
+pub fn data_dir() -> Result<PathBuf> {
+    let dirs = ProjectDirs::from("io.github", "aecsocket", "Wordbase")
+        .context("failed to get default app directories")?;
+    Ok(dirs.data_dir().to_path_buf())
 }

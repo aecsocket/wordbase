@@ -2,6 +2,9 @@ package io.github.aecsocket.wordbase
 
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
+import android.content.res.Resources
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -53,12 +56,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.core.view.HapticFeedbackConstantsCompat
 import androidx.core.view.ViewCompat
 import androidx.lifecycle.lifecycleScope
@@ -82,7 +87,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         lifecycleScope.launch {
-            Wordbase = uniffi.wordbase_engine.engine(filesDir.absolutePath)
+//            Wordbase = uniffi.wordbase_engine.engine(filesDir.absolutePath)
         }
         setContent {
             WordbaseTheme {
@@ -183,13 +188,11 @@ fun SearchPage(padding: PaddingValues) {
             .imePadding()
             .padding(padding)
     ) {
-        val webViewState = rememberWebViewStateWithHTMLData(
-            """
-            <h1>Hello world!</h1>
-            ${RecordKind.entries}
-            <p>some text</p>
-            """.trimIndent()
-        )
+        val html = LocalContext.current.resources.openRawResource(R.raw.records)
+            .bufferedReader()
+            .use { it.readText() }
+
+        val webViewState = rememberWebViewStateWithHTMLData(html)
         WebView(
             state = webViewState,
             modifier = Modifier.fillMaxSize(),
@@ -200,99 +203,8 @@ fun SearchPage(padding: PaddingValues) {
     }
 }
 
-@Composable
-fun ManagePage() {
-    var dictionaries by remember {
-        mutableStateOf(
-            listOf(
-                Dictionary(
-                    id = 1,
-                    meta = DictionaryMeta(
-                        kind = DictionaryKind.YOMITAN,
-                        name = "Jitendex",
-                        version = "1.0.0",
-                        description = "Jitendex foo bar whatever blah. Lorem ipsum dolor sit amet, just fill space so it wraps on a new line",
-                        url = "https://example.com",
-                        attribution = "attribution info..."
-                    ),
-                    position = 1
-                ),
-                Dictionary(
-                    id = 2,
-                    meta = DictionaryMeta(
-                        kind = DictionaryKind.YOMITAN,
-                        name = "JPDB",
-                        version = "0.1.0",
-                        description = "desc",
-                        url = null,
-                        attribution = null,
-                    ),
-                    position = 2
-                )
-            )
-        )
-    }
 
-    val view = LocalView.current
-    val lazyListState = rememberLazyListState()
-    val reorderableLazyListState = rememberReorderableLazyListState(lazyListState) { from, to ->
-        dictionaries = dictionaries.toMutableList().apply {
-            add(to.index - 1, removeAt(from.index - 1))
-        }
-
-        ViewCompat.performHapticFeedback(
-            view,
-            HapticFeedbackConstantsCompat.SEGMENT_FREQUENT_TICK
-        )
-    }
-
-    LazyColumn(
-        state = lazyListState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            horizontal = 16.dp
-        ),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        item {
-            Text(
-                "Dictionaries",
-                style = MaterialTheme.typography.headlineLarge
-            )
-        }
-
-        items(
-            dictionaries,
-            key = { meta -> meta.id }
-        ) { meta ->
-            ReorderableItem(
-                reorderableLazyListState,
-                key = meta.id
-            ) {
-                DictionaryRow(dict = meta)
-            }
-        }
-
-        item {
-            val launcher = rememberLauncherForActivityResult(
-                contract = ActivityResultContracts.OpenDocument(),
-            ) { result ->
-
-            }
-
-            Button(
-                onClick = {
-                    launcher.launch(arrayOf("application/zip"))
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(stringResource(R.string.dictionary_import))
-            }
-        }
-    }
-}
-
-@PreviewScreenSizes
+//@PreviewScreenSizes
 @Preview
 @Composable
 fun UiPreview() {
@@ -301,147 +213,4 @@ fun UiPreview() {
     }
 }
 
-@Composable
-fun ReorderableCollectionItemScope.DictionaryRow(dict: Dictionary) {
-    ExpanderCard(
-        titleContent = {
-            Row(
-                modifier = Modifier.padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val view = LocalView.current
-                Icon(
-                    modifier = Modifier.draggableHandle(
-                        onDragStarted = {
-                            ViewCompat.performHapticFeedback(
-                                view,
-                                HapticFeedbackConstantsCompat.GESTURE_START
-                            )
-                        },
-                        onDragStopped = {
-                            ViewCompat.performHapticFeedback(
-                                view,
-                                HapticFeedbackConstantsCompat.GESTURE_END
-                            )
-                        }
-                    ),
-                    painter = painterResource(R.drawable.outline_drag_indicator_24),
-                    contentDescription = null
-                )
 
-                Column {
-                    Text(
-                        dict.meta.name,
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-
-                    dict.meta.version?.let { version ->
-                        Text(
-                            version,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Switch(
-                        checked = true,
-                        onCheckedChange = {}
-                    )
-                }
-            }
-        }
-    ) {
-        Column(
-            modifier = Modifier.padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            dict.meta.description?.let { description ->
-                DictionaryMetaItem(
-                    key = stringResource(R.string.dictionary_description),
-                    value = description
-                )
-            }
-
-            dict.meta.attribution?.let { attribution ->
-                DictionaryMetaItem(
-                    key = stringResource(R.string.dictionary_attribution),
-                    value = attribution
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = {}
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.outline_sort_24),
-                        contentDescription = stringResource(R.string.dictionary_set_sorting)
-                    )
-                }
-
-                IconButton(
-                    onClick = {}
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.outline_globe_24),
-                        contentDescription = stringResource(R.string.dictionary_visit_website)
-                    )
-                }
-
-                IconButton(
-                    onClick = {}
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = stringResource(R.string.dictionary_delete)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun DictionaryMetaItem(key: String, value: String) {
-    Column {
-        Text(
-            key,
-            style = MaterialTheme.typography.labelMedium
-        )
-
-        Text(value)
-    }
-}
-
-@Composable
-fun ExpanderCard(
-    modifier: Modifier = Modifier,
-    titleContent: @Composable ColumnScope.() -> Unit,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    Card(modifier = modifier) {
-        Column {
-            Column(
-                modifier = Modifier
-                    .clickable { expanded = !expanded }
-            ) {
-                titleContent()
-            }
-
-            AnimatedVisibility(visible = expanded) {
-                content()
-            }
-        }
-    }
-}

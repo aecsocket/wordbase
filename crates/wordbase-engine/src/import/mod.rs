@@ -13,7 +13,7 @@ use {
         sync::{Arc, LazyLock},
     },
     tokio::sync::{Mutex, mpsc},
-    tracing::debug,
+    tracing::{debug, trace},
     wordbase::{
         DictionaryId, DictionaryKind, DictionaryMeta, FrequencyValue, RecordId, RecordType, Term,
     },
@@ -175,13 +175,16 @@ impl Engine {
                 return;
             }
             yield ImportEvent::ParsedMeta(meta);
+            trace!("Dictionary does not exist yet, continuing import");
 
+            let continue_task = tokio::spawn(continue_task);
             while let Some(progress) = recv_progress.recv().await {
                 yield ImportEvent::Progress(progress);
             }
 
             let id = continue_task
                 .await
+                .map_err(|source| ImportError::Import { kind, source: source.into() })?
                 .map_err(|source| ImportError::Import { kind, source })?;
 
             self.sync_dictionaries().await?;
