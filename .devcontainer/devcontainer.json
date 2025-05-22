@@ -3,6 +3,10 @@
   "build": {
     "dockerfile": "Dockerfile"
   },
+  "containerEnv": {
+    "LINDERA_CACHE": "/workspaces/wordbase/lindera-cache",
+    "DATABASE_URL": "sqlite:/home/vscode/.local/share/wordbase/wordbase.db"
+  },
   "mounts": [
     {
       "type": "volume",

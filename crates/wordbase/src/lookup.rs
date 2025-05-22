@@ -2,7 +2,7 @@ use {
     crate::{Engine, db},
     anyhow::{Context, Result, bail},
     foldhash::{HashSet, HashSetExt},
-    futures::{StreamExt, TryStreamExt, stream::FuturesUnordered},
+    futures::{StreamExt, TryStreamExt, stream::FuturesOrdered},
     itertools::Itertools,
     std::borrow::Borrow,
     wordbase_api::{
@@ -197,7 +197,7 @@ impl Engine {
                     .await
                     .map(|records| (deinflection, records))
             })
-            .collect::<FuturesUnordered<_>>();
+            .collect::<FuturesOrdered<_>>();
         while let Some((deinflection, lookup)) = lookup_tasks.try_next().await? {
             for record in lookup {
                 if seen_record_ids.insert(record.record_id) {

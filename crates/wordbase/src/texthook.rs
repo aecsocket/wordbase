@@ -95,7 +95,7 @@ pub(super) async fn run(
         };
 
         connected.store(0, atomic::Ordering::SeqCst);
-        _ = send_event.send(EngineEvent::PullTexthookerDisconnected);
+        _ = send_event.send(EngineEvent::TexthookerDisconnected);
         current_task = handle_url(&send_event, url.load().clone(), connected.clone());
     }
 }
@@ -125,13 +125,13 @@ async fn handle_url(
 
         info!("Connected to {url:?}");
         connected.store(1, atomic::Ordering::SeqCst);
-        _ = send_event.send(EngineEvent::PullTexthookerConnected);
+        _ = send_event.send(EngineEvent::TexthookerConnected);
 
         let Err(err) = handle_stream(send_event, stream).await;
 
         info!("Disconnected: {err:?}");
         connected.store(0, atomic::Ordering::SeqCst);
-        _ = send_event.send(EngineEvent::PullTexthookerDisconnected);
+        _ = send_event.send(EngineEvent::TexthookerDisconnected);
     }
 }
 
@@ -148,6 +148,6 @@ async fn handle_stream(
             .into_data();
         let sentence = serde_json::from_slice::<TexthookerSentence>(&message)
             .context("failed to deserialize message as hook sentence")?;
-        _ = send_event.send(EngineEvent::TexthookerSentence(sentence));
+        _ = send_event.send(EngineEvent::Sentence(sentence));
     }
 }

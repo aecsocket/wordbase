@@ -2,10 +2,11 @@ use {
     anyhow::{Context, Result},
     serde::{Deserialize, Serialize},
     sqlx::{
-        Pool, Sqlite,
+        ConnectOptions, Pool, Sqlite,
         sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
     },
-    std::{io, path::Path},
+    std::{io, path::Path, time::Duration},
+    tracing::log::LevelFilter,
 };
 
 pub async fn setup(path: &Path) -> Result<Pool<Sqlite>> {
@@ -28,8 +29,10 @@ fn connect_options(path: &Path) -> SqliteConnectOptions {
         .filename(path)
         .create_if_missing(true)
         .journal_mode(SqliteJournalMode::Wal)
+        // slow statements are not uncommon for us,
+        // so let's log them at a lower level than the default Warn
+        .log_slow_statements(LevelFilter::Debug, Duration::from_secs(1))
         .pragma("foreign_keys", "ON")
-        .pragma("synchronous", "OFF")
 }
 
 pub fn serialize(

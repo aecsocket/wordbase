@@ -4846,6 +4846,7 @@ dependencies = [
  "lindera",
  "maud",
  "paste",
+ "pin-project",
  "poem-openapi",
  "rayon",
  "regex",

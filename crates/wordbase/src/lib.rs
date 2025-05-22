@@ -8,6 +8,7 @@ pub mod dictionary;
 pub mod import;
 pub mod lookup;
 pub mod profile;
+pub mod render;
 pub mod texthook;
 
 pub use wordbase_api::*;
@@ -25,6 +26,7 @@ use {
         path::{Path, PathBuf},
         sync::Arc,
     },
+    tera::Tera,
     texthook::Texthookers,
     tokio::sync::broadcast,
     tracing::info,
@@ -38,6 +40,7 @@ pub struct SharedEngine(pub Arc<Engine>);
 pub struct Engine {
     profiles: ArcSwap<Profiles>,
     dictionaries: ArcSwap<Dictionaries>,
+    renderer: Tera,
     texthookers: Texthookers,
     deinflectors: Deinflectors,
     anki: Anki,
@@ -63,9 +66,9 @@ pub enum EngineEvent {
     AnkiNoteTypeSet {
         profile_id: ProfileId,
     },
-    PullTexthookerConnected,
-    PullTexthookerDisconnected,
-    TexthookerSentence(TexthookerSentence),
+    TexthookerConnected,
+    TexthookerDisconnected,
+    Sentence(TexthookerSentence),
 }
 
 #[derive(Debug, Clone)]
@@ -131,6 +134,15 @@ impl Engine {
                     .await
                     .context("failed to fetch initial dictionaries")?,
             ),
+            renderer: {
+                let mut tera = Tera::default();
+                tera.add_raw_template(
+                    "records.html",
+                    include_str!("../../../record-templates/records.html"),
+                )
+                .unwrap();
+                tera
+            },
             texthookers: Texthookers::new(&db, event_tx.clone())
                 .await
                 .context("failed to create texthooker listener")?,
@@ -159,17 +171,20 @@ const CHANNEL_BUF_CAP: usize = 4;
 uniffi::setup_scaffolding!();
 
 #[cfg(feature = "uniffi")]
-const _: () = {
-    #[uniffi::export(async_runtime = "tokio")]
-    pub async fn engine(data_dir: &str) -> Result<Engine, FfiError> {
-        Engine::new(data_dir).await.map_err(FfiError)
-    }
-
-    #[derive(Debug, Display, Error, uniffi::Object)]
+#[derive(Debug, Display, Error, uniffi::Error)]
+#[uniffi(flat_error)]
+pub enum FfiError {
     #[display("{_0:?}")]
-    pub struct FfiError(pub anyhow::Error);
-};
+    Ffi(anyhow::Error),
+}
 
+#[cfg(feature = "uniffi")]
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn engine(data_dir: &str) -> Result<Engine, FfiError> {
+    Engine::new(data_dir).await.map_err(FfiError::Ffi)
+}
+
+#[deprecated]
 pub fn data_dir() -> Result<PathBuf> {
     let dirs = ProjectDirs::from("io.github", "aecsocket", "Wordbase")
         .context("failed to get default app directories")?;

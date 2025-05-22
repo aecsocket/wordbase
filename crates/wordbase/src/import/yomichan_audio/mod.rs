@@ -2,7 +2,7 @@ mod schema;
 
 use {
     super::{ImportContinue, ImportKind, insert::Insert},
-    crate::{db, import::insert_dictionary},
+    crate::import::insert_dictionary,
     anyhow::{Context, Result, bail},
     async_compression::futures::bufread::XzDecoder,
     async_tar::EntryType,
@@ -10,9 +10,10 @@ use {
     derive_more::Deref,
     foldhash::{HashMap, HashMapExt},
     futures::{
-        AsyncBufRead, AsyncRead, AsyncReadExt as _, AsyncSeek, StreamExt, future::BoxFuture,
-        io::Cursor,
+        AsyncBufRead, AsyncRead, AsyncReadExt as _, AsyncSeek, AsyncSeekExt as _, StreamExt,
+        future::BoxFuture,
     },
+    pin_project::pin_project,
     schema::{
         FORVO_PATH, JPOD_INDEX, JPOD_MEDIA, MARKER_PATHS, NHK16_AUDIO, NHK16_INDEX,
         SHINMEIKAI8_INDEX, SHINMEIKAI8_MEDIA,
@@ -21,6 +22,7 @@ use {
     sqlx::{Pool, Sqlite, Transaction},
     std::{
         any::type_name,
+        io::SeekFrom,
         path::Path,
         pin::Pin,
         sync::{
@@ -29,11 +31,7 @@ use {
         },
         task::Poll,
     },
-    tokio::{
-        fs::File,
-        io::{AsyncReadExt, BufReader},
-        sync::mpsc,
-    },
+    tokio::{fs::File, io::BufReader, sync::mpsc},
     tokio_util::compat::{Compat, TokioAsyncReadCompatExt},
     tracing::{debug, trace},
     wordbase_api::{
@@ -74,16 +72,34 @@ impl ImportKind for YomichanAudio {
 
 async fn open_archive(
     archive_path: &Path,
-) -> Result<async_tar::Archive<XzDecoder<Compat<BufReader<File>>>>> {
-    let file = File::open(archive_path)
+) -> Result<(
+    async_tar::Archive<XzDecoder<Count<Compat<BufReader<File>>>>>,
+    Arc<AtomicU64>,
+    u64,
+)> {
+    let mut reader = BufReader::new(
+        File::open(archive_path)
+            .await
+            .context("failed to open file")?,
+    )
+    .compat();
+    let buf_len = reader
+        .seek(SeekFrom::End(0))
         .await
-        .context("failed to open file")?;
-    let archive = async_tar::Archive::new(XzDecoder::new(BufReader::new(file).compat()));
-    Ok(archive)
+        .context("failed to seek to end of file")?;
+    reader
+        .seek(SeekFrom::Start(0))
+        .await
+        .context("failed to seek to start of file")?;
+
+    let count = Count::new(reader);
+    let cursor_pos = count.pos();
+    let archive = async_tar::Archive::new(XzDecoder::new(count));
+    Ok((archive, cursor_pos, buf_len))
 }
 
 async fn validate(archive_path: Arc<Path>) -> Result<()> {
-    let archive = open_archive(&archive_path).await?;
+    let (archive, _, _) = open_archive(&archive_path).await?;
     let mut entries = archive
         .entries()
         .context("failed to read archive entries")?;
@@ -101,60 +117,66 @@ async fn validate(archive_path: Arc<Path>) -> Result<()> {
     bail!("missing one of {MARKER_PATHS:?}");
 }
 
-struct CountCursor<T> {
-    inner: std::io::Cursor<T>,
-    position: Arc<AtomicU64>,
+#[pin_project]
+struct Count<T> {
+    #[pin]
+    inner: T,
+    pos: Arc<AtomicU64>,
 }
 
-impl<T> CountCursor<T> {
+impl<T> Count<T> {
     pub fn new(inner: T) -> Self {
         Self {
-            inner: std::io::Cursor::new(inner),
-            position: Arc::new(AtomicU64::new(0)),
+            inner,
+            pos: Arc::new(AtomicU64::new(0)),
         }
     }
-}
 
-impl<T: AsRef<[u8]> + Unpin> AsyncSeek for CountCursor<T> {
-    fn poll_seek(
-        mut self: Pin<&mut Self>,
-        _: &mut std::task::Context<'_>,
-        pos: std::io::SeekFrom,
-    ) -> Poll<std::io::Result<u64>> {
-        Poll::Ready(std::io::Seek::seek(&mut self.inner, pos))
+    pub fn pos(&self) -> Arc<AtomicU64> {
+        self.pos.clone()
     }
 }
 
-impl<T: AsRef<[u8]> + Unpin> AsyncRead for CountCursor<T> {
+impl<T: AsyncSeek + Unpin> AsyncSeek for Count<T> {
+    fn poll_seek(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        pos: std::io::SeekFrom,
+    ) -> Poll<std::io::Result<u64>> {
+        self.project().inner.poll_seek(cx, pos)
+    }
+}
+
+impl<T: AsyncRead + Unpin> AsyncRead for Count<T> {
     fn poll_read(
-        mut self: Pin<&mut Self>,
-        _: &mut std::task::Context<'_>,
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
         buf: &mut [u8],
     ) -> Poll<std::io::Result<usize>> {
-        Poll::Ready(std::io::Read::read(&mut self.inner, buf))
+        self.project().inner.poll_read(cx, buf)
     }
 
     fn poll_read_vectored(
-        mut self: Pin<&mut Self>,
-        _: &mut std::task::Context<'_>,
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
         bufs: &mut [std::io::IoSliceMut<'_>],
     ) -> Poll<std::io::Result<usize>> {
-        Poll::Ready(std::io::Read::read_vectored(&mut self.inner, bufs))
+        self.project().inner.poll_read_vectored(cx, bufs)
     }
 }
 
-impl<T: AsRef<[u8]> + Unpin> AsyncBufRead for CountCursor<T> {
-    fn poll_fill_buf(
-        self: Pin<&mut Self>,
-        _: &mut std::task::Context<'_>,
-    ) -> Poll<std::io::Result<&[u8]>> {
-        Poll::Ready(std::io::BufRead::fill_buf(&mut self.get_mut().inner))
+impl<T: AsyncBufRead + Unpin> AsyncBufRead for Count<T> {
+    fn poll_fill_buf<'a>(
+        self: Pin<&'a mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<std::io::Result<&'a [u8]>> {
+        self.project().inner.poll_fill_buf(cx)
     }
 
-    fn consume(mut self: Pin<&mut Self>, amt: usize) {
-        std::io::BufRead::consume(&mut self.inner, amt);
-        self.position
-            .store(self.inner.position(), atomic::Ordering::SeqCst);
+    fn consume(self: Pin<&mut Self>, amt: usize) {
+        let this = self.project();
+        this.pos.fetch_add(amt as u64, atomic::Ordering::SeqCst);
+        this.inner.consume(amt);
     }
 }
 
@@ -175,18 +197,7 @@ async fn import(
     let mut nhk16_rev_index = None::<RevIndex<Nhk16Info>>;
     let mut shinmeikai8_rev_index = None::<RevIndex<GenericInfo>>;
 
-    let archive = open_archive(&archive_path).await?;
-
-    // archive.read_to_string(dst);
-
-    // let archive_len = archive
-    //     .metadata()
-    //     .await
-    //     .context("failed to read file metadata")?
-    //     .len();
-    // let cursor = CountCursor::new(&archive);
-    // let cursor_pos = cursor.position.clone();
-
+    let (archive, cursor_pos, buf_len) = open_archive(&archive_path).await?;
     let mut entries = archive
         .entries()
         .context("failed to read archive entries")?;
@@ -227,10 +238,9 @@ async fn import(
 
         num_entries += 1;
         if num_entries % 2000 == 0 {
-            println!("e = {num_entries}");
-            // let progress =
-            //     (cursor_pos.load(atomic::Ordering::SeqCst) as f64) / (archive_len as f64);
-            // _ = progress_tx.try_send(progress * 0.5);
+            let cursor_pos = cursor_pos.load(atomic::Ordering::SeqCst);
+            let progress = (cursor_pos as f64) / (buf_len as f64);
+            _ = progress_tx.try_send(progress * 0.5);
         }
     }
     debug!("{num_entries} total entries");
@@ -242,8 +252,8 @@ async fn import(
     let shinmeikai8_rev_index = shinmeikai8_rev_index
         .with_context(|| format!("no Shinmeikai index at `{SHINMEIKAI8_INDEX}`"))?;
 
-    let mut entries = open_archive(&archive_path)
-        .await?
+    let (archive, _, _) = open_archive(&archive_path).await?;
+    let mut entries = archive
         .entries()
         .context("failed to read archive entries")?;
     let mut entries_done = 0usize;

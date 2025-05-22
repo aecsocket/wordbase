@@ -1,5 +1,5 @@
 <!-- prettier-ignore -->
-<div>
+<!--
 {%- macro audio_kind_name(kind) -%}
   {%- if kind == "YomichanAudioForvo" -%}
     Forvo
@@ -13,10 +13,22 @@
     {{ kind }}
   {%- endif -%}
 {%- endmacro audio_kind_name -%}
-</div>
+
+{%- macro dictionary_name(id) -%}
+{{ dictionaries[id].meta.name | default(value = "?") }}
+{%- endmacro dictionary_name -%}
+-->
 
 <!doctype html>
 
+{# separate style block to retain syntax highlighting #}
+<style>
+  :root {
+    --accent-color: rgb(
+      {{accent_color.r}} {{accent_color.g}} {{accent_color.b}}
+    );
+  }
+</style>
 <style>
   body {
     padding: 0;
@@ -81,7 +93,6 @@
   :root {
     color: var(--window-fg-color);
     background-color: var(--window-bg-color);
-    --accent-color: green; /* todo */
     /** for Jitendex */
     --text-color: var(--window-fg-color);
   }
@@ -311,7 +322,7 @@
       {% for source, frequency_group in group.frequencies %}
       <span class="pill dimmed">
         <span class="text" style="gap: 12px">
-          <span>{{ dictionaries[source].meta.name }}</span>
+          <span>{{ self::dictionary_name(id=source) }}</span>
           <span class="frequency-value flow">
             {% for frequency in frequency_group %}
             <span style="font-weight: 700">{{ frequency.display }}</span>
@@ -329,7 +340,7 @@
       {% for source, glossary_group in group.glossary_groups %}
       <div style="display: flex; flex-direction: column; gap: 8px">
         <span class="caption-header">
-          {{ dictionaries[source].meta.name }}
+          {{ self::dictionary_name(id=source) }}
         </span>
 
         {% for glossary in glossary_group %}

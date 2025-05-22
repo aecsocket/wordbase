@@ -42,6 +42,7 @@ itertools            = { workspace = true }
 lindera              = { workspace = true, features = ["unidic"] }
 maud                 = { workspace = true }
 paste                = { workspace = true }
+pin-project          = { version = "1.1" }
 poem-openapi         = { workspace = true, optional = true }
 rayon                = { workspace = true }
 regex                = { workspace = true }

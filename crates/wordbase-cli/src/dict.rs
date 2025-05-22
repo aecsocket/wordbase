@@ -80,7 +80,8 @@ pub fn info(engine: &Engine, dict_id: DictionaryId) -> Result<()> {
 pub async fn import(engine: &Engine, path: &Path) -> Result<()> {
     let start = Instant::now();
 
-    let mut import_events = Box::pin(engine.import_dictionary(path));
+    let import_events = engine.import_dictionary(path);
+    tokio::pin!(import_events);
     while let Some(event) = import_events
         .try_next()
         .await

@@ -59,9 +59,9 @@ import io.github.aecsocket.wordbase.ui.theme.WordbaseTheme
 import sh.calvin.reorderable.ReorderableCollectionItemScope
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
-import uniffi.wordbase.Dictionary
-import uniffi.wordbase.DictionaryKind
-import uniffi.wordbase.DictionaryMeta
+import uniffi.wordbase_api.Dictionary
+import uniffi.wordbase_api.DictionaryKind
+import uniffi.wordbase_api.DictionaryMeta
 
 @Preview(showBackground = true)
 @Composable

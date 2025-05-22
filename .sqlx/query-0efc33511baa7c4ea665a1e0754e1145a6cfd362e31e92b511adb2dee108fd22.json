@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT OR IGNORE INTO frequency (source, headword, reading, mode, value)\n            VALUES ($1, $2, $3, $4, $5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "0efc33511baa7c4ea665a1e0754e1145a6cfd362e31e92b511adb2dee108fd22"
+}
