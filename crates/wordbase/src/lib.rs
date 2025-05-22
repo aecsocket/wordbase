@@ -6,7 +6,6 @@ mod db;
 pub mod deinflect;
 pub mod dictionary;
 pub mod import;
-pub mod lang;
 pub mod lookup;
 pub mod profile;
 pub mod texthook;

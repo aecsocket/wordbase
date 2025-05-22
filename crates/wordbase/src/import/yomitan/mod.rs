@@ -23,7 +23,8 @@ use {
     tokio_util::compat::Compat,
     tracing::{debug, trace},
     wordbase_api::{
-        DictionaryId, DictionaryKind, DictionaryMeta, FrequencyValue, NormString, Record, Term,
+        DictionaryId, DictionaryKind, DictionaryMeta, FrequencyValue, NoHeadwordOrReading,
+        NormString, Record, Term,
         dict::{
             jpn::PitchPosition,
             yomitan::{Frequency, Glossary, GlossaryTag, Pitch, structured},
@@ -369,8 +370,8 @@ async fn import_term(
     term_data: schema::Term,
     all_tags: &[GlossaryTag],
 ) -> Result<()> {
-    let term = Term::new(term_data.expression, term_data.reading)
-        .context("term does not contain headword or reading")?;
+    let term =
+        Term::from_full(term_data.expression, term_data.reading).ok_or(NoHeadwordOrReading)?;
 
     let tags = match_tags(
         all_tags,
@@ -436,8 +437,7 @@ async fn import_term_meta(
             // Yomitan dictionaries like VN Freq v2 seem to default to rank-based
             let frequency_mode = index.frequency_mode.unwrap_or(FrequencyMode::RankBased);
             let (record, reading) = to_frequency_and_reading(frequency_mode, frequency);
-            let term = Term::new(headword, reading)
-                .context("frequency term has no headword or reading")?;
+            let term = Term::from_parts(headword, reading).ok_or(NoHeadwordOrReading)?;
 
             records
                 .insert(tx, source, term.clone(), &record)
@@ -453,8 +453,8 @@ async fn import_term_meta(
         }
         schema::TermMetaData::Pitch(pitch) => {
             for (record, reading) in to_pitches_and_readings(pitch) {
-                let term = Term::new(headword.clone(), reading)
-                    .context("pitch term has no headword or reading")?;
+                let term =
+                    Term::from_parts(headword.clone(), Some(reading)).ok_or(NoHeadwordOrReading)?;
 
                 records
                     .insert(tx, source, term, &record)

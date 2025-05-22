@@ -375,25 +375,24 @@ impl TryFrom<schema::generic::Index> for RevIndex<GenericInfo> {
             }
         }
         for (path, info) in value.files {
-            let reading = info.kana_reading.and_then(NormString::new);
-            let pitch_pattern = info.pitch_pattern.and_then(NormString::new);
-            let pitch_number = info.pitch_number.and_then(|s| s.parse::<u64>().ok());
-
             let entry = for_path.entry(path).or_default();
-            match &mut entry.term {
-                Some(term) => {
-                    if let Some(reading) = reading {
+
+            if let Some(reading) = info.kana_reading.and_then(NormString::new) {
+                match &mut entry.term {
+                    Some(term) => {
                         term.set_reading(reading);
                     }
-                }
-                None => {
-                    entry.term = Term::from_reading(reading);
+                    None => {
+                        entry.term = Term::from_reading(reading);
+                    }
                 }
             }
-            if let Some(pitch_pattern) = pitch_pattern {
+
+            if let Some(pitch_pattern) = info.pitch_pattern.and_then(NormString::new) {
                 entry.pitch_pattern = Some(pitch_pattern);
             }
-            if let Some(pitch_number) = pitch_number {
+
+            if let Some(pitch_number) = info.pitch_number.and_then(|s| s.parse::<u64>().ok()) {
                 entry.pitch_number = Some(pitch_number);
             }
         }
@@ -418,7 +417,7 @@ impl TryFrom<schema::nhk16::Index> for RevIndex<Nhk16Info> {
                 .kanji
                 .into_iter()
                 .filter_map(NormString::new)
-                .filter_map(|headword| Term::new(headword, reading.clone()))
+                .filter_map(|headword| Term::from_parts(Some(headword), reading.clone()))
                 .collect::<Vec<_>>();
 
             for accent in entry.accents {

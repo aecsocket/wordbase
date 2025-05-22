@@ -10,7 +10,7 @@ pub async fn create_note(
     headword: &str,
     reading: &str,
 ) -> Result<()> {
-    let term = Term::new(headword, reading).context("invalid term")?;
+    let term = Term::from_full(headword, reading).context("invalid term")?;
     // TODO
     // engine
     //     .connect_anki("http://host.docker.internal:8765", "")

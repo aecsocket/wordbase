@@ -1,6 +1,6 @@
 use {
     super::request::{self, Asset},
-    crate::{Engine, IndexSet, lang},
+    crate::{Engine, IndexSet},
     anyhow::{Context as _, Result},
     data_encoding::BASE64,
     itertools::Itertools as _,
@@ -202,8 +202,14 @@ impl Engine {
             deck_name,
             model_name: note_type_name,
             fields: [
-                ("Expression", as_str(term.headword())),
-                ("ExpressionReading", as_str(term.reading())),
+                (
+                    "Expression",
+                    term.headword().map(|s| s.as_str()).unwrap_or_default(),
+                ),
+                (
+                    "ExpressionReading",
+                    term.reading().map(|s| s.as_str()).unwrap_or_default(),
+                ),
                 ("ExpressionFurigana", &term_ruby_plain),
                 ("Sentence", sentence_cloze),
                 (
@@ -243,11 +249,9 @@ fn as_str(str: Option<&NormString>) -> &str {
 
 fn term_ruby_plain(term: &Term) -> String {
     match term {
-        Term::Headword { headword } => headword.to_string(),
-        Term::Reading { reading } => reading.to_string(),
-        Term::Full { headword, reading } => {
+        Term::Full(headword, reading) => {
             let mut result = String::new();
-            for (headword_part, reading_part) in lang::jpn::furigana_parts(headword, reading) {
+            for (headword_part, reading_part) in dict::jpn::furigana_parts(headword, reading) {
                 _ = write!(&mut result, "{headword_part}");
                 if !reading_part.is_empty() {
                     _ = write!(&mut result, "[{reading_part}]");
@@ -258,6 +262,8 @@ fn term_ruby_plain(term: &Term) -> String {
             }
             result
         }
+        Term::Headword(headword) => headword.to_string(),
+        Term::Reading(reading) => reading.to_string(),
     }
 }
 

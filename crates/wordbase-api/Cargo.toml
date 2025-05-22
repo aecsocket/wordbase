@@ -25,6 +25,7 @@ uniffi      = ["dep:uniffi"]
 [dependencies]
 bytes        = { workspace = true, features = ["serde"] }
 html-escape  = { workspace = true, optional = true }
+itertools    = { workspace = true }
 maud         = { workspace = true, optional = true }
 paste        = { workspace = true }
 poem         = { workspace = true, optional = true }
@@ -34,8 +35,9 @@ serde_json   = { workspace = true }
 uniffi       = { workspace = true, optional = true }
 
 derive_more = { workspace = true, features = [
-  "from",
+  "debug",
   "display",
+  "from",
   "error",
   "deref",
   "deref_mut",

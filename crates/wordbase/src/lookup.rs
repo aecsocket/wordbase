@@ -2,12 +2,12 @@ use {
     crate::{Engine, db},
     anyhow::{Context, Result, bail},
     foldhash::{HashSet, HashSetExt},
-    futures::{StreamExt, TryStreamExt},
+    futures::{StreamExt, TryStreamExt, stream::FuturesUnordered},
     itertools::Itertools,
     std::borrow::Borrow,
     wordbase_api::{
-        DictionaryId, FrequencyValue, ProfileId, Record, RecordId, RecordKind, RecordLookup, Term,
-        for_kinds,
+        DictionaryId, FrequencyValue, NoHeadwordOrReading, ProfileId, Record, RecordId, RecordKind,
+        RecordLookup, Term, for_kinds,
     },
 };
 
@@ -144,8 +144,8 @@ impl Engine {
                 }}}}
 
                 let source = DictionaryId(record.source);
-                let term = Term::new(record.headword, record.reading)
-                    .context("fetched empty term")?;
+                let term = Term::from_parts(record.headword, record.reading)
+                    .ok_or(NoHeadwordOrReading)?;
 
                 let typed_record = for_kinds!(deserialize_record)
                     .with_context(|| {
@@ -189,15 +189,21 @@ impl Engine {
         let mut records = Vec::new();
         let mut seen_record_ids = HashSet::new();
 
-        for deinflection in self.deinflect(query) {
-            for result in self
-                .lookup_lemma(profile_id, &deinflection.lemma, record_kinds)
-                .await?
-            {
-                if seen_record_ids.insert(result.record_id) {
+        let deinflections = self.deinflect(query);
+        let mut lookup_tasks = deinflections
+            .iter()
+            .map(|deinflection| async move {
+                self.lookup_lemma(profile_id, &deinflection.lemma, record_kinds)
+                    .await
+                    .map(|records| (deinflection, records))
+            })
+            .collect::<FuturesUnordered<_>>();
+        while let Some((deinflection, lookup)) = lookup_tasks.try_next().await? {
+            for record in lookup {
+                if seen_record_ids.insert(record.record_id) {
                     records.push(RecordLookup {
                         bytes_scanned: deinflection.scan_len as u64, // TODO properly
-                        ..result
+                        ..record
                     });
                 }
             }

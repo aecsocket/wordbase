@@ -4873,6 +4873,7 @@ dependencies = [
  "bytes",
  "derive_more 2.0.1",
  "html-escape",
+ "itertools",
  "maud",
  "paste",
  "poem",

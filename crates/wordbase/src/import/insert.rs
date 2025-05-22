@@ -38,7 +38,9 @@ impl<T> Insert<T> {
         f: impl FnOnce(Separated<'_, '_, Sqlite, &str>),
     ) -> Result<()> {
         if self.binds + N >= BIND_LIMIT {
-            self.flush(tx).await?;
+            self.flush(tx).await.context(
+                "failed to flush (error may be related to a previous insert, not the current one)",
+            )?;
         }
         if self.binds > 0 {
             self.qb.push(", ");
@@ -83,8 +85,7 @@ impl Insert<Record> {
     ) -> Result<()> {
         let mut scratch = Vec::new();
         db::serialize(&record, &mut scratch).context("failed to serialize record")?;
-        let (headword, reading) = term.take_pair();
-
+        let (headword, reading) = term.into_parts();
         self.do_insert::<5>(tx, |mut qb| {
             qb.push_bind(source.0);
             qb.push_bind(headword.map(NormString::into_inner));
@@ -124,12 +125,11 @@ impl Insert<FrequencyValue> {
         term: Term,
         frequency: FrequencyValue,
     ) -> Result<()> {
-        let (headword, reading) = term.take_pair();
         let (mode, value) = match frequency {
             FrequencyValue::Rank(n) => (0, n),
             FrequencyValue::Occurrence(n) => (1, n),
         };
-
+        let (headword, reading) = term.into_parts();
         self.do_insert::<5>(tx, |mut qb| {
             qb.push_bind(source.0);
             qb.push_bind(headword.map(NormString::into_inner));

@@ -1,15 +1,18 @@
 #![doc = include_str!("../README.md")]
 
 pub mod dict;
-mod imp;
+mod norm_string;
 mod protocol;
+mod term;
 
-pub use protocol::*;
 use {
-    derive_more::{Debug, Deref, Display, Error, From},
+    derive_more::From,
     serde::{Deserialize, Serialize, de::DeserializeOwned},
-    std::str::FromStr,
 };
+pub use {norm_string::*, protocol::*, term::*};
+
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
 
 /// Invokes a macro, passing in all existing dictionary and record kind into the
 /// macro.
@@ -279,6 +282,21 @@ pub struct DictionaryMeta {
     pub attribution: Option<String>,
 }
 
+impl DictionaryMeta {
+    /// Creates a new value with only the required fields.
+    #[must_use]
+    pub fn new(kind: DictionaryKind, name: impl Into<String>) -> Self {
+        Self {
+            kind,
+            name: name.into(),
+            version: None,
+            description: None,
+            url: None,
+            attribution: None,
+        }
+    }
+}
+
 /// Opaque and unique identifier for a [`Dictionary`] in the engine.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
@@ -286,63 +304,6 @@ pub struct DictionaryId(pub i64);
 
 #[cfg(feature = "uniffi")]
 uniffi::custom_newtype!(DictionaryId, i64);
-
-/// Key for [`Record`]s in a [`Dictionary`].
-///
-/// A term consists of at least one of a headword or reading. Both the headword
-/// and reading are guaranteed to be non-empty, enforced by [`NormString`].
-///
-/// For languages without the concept of a reading, only the headword should be
-/// specified ([`Term::Headword`]), as this represents the canonical dictionary
-/// form of this term.
-#[derive(Debug, Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(untagged, deny_unknown_fields)]
-pub enum Term {
-    /// Has both a headword and a reading.
-    #[debug("({headword:?}, {reading:?})")]
-    #[display("{headword} ({reading})")]
-    Full {
-        /// Headword.
-        headword: NormString,
-        /// Reading.
-        reading: NormString,
-    },
-    /// Has only a headword.
-    #[debug("({headword:?}, ())")]
-    #[display("{headword}")]
-    Headword {
-        /// Headword.
-        headword: NormString,
-    },
-    /// Has only a reading.
-    #[debug("((), {reading:?})")]
-    #[display("{reading}")]
-    Reading {
-        /// Reading.
-        reading: NormString,
-    },
-}
-
-#[cfg(feature = "uniffi")]
-const _: () = {
-    #[derive(uniffi::Record)]
-    pub struct TermFfi {
-        headword: Option<NormString>,
-        reading: Option<NormString>,
-    }
-
-    #[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Error)]
-    #[display("no headword or reading")]
-    pub struct NoHeadwordOrReading;
-
-    uniffi::custom_type!(Term, TermFfi, {
-        lower: |term| TermFfi {
-            headword: term.headword().cloned(),
-            reading: term.reading().cloned(),
-        },
-        try_lift: |ffi| Term::new(ffi.headword, ffi.reading).ok_or_else(|| NoHeadwordOrReading.into()),
-    });
-};
 
 /// How often a [`Term`] appears in a single [`Dictionary`].
 ///
@@ -407,6 +368,22 @@ pub struct Profile {
     pub enabled_dictionaries: Vec<DictionaryId>,
 }
 
+impl Profile {
+    /// Creates a new profile with the default state.
+    #[must_use]
+    pub fn new(id: ProfileId) -> Self {
+        Self {
+            id,
+            name: None,
+            sorting_dictionary: None,
+            font_family: None,
+            anki_deck: None,
+            anki_note_type: None,
+            enabled_dictionaries: Vec::new(),
+        }
+    }
+}
+
 /// Opaque and unique identifier for a [`Profile`] in the engine.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
@@ -414,57 +391,3 @@ pub struct ProfileId(pub i64);
 
 #[cfg(feature = "uniffi")]
 uniffi::custom_newtype!(ProfileId, i64);
-
-/// Normalized string buffer.
-///
-/// This type is guaranteed to be a non-empty string with no trailing or leading
-/// whitespace.
-#[derive(Debug, Display, Clone, PartialEq, Eq, Hash, Deref, Serialize)]
-#[cfg_attr(
-    feature = "poem",
-    derive(poem_openapi::NewType),
-    oai(from_json = false, from_parameter = false, from_multipart = false)
-)]
-#[debug("{_0:?}")]
-pub struct NormString(String);
-
-/// Attempted to turn a string into a [`NormString`], but the string was empty.
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Error)]
-#[display("string empty")]
-pub struct StringEmpty;
-
-impl TryFrom<String> for NormString {
-    type Error = StringEmpty;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        Self::new(value).ok_or(StringEmpty)
-    }
-}
-
-impl FromStr for NormString {
-    type Err = StringEmpty;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::new(s).ok_or(StringEmpty)
-    }
-}
-
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(NormString, String, {
-    lower: |s| s.0,
-    try_lift: |s| NormString::try_from(s).map_err(Into::into),
-});
-
-#[doc(hidden)]
-pub trait TermPart: Sized {
-    type IntoTerm;
-
-    fn try_into_non_empty_string(self) -> Option<NormString>;
-
-    fn into_term_with_headword(self) -> Self::IntoTerm;
-
-    fn into_term_with_reading(self) -> Self::IntoTerm;
-}
-
-#[cfg(feature = "uniffi")]
-uniffi::setup_scaffolding!();
