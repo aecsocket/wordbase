@@ -204,3 +204,15 @@ async fn fetch_owned(db: &Pool<Sqlite>) -> Result<Vec<Profile>> {
     }
     Ok(profiles)
 }
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+impl Engine {
+    #[uniffi::method(name = "profiles")]
+    pub fn ffi_profiles(&self) -> Vec<Profile> {
+        self.profiles()
+            .iter()
+            .map(|(_, profile)| (**profile).clone())
+            .collect()
+    }
+}

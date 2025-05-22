@@ -173,15 +173,15 @@ uniffi::setup_scaffolding!();
 #[cfg(feature = "uniffi")]
 #[derive(Debug, Display, Error, uniffi::Error)]
 #[uniffi(flat_error)]
-pub enum FfiError {
+pub enum WordbaseError {
     #[display("{_0:?}")]
     Ffi(anyhow::Error),
 }
 
 #[cfg(feature = "uniffi")]
 #[uniffi::export(async_runtime = "tokio")]
-pub async fn engine(data_dir: &str) -> Result<Engine, FfiError> {
-    Engine::new(data_dir).await.map_err(FfiError::Ffi)
+pub async fn engine(data_dir: &str) -> Result<Engine, WordbaseError> {
+    Engine::new(data_dir).await.map_err(WordbaseError::Ffi)
 }
 
 #[deprecated]

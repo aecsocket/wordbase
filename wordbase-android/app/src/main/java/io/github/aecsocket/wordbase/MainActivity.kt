@@ -1,8 +1,6 @@
 package io.github.aecsocket.wordbase
 
 import android.os.Bundle
-import android.view.ViewGroup
-import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -38,36 +36,41 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.lifecycleScope
 import androidx.window.core.layout.WindowWidthSizeClass
 import com.kevinnzou.web.WebView
 import com.kevinnzou.web.rememberWebViewStateWithHTMLData
 import io.github.aecsocket.wordbase.ui.theme.WordbaseTheme
 import kotlinx.coroutines.launch
 import uniffi.wordbase.Engine
-import uniffi.wordbase_api.Frequency
-import uniffi.wordbase_api.FrequencyValue
-import uniffi.wordbase_api.Record
+import uniffi.wordbase_api.RecordKind
 import uniffi.wordbase_api.RecordLookup
-import uniffi.wordbase_api.Term
+import java.io.File
 
-lateinit var Wordbase: Engine
+var Wordbase: Engine? = null
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        val file = File(filesDir, "wordbase.db")
+        file.delete()
+        assets.open("wordbase.db").use { input ->
+            file.outputStream().use { output ->
+                input.copyTo(output)
+            }
+        }
+
         setContent {
             var engineReady by remember { mutableStateOf(false) }
 
             LaunchedEffect(Unit) {
-                lifecycleScope.launch {
-                    Wordbase = uniffi.wordbase.engine(filesDir.absolutePath)
-                    engineReady = true
-                }
+                Wordbase = uniffi.wordbase.engine(filesDir.absolutePath)
+                engineReady = true
             }
 
             WordbaseTheme {
@@ -84,6 +87,7 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Ui() {
+    var query by remember { mutableStateOf("") }
     if (currentWindowAdaptiveInfo().windowSizeClass.windowWidthSizeClass == WindowWidthSizeClass.COMPACT) {
         BottomSheetScaffold(
             topBar = {
@@ -91,111 +95,94 @@ fun Ui() {
                     colors = topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         titleContentColor = MaterialTheme.colorScheme.primary,
-                    ),
-                    title = {
-                        SearchBar()
-                    }
-                )
-            },
-            sheetContent = {
+                    ), title = {
+                        SearchBar(
+                            query = query, onQueryChange = { query = it })
+                    })
+            }, sheetContent = {
                 ManagePage()
-            },
-            sheetPeekHeight = 96.dp
+            }, sheetPeekHeight = 96.dp
         ) { padding ->
-            SearchPage(padding = padding)
+            SearchPage(padding = padding, query = query)
         }
     } else {
         val coroutineScope = rememberCoroutineScope()
         val drawerState = rememberDrawerState(DrawerValue.Closed)
         ModalNavigationDrawer(
-            drawerState = drawerState,
-            drawerContent = {
+            drawerState = drawerState, drawerContent = {
                 ModalDrawerSheet {
                     ManagePage()
                 }
-            }
-        ) {
+            }) {
             Scaffold(
                 topBar = {
                     TopAppBar(
                         colors = topAppBarColors(
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
                             titleContentColor = MaterialTheme.colorScheme.primary,
-                        ),
-                        title = {
-                            SearchBar()
-                        },
-                        navigationIcon = {
+                        ), title = {
+                            SearchBar(
+                                query = query, onQueryChange = { query = it })
+                        }, navigationIcon = {
                             IconButton(
                                 onClick = {
                                     coroutineScope.launch {
                                         drawerState.open()
                                     }
-                                }
-                            ) {
+                                }) {
                                 Icon(
                                     imageVector = Icons.Default.Menu,
                                     contentDescription = stringResource(R.string.open_menu)
                                 )
                             }
-                        }
-                    )
-                }
-            ) { padding ->
-                SearchPage(padding = padding)
+                        })
+                }) { padding ->
+                SearchPage(padding = padding, query = query)
             }
         }
     }
 }
 
 @Composable
-fun SearchBar() {
-    var query by remember { mutableStateOf("") }
+fun SearchBar(query: String, onQueryChange: (String) -> Unit) {
     TextField(
         value = query,
-        onValueChange = { query = it },
+        onValueChange = onQueryChange,
         singleLine = true,
         leadingIcon = {
             Icon(imageVector = Icons.Default.Search, contentDescription = null)
         },
         modifier = Modifier
             .fillMaxWidth()
-            .padding(8.dp)
+            .padding(8.dp),
+        textStyle = MaterialTheme.typography.bodySmall
     )
 }
 
 @Composable
-fun SearchPage(padding: PaddingValues) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .imePadding()
-            .padding(padding)
+fun SearchPage(padding: PaddingValues, query: String) {
+    val bottomPadding = padding.calculateBottomPadding().value
+    // amazingly, this scales perfectly
+    val paddingCss = "<style>body { padding: 0 0 ${bottomPadding}px 0; }</style>"
+
+    Column(                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
+        modifier = Modifier.fillMaxSize()
     ) {
-        val html = Wordbase.renderToHtml(
-            records = listOf(
-                RecordLookup(
-                    bytesScanned = 4UL,
-                    source = 1L,
-                    term = Term(
-                        headword = "見る",
-                        reading = "みる",
-                    ),
-                    recordId = 1L,
-                    record = Record.YomitanFrequency(
-                        Frequency(
-                            value = FrequencyValue.Rank(123),
-                            display = "123",
-                        )
-                    ),
-                    profileSortingFrequency = null,
-                    sourceSortingFrequency = null,
+        var html by remember { mutableStateOf("waiting... TODO") }
+
+        Wordbase?.let { wordbase ->
+            LaunchedEffect(query) {
+                val records = wordbase.lookup(
+                    profileId = 1L, sentence = query, cursor = 0UL, recordKinds = RecordKind.entries
                 )
-            ),
-            accentColorR = 0x35U,
-            accentColorG = 0x84U,
-            accentColorB = 0xe4U,
-        )
+                html = wordbase.renderToHtml(
+                    records = records,
+                    accentColorR = 0x35U,
+                    accentColorG = 0x84U,
+                    accentColorB = 0xe4U,
+                ) + paddingCss
+            }
+        }
 
         val webViewState = rememberWebViewStateWithHTMLData(html)
         WebView(

@@ -213,6 +213,23 @@ impl Engine {
     }
 }
 
+#[cfg(feature = "uniffi")]
+#[uniffi::export(async_runtime = "tokio")]
+impl Engine {
+    #[uniffi::method(name = "lookup")]
+    pub async fn ffi_lookup<'a>(
+        &'a self,
+        profile_id: ProfileId,
+        sentence: &'a str,
+        cursor: u64,
+        record_kinds: &[RecordKind],
+    ) -> Result<Vec<RecordLookup>, crate::WordbaseError> {
+        self.lookup(ProfileId(1), sentence, cursor as usize, RecordKind::ALL)
+            .await
+            .map_err(crate::WordbaseError::Ffi)
+    }
+}
+
 fn to_frequency_value(mode: Option<i64>, value: Option<i64>) -> Option<FrequencyValue> {
     match (mode, value) {
         (Some(0), Some(value)) => Some(FrequencyValue::Rank(value)),

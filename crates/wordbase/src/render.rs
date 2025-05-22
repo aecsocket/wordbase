@@ -28,7 +28,8 @@ impl Engine {
     }
 }
 
-#[cfg_attr(feature = "uniffi", uniffi::export)]
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
 impl Engine {
     #[uniffi::method(name = "render_to_html")]
     pub fn ffi_render_to_html(
@@ -37,9 +38,9 @@ impl Engine {
         accent_color_r: u8,
         accent_color_g: u8,
         accent_color_b: u8,
-    ) -> Result<String, crate::FfiError> {
+    ) -> Result<String, crate::WordbaseError> {
         self.render_to_html(records, (accent_color_r, accent_color_g, accent_color_b))
-            .map_err(crate::FfiError::Ffi)
+            .map_err(crate::WordbaseError::Ffi)
     }
 }
 

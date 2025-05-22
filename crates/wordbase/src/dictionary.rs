@@ -182,3 +182,15 @@ async fn fetch_owned(db: &Pool<Sqlite>) -> Result<Vec<Dictionary>> {
     .try_collect()
     .await
 }
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+impl Engine {
+    #[uniffi::method(name = "dictionaries")]
+    pub fn ffi_dictionaries(&self) -> Vec<Dictionary> {
+        self.dictionaries()
+            .iter()
+            .map(|(_, dict)| (**dict).clone())
+            .collect()
+    }
+}

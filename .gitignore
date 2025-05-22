@@ -2,3 +2,4 @@ target/
 /lindera-cache
 .env
 .direnv
+*.db
