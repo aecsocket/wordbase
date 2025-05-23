@@ -7,38 +7,16 @@ use wordbase_api::{DictionaryId, Record, RecordKind, RecordLookup, Term, dict};
 use crate::{Engine, IndexMap};
 
 impl Engine {
-    pub fn render_to_html(
-        &self,
-        records: &[RecordLookup],
-        foreground_color: &str,
-        background_color: &str,
-        header_color: &str,
-        accent_color: &str,
-    ) -> Result<String> {
-        let colors = Colors {
-            foreground: foreground_color,
-            background: background_color,
-            header: header_color,
-            accent: accent_color,
-        };
+    pub fn render_to_html(&self, records: &[RecordLookup]) -> Result<String> {
         let terms = group_terms(records);
 
         let mut context = tera::Context::new();
-        context.insert("colors", &colors);
         context.insert("dictionaries", &self.dictionaries().0);
         context.insert("terms", &terms);
 
         let html = self.renderer.render("records.html", &context)?;
         Ok(html)
     }
-}
-
-#[derive(Serialize)]
-pub struct Colors<'a> {
-    foreground: &'a str,
-    background: &'a str,
-    header: &'a str,
-    accent: &'a str,
 }
 
 fn group_terms(records: &[RecordLookup]) -> Vec<RecordTerm> {
@@ -175,12 +153,13 @@ fn base_pitch<'a>(term: &Term, downstep: dict::jpn::PitchPosition) -> Pitch<'a> 
         return Pitch::default();
     };
 
+    let downstep = usize::try_from(downstep.0).unwrap_or(usize::MAX);
     let n_morae = dict::jpn::morae(reading).count();
-    let category = dict::jpn::pitch_category_of(n_morae, downstep.0 as usize);
+    let category = dict::jpn::pitch_category_of(n_morae, downstep);
     Pitch {
         category: Some(category),
         high: (0..=n_morae)
-            .map(|pos| dict::jpn::is_high(downstep.0 as usize, pos))
+            .map(|pos| dict::jpn::is_high(downstep, pos))
             .collect(),
         ..Default::default()
     }
@@ -207,21 +186,8 @@ const _: () = {
 
     #[uniffi::export]
     impl Wordbase {
-        pub fn render_to_html(
-            &self,
-            records: &[RecordLookup],
-            foreground_color: &str,
-            background_color: &str,
-            header_color: &str,
-            accent_color: &str,
-        ) -> FfiResult<String> {
-            Ok(self.0.render_to_html(
-                records,
-                foreground_color,
-                background_color,
-                header_color,
-                accent_color,
-            )?)
+        pub fn render_to_html(&self, records: &[RecordLookup]) -> FfiResult<String> {
+            Ok(self.0.render_to_html(records)?)
         }
     }
 };

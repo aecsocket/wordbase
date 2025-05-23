@@ -1,3 +1,5 @@
+<!doctype html>
+
 <!-- prettier-ignore -->
 <!--
 {%- macro audio_kind_name(kind) -%}
@@ -19,22 +21,16 @@
 {%- endmacro dictionary_name -%}
 -->
 
-<!doctype html>
+<style>
+  :root {
+    color: var(--fg-color);
+    background-color: var(--bg-color);
+    /** for Jitendex */
+    --text-color: var(--fg-color);
 
-{# separate style block to retain syntax highlighting #}
-<style>
-  :root {
-    --foreground-color: {{ colors.foreground }};
-    --background-color: {{ colors.background }};
-    --header-color: {{ colors.header }};
-    --accent-color: {{ colors.accent }};
-  }
-</style>
-<style>
-  :root {
     font-family: sans-serif;
     line-height: 1.5;
-    --margin: 16px;
+    --content-margin: 16px;
   }
 
   :root {
@@ -64,39 +60,22 @@
   }
 
   :root {
-    --window-bg-color: #fafafb;
-    --window-fg-color: rgb(0 0 6 / 80%);
-    --view-bg-color: #ffffff;
-    --view-fg-color: rgb(0 0 6 / 80%);
     --card-bg-color: #ffffff;
     --card-fg-color: rgb(0 0 6 / 80%);
     --headerbar-shade-color: rgba(0 0 6 / 12%);
-    --headerbar-darker-shade-color: rgb(0 0 6 / 12%);
   }
 
-  :root {
-    @media (prefers-color-scheme: dark) {
-      --window-bg-color: #222226;
-      --window-fg-color: #ffffff;
-      --view-bg-color: #1d1d20;
-      --view-fg-color: #ffffff;
+  @media (prefers-color-scheme: dark) {
+    :root {
       --card-bg-color: rgb(255 255 255 / 8%);
       --card-fg-color: #ffffff;
       --headerbar-shade-color: rgba(0 0 6 / 36%);
-      --headerbar-darker-shade-color: rgba(0 0 6 / 90%);
     }
-  }
-
-  :root {
-    color: var(--foreground-color);
-    background-color: var(--background-color);
-    /** for Jitendex */
-    --text-color: var(--foreground-color);
   }
 
   body {
     padding: 0;
-    margin: 0 0 var(--margin) 0;
+    margin: 0 0 var(--content-margin) 0;
   }
 
   a {
@@ -122,6 +101,7 @@
     font-weight: 700;
     transition: background-color 0.2s ease;
   }
+
   button:hover {
     background: var(--button-hover-color);
   }
@@ -184,6 +164,10 @@
     opacity: var(--dim-opacity);
   }
 
+  .content {
+    padding: 0 var(--content-margin);
+  }
+
   .caption-header {
     font-size: var(--caption-font-size);
     font-weight: var(--caption-font-weight);
@@ -196,15 +180,11 @@
     position: sticky;
     z-index: 1000;
     top: 0;
-    background-color: var(--header-color);
+    background-color: var(--bg-color);
     box-shadow:
       0 1px color-mix(in srgb, var(--headerbar-shade-color) 50%, transparent),
       0 2px 4px
         color-mix(in srgb, var(--headerbar-shade-color) 50%, transparent);
-  }
-
-  .content {
-    margin: 0 var(--margin);
   }
 
   .frequency-value span:not(:last-child):after {
@@ -261,12 +241,14 @@
   {% for group in terms %}
   <div style="display: flex; flex-direction: column; gap: 8px">
     <div class="header">
-      <div class="content" style="padding: 16px 0; font-size: 2em">
-        <ruby>
-          {%- for part in group.furigana_parts -%}
-          <span>{{- part[0] -}}</span><rt>{{- part[1] -}}</rt>
-          {%- endfor -%}
-        </ruby>
+      <div class="content">
+        <div style="padding: 16px 0; font-size: 2em">
+          <ruby>
+            {%- for part in group.furigana_parts -%}
+            <span>{{- part[0] -}}</span><rt>{{- part[1] -}}</rt>
+            {%- endfor -%}
+          </ruby>
+        </div>
       </div>
     </div>
 
@@ -343,6 +325,7 @@
 
         {% for glossary in glossary_group %}
         <div class="card" style="padding: 8px">
+          {% if glossary.tags | length > 0 %}
           <span class="flow" style="gap: 6px">
             {% for tag in glossary.tags %}
             <span class="pill" title="{{ tag.description }}">
@@ -350,6 +333,9 @@
             </span>
             {% endfor %}
           </span>
+          {% endif %}
+
+          <!-- -->
 
           {% for content in glossary.content %}
           <p>{{ content | safe }}</p>

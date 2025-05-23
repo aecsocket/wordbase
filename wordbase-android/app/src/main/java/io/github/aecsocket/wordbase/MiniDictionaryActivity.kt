@@ -6,7 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -66,7 +66,7 @@ fun Ui(query: String) {
                     LookupView(
                         wordbase = wordbase,
                         query = query,
-                        padding = PaddingValues(0.dp),
+                        insets = WindowInsets(0.dp),
                         containerColor = BottomSheetDefaults.ContainerColor,
                         onExit = {
                             coroutineScope.launch {

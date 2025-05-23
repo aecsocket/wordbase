@@ -2,6 +2,7 @@ package io.github.aecsocket.wordbase
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.contentColorFor
@@ -14,6 +15,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.kevinnzou.web.WebView
@@ -26,38 +29,48 @@ import uniffi.wordbase_api.RecordKind
 fun LookupView(
     wordbase: Wordbase,
     query: String,
-    padding: PaddingValues = PaddingValues(0.dp),
-    containerColor: Color = MaterialTheme.colorScheme.background,
+    insets: WindowInsets,
+    containerColor: Color = MaterialTheme.colorScheme.surface,
     contentColor: Color = contentColorFor(containerColor),
-    headerColor: Color = containerColor,
     onExit: (() -> Unit)? = null,
 ) {
     var html by remember { mutableStateOf<String?>(null) }
 
     // amazingly, this scales perfectly
-    val padding = """
-        <style>
+    val density = LocalDensity.current
+    val layoutDir = LocalLayoutDirection.current
+    val extraCss = with (density) {
+        """
+        :root {
+            --bg-color: ${containerColor.css()};
+            --fg-color: ${contentColor.css()};
+            --accent-color: #3584e4;
+        }
+
+        .content {
+            margin:
+                0
+                ${insets.getRight(density, layoutDir).toDp().value}px
+                0
+                ${insets.getLeft(density, layoutDir).toDp().value}px;
+        }
+
         body {
             padding:
-                ${padding.calculateTopPadding().value}px
-                ${padding.calculateRightPadding(LayoutDirection.Ltr).value}px
-                ${padding.calculateBottomPadding().value}px
-                ${padding.calculateLeftPadding(LayoutDirection.Ltr).value}px;
+                ${insets.getTop(density).toDp().value}px
+                0
+                ${insets.getBottom(density).toDp().value}px
+                0;
         }
-        </style>"""
+        """.trimIndent()
+    }
 
     val app = LocalContext.current.app()
     LaunchedEffect(arrayOf(query, app.dictionaries, app.profiles)) {
         val records = wordbase.lookup(
             profileId = 1L, sentence = query, cursor = 0UL, recordKinds = RecordKind.entries
         )
-        html = wordbase.renderToHtml(
-            records = records,
-            foregroundColor = contentColor.css(),
-            backgroundColor = containerColor.css(),
-            headerColor = headerColor.css(),
-            accentColor = "#3584e4",
-        ) + padding
+        html = wordbase.renderToHtml(records) + "<style>$extraCss</style>"
     }
 
     html?.let { html ->

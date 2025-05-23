@@ -1,6 +1,7 @@
 package io.github.aecsocket.wordbase
 
 import android.content.Intent
+import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -72,7 +73,7 @@ import uniffi.wordbase_api.Profile
 
 @Preview(showBackground = true)
 @Composable
-fun PagePreview() {
+fun PreviewManagePage(modifier: Modifier = Modifier) {
     WordbaseTheme {
         fun DictionaryMeta(name: String) = DictionaryMeta(
             kind = DictionaryKind.YOMITAN,
@@ -115,6 +116,7 @@ fun PagePreview() {
         }
 
         ManagePage(
+            modifier = modifier,
             dictionaries = dictionaries,
             profile = profile,
             onDictionaryReorder = { from, to ->
@@ -146,8 +148,10 @@ fun PagePreview() {
                         } else {
                             removeIf { it == dictionary.id }
                         }
-                    })
-            }
+                    }
+                )
+            },
+            onDictionaryImport = {},
         )
     }
 }
@@ -160,6 +164,30 @@ fun AppManagePage(modifier: Modifier = Modifier) {
     val coroutineScope = rememberCoroutineScope()
     val app = LocalContext.current.app()
     val profile = app.profiles.values.first()
+
+    val context = LocalContext.current
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        val uri = uri ?: return@rememberLauncherForActivityResult
+
+        context.contentResolver.openInputStream()
+
+        context.contentResolver.openFileDescriptor(uri, "r")?.use { fd ->
+            fd.
+
+            fd.dup()
+        }
+    }
+
+    // Some actions, like deleting a dictionary, may take a long time
+    // during this, if the user performs another action, it may fail
+    // because the database will be locked for too long.
+    // To avoid this, we use `locked` to lock out the user from interactions
+    // while one of these long-running operations is happening.
+    // Note we only do this on ops we KNOW will take a long time,
+    // to avoid locking the UI on every tiny change.
+    var locked by remember { mutableStateOf(false) }
     ManagePage(
         modifier = modifier,
         dictionaries = app.dictionaries.values.sortedBy { it.position },
@@ -177,7 +205,16 @@ fun AppManagePage(modifier: Modifier = Modifier) {
                 wordbase.setSortingDictionary(profile.id, null)
             }
         },
-        onDictionaryDelete = {},
+        onDictionaryDelete = { dict ->
+            coroutineScope.launch {
+                locked = true
+                try {
+                    wordbase.removeDictionary(dict.id)
+                } finally {
+                    locked = false
+                }
+            }
+        },
         onDictionaryEnabledChange = { dictionary, enabled ->
             coroutineScope.launch {
                 if (enabled) {
@@ -186,7 +223,11 @@ fun AppManagePage(modifier: Modifier = Modifier) {
                     wordbase.disableDictionary(profile.id, dictionary.id)
                 }
             }
-        }
+        },
+        onDictionaryImport = {
+            importLauncher.launch(arrayOf("application/zip"))
+        },
+        enabled = !locked,
     )
 }
 
@@ -200,6 +241,8 @@ fun ManagePage(
     onDictionarySortingUnset: () -> Unit,
     onDictionaryDelete: (Dictionary) -> Unit,
     onDictionaryEnabledChange: (Dictionary, Boolean) -> Unit,
+    onDictionaryImport: () -> Unit,
+    enabled: Boolean = true,
 ) {
     val view = LocalView.current
     val lazyListState = rememberLazyListState()
@@ -237,7 +280,8 @@ fun ManagePage(
         ) { dictionary ->
             ReorderableItem(
                 state = reorderableLazyListState,
-                key = dictionary.id
+                key = dictionary.id,
+                enabled = enabled,
             ) {
                 DictionaryRow(
                     dictionary = dictionary,
@@ -253,7 +297,8 @@ fun ManagePage(
                     },
                     onEnabledChange = { enabled ->
                         onDictionaryEnabledChange(dictionary, enabled)
-                    }
+                    },
+                    enabled = enabled,
                 )
             }
         }
@@ -291,18 +336,9 @@ fun ManagePage(
 //        }
 
         item {
-            val launcher = rememberLauncherForActivityResult(
-                contract = ActivityResultContracts.OpenDocument(),
-            ) { uri ->
-                val uri = uri ?: return@rememberLauncherForActivityResult
-                context.contentResolver.openFileDescriptor(uri, "r")?.use { fd ->
-                }
-            }
-
             Button(
-                onClick = {
-                    launcher.launch(arrayOf("application/zip"))
-                }, modifier = Modifier.fillMaxWidth()
+                onClick = onDictionaryImport,
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Text(stringResource(R.string.dictionary_import))
             }
@@ -318,9 +354,11 @@ fun ReorderableCollectionItemScope.DictionaryRow(
     onSortingUnset: () -> Unit,
     onDelete: () -> Unit,
     onEnabledChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     ExpanderCard(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier,
         titleModifier = Modifier
             .fillMaxWidth()
             .padding(8.dp),
@@ -358,7 +396,8 @@ fun ReorderableCollectionItemScope.DictionaryRow(
 
             if (profile.sortingDictionary == dictionary.id) {
                 IconButton(
-                    onClick = onSortingUnset
+                    onClick = onSortingUnset,
+                    enabled = enabled,
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.outline_sort_24),
@@ -369,7 +408,8 @@ fun ReorderableCollectionItemScope.DictionaryRow(
 
             Switch(
                 checked = profile.enabledDictionaries.contains(dictionary.id),
-                onCheckedChange = onEnabledChange
+                onCheckedChange = onEnabledChange,
+                enabled = enabled,
             )
         }
     ) {
@@ -378,6 +418,7 @@ fun ReorderableCollectionItemScope.DictionaryRow(
                 meta = dictionary.meta,
                 onSetSorting = onSortingSet,
                 onDelete = onDelete,
+                enabled = enabled,
             )
         }
     }
@@ -417,9 +458,9 @@ fun ImportRow(
         titleContent = {
             Box {
                 val (progressAlpha, iconAlpha) = if (error == null) {
-                    Pair(1f, 0f)
+                    1f to 0f
                 } else {
-                    Pair(0f, 1f)
+                    0f to 1f
                 }
 
                 when (state) {
@@ -519,6 +560,7 @@ fun ColumnScope.DictionaryInfo(
     meta: DictionaryMeta,
     onSetSorting: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
+    enabled: Boolean = true,
 ) {
     DictionaryMetaItem(
         key = stringResource(R.string.dictionary_format), value = stringResource(
@@ -549,7 +591,10 @@ fun ColumnScope.DictionaryInfo(
         val context = LocalContext.current
 
         onSetSorting?.let { onSetSortingDict ->
-            IconButton(onClick = onSetSortingDict) {
+            IconButton(
+                onClick = onSetSortingDict,
+                enabled = enabled,
+            ) {
                 Icon(
                     painter = painterResource(R.drawable.outline_sort_24),
                     contentDescription = stringResource(R.string.dictionary_set_sorting)
@@ -562,7 +607,8 @@ fun ColumnScope.DictionaryInfo(
                 onClick = {
                     val intent = Intent(Intent.ACTION_VIEW, url.toUri())
                     context.startActivity(intent)
-                }) {
+                },
+            ) {
                 Icon(
                     painter = painterResource(R.drawable.outline_globe_24),
                     contentDescription = stringResource(R.string.dictionary_visit_website)
@@ -573,9 +619,12 @@ fun ColumnScope.DictionaryInfo(
         onDelete?.let { onDelete ->
             var openDeleteDialog by remember { mutableStateOf(false) }
 
-            IconButton(onClick = {
-                openDeleteDialog = true
-            }) {
+            IconButton(
+                onClick = {
+                    openDeleteDialog = true
+                },
+                enabled = enabled,
+            ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
                     contentDescription = stringResource(R.string.dictionary_delete)

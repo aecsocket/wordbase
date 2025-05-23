@@ -4,6 +4,8 @@
     <string name="cancel">Cancel</string>
     <string name="confirm">Confirm</string>
 
+    <string name="search_title">Search a word or phrase</string>
+
     <string name="dictionaries">Dictionaries</string>
     <string name="dictionary_description">Description</string>
     <string name="dictionary_attribution">Attribution</string>

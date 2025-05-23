@@ -234,9 +234,10 @@ const _: () = {
             cursor: u64,
             record_kinds: &[RecordKind],
         ) -> FfiResult<Vec<RecordLookup>> {
+            let cursor = usize::try_from(cursor).unwrap_or(usize::MAX);
             Ok(self
                 .0
-                .lookup(profile_id, sentence, cursor as usize, record_kinds)
+                .lookup(profile_id, sentence, cursor, record_kinds)
                 .await?)
         }
     }

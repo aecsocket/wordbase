@@ -47,6 +47,7 @@ pub trait ImportKind: Send + Sync {
 pub type ImportContinue = BoxFuture<'static, Result<DictionaryId>>;
 
 #[derive(Debug)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum ImportEvent {
     DeterminedKind(DictionaryKind),
     ParsedMeta(DictionaryMeta),
@@ -114,6 +115,7 @@ pub struct ImportStarted {
 }
 
 #[derive(Debug, Display, Error, From)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Error), uniffi(flat_error))]
 pub enum ImportError {
     #[display("failed to determine dictionary kind")]
     GetKind(GetKindError),
@@ -247,3 +249,34 @@ impl IntoArcPath for &str {
         PathBuf::from(self).into_arc_path()
     }
 }
+
+#[cfg(feature = "uniffi")]
+const _: () = {
+    use crate::{FfiResult, Wordbase};
+
+    #[uniffi::export(with_foreign)]
+    pub trait ImportDictionaryCallback: Send + Sync {
+        fn on_event(&self, event: ImportEvent) -> FfiResult<()>;
+    }
+
+    #[uniffi::export(async_runtime = "tokio")]
+    impl Wordbase {
+        pub async fn import_dictionary(
+            &self,
+            archive_path: &str,
+            callback: Arc<dyn ImportDictionaryCallback>,
+        ) -> Result<DictionaryId, ImportError> {
+            let events = self.0.import_dictionary(archive_path);
+            tokio::pin!(events);
+            while let Some(event) = events.try_next().await? {
+                match event {
+                    ImportEvent::Done(id) => return Ok(id),
+                    event => {
+                        _ = callback.on_event(event);
+                    }
+                }
+            }
+            unreachable!();
+        }
+    }
+};
