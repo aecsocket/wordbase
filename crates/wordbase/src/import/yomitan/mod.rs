@@ -1,7 +1,7 @@
 mod schema;
 
 use {
-    super::{ImportContinue, ImportKind},
+    super::{Archive, ImportContinue, ImportKind, OpenArchive},
     crate::import::{insert::Insert, insert_dictionary},
     anyhow::{Context, Result},
     async_zip::base::read::seek::ZipFileReader,
@@ -13,10 +13,8 @@ use {
     },
     serde::de::DeserializeOwned,
     sqlx::{Pool, Sqlite, Transaction},
-    std::{iter, path::Path, sync::Arc},
+    std::{iter, sync::Arc},
     tokio::{
-        fs::File,
-        io::BufReader,
         sync::{Semaphore, mpsc},
         task::JoinSet,
     },
@@ -35,35 +33,38 @@ use {
 pub struct Yomitan;
 
 impl ImportKind for Yomitan {
-    fn is_of_kind(&self, archive_path: Arc<Path>) -> BoxFuture<'_, Result<()>> {
-        Box::pin(validate(archive_path))
+    fn is_of_kind(&self, open_archive: Arc<dyn OpenArchive>) -> BoxFuture<'_, Result<()>> {
+        Box::pin(validate(open_archive))
     }
 
     fn start_import(
         &self,
         db: Pool<Sqlite>,
-        archive_path: Arc<Path>,
+        open_archive: Arc<dyn OpenArchive>,
         progress_tx: mpsc::Sender<f64>,
     ) -> BoxFuture<Result<(DictionaryMeta, ImportContinue)>> {
         Box::pin(async move {
-            let (meta, continuation) = start_import(db, archive_path, progress_tx).await?;
+            let (meta, continuation) = start_import(db, open_archive, progress_tx).await?;
             Ok((meta, Box::pin(continuation) as ImportContinue))
         })
     }
 }
 
-async fn open_archive(archive_path: &Path) -> Result<ZipFileReader<Compat<BufReader<File>>>> {
-    let file = File::open(archive_path)
+async fn archive_reader(
+    open_archive: &dyn OpenArchive,
+) -> Result<ZipFileReader<Compat<Box<dyn Archive>>>> {
+    let archive = open_archive
+        .open_archive()
         .await
-        .context("failed to open file")?;
-    let archive = ZipFileReader::with_tokio(BufReader::new(file))
+        .context("failed to open archive")?;
+    let archive = ZipFileReader::with_tokio(archive)
         .await
         .context("failed to open zip archive")?;
     Ok(archive)
 }
 
-async fn validate(archive_path: Arc<Path>) -> Result<()> {
-    open_archive(&archive_path)
+async fn validate(open_archive: Arc<dyn OpenArchive>) -> Result<()> {
+    archive_reader(&*open_archive)
         .await?
         .file()
         .entries()
@@ -80,10 +81,10 @@ async fn validate(archive_path: Arc<Path>) -> Result<()> {
 
 async fn start_import(
     db: Pool<Sqlite>,
-    archive_path: Arc<Path>,
+    open_archive: Arc<dyn OpenArchive>,
     progress_tx: mpsc::Sender<f64>,
 ) -> Result<(DictionaryMeta, impl Future<Output = Result<DictionaryId>>)> {
-    let mut archive = open_archive(&archive_path).await?;
+    let mut archive = archive_reader(&*open_archive).await?;
     let index_index = archive
         .file()
         .entries()
@@ -117,7 +118,7 @@ async fn start_import(
 
     Ok((
         meta.clone(),
-        continue_import(db, archive_path, meta, index, progress_tx),
+        continue_import(db, open_archive, meta, index, progress_tx),
     ))
 }
 
@@ -126,7 +127,7 @@ const BANK_BUF_CAP: usize = 1;
 
 async fn continue_import(
     db: Pool<Sqlite>,
-    archive_path: Arc<Path>,
+    open_archive: Arc<dyn OpenArchive>,
     meta: DictionaryMeta,
     index: schema::Index,
     progress_tx: mpsc::Sender<f64>,
@@ -134,7 +135,7 @@ async fn continue_import(
     trace!("Importing Yomitan");
 
     // stage 1: read dictionary meta and find what banks we have
-    let archive = open_archive(&archive_path).await?;
+    let archive = archive_reader(&*open_archive).await?;
 
     let mut tag_bank_paths = Vec::<(usize, String)>::new();
     let mut term_bank_paths = Vec::<(usize, String)>::new();
@@ -177,28 +178,28 @@ async fn continue_import(
 
     spawn_parse_tasks::<schema::Term>(
         term_bank_paths,
-        &archive_path,
+        &open_archive,
         &parse_permits,
         &to_insert_tx,
         &mut tasks,
     );
     spawn_parse_tasks::<schema::TermMeta>(
         term_meta_bank_paths,
-        &archive_path,
+        &open_archive,
         &parse_permits,
         &to_insert_tx,
         &mut tasks,
     );
     spawn_parse_tasks::<schema::Kanji>(
         kanji_bank_paths,
-        &archive_path,
+        &open_archive,
         &parse_permits,
         &to_insert_tx,
         &mut tasks,
     );
     spawn_parse_tasks::<schema::KanjiMeta>(
         kanji_meta_bank_paths,
-        &archive_path,
+        &open_archive,
         &parse_permits,
         &to_insert_tx,
         &mut tasks,
@@ -209,7 +210,7 @@ async fn continue_import(
     // since we need them for inserting term banks later
     let mut tag_bank = Vec::new();
     for (entry_index, entry_path) in tag_bank_paths {
-        let mut bank = parse_bank::<schema::Tag>(&archive_path, entry_index)
+        let mut bank = parse_bank::<schema::Tag>(&*open_archive, entry_index)
             .await
             .with_context(|| format!("failed to parse tag bank `{entry_path}`"))?;
         tag_bank.append(&mut bank);
@@ -312,7 +313,7 @@ enum Bank {
 
 fn spawn_parse_tasks<T>(
     bank_entries: impl IntoIterator<Item = (usize, String)>,
-    archive_path: &Arc<Path>,
+    open_archive: &Arc<dyn OpenArchive>,
     parse_permits: &Arc<Semaphore>,
     to_insert_tx: &mpsc::Sender<Bank>,
     tasks: &mut JoinSet<Result<()>>,
@@ -321,12 +322,12 @@ fn spawn_parse_tasks<T>(
     Vec<T>: DeserializeOwned,
 {
     for (entry_index, entry_path) in bank_entries {
-        let archive_path = archive_path.clone();
+        let open_archive = open_archive.clone();
         let parse_permits = parse_permits.clone();
         let to_insert_tx = to_insert_tx.clone();
         tasks.spawn(async move {
             let _permit = parse_permits.acquire().await?;
-            let bank = parse_bank::<T>(&archive_path, entry_index)
+            let bank = parse_bank::<T>(&*open_archive, entry_index)
                 .await
                 .with_context(|| format!("failed to parse bank `{entry_path}`"))?;
             to_insert_tx.send(Bank::from(bank)).await?;
@@ -335,11 +336,11 @@ fn spawn_parse_tasks<T>(
     }
 }
 
-async fn parse_bank<T>(archive_path: &Path, entry_index: usize) -> Result<Vec<T>>
+async fn parse_bank<T>(open_archive: &dyn OpenArchive, entry_index: usize) -> Result<Vec<T>>
 where
     Vec<T>: DeserializeOwned,
 {
-    let mut archive = open_archive(archive_path).await?;
+    let mut archive = archive_reader(open_archive).await?;
     let mut entry = archive
         .reader_with_entry(entry_index)
         .await

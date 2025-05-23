@@ -2,7 +2,7 @@ use {
     anyhow::{Context, Result},
     ascii_table::AsciiTable,
     futures::TryStreamExt,
-    std::{path::Path, time::Instant},
+    std::{path::PathBuf, sync::Arc, time::Instant},
     wordbase::{DictionaryId, Engine, Profile, import::ImportEvent},
 };
 
@@ -77,9 +77,10 @@ pub fn info(engine: &Engine, dict_id: DictionaryId) -> Result<()> {
     Ok(())
 }
 
-pub async fn import(engine: &Engine, path: &Path) -> Result<()> {
+pub async fn import(engine: &Engine, path: PathBuf) -> Result<()> {
     let start = Instant::now();
 
+    let path = Arc::new(path);
     let import_events = engine.import_dictionary(path);
     tokio::pin!(import_events);
     while let Some(event) = import_events

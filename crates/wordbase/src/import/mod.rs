@@ -1,5 +1,5 @@
 mod insert;
-mod yomichan_audio;
+// mod yomichan_audio;
 mod yomitan;
 
 use {
@@ -13,7 +13,11 @@ use {
         path::{Path, PathBuf},
         sync::{Arc, LazyLock},
     },
-    tokio::sync::mpsc,
+    tokio::{
+        fs::File,
+        io::{AsyncBufRead, AsyncRead, AsyncSeek, BufReader},
+        sync::mpsc,
+    },
     tokio_util::task::AbortOnDropHandle,
     tracing::{debug, trace},
     wordbase_api::{DictionaryId, DictionaryKind, DictionaryMeta},
@@ -25,24 +29,52 @@ static FORMATS: LazyLock<HashMap<DictionaryKind, Arc<dyn ImportKind>>> = LazyLoc
             DictionaryKind::Yomitan,
             Arc::new(yomitan::Yomitan) as Arc<dyn ImportKind>,
         ),
-        (
-            DictionaryKind::YomichanAudio,
-            Arc::new(yomichan_audio::YomichanAudio),
-        ),
+        // (
+        //     DictionaryKind::YomichanAudio,
+        //     Arc::new(yomichan_audio::YomichanAudio),
+        // ),
     ]
     .into()
 });
 
 pub trait ImportKind: Send + Sync {
-    fn is_of_kind(&self, path: Arc<Path>) -> BoxFuture<'_, Result<()>>;
+    fn is_of_kind(&self, open_archive: Arc<dyn OpenArchive>) -> BoxFuture<'_, Result<()>>;
 
     fn start_import(
         &self,
         db: Pool<Sqlite>,
-        path: Arc<Path>,
+        open_archive: Arc<dyn OpenArchive>,
         progress_tx: mpsc::Sender<f64>,
     ) -> BoxFuture<Result<(DictionaryMeta, ImportContinue)>>;
 }
+
+pub trait OpenArchive: Send + Sync {
+    fn open_archive(&self) -> BoxFuture<'_, Result<Box<dyn Archive>>>;
+}
+
+impl<T, Fut> OpenArchive for T
+where
+    T: Send + Sync + Fn() -> Fut,
+    Fut: Send + Future<Output = Result<Box<dyn Archive>>>,
+{
+    fn open_archive(&self) -> BoxFuture<'_, Result<Box<dyn Archive>>> {
+        Box::pin(async { self().await })
+    }
+}
+
+impl<P: Send + Sync + AsRef<Path>> OpenArchive for Arc<P> {
+    fn open_archive(&self) -> BoxFuture<'_, Result<Box<dyn Archive>>> {
+        let path = self.clone();
+        Box::pin(async move {
+            let file = File::open(&*path).await?;
+            Ok(Box::new(BufReader::new(file)) as Box<dyn Archive>)
+        })
+    }
+}
+
+pub trait Archive: Send + Sync + AsyncRead + AsyncSeek + AsyncBufRead + Unpin {}
+
+impl<T: Send + Sync + AsyncRead + AsyncSeek + AsyncBufRead + Unpin> Archive for T {}
 
 pub type ImportContinue = BoxFuture<'static, Result<DictionaryId>>;
 
@@ -74,17 +106,19 @@ fn format_errors(errors: &HashMap<DictionaryKind, anyhow::Error>) -> String {
         .join("\n")
 }
 
-pub async fn kind_of(archive_path: impl IntoArcPath) -> Result<DictionaryKind, GetKindError> {
-    let archive_path = archive_path.into_arc_path();
+pub async fn kind_of(
+    open_archive: impl Into<Arc<dyn OpenArchive>>,
+) -> Result<DictionaryKind, GetKindError> {
+    let open_archive = open_archive.into();
     let mut valid_formats = Vec::<DictionaryKind>::new();
     let mut format_errors = HashMap::<DictionaryKind, anyhow::Error>::new();
 
     let format_results = FORMATS
         .iter()
         .map(|(format, importer)| {
-            let archive_path = archive_path.clone();
+            let open_archive = open_archive.clone();
             async move {
-                let result = importer.is_of_kind(archive_path).await;
+                let result = importer.is_of_kind(open_archive).await;
                 Ok((*format, result))
             }
         })
@@ -140,13 +174,18 @@ pub enum ImportError {
 impl Engine {
     pub fn import_dictionary(
         &self,
-        archive_path: impl IntoArcPath,
+        open_archive: impl OpenArchive + 'static,
+    ) -> impl Stream<Item = Result<ImportEvent, ImportError>> {
+        self.import_dictionary_arc(Arc::new(open_archive))
+    }
+
+    pub fn import_dictionary_arc(
+        &self,
+        open_archive: Arc<dyn OpenArchive>,
     ) -> impl Stream<Item = Result<ImportEvent, ImportError>> {
         async_stream::try_stream! {
-            let archive_path = archive_path.into_arc_path();
-
             debug!("Attempting to determine dictionary kind");
-            let kind = kind_of(archive_path.clone()).await.map_err(ImportError::GetKind)?;
+            let kind = kind_of(open_archive.clone()).await.map_err(ImportError::GetKind)?;
             debug!("Importing as {kind:?} dictionary");
             yield ImportEvent::DeterminedKind(kind);
 
@@ -154,7 +193,7 @@ impl Engine {
             let (progress_tx, mut progress_rx) = mpsc::channel(CHANNEL_BUF_CAP);
 
             let (meta, continue_task) = importer
-                .start_import(self.db.clone(), archive_path, progress_tx)
+                .start_import(self.db.clone(), open_archive, progress_tx)
                 .await
                 .map_err(|source| ImportError::ParseMeta { kind, source })?;
             debug!(
@@ -252,10 +291,16 @@ impl IntoArcPath for &str {
 
 #[cfg(feature = "uniffi")]
 const _: () = {
+    use std::os::fd::{FromRawFd, RawFd};
+
+    use tokio::{fs::File, io::BufReader};
+
     use crate::{FfiResult, Wordbase};
 
     #[uniffi::export(with_foreign)]
     pub trait ImportDictionaryCallback: Send + Sync {
+        fn open_archive_file(&self) -> FfiResult<RawFd>;
+
         fn on_event(&self, event: ImportEvent) -> FfiResult<()>;
     }
 
@@ -263,10 +308,19 @@ const _: () = {
     impl Wordbase {
         pub async fn import_dictionary(
             &self,
-            archive_path: &str,
             callback: Arc<dyn ImportDictionaryCallback>,
         ) -> Result<DictionaryId, ImportError> {
-            let events = self.0.import_dictionary(archive_path);
+            let events = self.0.import_dictionary({
+                let callback = callback.clone();
+                move || {
+                    let callback = callback.clone();
+                    async move {
+                        let fd = callback.open_archive_file()?;
+                        let file = unsafe { File::from_raw_fd(fd) };
+                        Ok(Box::new(BufReader::new(file)) as Box<dyn Archive>)
+                    }
+                }
+            });
             tokio::pin!(events);
             while let Some(event) = events.try_next().await? {
                 match event {
