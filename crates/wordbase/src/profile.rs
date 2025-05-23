@@ -206,13 +206,57 @@ async fn fetch_owned(db: &Pool<Sqlite>) -> Result<Vec<Profile>> {
 }
 
 #[cfg(feature = "uniffi")]
-#[uniffi::export]
-impl Engine {
-    #[uniffi::method(name = "profiles")]
-    pub fn ffi_profiles(&self) -> Vec<Profile> {
-        self.profiles()
-            .iter()
-            .map(|(_, profile)| (**profile).clone())
-            .collect()
+const _: () = {
+    use std::collections::HashMap;
+
+    use crate::{FfiResult, Wordbase, WordbaseError};
+
+    #[uniffi::export(async_runtime = "tokio")]
+    impl Wordbase {
+        pub fn profiles(&self) -> HashMap<ProfileId, Profile> {
+            self.0
+                .profiles()
+                .iter()
+                .map(|(id, profile)| (*id, (**profile).clone()))
+                .collect()
+        }
+
+        pub async fn add_profile(&self, name: Option<NormString>) -> FfiResult<ProfileId> {
+            Ok(self.0.add_profile(name).await?)
+        }
+
+        pub async fn copy_profile(
+            &self,
+            src_id: ProfileId,
+            new_name: Option<NormString>,
+        ) -> FfiResult<ProfileId> {
+            self.0
+                .copy_profile(src_id, new_name)
+                .await
+                .map_err(WordbaseError::Ffi)
+        }
+
+        pub async fn remove_profile(&self, id: ProfileId) -> FfiResult<()> {
+            Ok(self.0.remove_profile(id).await?)
+        }
+
+        pub async fn set_profile_name(
+            &self,
+            profile_id: ProfileId,
+            name: Option<NormString>,
+        ) -> FfiResult<()> {
+            Ok(self.0.set_profile_name(profile_id, name).await?)
+        }
+
+        pub async fn set_font_family(
+            &self,
+            profile_id: ProfileId,
+            font_family: Option<String>,
+        ) -> FfiResult<()> {
+            Ok(self
+                .0
+                .set_font_family(profile_id, font_family.as_deref())
+                .await?)
+        }
     }
-}
+};

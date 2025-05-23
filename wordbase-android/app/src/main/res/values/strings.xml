@@ -1,8 +1,13 @@
 <resources>
     <string name="app_name">Wordbase</string>
     <string name="open_menu">Open menu</string>
+    <string name="cancel">Cancel</string>
+    <string name="confirm">Confirm</string>
+
+    <string name="dictionaries">Dictionaries</string>
     <string name="dictionary_description">Description</string>
     <string name="dictionary_attribution">Attribution</string>
+    <string name="dictionary_used_as_sorting">Used as sorting dictionary</string>
     <string name="dictionary_set_sorting">Set as sorting dictionary</string>
     <string name="dictionary_visit_website">Visit website</string>
     <string name="dictionary_delete">Delete</string>
@@ -13,4 +18,6 @@
     <string name="dictionary_format">Format</string>
     <string name="dictionary_format_yomitan">Yomitan</string>
     <string name="dictionary_format_yomichan_audio">Yomichan Audio</string>
+    <string name="dictionary_delete_title">Delete dictionary?</string>
+    <string name="dictionary_delete_body">Are you sure you want to delete ‘%s’?</string>
 </resources>

@@ -213,23 +213,6 @@ impl Engine {
     }
 }
 
-#[cfg(feature = "uniffi")]
-#[uniffi::export(async_runtime = "tokio")]
-impl Engine {
-    #[uniffi::method(name = "lookup")]
-    pub async fn ffi_lookup<'a>(
-        &'a self,
-        profile_id: ProfileId,
-        sentence: &'a str,
-        cursor: u64,
-        record_kinds: &[RecordKind],
-    ) -> Result<Vec<RecordLookup>, crate::WordbaseError> {
-        self.lookup(profile_id, sentence, cursor as usize, record_kinds)
-            .await
-            .map_err(crate::WordbaseError::Ffi)
-    }
-}
-
 fn to_frequency_value(mode: Option<i64>, value: Option<i64>) -> Option<FrequencyValue> {
     match (mode, value) {
         (Some(0), Some(value)) => Some(FrequencyValue::Rank(value)),
@@ -237,3 +220,24 @@ fn to_frequency_value(mode: Option<i64>, value: Option<i64>) -> Option<Frequency
         _ => None,
     }
 }
+
+#[cfg(feature = "uniffi")]
+const _: () = {
+    use crate::{FfiResult, Wordbase};
+
+    #[uniffi::export(async_runtime = "tokio")]
+    impl Wordbase {
+        pub async fn lookup<'a>(
+            &'a self,
+            profile_id: ProfileId,
+            sentence: &'a str,
+            cursor: u64,
+            record_kinds: &[RecordKind],
+        ) -> FfiResult<Vec<RecordLookup>> {
+            Ok(self
+                .0
+                .lookup(profile_id, sentence, cursor as usize, record_kinds)
+                .await?)
+        }
+    }
+};

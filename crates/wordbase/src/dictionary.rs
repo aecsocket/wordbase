@@ -184,13 +184,58 @@ async fn fetch_owned(db: &Pool<Sqlite>) -> Result<Vec<Dictionary>> {
 }
 
 #[cfg(feature = "uniffi")]
-#[uniffi::export]
-impl Engine {
-    #[uniffi::method(name = "dictionaries")]
-    pub fn ffi_dictionaries(&self) -> Vec<Dictionary> {
-        self.dictionaries()
-            .iter()
-            .map(|(_, dict)| (**dict).clone())
-            .collect()
+const _: () = {
+    use std::collections::HashMap;
+
+    use crate::{FfiResult, Wordbase};
+
+    #[uniffi::export(async_runtime = "tokio")]
+    impl Wordbase {
+        pub fn dictionaries(&self) -> HashMap<DictionaryId, Dictionary> {
+            self.0
+                .dictionaries()
+                .iter()
+                .map(|(id, dict)| (*id, (**dict).clone()))
+                .collect()
+        }
+
+        pub async fn remove_dictionary(&self, id: DictionaryId) -> FfiResult<()> {
+            Ok(self.0.remove_dictionary(id).await?)
+        }
+
+        pub async fn swap_dictionary_positions(
+            &self,
+            a_id: DictionaryId,
+            b_id: DictionaryId,
+        ) -> FfiResult<()> {
+            Ok(self.0.swap_dictionary_positions(a_id, b_id).await?)
+        }
+
+        pub async fn set_sorting_dictionary(
+            &self,
+            profile_id: ProfileId,
+            dictionary_id: Option<DictionaryId>,
+        ) -> FfiResult<()> {
+            Ok(self
+                .0
+                .set_sorting_dictionary(profile_id, dictionary_id)
+                .await?)
+        }
+
+        pub async fn enable_dictionary(
+            &self,
+            profile_id: ProfileId,
+            dictionary_id: DictionaryId,
+        ) -> FfiResult<()> {
+            Ok(self.0.enable_dictionary(profile_id, dictionary_id).await?)
+        }
+
+        pub async fn disable_dictionary(
+            &self,
+            profile_id: ProfileId,
+            dictionary_id: DictionaryId,
+        ) -> FfiResult<()> {
+            Ok(self.0.disable_dictionary(profile_id, dictionary_id).await?)
+        }
     }
-}
+};

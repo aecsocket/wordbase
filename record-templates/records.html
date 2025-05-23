@@ -24,20 +24,17 @@
 {# separate style block to retain syntax highlighting #}
 <style>
   :root {
-    --accent-color: rgb(
-      {{accent_color.r}} {{accent_color.g}} {{accent_color.b}}
-    );
+    --foreground-color: {{ colors.foreground }};
+    --background-color: {{ colors.background }};
+    --header-color: {{ colors.header }};
+    --accent-color: {{ colors.accent }};
   }
 </style>
 <style>
-  body {
-    padding: 0;
-    margin: 0;
-  }
-
   :root {
     font-family: sans-serif;
     line-height: 1.5;
+    --margin: 16px;
   }
 
   :root {
@@ -91,10 +88,15 @@
   }
 
   :root {
-    color: var(--window-fg-color);
-    background-color: var(--window-bg-color);
+    color: var(--foreground-color);
+    background-color: var(--background-color);
     /** for Jitendex */
-    --text-color: var(--window-fg-color);
+    --text-color: var(--foreground-color);
+  }
+
+  body {
+    padding: 0;
+    margin: 0 0 var(--margin) 0;
   }
 
   a {
@@ -194,7 +196,7 @@
     position: sticky;
     z-index: 1000;
     top: 0;
-    background-color: var(--window-bg-color);
+    background-color: var(--header-color);
     box-shadow:
       0 1px color-mix(in srgb, var(--headerbar-shade-color) 50%, transparent),
       0 2px 4px
@@ -202,7 +204,7 @@
   }
 
   .content {
-    margin: 0 16px;
+    margin: 0 var(--margin);
   }
 
   .frequency-value span:not(:last-child):after {
@@ -261,9 +263,9 @@
     <div class="header">
       <div class="content" style="padding: 16px 0; font-size: 2em">
         <ruby>
-          {% for part in group.furigana_parts %} {{ part[0] }}
-          <rt>{{ part[1] }}</rt>
-          {% endfor %}
+          {%- for part in group.furigana_parts -%}
+          <span>{{- part[0] -}}</span><rt>{{- part[1] -}}</rt>
+          {%- endfor -%}
         </ruby>
       </div>
     </div>
@@ -275,20 +277,16 @@
         style="gap: 6px"
         data-pitch-category="{{ pitch.category }}"
       >
-        <span style="padding: 0 0 0 var(--pill-padding)">
-          {% for i in range(end=(group.morae | length)) %}
+        <span class="text">
+          {%- for i in range(end=(group.morae | length)) -%}
           <!--
-          {% set high = pitch.high | nth(n=i) %}
-          {% set next_high = pitch.high | nth(n=i + 1)
-          %}
-          -->
-          <span
+          {%- set high = pitch.high | nth(n=i) -%}
+          {%- set next_high = pitch.high | nth(n=i + 1) -%}
+          --><span
             class="mora {% if high %} high {% else %} low {% endif %} {% if next_high %} next-high {% else %} next-low {% endif %}"
+            >{{ group.morae[i] }}</span
           >
-            {{ group.morae[i] }}
-          </span>
-
-          {% endfor %}
+          {%- endfor -%}
         </span>
         {% for audio in pitch.audio %}
         <button

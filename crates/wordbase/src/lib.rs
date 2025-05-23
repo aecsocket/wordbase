@@ -17,26 +17,22 @@ use {
     anyhow::{Context, Result},
     arc_swap::ArcSwap,
     deinflect::Deinflectors,
-    derive_more::{Deref, DerefMut, Display, Error},
+    derive_more::{Display, Error},
     dictionary::Dictionaries,
     directories::ProjectDirs,
     profile::Profiles,
     sqlx::{Pool, Sqlite},
-    std::{
-        path::{Path, PathBuf},
-        sync::Arc,
-    },
+    std::path::{Path, PathBuf},
     tera::Tera,
     texthook::Texthookers,
     tokio::sync::broadcast,
     tracing::info,
 };
 
-#[derive(Debug, Clone, Deref, DerefMut)]
-pub struct SharedEngine(pub Arc<Engine>);
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
 
 #[derive(Debug)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct Engine {
     profiles: ArcSwap<Profiles>,
     dictionaries: ArcSwap<Dictionaries>,
@@ -167,26 +163,53 @@ pub struct NotFound;
 
 const CHANNEL_BUF_CAP: usize = 4;
 
-#[cfg(feature = "uniffi")]
-uniffi::setup_scaffolding!();
-
-#[cfg(feature = "uniffi")]
-#[derive(Debug, Display, Error, uniffi::Error)]
-#[uniffi(flat_error)]
-pub enum WordbaseError {
-    #[display("{_0:?}")]
-    Ffi(anyhow::Error),
-}
-
-#[cfg(feature = "uniffi")]
-#[uniffi::export(async_runtime = "tokio")]
-pub async fn engine(data_dir: &str) -> Result<Engine, WordbaseError> {
-    Engine::new(data_dir).await.map_err(WordbaseError::Ffi)
-}
-
 #[deprecated]
 pub fn data_dir() -> Result<PathBuf> {
     let dirs = ProjectDirs::from("io.github", "aecsocket", "Wordbase")
         .context("failed to get default app directories")?;
     Ok(dirs.data_dir().to_path_buf())
 }
+
+#[cfg(feature = "uniffi")]
+mod ffi {
+    use crate::{Engine, EngineEvent};
+    use derive_more::{Display, Error, From};
+    use tokio::sync::{Mutex, broadcast};
+
+    #[derive(Debug, uniffi::Object)]
+    pub struct Wordbase(pub Engine);
+
+    #[derive(Debug, Display, Error, From, uniffi::Error)]
+    #[uniffi(flat_error)]
+    pub enum WordbaseError {
+        #[display("{_0:?}")]
+        Ffi(anyhow::Error),
+    }
+
+    pub type FfiResult<T> = Result<T, WordbaseError>;
+
+    #[uniffi::export(async_runtime = "tokio")]
+    pub async fn wordbase(data_dir: &str) -> FfiResult<Wordbase> {
+        Ok(Engine::new(data_dir).await.map(Wordbase)?)
+    }
+
+    #[derive(uniffi::Object)]
+    pub struct EngineEventReceiver(Mutex<broadcast::Receiver<EngineEvent>>);
+
+    #[uniffi::export]
+    impl Wordbase {
+        pub fn event_rx(&self) -> EngineEventReceiver {
+            EngineEventReceiver(Mutex::new(self.0.event_rx()))
+        }
+    }
+
+    #[uniffi::export(async_runtime = "tokio")]
+    impl EngineEventReceiver {
+        pub async fn recv(&self) -> Option<EngineEvent> {
+            self.0.lock().await.recv().await.ok()
+        }
+    }
+}
+
+#[cfg(feature = "uniffi")]
+pub use ffi::*;

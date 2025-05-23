@@ -3,28 +3,27 @@ package io.github.aecsocket.wordbase
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Text
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import com.kevinnzou.web.WebView
-import com.kevinnzou.web.rememberWebViewStateWithHTMLData
+import androidx.compose.ui.unit.dp
 import io.github.aecsocket.wordbase.ui.theme.WordbaseTheme
-import uniffi.wordbase_api.RecordKind
+import kotlinx.coroutines.launch
 
 class MiniDictionaryActivity : ComponentActivity() {
-    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val query = intent.getStringExtra(Intent.EXTRA_PROCESS_TEXT) ?: run {
@@ -35,42 +34,47 @@ class MiniDictionaryActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             WordbaseTheme {
-                var html by remember { mutableStateOf("") }
+                Ui(query = query)
+            }
+        }
+    }
+}
 
-                LaunchedEffect(Unit) {
-                    val wordbase = wordbase()
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun Ui(query: String) {
+    var wordbase by rememberWordbase()
 
-                    val records = wordbase.lookup(
-                        profileId = 1L,
-                        sentence = query,
-                        cursor = 0UL,
-                        recordKinds = RecordKind.entries
-                    )
-                    html = wordbase.renderToHtml(
-                        records = records,
-                        accentColorR = 0x35U,
-                        accentColorG = 0x84U,
-                        accentColorB = 0xe4U,
-                    ) + "<style>body { margin: 0 0 16px 0; }</style>"
-                }
-
-                ModalBottomSheet(
-                    onDismissRequest = {
-                        finish()
-                    }, modifier = Modifier.fillMaxSize()
-                ) {
-                    // the column lets you scroll the webview
-                    // why? idk!!
-                    // https://medium.com/@itsuki.enjoy/android-kotlin-jetpack-compose-make-your-nested-webview-scroll-cbf023e821a1
-                    LazyColumn {
-                        item {
-                            val webViewState = rememberWebViewStateWithHTMLData(html)
-                            WebView(
-                                state = webViewState,
-                                modifier = Modifier.fillMaxSize(),
-                            )
+    val coroutineScope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState()
+    val activity = LocalActivity.current
+    ModalBottomSheet(
+        sheetState = sheetState,
+        onDismissRequest = {
+            activity?.finish()
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+    ) {
+        // the column lets you scroll the webview
+        // why? idk!!
+        // https://medium.com/@itsuki.enjoy/android-kotlin-jetpack-compose-make-your-nested-webview-scroll-cbf023e821a1
+        LazyColumn {
+            wordbase?.let { wordbase ->
+                item {
+                    LookupView(
+                        wordbase = wordbase,
+                        query = query,
+                        padding = PaddingValues(0.dp),
+                        containerColor = BottomSheetDefaults.ContainerColor,
+                        onExit = {
+                            coroutineScope.launch {
+                                sheetState.hide()
+                                activity?.finish()
+                            }
                         }
-                    }
+                    )
                 }
             }
         }

@@ -2,13 +2,16 @@ package io.github.aecsocket.wordbase
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
@@ -21,31 +24,27 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults.topAppBarColors
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
+import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.window.core.layout.WindowWidthSizeClass
-import com.kevinnzou.web.WebView
-import com.kevinnzou.web.rememberWebViewStateWithHTMLData
 import io.github.aecsocket.wordbase.ui.theme.WordbaseTheme
 import kotlinx.coroutines.launch
-import uniffi.wordbase.Engine
-import uniffi.wordbase_api.RecordKind
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -62,43 +61,50 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Ui() {
-    var query by remember { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
+    val headerColor = MaterialTheme.colorScheme.surfaceContainer
+
+    val topAppBarColors = topAppBarColors(containerColor = headerColor)
     if (currentWindowAdaptiveInfo().windowSizeClass.windowWidthSizeClass == WindowWidthSizeClass.COMPACT) {
         BottomSheetScaffold(
             topBar = {
                 TopAppBar(
-                    colors = topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        titleContentColor = MaterialTheme.colorScheme.primary,
-                    ), title = {
-                        SearchBar(
-                            query = query, onQueryChange = { query = it })
-                    })
-            }, sheetContent = {
-                ManagePage()
-            }, sheetPeekHeight = 96.dp
+                    colors = topAppBarColors,
+                    title = {
+                        SearchBar(query = query, onQueryChange = { query = it })
+                    }
+                )
+            },
+            sheetContent = {
+                AppManagePage(
+                    modifier = Modifier.navigationBarsPadding()
+                )
+            },
+            sheetPeekHeight = 96.dp
         ) { padding ->
-            SearchPage(padding = padding, query = query)
+            SearchPage(padding = padding, query = query, headerColor = headerColor)
         }
     } else {
         val coroutineScope = rememberCoroutineScope()
         val drawerState = rememberDrawerState(DrawerValue.Closed)
         ModalNavigationDrawer(
-            drawerState = drawerState, drawerContent = {
+            drawerState = drawerState,
+            // allow closing with a swipe, but not opening
+            gesturesEnabled = drawerState.isOpen,
+            drawerContent = {
                 ModalDrawerSheet {
-                    ManagePage()
+                    AppManagePage()
                 }
             }) {
             Scaffold(
                 topBar = {
                     TopAppBar(
-                        colors = topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            titleContentColor = MaterialTheme.colorScheme.primary,
-                        ), title = {
+                        colors = topAppBarColors,
+                        title = {
                             SearchBar(
                                 query = query, onQueryChange = { query = it })
-                        }, navigationIcon = {
+                        },
+                        navigationIcon = {
                             IconButton(
                                 onClick = {
                                     coroutineScope.launch {
@@ -112,7 +118,7 @@ fun Ui() {
                             }
                         })
                 }) { padding ->
-                SearchPage(padding = padding, query = query)
+                SearchPage(padding = padding, query = query, headerColor = headerColor)
             }
         }
     }
@@ -135,53 +141,40 @@ fun SearchBar(query: String, onQueryChange: (String) -> Unit) {
 }
 
 @Composable
-fun SearchPage(padding: PaddingValues, query: String) {
-    val bottomPadding = padding.calculateBottomPadding().value
-    // amazingly, this scales perfectly
-    val paddingCss = "<style>body { padding: 0 0 ${bottomPadding}px 0; }</style>"
-
+fun SearchPage(
+    padding: PaddingValues,
+    query: String,
+    headerColor: Color
+) {
+    var foo by remember { mutableStateOf("foo") }
     Column(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = padding.calculateTopPadding())
     ) {
-        val context = LocalContext.current
-        var wordbase by remember { mutableStateOf<Engine?>(null) }
+        TextField(
+            value = foo,
+            onValueChange = { foo = it }
+        )
 
-        LaunchedEffect(Unit) {
-            wordbase = context.wordbase()
-        }
-
-        var html by remember { mutableStateOf("waiting... TODO") }
-
-        val files = LocalContext.current.filesDir?.list()
-
-        Text(text = "f = ${files.contentToString()}")
+        var wordbase by rememberWordbase()
 
         wordbase?.let { wordbase ->
-            Text(text = "dicts = ${wordbase.dictionaries().map { it.meta.name }}")
-
-            Text(text = "profiles = ${wordbase.profiles()}")
-
-            LaunchedEffect(query) {
-                val records = wordbase.lookup(
-                    profileId = 1L, sentence = query, cursor = 0UL, recordKinds = RecordKind.entries
-                )
-                html = "hello!" + wordbase.renderToHtml(
-                    records = records,
-                    accentColorR = 0x35U,
-                    accentColorG = 0x84U,
-                    accentColorB = 0xe4U,
-                ) + paddingCss
-            }
+            val activity = LocalActivity.current
+            LookupView(
+                wordbase = wordbase,
+                query = query,
+                padding = PaddingValues(
+                    bottom = padding.calculateBottomPadding(),
+                ),
+                headerColor = headerColor,
+                onExit = {
+                    activity?.finish()
+                }
+            )
         }
-
-        val webViewState = rememberWebViewStateWithHTMLData(html)
-        WebView(
-            state = webViewState,
-            modifier = Modifier.fillMaxSize(),
-        )
     }
 }
-
 
 //@PreviewScreenSizes
 @Preview

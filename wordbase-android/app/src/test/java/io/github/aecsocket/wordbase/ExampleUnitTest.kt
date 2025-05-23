@@ -13,6 +13,5 @@ import org.junit.Assert.*
 class ExampleUnitTest {
     @Test
     fun addition_isCorrect() {
-        assertEquals(5, uniffi.wordbase.add(2u, 3u))
-    }
+     }
 }

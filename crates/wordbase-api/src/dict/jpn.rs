@@ -14,6 +14,9 @@ pub struct PitchPosition(pub u64);
 #[cfg(feature = "uniffi")]
 uniffi::custom_newtype!(PitchPosition, u64);
 
+/// Category of a word's [pitch][jpa] position.
+///
+/// [jpa]: https://en.wikipedia.org/wiki/Japanese_pitch_accent
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum PitchCategory {
     /// 平板式: first mora is low; all later morae are high.

@@ -24,7 +24,13 @@ async fn main() -> Result<()> {
         .context("failed to perform lookup")?;
 
     loop {
-        match engine.render_to_html(&records, (0x35, 0x84, 0xe4)) {
+        match engine.render_to_html(
+            &records,
+            "var(--window-fg-color)",
+            "var(--window-bg-color)",
+            "var(--window-bg-color)",
+            "#3584e4",
+        ) {
             Ok(html) => {
                 fs::write("target/records.html", &html)
                     .await

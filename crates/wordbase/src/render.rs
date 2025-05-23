@@ -10,16 +10,21 @@ impl Engine {
     pub fn render_to_html(
         &self,
         records: &[RecordLookup],
-        accent_color: (u8, u8, u8),
+        foreground_color: &str,
+        background_color: &str,
+        header_color: &str,
+        accent_color: &str,
     ) -> Result<String> {
-        let accent_color = {
-            let (r, g, b) = accent_color;
-            AccentColor { r, g, b }
+        let colors = Colors {
+            foreground: foreground_color,
+            background: background_color,
+            header: header_color,
+            accent: accent_color,
         };
         let terms = group_terms(records);
 
         let mut context = tera::Context::new();
-        context.insert("accent_color", &accent_color);
+        context.insert("colors", &colors);
         context.insert("dictionaries", &self.dictionaries().0);
         context.insert("terms", &terms);
 
@@ -28,27 +33,12 @@ impl Engine {
     }
 }
 
-#[cfg(feature = "uniffi")]
-#[uniffi::export]
-impl Engine {
-    #[uniffi::method(name = "render_to_html")]
-    pub fn ffi_render_to_html(
-        &self,
-        records: &[RecordLookup],
-        accent_color_r: u8,
-        accent_color_g: u8,
-        accent_color_b: u8,
-    ) -> Result<String, crate::WordbaseError> {
-        self.render_to_html(records, (accent_color_r, accent_color_g, accent_color_b))
-            .map_err(crate::WordbaseError::Ffi)
-    }
-}
-
-#[derive(Debug, Clone, Copy, Serialize)]
-struct AccentColor {
-    r: u8,
-    g: u8,
-    b: u8,
+#[derive(Serialize)]
+pub struct Colors<'a> {
+    foreground: &'a str,
+    background: &'a str,
+    header: &'a str,
+    accent: &'a str,
 }
 
 fn group_terms(records: &[RecordLookup]) -> Vec<RecordTerm> {
@@ -210,3 +200,28 @@ fn audio_blob(audio: &dict::yomichan_audio::Audio) -> String {
     let data = BASE64.encode(&audio.data);
     format!("data:{mime_type};base64,{data}")
 }
+
+#[cfg(feature = "uniffi")]
+const _: () = {
+    use crate::{FfiResult, Wordbase};
+
+    #[uniffi::export]
+    impl Wordbase {
+        pub fn render_to_html(
+            &self,
+            records: &[RecordLookup],
+            foreground_color: &str,
+            background_color: &str,
+            header_color: &str,
+            accent_color: &str,
+        ) -> FfiResult<String> {
+            Ok(self.0.render_to_html(
+                records,
+                foreground_color,
+                background_color,
+                header_color,
+                accent_color,
+            )?)
+        }
+    }
+};
