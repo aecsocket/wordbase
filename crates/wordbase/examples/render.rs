@@ -24,10 +24,6 @@ const EXTRA_CSS: &str = "
         --fg-color: #ffffff;
     }
 }
-
-.content {
-    margin: 0 0 0 48px;
-}
 ";
 
 #[tokio::main]

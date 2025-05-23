@@ -81,6 +81,9 @@ fun LookupView(
             navigator = navigator,
             modifier = Modifier.fillMaxSize(),
             captureBackPresses = false,
+            onCreated = {
+                it.settings.javaScriptEnabled = true
+            }
         )
 
         BackHandler {
