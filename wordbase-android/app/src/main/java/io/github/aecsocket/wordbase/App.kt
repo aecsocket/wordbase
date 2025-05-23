@@ -39,15 +39,15 @@ class App : Application() {
         super.onCreate()
 
         // todo
-        File(filesDir, "wordbase.db-shm").delete()
-        File(filesDir, "wordbase.db-wal").delete()
-        val file = File(filesDir, "wordbase.db")
-        file.delete()
-        assets.open("wordbase.db").use { input ->
-            file.outputStream().use { output ->
-                input.copyTo(output)
-            }
-        }
+//        File(filesDir, "wordbase.db-shm").delete()
+//        File(filesDir, "wordbase.db-wal").delete()
+//        val file = File(filesDir, "wordbase.db")
+//        file.delete()
+//        assets.open("wordbase.db").use { input ->
+//            file.outputStream().use { output ->
+//                input.copyTo(output)
+//            }
+//        }
 
         val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 

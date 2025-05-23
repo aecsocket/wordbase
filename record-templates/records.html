@@ -305,7 +305,10 @@
           <span>{{ self::dictionary_name(id=source) }}</span>
           <span class="frequency-value flow">
             {% for frequency in frequency_group %}
-            <span style="font-weight: 700">{{ frequency.display }}</span>
+            <span style="font-weight: 700"
+              >{{ frequency.display | default(value=frequency.value.Rank) |
+              default(value=frequency.value.Occurrence) }}</span
+            >
             {% endfor %}
           </span>
         </span>

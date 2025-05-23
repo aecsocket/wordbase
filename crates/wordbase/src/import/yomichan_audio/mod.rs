@@ -1,7 +1,7 @@
 mod schema;
 
 use {
-    super::{ImportContinue, ImportKind, insert::Insert},
+    super::{Archive, ImportContinue, ImportKind, OpenArchive, insert::Insert},
     crate::import::insert_dictionary,
     anyhow::{Context, Result, bail},
     async_compression::futures::bufread::XzDecoder,
@@ -31,7 +31,7 @@ use {
         },
         task::Poll,
     },
-    tokio::{fs::File, io::BufReader, sync::mpsc},
+    tokio::sync::mpsc,
     tokio_util::compat::{Compat, TokioAsyncReadCompatExt},
     tracing::{debug, trace},
     wordbase_api::{
@@ -46,14 +46,14 @@ use {
 pub struct YomichanAudio;
 
 impl ImportKind for YomichanAudio {
-    fn is_of_kind(&self, archive_path: Arc<Path>) -> BoxFuture<'_, Result<()>> {
-        Box::pin(validate(archive_path))
+    fn is_of_kind(&self, open_archive: Arc<dyn OpenArchive>) -> BoxFuture<'_, Result<()>> {
+        Box::pin(validate(open_archive))
     }
 
     fn start_import(
         &self,
         db: Pool<Sqlite>,
-        archive_path: Arc<Path>,
+        open_archive: Arc<dyn OpenArchive>,
         progress_tx: mpsc::Sender<f64>,
     ) -> BoxFuture<Result<(DictionaryMeta, ImportContinue)>> {
         Box::pin(async move {
@@ -64,42 +64,41 @@ impl ImportKind for YomichanAudio {
             meta.url = Some("https://github.com/yomidevs/local-audio-yomichan".into());
             Ok((
                 meta.clone(),
-                Box::pin(import(db, archive_path, meta, progress_tx)) as ImportContinue,
+                Box::pin(import(db, open_archive, meta, progress_tx)) as ImportContinue,
             ))
         })
     }
 }
 
-async fn open_archive(
-    archive_path: &Path,
+async fn archive_reader(
+    open_archive: &dyn OpenArchive,
 ) -> Result<(
-    async_tar::Archive<XzDecoder<Count<Compat<BufReader<File>>>>>,
+    async_tar::Archive<XzDecoder<Count<Compat<Box<dyn Archive>>>>>,
     Arc<AtomicU64>,
     u64,
 )> {
-    let mut reader = BufReader::new(
-        File::open(archive_path)
-            .await
-            .context("failed to open file")?,
-    )
-    .compat();
-    let buf_len = reader
+    let mut archive = open_archive
+        .open_archive()
+        .await
+        .context("failed to open archive")?
+        .compat();
+    let buf_len = archive
         .seek(SeekFrom::End(0))
         .await
-        .context("failed to seek to end of file")?;
-    reader
+        .context("failed to seek to end")?;
+    archive
         .seek(SeekFrom::Start(0))
         .await
-        .context("failed to seek to start of file")?;
+        .context("failed to seek to start")?;
 
-    let count = Count::new(reader);
+    let count = Count::new(archive);
     let cursor_pos = count.pos();
     let archive = async_tar::Archive::new(XzDecoder::new(count));
     Ok((archive, cursor_pos, buf_len))
 }
 
-async fn validate(archive_path: Arc<Path>) -> Result<()> {
-    let (archive, _, _) = open_archive(&archive_path).await?;
+async fn validate(open_archive: Arc<dyn OpenArchive>) -> Result<()> {
+    let (archive, _, _) = archive_reader(&*open_archive).await?;
     let mut entries = archive
         .entries()
         .context("failed to read archive entries")?;
@@ -182,7 +181,7 @@ impl<T: AsyncBufRead + Unpin> AsyncBufRead for Count<T> {
 
 async fn import(
     db: Pool<Sqlite>,
-    archive_path: Arc<Path>,
+    open_archive: Arc<dyn OpenArchive>,
     meta: DictionaryMeta,
     progress_tx: mpsc::Sender<f64>,
 ) -> Result<DictionaryId> {
@@ -197,7 +196,7 @@ async fn import(
     let mut nhk16_rev_index = None::<RevIndex<Nhk16Info>>;
     let mut shinmeikai8_rev_index = None::<RevIndex<GenericInfo>>;
 
-    let (archive, cursor_pos, buf_len) = open_archive(&archive_path).await?;
+    let (archive, cursor_pos, buf_len) = archive_reader(&*open_archive).await?;
     let mut entries = archive
         .entries()
         .context("failed to read archive entries")?;
@@ -252,7 +251,7 @@ async fn import(
     let shinmeikai8_rev_index = shinmeikai8_rev_index
         .with_context(|| format!("no Shinmeikai index at `{SHINMEIKAI8_INDEX}`"))?;
 
-    let (archive, _, _) = open_archive(&archive_path).await?;
+    let (archive, _, _) = archive_reader(&*open_archive).await?;
     let mut entries = archive
         .entries()
         .context("failed to read archive entries")?;

@@ -1,5 +1,6 @@
 package io.github.aecsocket.wordbase
 
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -66,6 +67,8 @@ import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableCollectionItemScope
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import uniffi.wordbase.ImportDictionaryCallback
+import uniffi.wordbase.ImportEvent
 import uniffi.wordbase_api.Dictionary
 import uniffi.wordbase_api.DictionaryKind
 import uniffi.wordbase_api.DictionaryMeta
@@ -165,20 +168,7 @@ fun AppManagePage(modifier: Modifier = Modifier) {
     val app = LocalContext.current.app()
     val profile = app.profiles.values.first()
 
-    val context = LocalContext.current
-    val importLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-        val uri = uri ?: return@rememberLauncherForActivityResult
-
-        context.contentResolver.openInputStream()
-
-        context.contentResolver.openFileDescriptor(uri, "r")?.use { fd ->
-            fd.
-
-            fd.dup()
-        }
-    }
+    var debugWhateverFooTodo by remember { mutableStateOf("...") }
 
     // Some actions, like deleting a dictionary, may take a long time
     // during this, if the user performs another action, it may fail
@@ -188,47 +178,91 @@ fun AppManagePage(modifier: Modifier = Modifier) {
     // Note we only do this on ops we KNOW will take a long time,
     // to avoid locking the UI on every tiny change.
     var locked by remember { mutableStateOf(false) }
-    ManagePage(
-        modifier = modifier,
-        dictionaries = app.dictionaries.values.sortedBy { it.position },
-        profile = profile,
-        onDictionaryReorder = { from, to ->
-            app.swapDictionaryPositions(from.id, to.id)
-        },
-        onDictionarySortingSet = { dict ->
-            coroutineScope.launch {
-                wordbase.setSortingDictionary(profile.id, dict.id)
+
+    val context = LocalContext.current
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        val uri = uri ?: return@rememberLauncherForActivityResult
+
+        coroutineScope.launch {
+            locked = true
+            debugWhateverFooTodo = "started import!"
+            try {
+                val dictId = wordbase.importDictionary(object : ImportDictionaryCallback {
+                    @SuppressLint("Recycle") // we are passing the fd to native code
+                    override fun openArchiveFile(): Int {
+                        val fd = context.contentResolver.openFileDescriptor(uri, "r")
+                            ?: throw Exception("failed to open file")
+                        return fd.detachFd()
+                    }
+
+                    override fun onEvent(event: ImportEvent) {
+                        debugWhateverFooTodo = "$event"
+                    }
+                })
+                wordbase.enableDictionary(profile.id, dictId)
+                debugWhateverFooTodo = "import done!"
+            } catch (ex: Exception) {
+                debugWhateverFooTodo = "error: $ex"
+            } finally {
+                locked = false
             }
-        },
-        onDictionarySortingUnset = {
-            coroutineScope.launch {
-                wordbase.setSortingDictionary(profile.id, null)
-            }
-        },
-        onDictionaryDelete = { dict ->
-            coroutineScope.launch {
-                locked = true
-                try {
-                    wordbase.removeDictionary(dict.id)
-                } finally {
-                    locked = false
+        }
+
+    }
+
+    Column {
+        Text(debugWhateverFooTodo)
+
+        ManagePage(
+            modifier = modifier,
+            dictionaries = app.dictionaries.values.sortedBy { it.position },
+            profile = profile,
+            onDictionaryReorder = { from, to ->
+                app.swapDictionaryPositions(from.id, to.id)
+            },
+            onDictionarySortingSet = { dict ->
+                coroutineScope.launch {
+                    wordbase.setSortingDictionary(profile.id, dict.id)
                 }
-            }
-        },
-        onDictionaryEnabledChange = { dictionary, enabled ->
-            coroutineScope.launch {
-                if (enabled) {
-                    wordbase.enableDictionary(profile.id, dictionary.id)
-                } else {
-                    wordbase.disableDictionary(profile.id, dictionary.id)
+            },
+            onDictionarySortingUnset = {
+                coroutineScope.launch {
+                    wordbase.setSortingDictionary(profile.id, null)
                 }
-            }
-        },
-        onDictionaryImport = {
-            importLauncher.launch(arrayOf("application/zip"))
-        },
-        enabled = !locked,
-    )
+            },
+            onDictionaryDelete = { dict ->
+                coroutineScope.launch {
+                    locked = true
+                    try {
+                        wordbase.removeDictionary(dict.id)
+                    } finally {
+                        locked = false
+                    }
+                }
+            },
+            onDictionaryEnabledChange = { dictionary, enabled ->
+                coroutineScope.launch {
+                    if (enabled) {
+                        wordbase.enableDictionary(profile.id, dictionary.id)
+                    } else {
+                        wordbase.disableDictionary(profile.id, dictionary.id)
+                    }
+                }
+            },
+            onDictionaryImport = {
+                importLauncher.launch(
+                    arrayOf(
+                        "application/zip",
+                        "application/x-tar",
+                        "application/x-xz"
+                    )
+                )
+            },
+            enabled = !locked,
+        )
+    }
 }
 
 @Composable
@@ -338,7 +372,8 @@ fun ManagePage(
         item {
             Button(
                 onClick = onDictionaryImport,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                enabled = enabled,
             ) {
                 Text(stringResource(R.string.dictionary_import))
             }

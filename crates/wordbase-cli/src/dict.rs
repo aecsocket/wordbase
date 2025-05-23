@@ -77,7 +77,7 @@ pub fn info(engine: &Engine, dict_id: DictionaryId) -> Result<()> {
     Ok(())
 }
 
-pub async fn import(engine: &Engine, path: PathBuf) -> Result<()> {
+pub async fn import(engine: &Engine, profile: &Profile, path: PathBuf) -> Result<()> {
     let start = Instant::now();
 
     let path = Arc::new(path);
@@ -100,6 +100,10 @@ pub async fn import(engine: &Engine, path: PathBuf) -> Result<()> {
             }
             ImportEvent::Done(id) => {
                 println!("Imported as {id:?}");
+                engine
+                    .enable_dictionary(profile.id, id)
+                    .await
+                    .context("failed to enable dictionary")?;
             }
         }
     }

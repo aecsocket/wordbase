@@ -231,7 +231,7 @@ async fn main() -> Result<()> {
         } => dict::info(&engine, DictionaryId(dict_id))?,
         Command::Dict {
             command: DictCommand::Import { path },
-        } => dict::import(&engine, path).await?,
+        } => dict::import(&engine, &*require_profile()?, path).await?,
         Command::Dict {
             command:
                 DictCommand::Set {

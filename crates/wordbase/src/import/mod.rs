@@ -1,5 +1,5 @@
 mod insert;
-// mod yomichan_audio;
+mod yomichan_audio;
 mod yomitan;
 
 use {
@@ -29,10 +29,10 @@ static FORMATS: LazyLock<HashMap<DictionaryKind, Arc<dyn ImportKind>>> = LazyLoc
             DictionaryKind::Yomitan,
             Arc::new(yomitan::Yomitan) as Arc<dyn ImportKind>,
         ),
-        // (
-        //     DictionaryKind::YomichanAudio,
-        //     Arc::new(yomichan_audio::YomichanAudio),
-        // ),
+        (
+            DictionaryKind::YomichanAudio,
+            Arc::new(yomichan_audio::YomichanAudio),
+        ),
     ]
     .into()
 });
@@ -222,6 +222,8 @@ impl Engine {
                 .map_err(|source| ImportError::Import { kind, source })?;
 
             self.sync_dictionaries().await?;
+            yield ImportEvent::Done(id);
+
             _ = self
                 .event_tx
                 .send(EngineEvent::Dictionary(DictionaryEvent::Added { id }));
@@ -316,6 +318,8 @@ const _: () = {
                     let callback = callback.clone();
                     async move {
                         let fd = callback.open_archive_file()?;
+                        // SAFETY: it is the FFI layer's responsibility
+                        // to ensure that this fd is valid and open
                         let file = unsafe { File::from_raw_fd(fd) };
                         Ok(Box::new(BufReader::new(file)) as Box<dyn Archive>)
                     }
