@@ -224,7 +224,7 @@ impl Engine {
         cursor: u64,
         record_kinds: &[RecordKind],
     ) -> Result<Vec<RecordLookup>, crate::WordbaseError> {
-        self.lookup(ProfileId(1), sentence, cursor as usize, RecordKind::ALL)
+        self.lookup(profile_id, sentence, cursor as usize, record_kinds)
             .await
             .map_err(crate::WordbaseError::Ffi)
     }

@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
@@ -47,38 +46,14 @@ import io.github.aecsocket.wordbase.ui.theme.WordbaseTheme
 import kotlinx.coroutines.launch
 import uniffi.wordbase.Engine
 import uniffi.wordbase_api.RecordKind
-import uniffi.wordbase_api.RecordLookup
-import java.io.File
-
-var Wordbase: Engine? = null
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        val file = File(filesDir, "wordbase.db")
-        file.delete()
-        assets.open("wordbase.db").use { input ->
-            file.outputStream().use { output ->
-                input.copyTo(output)
-            }
-        }
-
         setContent {
-            var engineReady by remember { mutableStateOf(false) }
-
-            LaunchedEffect(Unit) {
-                Wordbase = uniffi.wordbase.engine(filesDir.absolutePath)
-                engineReady = true
-            }
-
             WordbaseTheme {
-                if (engineReady) {
-                    Ui()
-                } else {
-                    Text("loading TODO...")
-                }
+                Ui()
             }
         }
     }
@@ -165,17 +140,32 @@ fun SearchPage(padding: PaddingValues, query: String) {
     // amazingly, this scales perfectly
     val paddingCss = "<style>body { padding: 0 0 ${bottomPadding}px 0; }</style>"
 
-    Column(                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
+    Column(
         modifier = Modifier.fillMaxSize()
     ) {
+        val context = LocalContext.current
+        var wordbase by remember { mutableStateOf<Engine?>(null) }
+
+        LaunchedEffect(Unit) {
+            wordbase = context.wordbase()
+        }
+
         var html by remember { mutableStateOf("waiting... TODO") }
 
-        Wordbase?.let { wordbase ->
+        val files = LocalContext.current.filesDir?.list()
+
+        Text(text = "f = ${files.contentToString()}")
+
+        wordbase?.let { wordbase ->
+            Text(text = "dicts = ${wordbase.dictionaries().map { it.meta.name }}")
+
+            Text(text = "profiles = ${wordbase.profiles()}")
+
             LaunchedEffect(query) {
                 val records = wordbase.lookup(
                     profileId = 1L, sentence = query, cursor = 0UL, recordKinds = RecordKind.entries
                 )
-                html = wordbase.renderToHtml(
+                html = "hello!" + wordbase.renderToHtml(
                     records = records,
                     accentColorR = 0x35U,
                     accentColorG = 0x84U,
