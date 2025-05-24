@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.BottomSheetScaffold
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -60,11 +61,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             WordbaseTheme {
-                Ui(
-                    manageContent = { modifier ->
-                        AppManagePage(modifier = modifier)
-                    }
-                )
+                AppUi()
             }
         }
     }
@@ -230,13 +227,15 @@ fun SearchPage(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
+                CircularProgressIndicator()
+
                 Text(
-                    text = "Loading engine",
+                    text = stringResource(R.string.loading_title),
                     style = MaterialTheme.typography.headlineMedium
                 )
 
                 Text(
-                    text = "If migrating to a new version, this may take a while",
+                    text = stringResource(R.string.loading_body),
                     textAlign = TextAlign.Center,
                 )
             }

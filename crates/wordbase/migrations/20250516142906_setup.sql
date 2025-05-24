@@ -61,7 +61,10 @@ CREATE TABLE term_record (
     source      INTEGER NOT NULL REFERENCES dictionary(id) ON DELETE CASCADE,
     headword    TEXT,
     reading     TEXT,
-    record      INTEGER NOT NULL REFERENCES record(id) ON DELETE CASCADE,
+    -- this needs to be deferred so that we can insert into `term_record`
+    -- before inserting the referenced record into `record` -
+    -- see the test in `insert.rs`
+    record      INTEGER NOT NULL REFERENCES record(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
     UNIQUE (source, headword, reading, record)
     CHECK (headword IS NOT NULL OR reading IS NOT NULL)
 );

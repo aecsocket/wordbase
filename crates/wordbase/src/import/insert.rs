@@ -20,7 +20,8 @@
 //! into `record`, but we may flush `term_record` inserts before `record`
 //! inserts, meaning we break the foreign key constraint.
 //!
-//! To fix this, we disable `PRAGMA foreign_keys`. `¯\_(ツ)_/¯`
+//! We can't fix this by just disabling `PRAGMA foreign_keys`, because that
+//! breaks `ON DELETE CASCADE`.
 
 use std::marker::PhantomData;
 
@@ -294,7 +295,6 @@ mod tests {
         const ITEMS: i64 = 100_000;
 
         let mut tx = db.begin().await.unwrap();
-
         let source = insert_dictionary(
             &mut tx,
             &DictionaryMeta::new(DictionaryKind::Yomitan, "dict"),
@@ -310,10 +310,7 @@ mod tests {
                     &mut tx,
                     RecordId(i),
                     source,
-                    &dict::yomitan::Frequency {
-                        display: None,
-                        value: None,
-                    },
+                    &dict::yomitan::Frequency::default(),
                 )
                 .await
                 .unwrap();
@@ -325,6 +322,52 @@ mod tests {
         assert_eq!(
             ITEMS,
             query_scalar!("SELECT COUNT(*) FROM record")
+                .fetch_one(&db)
+                .await
+                .unwrap()
+        );
+    }
+
+    #[sqlx::test]
+    fn deferred_foreign_keys(db: Pool<Sqlite>) {
+        let mut tx = db.begin().await.unwrap();
+        let source = insert_dictionary(
+            &mut tx,
+            &DictionaryMeta::new(DictionaryKind::Yomitan, "dict"),
+        )
+        .await
+        .unwrap();
+
+        let mut insert = Inserter::new(&mut tx, source).await.unwrap();
+
+        let record_id = insert
+            .record(&dict::yomitan::Frequency::default())
+            .await
+            .unwrap();
+        insert
+            .term_record(Term::from_headword("foo").unwrap(), record_id)
+            .await
+            .unwrap();
+
+        // make sure that if we flush `term_record` before `record`,
+        // that it won't cause foreign key constraint errors
+        // (at least until the end of the txn)
+        // this is why `term_record.record` is `DEFERRABLE INITIALLY DEFERRED`
+        insert.term_records.flush(insert.tx).await.unwrap();
+        insert.records.flush(insert.tx).await.unwrap();
+
+        tx.commit().await.unwrap();
+
+        assert_eq!(
+            1,
+            query_scalar!("SELECT COUNT(*) FROM record")
+                .fetch_one(&db)
+                .await
+                .unwrap()
+        );
+        assert_eq!(
+            1,
+            query_scalar!("SELECT COUNT(*) FROM term_record")
                 .fetch_one(&db)
                 .await
                 .unwrap()

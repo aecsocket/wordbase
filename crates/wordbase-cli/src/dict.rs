@@ -129,6 +129,10 @@ pub async fn disable(engine: &Engine, profile: &Profile, dict_id: DictionaryId) 
 }
 
 pub async fn rm(engine: &Engine, dict_id: DictionaryId) -> Result<()> {
+    let start = Instant::now();
     engine.remove_dictionary(dict_id).await?;
+    let end = Instant::now();
+    println!("Removal complete in {:?}", end.duration_since(start));
+
     Ok(())
 }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -61,6 +62,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -238,6 +240,7 @@ fun AppManagePage(modifier: Modifier = Modifier) {
                                     progress = 0f,
                                 )
                             }
+
                             is ImportEvent.Progress -> {
                                 meta?.let { meta ->
                                     importState = DictionaryImport.ReadMeta(
@@ -407,6 +410,50 @@ fun ManagePage(
                 enabled = enabled,
             ) {
                 Text(stringResource(R.string.dictionary_import))
+            }
+        }
+
+        item {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "EARLY PRE RELEASE BUILD",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.headlineMedium,
+                    textAlign = TextAlign.Center,
+                )
+
+                Text(
+                    text = "App functions may break. Your database may get corrupted. " +
+                            "You may have to reimport your dictionaries a lot, " +
+                            "or even delete and reinstall the app. " +
+                            "DO NOT delete the original dictionary zips!",
+                    textAlign = TextAlign.Center,
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                val context = LocalContext.current
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    Button(
+                        onClick = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/aecsocket/wordbase/releases".toUri()))
+                        },
+                    ) {
+                        Text("Download latest version")
+                    }
+
+                    Button(
+                        onClick = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/aecsocket/wordbase/issues".toUri()))
+                        },
+                    ) {
+                        Text("Report bug")
+                    }
+                }
             }
         }
     }
