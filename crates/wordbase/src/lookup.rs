@@ -40,31 +40,31 @@ impl Engine {
             -- otherwise, the query planner might use the `record(source)` index,
             -- which would kill performance
             WITH base AS (
-                SELECT id FROM record
-                INDEXED BY record_query_headword
+                SELECT headword, reading, record FROM term_record
+                INDEXED BY term_record_query_headword
                 WHERE headword = $2
 
                 -- we can get away with `UNION ALL` here,
                 -- because we don't guarantee to callers that there won't be duplicate records
                 UNION ALL
 
-                SELECT id FROM record
-                INDEXED BY record_query_reading
+                SELECT headword, reading, record FROM term_record
+                INDEXED BY term_record_query_reading
                 WHERE reading = $2
             )
             SELECT
                 record.id,
                 record.source,
-                record.headword,
-                record.reading,
                 record.kind,
                 record.data,
+                base.headword,
+                base.reading,
                 profile_frequency.mode AS 'profile_frequency_mode?',
                 profile_frequency.value AS 'profile_frequency_value?',
                 source_frequency.mode AS 'source_frequency_mode?',
                 source_frequency.value AS 'source_frequency_value?'
             FROM record
-            JOIN base ON record.id = base.id
+            JOIN base ON record.id = base.record
 
             -- make sure the dictionary we're getting this record from is enabled
             INNER JOIN dictionary ON record.source = dictionary.id
@@ -78,15 +78,15 @@ impl Engine {
                     SELECT sorting_dictionary FROM profile
                     WHERE id = $1
                 )
-                AND profile_frequency.headword = record.headword
-                AND profile_frequency.reading = record.reading
+                AND profile_frequency.headword = base.headword
+                AND profile_frequency.reading = base.reading
             )
 
             -- join on frequency information for this source
             LEFT JOIN frequency source_frequency ON (
                 source_frequency.source = record.source
-                AND source_frequency.headword = record.headword
-                AND source_frequency.reading = record.reading
+                AND source_frequency.headword = base.headword
+                AND source_frequency.reading = base.reading
             )
 
             WHERE record.kind IN (SELECT value FROM json_each($3))
@@ -97,12 +97,12 @@ impl Engine {
                     -- e.g. if you typed あらゆる:
                     -- - the first results would be for the kana あらゆる
                     -- - then the kanji like 汎ゆる
-                    WHEN record.reading = $2 AND record.headword = $2 THEN 0
+                    WHEN base.reading = $2 AND base.headword = $2 THEN 0
                     -- then prioritize results where at least the reading or headword are an exact match
                     -- e.g. in 念じる, usually 念ずる comes up first
                     -- but this is obviously a different reading
                     -- so we want to prioritize 念じる
-                    WHEN record.reading = $2 OR record.headword = $2 THEN 1
+                    WHEN base.reading = $2 OR base.headword = $2 THEN 1
                     -- all other results at the end
                     ELSE 2
                 END,

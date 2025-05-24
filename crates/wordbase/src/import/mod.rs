@@ -10,7 +10,7 @@ use {
     sqlx::{Pool, Sqlite, Transaction},
     std::{
         collections::HashMap,
-        path::{Path, PathBuf},
+        path::Path,
         sync::{Arc, LazyLock},
     },
     tokio::{
@@ -247,7 +247,7 @@ async fn insert_dictionary(
     meta: &DictionaryMeta,
 ) -> Result<DictionaryId> {
     let meta = serde_json::to_string(meta).context("failed to serialize dictionary meta")?;
-    let new_id = sqlx::query!(
+    let id = sqlx::query!(
         "INSERT INTO dictionary (meta, position)
         VALUES ($1, (SELECT COALESCE(MAX(position), 0) + 1 FROM dictionary))",
         meta
@@ -255,41 +255,7 @@ async fn insert_dictionary(
     .execute(&mut **tx)
     .await?
     .last_insert_rowid();
-    Ok(DictionaryId(new_id))
-}
-
-pub trait IntoArcPath {
-    fn into_arc_path(self) -> Arc<Path>;
-}
-
-impl IntoArcPath for Arc<Path> {
-    fn into_arc_path(self) -> Arc<Path> {
-        self
-    }
-}
-
-impl IntoArcPath for PathBuf {
-    fn into_arc_path(self) -> Arc<Path> {
-        Arc::from(self)
-    }
-}
-
-impl IntoArcPath for String {
-    fn into_arc_path(self) -> Arc<Path> {
-        PathBuf::from(self).into_arc_path()
-    }
-}
-
-impl IntoArcPath for &Path {
-    fn into_arc_path(self) -> Arc<Path> {
-        self.to_path_buf().into_arc_path()
-    }
-}
-
-impl IntoArcPath for &str {
-    fn into_arc_path(self) -> Arc<Path> {
-        PathBuf::from(self).into_arc_path()
-    }
+    Ok(DictionaryId(id))
 }
 
 #[cfg(feature = "uniffi")]

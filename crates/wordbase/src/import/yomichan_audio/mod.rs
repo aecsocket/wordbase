@@ -1,14 +1,14 @@
 mod schema;
 
 use {
-    super::{Archive, ImportContinue, ImportKind, OpenArchive, insert::Insert},
-    crate::import::insert_dictionary,
+    super::{Archive, ImportContinue, ImportKind, OpenArchive},
+    crate::import::{insert::Inserter, insert_dictionary},
     anyhow::{Context, Result, bail},
     async_compression::futures::bufread::XzDecoder,
     async_tar::EntryType,
     bytes::Bytes,
     derive_more::Deref,
-    foldhash::{HashMap, HashMapExt},
+    foldhash::{HashMap, HashMapExt, HashSet},
     futures::{
         AsyncBufRead, AsyncRead, AsyncReadExt as _, AsyncSeek, AsyncSeekExt as _, StreamExt,
         future::BoxFuture,
@@ -19,7 +19,7 @@ use {
         SHINMEIKAI8_INDEX, SHINMEIKAI8_MEDIA,
     },
     serde::de::DeserializeOwned,
-    sqlx::{Pool, Sqlite, Transaction},
+    sqlx::{Pool, Sqlite},
     std::{
         any::type_name,
         io::SeekFrom,
@@ -35,7 +35,7 @@ use {
     tokio_util::compat::{Compat, TokioAsyncReadCompatExt},
     tracing::{debug, trace},
     wordbase_api::{
-        DictionaryId, DictionaryKind, DictionaryMeta, NormString, Record, RecordType, Term,
+        DictionaryId, DictionaryKind, DictionaryMeta, NormString, RecordType, Term,
         dict::{
             jpn::PitchPosition,
             yomichan_audio::{Audio, AudioFormat, Forvo, Jpod, Nhk16, Shinmeikai8},
@@ -186,10 +186,10 @@ async fn import(
     progress_tx: mpsc::Sender<f64>,
 ) -> Result<DictionaryId> {
     let mut tx = db.begin().await.context("failed to begin transaction")?;
-    let mut records = Insert::<Record>::new();
     let dictionary_id = insert_dictionary(&mut tx, &meta)
         .await
         .context("failed to insert dictionary")?;
+    let mut insert = Inserter::new(&mut tx, dictionary_id).await?;
 
     debug!("Counting entries and parsing indexes");
     let mut jpod_rev_index = None::<RevIndex<GenericInfo>>;
@@ -270,14 +270,12 @@ async fn import(
 
         (async {
             if let Some(path) = path.strip_prefix(FORVO_PATH) {
-                import_forvo(&mut tx, &mut records, dictionary_id, path, &mut entry)
+                import_forvo(&mut insert, path, &mut entry)
                     .await
                     .context("failed to import Forvo file")?;
             } else if let Some(path) = path.strip_prefix(JPOD_MEDIA) {
                 import_by_rev_index(
-                    &mut tx,
-                    &mut records,
-                    dictionary_id,
+                    &mut insert,
                     path,
                     &mut entry,
                     &jpod_rev_index,
@@ -287,9 +285,7 @@ async fn import(
                 .await?;
             } else if let Some(path) = path.strip_prefix(NHK16_AUDIO) {
                 import_by_rev_index(
-                    &mut tx,
-                    &mut records,
-                    dictionary_id,
+                    &mut insert,
                     path,
                     &mut entry,
                     &nhk16_rev_index,
@@ -301,15 +297,16 @@ async fn import(
                             .iter()
                             .copied()
                             .map(PitchPosition)
+                            // remove duplicates
+                            .collect::<HashSet<_>>()
+                            .into_iter()
                             .collect(),
                     },
                 )
                 .await?;
             } else if let Some(path) = path.strip_prefix(SHINMEIKAI8_MEDIA) {
                 import_by_rev_index(
-                    &mut tx,
-                    &mut records,
-                    dictionary_id,
+                    &mut insert,
                     path,
                     &mut entry,
                     &shinmeikai8_rev_index,
@@ -334,10 +331,7 @@ async fn import(
         }
     }
 
-    records
-        .flush(&mut tx)
-        .await
-        .context("failed to flush records")?;
+    insert.flush().await.context("failed to flush records")?;
     tx.commit().await.context("failed to commit transaction")?;
     Ok(dictionary_id)
 }
@@ -452,9 +446,7 @@ impl TryFrom<schema::nhk16::Index> for RevIndex<Nhk16Info> {
 }
 
 pub async fn import_forvo<R: AsyncRead + Unpin>(
-    tx: &mut Transaction<'_, Sqlite>,
-    records: &mut Insert<Record>,
-    source: DictionaryId,
+    insert: &mut Inserter<'_, '_>,
     path: &str,
     entry: &mut async_tar::Entry<R>,
 ) -> Result<()> {
@@ -469,21 +461,20 @@ pub async fn import_forvo<R: AsyncRead + Unpin>(
         .and_then(|(name, _)| Term::from_headword(name))
         .context("no headword in path")?;
 
-    records
-        .insert(
-            tx,
-            source,
-            term,
-            &Forvo {
-                username,
-                audio: Audio {
-                    format: format_of(path)?,
-                    data: encode(entry).await?,
-                },
+    let record_id = insert
+        .record(&Forvo {
+            username,
+            audio: Audio {
+                format: format_of(path)?,
+                data: encode(entry).await?,
             },
-        )
+        })
         .await
         .context("failed to insert record")?;
+    insert
+        .term_record(term, record_id)
+        .await
+        .context("failed to insert term record")?;
     Ok(())
 }
 
@@ -498,9 +489,7 @@ fn format_of(path: &str) -> Result<AudioFormat> {
 
 #[expect(clippy::future_not_send, reason = "we don't care about non-send here")]
 async fn import_by_rev_index<'a, R, Rev, T, Terms>(
-    tx: &mut Transaction<'_, Sqlite>,
-    records: &mut Insert<Record>,
-    source: DictionaryId,
+    insert: &mut Inserter<'_, '_>,
     path: &str,
     entry: &mut async_tar::Entry<R>,
     index: &'a RevIndex<Rev>,
@@ -527,11 +516,16 @@ where
         data: encode(entry).await?,
     };
     let record = into_record(audio, info);
+    let record_id = insert
+        .record(&record)
+        .await
+        .context("failed to insert record")?;
+
     for term in terms_of(info) {
-        records
-            .insert(tx, source, term.clone(), &record)
+        insert
+            .term_record(term.clone(), record_id)
             .await
-            .context("failed to insert record")?;
+            .with_context(|| format!("failed to insert term record {term:?}"))?;
     }
     Ok(())
 }

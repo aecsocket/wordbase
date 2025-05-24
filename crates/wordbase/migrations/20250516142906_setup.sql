@@ -34,6 +34,8 @@ CREATE TABLE profile_enabled_dictionary (
     dictionary  INTEGER NOT NULL REFERENCES dictionary(id)  ON DELETE CASCADE,
     UNIQUE      (profile, dictionary)
 );
+CREATE INDEX profile_enabled_dictionary_profile    ON profile_enabled_dictionary(profile);
+CREATE INDEX profile_enabled_dictionary_dictionary ON profile_enabled_dictionary(dictionary);
 
 CREATE TABLE config (
     id                      INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
@@ -51,21 +53,47 @@ END;
 CREATE TABLE record (
     id          INTEGER NOT NULL PRIMARY KEY,
     source      INTEGER NOT NULL REFERENCES dictionary(id) ON DELETE CASCADE,
+    kind        INTEGER NOT NULL,
+    data        BLOB    NOT NULL
+);
+
+CREATE TABLE term_record (
+    source      INTEGER NOT NULL REFERENCES dictionary(id) ON DELETE CASCADE,
     headword    TEXT,
     reading     TEXT,
-    kind        INTEGER NOT NULL,
-    data        BLOB    NOT NULL,
+    record      INTEGER NOT NULL REFERENCES record(id) ON DELETE CASCADE,
+    UNIQUE (source, headword, reading, record)
     CHECK (headword IS NOT NULL OR reading IS NOT NULL)
 );
-CREATE INDEX record_headword ON record(headword);
-CREATE INDEX record_reading ON record(reading);
 
 CREATE TABLE frequency (
     source      INTEGER NOT NULL REFERENCES dictionary(id) ON DELETE CASCADE,
     headword    TEXT,
     reading     TEXT,
+    -- 0: rank
+    -- 1: occurrence
     mode        INTEGER NOT NULL CHECK (mode IN (0, 1)),
     value       INTEGER NOT NULL,
     UNIQUE (source, headword, reading)
     CHECK (headword IS NOT NULL OR reading IS NOT NULL)
 );
+
+-- improves removal performance, but if we're not careful,
+-- SQLite will use these indexes for queries as well.
+-- that will be VERY slow, since there may be 100,000s of entries
+-- for a single `source`
+CREATE INDEX record_source ON record(source);
+CREATE INDEX term_record_source ON term_record(source);
+CREATE INDEX frequency_source ON frequency(source);
+
+-- ensure that SQLite uses proper word indexes for lookups
+-- use 2 separate indexes since we search first by headword, then by reading,
+-- done in 2 separate queries; we never search by both at the same time
+CREATE INDEX term_record_query_headword ON term_record(headword, source);
+CREATE INDEX term_record_query_reading ON term_record(reading, source);
+
+-- we always search where `source` is the current sorting dict,
+-- so `source` is first
+-- we only search `frequency` by headword AND reading, never either,
+-- so we include 1 (headword, reading) index instead of 2 separate ones
+CREATE INDEX frequency_query ON frequency(source, headword, reading);

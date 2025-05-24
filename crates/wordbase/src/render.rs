@@ -1,5 +1,6 @@
 use anyhow::Result;
 use data_encoding::BASE64;
+use foldhash::HashSet;
 use maud::Render as _;
 use serde::Serialize;
 use wordbase_api::{DictionaryId, Record, RecordKind, RecordLookup, Term, dict};
@@ -83,7 +84,13 @@ fn group_terms(records: &[RecordLookup]) -> Vec<RecordTerm> {
                 if audio.pitch_positions.is_empty() {
                     info.audio_no_pitch.entry(source).or_default().push(conv);
                 } else {
-                    for &pos in &audio.pitch_positions {
+                    for &pos in &audio
+                        .pitch_positions
+                        .iter()
+                        .copied()
+                        // deduplicate pitches
+                        .collect::<HashSet<_>>()
+                    {
                         info.pitches
                             .entry(pos)
                             .or_insert_with(|| base_pitch(term, pos))

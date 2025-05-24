@@ -2,7 +2,7 @@ mod schema;
 
 use {
     super::{Archive, ImportContinue, ImportKind, OpenArchive},
-    crate::import::{insert::Insert, insert_dictionary},
+    crate::import::{insert::Inserter, insert_dictionary},
     anyhow::{Context, Result},
     async_zip::base::read::seek::ZipFileReader,
     derive_more::From,
@@ -12,7 +12,7 @@ use {
         TERM_BANK_PATTERN, TERM_META_BANK_PATTERN,
     },
     serde::de::DeserializeOwned,
-    sqlx::{Pool, Sqlite, Transaction},
+    sqlx::{Pool, Sqlite},
     std::{iter, sync::Arc},
     tokio::{
         sync::{Semaphore, mpsc},
@@ -22,7 +22,7 @@ use {
     tracing::{debug, trace},
     wordbase_api::{
         DictionaryId, DictionaryKind, DictionaryMeta, FrequencyValue, NoHeadwordOrReading,
-        NormString, Record, Term,
+        NormString, Term,
         dict::{
             jpn::PitchPosition,
             yomitan::{Frequency, Glossary, GlossaryTag, Pitch, structured},
@@ -220,11 +220,10 @@ async fn continue_import(
 
     // stage 4: start inserting
     let mut tx = db.begin().await.context("failed to begin transaction")?;
-    let mut records = Insert::<Record>::new();
-    let mut frequencies = Insert::<FrequencyValue>::new();
     let dictionary_id = insert_dictionary(&mut tx, &meta)
         .await
         .context("failed to insert dictionary")?;
+    let mut insert = Inserter::new(&mut tx, dictionary_id).await?;
 
     let notify_progress = |banks_done: usize, rows_done: usize, rows_len: usize| {
         // +1 to not trigger on the first row
@@ -242,16 +241,9 @@ async fn continue_import(
                 let rows_len = bank.len();
                 for (row_idx, term_meta) in bank.into_iter().enumerate() {
                     let headword = term_meta.expression.clone();
-                    import_term_meta(
-                        dictionary_id,
-                        &mut tx,
-                        &mut records,
-                        &mut frequencies,
-                        &index,
-                        term_meta,
-                    )
-                    .await
-                    .with_context(|| format!("failed to import term meta {headword:?}"))?;
+                    import_term_meta(&mut insert, &index, term_meta)
+                        .await
+                        .with_context(|| format!("failed to import term meta {headword:?}"))?;
                     notify_progress(banks_done, row_idx, rows_len);
                 }
             }
@@ -260,18 +252,11 @@ async fn continue_import(
                 for (row_idx, term) in bank.into_iter().enumerate() {
                     let headword = term.expression.clone();
                     let reading = term.reading.clone();
-                    import_term(
-                        dictionary_id,
-                        &mut tx,
-                        &mut records,
-                        &mut frequencies,
-                        term,
-                        &all_tags,
-                    )
-                    .await
-                    .with_context(|| {
-                        format!("failed to import term ({headword:?}, {reading:?})")
-                    })?;
+                    import_term(&mut insert, term, &all_tags)
+                        .await
+                        .with_context(|| {
+                            format!("failed to import term ({headword:?}, {reading:?})")
+                        })?;
                     notify_progress(banks_done, row_idx, rows_len);
                 }
             }
@@ -291,14 +276,7 @@ async fn continue_import(
     }
 
     debug!("Insert complete, flushing");
-    records
-        .flush(&mut tx)
-        .await
-        .context("failed to flush records")?;
-    frequencies
-        .flush(&mut tx)
-        .await
-        .context("failed to flush frequencies")?;
+    insert.flush().await.context("failed to flush inserts")?;
     tx.commit().await.context("failed to commit transaction")?;
     Ok(dictionary_id)
 }
@@ -364,10 +342,7 @@ fn to_term_tag(raw: schema::Tag) -> GlossaryTag {
 }
 
 async fn import_term(
-    source: DictionaryId,
-    tx: &mut Transaction<'_, Sqlite>,
-    records: &mut Insert<Record>,
-    frequencies: &mut Insert<FrequencyValue>,
+    insert: &mut Inserter<'_, '_>,
     term_data: schema::Term,
     all_tags: &[GlossaryTag],
 ) -> Result<()> {
@@ -391,17 +366,16 @@ async fn import_term(
         content,
     };
 
-    records
-        .insert(tx, source, term.clone(), &record)
+    let record_id = insert
+        .record(&record)
         .await
         .context("failed to insert record")?;
-    frequencies
-        .insert(
-            tx,
-            source,
-            term,
-            FrequencyValue::Occurrence(term_data.score),
-        )
+    insert
+        .term_record(term.clone(), record_id)
+        .await
+        .context("failed to insert term record")?;
+    insert
+        .frequency(term, FrequencyValue::Occurrence(term_data.score))
         .await
         .context("failed to insert frequency record")?;
     Ok(())
@@ -425,10 +399,7 @@ fn match_tags<'a>(
 }
 
 async fn import_term_meta(
-    source: DictionaryId,
-    tx: &mut Transaction<'_, Sqlite>,
-    records: &mut Insert<Record>,
-    frequencies: &mut Insert<FrequencyValue>,
+    insert: &mut Inserter<'_, '_>,
     index: &schema::Index,
     term_meta: schema::TermMeta,
 ) -> Result<()> {
@@ -440,16 +411,20 @@ async fn import_term_meta(
             let (record, reading) = to_frequency_and_reading(frequency_mode, frequency);
             let term = Term::from_parts(headword, reading).ok_or(NoHeadwordOrReading)?;
 
-            records
-                .insert(tx, source, term.clone(), &record)
+            let record_id = insert
+                .record(&record)
                 .await
-                .context("failed to insert frequency record")?;
+                .context("failed to insert record")?;
+            insert
+                .term_record(term.clone(), record_id)
+                .await
+                .context("failed to insert term record")?;
 
             if let Some(value) = record.value {
-                frequencies
-                    .insert(tx, source, term, value)
+                insert
+                    .frequency(term, value)
                     .await
-                    .context("failed to insert frequency sorting record")?;
+                    .context("failed to insert frequency record")?;
             }
         }
         schema::TermMetaData::Pitch(pitch) => {
@@ -457,10 +432,14 @@ async fn import_term_meta(
                 let term =
                     Term::from_parts(headword.clone(), Some(reading)).ok_or(NoHeadwordOrReading)?;
 
-                records
-                    .insert(tx, source, term, &record)
+                let record_id = insert
+                    .record(&record)
                     .await
-                    .context("failed to insert pitch record")?;
+                    .context("failed to insert record")?;
+                insert
+                    .term_record(term, record_id)
+                    .await
+                    .context("failed to insert term record")?;
             }
         }
         schema::TermMetaData::Phonetic(_) => {}
