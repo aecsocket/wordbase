@@ -16,7 +16,7 @@ workspace = true
 all-features = true
 
 [dependencies]
-wordbase = { workspace = true }
+wordbase = { workspace = true, features = ["desktop"] }
 
 anyhow             = { workspace = true }
 ascii_table        = { workspace = true, features = ["wide_characters"] }

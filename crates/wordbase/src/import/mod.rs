@@ -318,7 +318,7 @@ const _: () = {
                     let callback = callback.clone();
                     async move {
                         let fd = callback.open_archive_file()?;
-                        // SAFETY: it is the FFI layer's responsibility
+                        // SAFETY: it is the FFI caller's responsibility
                         // to ensure that this fd is valid and open
                         let file = unsafe { File::from_raw_fd(fd) };
                         Ok(Box::new(BufReader::new(file)) as Box<dyn Archive>)

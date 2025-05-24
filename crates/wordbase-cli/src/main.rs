@@ -40,6 +40,14 @@ enum Command {
         /// Text to deinflect
         text: String,
     },
+    /// Fetch records for some text and render the results as HTML
+    Render {
+        /// Text to look up
+        text: String,
+        /// File to write HTML to
+        #[arg(short, long)]
+        output: PathBuf,
+    },
     /// Manage profiles
     Profile {
         #[command(subcommand)]
@@ -112,6 +120,13 @@ enum DictCommand {
         dict_id: i64,
         #[command(subcommand)]
         command: DictSetCommand,
+    },
+    /// Swap positions of two dictionaries
+    Swap {
+        /// First dictionary ID
+        a_id: i64,
+        /// Second dictionary ID
+        b_id: i64,
     },
     /// Delete a dictionary with the given ID
     Rm {
@@ -200,6 +215,9 @@ async fn main() -> Result<()> {
         Command::LookupLemma { lemma } => {
             lookup::lookup_lemma(&engine, &*require_profile()?, &lemma).await?;
         }
+        Command::Render { text, output } => {
+            lookup::render(&engine, &*require_profile()?, &text, &output).await?;
+        }
         Command::Deinflect { text } => {
             lookup::deinflect(&engine, &text);
         }
@@ -246,6 +264,9 @@ async fn main() -> Result<()> {
                     command: DictSetCommand::Disabled,
                 },
         } => dict::disable(&engine, &*require_profile()?, DictionaryId(dict_id)).await?,
+        Command::Dict {
+            command: DictCommand::Swap { a_id, b_id },
+        } => dict::swap_positions(&engine, DictionaryId(a_id), DictionaryId(b_id)).await?,
         Command::Dict {
             command: DictCommand::Rm { dict_id },
         } => dict::rm(&engine, DictionaryId(dict_id)).await?,

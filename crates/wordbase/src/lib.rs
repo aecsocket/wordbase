@@ -163,7 +163,7 @@ pub struct NotFound;
 
 const CHANNEL_BUF_CAP: usize = 4;
 
-#[deprecated]
+#[cfg(feature = "desktop")]
 pub fn data_dir() -> Result<PathBuf> {
     let dirs = ProjectDirs::from("io.github", "aecsocket", "Wordbase")
         .context("failed to get default app directories")?;

@@ -1,8 +1,9 @@
+@file:OptIn(ExperimentalUuidApi::class)
+
 package io.github.aecsocket.wordbase
 
 import android.annotation.SuppressLint
 import android.content.Intent
-import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -11,10 +12,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
@@ -73,6 +76,8 @@ import uniffi.wordbase_api.Dictionary
 import uniffi.wordbase_api.DictionaryKind
 import uniffi.wordbase_api.DictionaryMeta
 import uniffi.wordbase_api.Profile
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 @Preview(showBackground = true)
 @Composable
@@ -121,6 +126,12 @@ fun PreviewManagePage(modifier: Modifier = Modifier) {
         ManagePage(
             modifier = modifier,
             dictionaries = dictionaries,
+            dictionaryImports = listOf(
+                DictionaryImport.Started(
+                    id = Uuid.random(),
+                    fileName = "dict.zip",
+                ),
+            ),
             profile = profile,
             onDictionaryReorder = { from, to ->
                 val fromOld = from.position
@@ -155,6 +166,7 @@ fun PreviewManagePage(modifier: Modifier = Modifier) {
                 )
             },
             onDictionaryImport = {},
+            enabled = true,
         )
     }
 }
@@ -166,9 +178,7 @@ fun AppManagePage(modifier: Modifier = Modifier) {
 
     val coroutineScope = rememberCoroutineScope()
     val app = LocalContext.current.app()
-    val profile = app.profiles.values.first()
-
-    var debugWhateverFooTodo by remember { mutableStateOf("...") }
+    val profile = app.profiles.values.first() // TODO switchable profile
 
     // Some actions, like deleting a dictionary, may take a long time
     // during this, if the user performs another action, it may fail
@@ -177,7 +187,10 @@ fun AppManagePage(modifier: Modifier = Modifier) {
     // while one of these long-running operations is happening.
     // Note we only do this on ops we KNOW will take a long time,
     // to avoid locking the UI on every tiny change.
+    // TODO: This is effectively a hand-rolled mutex. Can we use an actual mutex somehow?
     var locked by remember { mutableStateOf(false) }
+
+    var importState by remember { mutableStateOf<DictionaryImport?>(null) }
 
     val context = LocalContext.current
     val importLauncher = rememberLauncherForActivityResult(
@@ -187,7 +200,14 @@ fun AppManagePage(modifier: Modifier = Modifier) {
 
         coroutineScope.launch {
             locked = true
-            debugWhateverFooTodo = "started import!"
+            val importId = Uuid.random()
+            var meta: DictionaryMeta? = null
+
+            importState = DictionaryImport.Started(
+                id = importId,
+                fileName = uri.toString(),
+            )
+
             try {
                 val dictId = wordbase.importDictionary(object : ImportDictionaryCallback {
                     @SuppressLint("Recycle") // we are passing the fd to native code
@@ -198,13 +218,33 @@ fun AppManagePage(modifier: Modifier = Modifier) {
                     }
 
                     override fun onEvent(event: ImportEvent) {
-                        debugWhateverFooTodo = "$event"
+                        when (event) {
+                            is ImportEvent.DeterminedKind -> {}
+                            is ImportEvent.Done -> {}
+                            is ImportEvent.ParsedMeta -> {
+                                meta = event.v1
+                                importState = DictionaryImport.ReadMeta(
+                                    id = importId,
+                                    meta = meta,
+                                    progress = 0f,
+                                )
+                            }
+                            is ImportEvent.Progress -> {
+                                meta?.let { meta ->
+                                    importState = DictionaryImport.ReadMeta(
+                                        id = importId,
+                                        meta = meta,
+                                        progress = event.v1.toFloat()
+                                    )
+                                }
+                            }
+                        }
                     }
                 })
                 wordbase.enableDictionary(profile.id, dictId)
-                debugWhateverFooTodo = "import done!"
+                importState = null
             } catch (ex: Exception) {
-                debugWhateverFooTodo = "error: $ex"
+                importState = importState?.withError(ex.toString())
             } finally {
                 locked = false
             }
@@ -212,64 +252,62 @@ fun AppManagePage(modifier: Modifier = Modifier) {
 
     }
 
-    Column {
-        Text(debugWhateverFooTodo)
-
-        ManagePage(
-            modifier = modifier,
-            dictionaries = app.dictionaries.values.sortedBy { it.position },
-            profile = profile,
-            onDictionaryReorder = { from, to ->
-                app.swapDictionaryPositions(from.id, to.id)
-            },
-            onDictionarySortingSet = { dict ->
-                coroutineScope.launch {
-                    wordbase.setSortingDictionary(profile.id, dict.id)
+    ManagePage(
+        modifier = modifier,
+        profile = profile,
+        dictionaries = app.dictionaries.values.sortedBy { it.position },
+        dictionaryImports = importState?.let { listOf(it) } ?: listOf(),
+        onDictionaryReorder = { from, to ->
+            app.swapDictionaryPositions(from.id, to.id)
+        },
+        onDictionarySortingSet = { dict ->
+            coroutineScope.launch {
+                wordbase.setSortingDictionary(profile.id, dict.id)
+            }
+        },
+        onDictionarySortingUnset = {
+            coroutineScope.launch {
+                wordbase.setSortingDictionary(profile.id, null)
+            }
+        },
+        onDictionaryDelete = { dict ->
+            coroutineScope.launch {
+                locked = true
+                try {
+                    wordbase.removeDictionary(dict.id)
+                } finally {
+                    locked = false
                 }
-            },
-            onDictionarySortingUnset = {
-                coroutineScope.launch {
-                    wordbase.setSortingDictionary(profile.id, null)
+            }
+        },
+        onDictionaryEnabledChange = { dictionary, enabled ->
+            coroutineScope.launch {
+                if (enabled) {
+                    wordbase.enableDictionary(profile.id, dictionary.id)
+                } else {
+                    wordbase.disableDictionary(profile.id, dictionary.id)
                 }
-            },
-            onDictionaryDelete = { dict ->
-                coroutineScope.launch {
-                    locked = true
-                    try {
-                        wordbase.removeDictionary(dict.id)
-                    } finally {
-                        locked = false
-                    }
-                }
-            },
-            onDictionaryEnabledChange = { dictionary, enabled ->
-                coroutineScope.launch {
-                    if (enabled) {
-                        wordbase.enableDictionary(profile.id, dictionary.id)
-                    } else {
-                        wordbase.disableDictionary(profile.id, dictionary.id)
-                    }
-                }
-            },
-            onDictionaryImport = {
-                importLauncher.launch(
-                    arrayOf(
-                        "application/zip",
-                        "application/x-tar",
-                        "application/x-xz"
-                    )
+            }
+        },
+        onDictionaryImport = {
+            importLauncher.launch(
+                arrayOf(
+                    "application/zip",
+                    "application/x-tar",
+                    "application/x-xz"
                 )
-            },
-            enabled = !locked,
-        )
-    }
+            )
+        },
+        enabled = !locked,
+    )
 }
 
 @Composable
 fun ManagePage(
     modifier: Modifier = Modifier,
-    dictionaries: List<Dictionary>,
     profile: Profile,
+    dictionaries: List<Dictionary>,
+    dictionaryImports: List<DictionaryImport>,
     onDictionaryReorder: suspend CoroutineScope.(Dictionary, Dictionary) -> Unit,
     onDictionarySortingSet: (Dictionary) -> Unit,
     onDictionarySortingUnset: () -> Unit,
@@ -290,7 +328,6 @@ fun ManagePage(
         )
     }
 
-    val context = LocalContext.current
     LazyColumn(
         state = lazyListState,
         modifier = modifier,
@@ -300,10 +337,20 @@ fun ManagePage(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item {
-            Column {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
                     text = stringResource(R.string.dictionaries),
                     style = MaterialTheme.typography.headlineLarge,
+                    modifier = Modifier.weight(1f),
+                )
+
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .padding(4.dp)
+                        .height(IntrinsicSize.Min)
+                        .alpha(if (enabled) 0.0f else 1.0f)
                 )
             }
         }
@@ -337,37 +384,12 @@ fun ManagePage(
             }
         }
 
-//        item {
-//            ImportRow(
-//                state = ImportState.Started(
-//                    fileName = "dict.zip"
-//                ),
-//            )
-//        }
-//
-//        item {
-//            ImportRow(
-//                state = ImportState.Started(
-//                    fileName = "dict2.zip"
-//                ), error = "oh no"
-//            )
-//        }
-//
-//        item {
-//            ImportRow(
-//                state = ImportState.ReadMeta(
-//                    meta = DictionaryMeta(
-//                        kind = DictionaryKind.YOMITAN,
-//                        name = "Jitendex",
-//                        version = "0.2.0",
-//                        description = null,
-//                        url = null,
-//                        attribution = null,
-//                    ),
-//                    progress = 0.5f,
-//                ), error = null
-//            )
-//        }
+        items(
+            dictionaryImports,
+            key = { it.id }
+        ) { import ->
+            ImportRow(import)
+        }
 
         item {
             Button(
@@ -459,26 +481,38 @@ fun ReorderableCollectionItemScope.DictionaryRow(
     }
 }
 
-sealed class ImportState {
+sealed class DictionaryImport {
+    abstract val id: Uuid
+    abstract val error: String?
+
+    abstract fun withError(error: String): DictionaryImport
+
     data class Started(
+        override val id: Uuid,
         val fileName: String,
-    ) : ImportState()
+        override val error: String? = null,
+    ) : DictionaryImport() {
+        override fun withError(error: String) =
+            Started(id, fileName, error)
+    }
 
     data class ReadMeta(
+        override val id: Uuid,
         val meta: DictionaryMeta,
         val progress: Float,
-    ) : ImportState()
+        override val error: String? = null,
+    ) : DictionaryImport() {
+        override fun withError(error: String) =
+            ReadMeta(id, meta, progress, error)
+    }
 }
 
 @Composable
-fun ImportRow(
-    state: ImportState,
-    error: String? = null,
-) {
+fun ImportRow(import: DictionaryImport) {
     ExpanderCard(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (error == null) {
+            containerColor = if (import.error == null) {
                 Color.Unspecified
             } else {
                 MaterialTheme.colorScheme.errorContainer
@@ -492,22 +526,24 @@ fun ImportRow(
         titleVerticalAlignment = Alignment.CenterVertically,
         titleContent = {
             Box {
-                val (progressAlpha, iconAlpha) = if (error == null) {
+                val (progressAlpha, iconAlpha) = if (import.error == null) {
                     1f to 0f
                 } else {
                     0f to 1f
                 }
 
-                when (state) {
-                    is ImportState.Started -> {
+                when (import) {
+                    is DictionaryImport.Started -> {
                         CircularProgressIndicator(
                             modifier = Modifier.alpha(progressAlpha)
                         )
                     }
 
-                    is ImportState.ReadMeta -> {
+                    is DictionaryImport.ReadMeta -> {
                         CircularProgressIndicator(
-                            modifier = Modifier.alpha(progressAlpha), progress = { state.progress })
+                            modifier = Modifier.alpha(progressAlpha),
+                            progress = { import.progress }
+                        )
                     }
                 }
 
@@ -520,19 +556,19 @@ fun ImportRow(
                 )
             }
 
-            val title = when (state) {
-                is ImportState.Started -> {
-                    state.fileName
+            val title = when (import) {
+                is DictionaryImport.Started -> {
+                    import.fileName
                 }
 
-                is ImportState.ReadMeta -> {
-                    state.meta.name
+                is DictionaryImport.ReadMeta -> {
+                    import.meta.name
                 }
             }
-            val subtitle = if (error == null) {
-                when (state) {
-                    is ImportState.Started -> null
-                    is ImportState.ReadMeta -> state.meta.version
+            val subtitle = if (import.error == null) {
+                when (import) {
+                    is DictionaryImport.Started -> null
+                    is DictionaryImport.ReadMeta -> import.meta.version
                 }
             } else {
                 stringResource(R.string.dictionary_import_failed)
@@ -564,15 +600,16 @@ fun ImportRow(
         }
     ) {
         DictionaryRowColumn {
-            if (error != null) {
+            import.error?.let { error ->
                 DictionaryMetaItem(
-                    key = stringResource(R.string.dictionary_import_error), value = error
+                    key = stringResource(R.string.dictionary_import_error),
+                    value = error
                 )
             }
 
-            when (state) {
-                is ImportState.Started -> {}
-                is ImportState.ReadMeta -> DictionaryInfo(meta = state.meta)
+            when (import) {
+                is DictionaryImport.Started -> {}
+                is DictionaryImport.ReadMeta -> DictionaryInfo(meta = import.meta)
             }
         }
     }

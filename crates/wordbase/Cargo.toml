@@ -20,6 +20,7 @@ all-features = true
 [features]
 poem   = ["wordbase-api/poem", "dep:poem-openapi"]
 uniffi = ["wordbase-api/uniffi", "dep:uniffi"]
+desktop = ["dep:directories"]
 
 [dependencies]
 wordbase-api = { workspace = true, features = ["render-html"] }
@@ -33,7 +34,7 @@ async_zip            = { workspace = true, features = ["deflate", "tokio"] }
 blocking             = { workspace = true }
 bytes                = { workspace = true }
 data-encoding        = { workspace = true }
-directories          = { workspace = true }
+directories          = { workspace = true, optional = true }
 either               = { workspace = true }
 foldhash             = { workspace = true }
 futures              = { workspace = true }

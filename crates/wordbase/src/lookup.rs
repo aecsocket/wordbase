@@ -29,8 +29,30 @@ impl Engine {
                 .format(",")
         );
 
-        let result = sqlx::query!(
-            "SELECT
+        let query = sqlx::query!(
+            "
+            -- use a CTE to get results for all records matching the headword and reading,
+            -- instead of `WHERE headword = $2 OR reading = $2`
+            -- this makes it clear to the query planner that we want to use these indexes:
+            -- - `record(headword, source, kind)`
+            -- - `record(reading, source, kind)`
+            --
+            -- otherwise, the query planner might use the `record(source)` index,
+            -- which would kill performance
+            WITH base AS (
+                SELECT id FROM record
+                INDEXED BY record_query_headword
+                WHERE headword = $2
+
+                -- we can get away with `UNION ALL` here,
+                -- because we don't guarantee to callers that there won't be duplicate records
+                UNION ALL
+
+                SELECT id FROM record
+                INDEXED BY record_query_reading
+                WHERE reading = $2
+            )
+            SELECT
                 record.id,
                 record.source,
                 record.headword,
@@ -42,9 +64,10 @@ impl Engine {
                 source_frequency.mode AS 'source_frequency_mode?',
                 source_frequency.value AS 'source_frequency_value?'
             FROM record
-            INNER JOIN dictionary ON record.source = dictionary.id
+            JOIN base ON record.id = base.id
 
             -- make sure the dictionary we're getting this record from is enabled
+            INNER JOIN dictionary ON record.source = dictionary.id
             INNER JOIN profile_enabled_dictionary ped
                 ON (ped.profile = $1 AND ped.dictionary = dictionary.id)
 
@@ -66,11 +89,7 @@ impl Engine {
                 AND source_frequency.reading = record.reading
             )
 
-            WHERE
-                -- only include records for the given record kinds
-                kind IN (SELECT value FROM json_each($3))
-                -- find records which match the term
-                AND (record.headword = $2 OR record.reading = $2)
+            WHERE record.kind IN (SELECT value FROM json_each($3))
 
             ORDER BY
                 CASE
@@ -111,7 +130,9 @@ impl Engine {
                 profile_id.0,
                 lemma,
                 record_kinds
-            )
+        );
+
+        let result = query
             .fetch(&self.db)
             .map(|record| {
                 let record = record.context("failed to fetch record")?;
