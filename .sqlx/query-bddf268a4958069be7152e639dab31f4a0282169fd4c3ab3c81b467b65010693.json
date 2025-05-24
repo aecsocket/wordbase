@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM term_record WHERE source = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "bddf268a4958069be7152e639dab31f4a0282169fd4c3ab3c81b467b65010693"
+}

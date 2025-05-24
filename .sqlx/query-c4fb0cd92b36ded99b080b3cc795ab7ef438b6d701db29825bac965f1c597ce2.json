@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM frequency WHERE source = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "c4fb0cd92b36ded99b080b3cc795ab7ef438b6d701db29825bac965f1c597ce2"
+}

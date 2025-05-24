@@ -21,6 +21,10 @@ impl Engine {
 }
 
 fn group_terms(records: &[RecordLookup]) -> Vec<RecordTerm> {
+    // note on ordering:
+    // by default, tera will not preserve the order of IndexMap entries,
+    // because serde_json doesn't either.
+    // we enable `tera/preserve_order` to make sure that order stays.
     let mut groups = IndexMap::<Term, TermInfo>::default();
     for record in records {
         let source = record.source;
