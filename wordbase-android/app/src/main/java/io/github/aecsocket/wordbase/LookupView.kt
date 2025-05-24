@@ -21,14 +21,17 @@ import com.kevinnzou.web.rememberWebViewNavigator
 import com.kevinnzou.web.rememberWebViewStateWithHTMLData
 import uniffi.wordbase.Wordbase
 import uniffi.wordbase_api.RecordKind
+import uniffi.wordbase_api.RecordLookup
 
 @Composable
 fun LookupView(
     wordbase: Wordbase,
-    query: String,
+    sentence: String,
+    cursor: ULong,
     insets: WindowInsets,
     containerColor: Color = MaterialTheme.colorScheme.surface,
     contentColor: Color = contentColorFor(containerColor),
+    onRecords: (List<RecordLookup>) -> Unit = {},
     onExit: (() -> Unit)? = null,
 ) {
     var html by remember { mutableStateOf<String?>(null) }
@@ -36,7 +39,7 @@ fun LookupView(
     // amazingly, this scales perfectly
     val density = LocalDensity.current
     val layoutDir = LocalLayoutDirection.current
-    val extraCss = with (density) {
+    val extraCss = with(density) {
         """
         :root {
             --bg-color: ${containerColor.css()};
@@ -63,10 +66,14 @@ fun LookupView(
     }
 
     val app = LocalContext.current.app()
-    LaunchedEffect(arrayOf(query, app.dictionaries, app.profiles)) {
+    LaunchedEffect(arrayOf(sentence, cursor, app.dictionaries, app.profiles)) {
         val records = wordbase.lookup(
-            profileId = 1L, sentence = query, cursor = 0UL, recordKinds = RecordKind.entries
+            profileId = 1L,
+            sentence = sentence,
+            cursor = cursor,
+            recordKinds = RecordKind.entries,
         )
+        onRecords(records)
         html = wordbase.renderToHtml(records) + "<style>$extraCss</style>"
     }
 

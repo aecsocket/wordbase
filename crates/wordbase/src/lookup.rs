@@ -177,7 +177,8 @@ impl Engine {
                     })?;
 
                 Ok(RecordLookup {
-                    bytes_scanned: lemma.len() as u64, // TODO proper
+                    bytes_scanned: lemma.len() as u64,
+                    chars_scanned: lemma.chars().count() as u64,
                     source: DictionaryId(record.source),
                     record_id: RecordId(record.id),
                     term,

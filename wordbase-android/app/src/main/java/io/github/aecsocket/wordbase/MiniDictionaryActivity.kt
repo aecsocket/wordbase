@@ -6,27 +6,44 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.unit.dp
+import androidx.core.view.HapticFeedbackConstantsCompat
+import androidx.core.view.ViewCompat
 import io.github.aecsocket.wordbase.ui.theme.WordbaseTheme
 import kotlinx.coroutines.launch
 
 class MiniDictionaryActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val query = intent.getStringExtra(Intent.EXTRA_PROCESS_TEXT) ?: run {
+        val sentence = intent.getStringExtra(Intent.EXTRA_PROCESS_TEXT) ?: run {
             finish()
             return
         }
@@ -34,7 +51,7 @@ class MiniDictionaryActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             WordbaseTheme {
-                Ui(query = query)
+                MiniDictionaryUi(sentence = sentence)
             }
         }
     }
@@ -42,8 +59,58 @@ class MiniDictionaryActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Ui(query: String) {
+fun MiniDictionaryUi(sentence: String) {
+    data class Cursor(
+        val chars: Int = 0,
+        val bytes: ULong = 0UL,
+    )
+
     var wordbase by rememberWordbase()
+    var cursor by remember { mutableStateOf(Cursor()) }
+    var scanChars by remember { mutableStateOf(0UL) }
+
+    val view = LocalView.current
+    val annotatedQuery = buildAnnotatedString {
+        var charIndex = 0
+        var byteIndex = 0UL
+        for (ch in sentence) {
+            val thisCharIndex = charIndex
+            val thisByteIndex = byteIndex
+
+            append(ch)
+            addLink(
+                clickable = LinkAnnotation.Clickable(
+                    tag = "",
+                    linkInteractionListener = {
+                        cursor = Cursor(
+                            chars = thisCharIndex,
+                            bytes = thisByteIndex,
+                        )
+                        scanChars = 1UL
+
+                        ViewCompat.performHapticFeedback(
+                            view,
+                            HapticFeedbackConstantsCompat.CONTEXT_CLICK,
+                        )
+                    }
+                ),
+                start = thisCharIndex,
+                end = thisCharIndex + 1,
+            )
+
+            charIndex += 1
+            byteIndex += ch.toString().toByteArray(Charsets.UTF_8).size.toUInt()
+        }
+
+        addStyle(
+            style = SpanStyle(
+                color = MaterialTheme.colorScheme.surface,
+                background = MaterialTheme.colorScheme.primary,
+            ),
+            start = cursor.chars,
+            end = cursor.chars + scanChars.toInt(),
+        )
+    }
 
     val coroutineScope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState()
@@ -61,19 +128,42 @@ fun Ui(query: String) {
         // why? idk!!
         // https://medium.com/@itsuki.enjoy/android-kotlin-jetpack-compose-make-your-nested-webview-scroll-cbf023e821a1
         LazyColumn {
+            item {
+                Box(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                ) {
+                    SelectionContainer {
+                        Text(
+                            text = annotatedQuery,
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            softWrap = false,
+                            modifier = Modifier.padding(
+                                horizontal = 16.dp,
+                                vertical = 4.dp,
+                            )
+                        )
+                    }
+                }
+            }
+
             wordbase?.let { wordbase ->
                 item {
                     LookupView(
                         wordbase = wordbase,
-                        query = query,
+                        sentence = sentence,
+                        cursor = cursor.bytes,
                         insets = WindowInsets(0.dp),
                         containerColor = BottomSheetDefaults.ContainerColor,
+                        onRecords = { records ->
+                            scanChars = records.maxOfOrNull { it.charsScanned } ?: 0UL
+                        },
                         onExit = {
                             coroutineScope.launch {
                                 sheetState.hide()
                                 activity?.finish()
                             }
-                        }
+                        },
                     )
                 }
             }

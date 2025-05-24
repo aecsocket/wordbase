@@ -214,7 +214,8 @@ fun SearchPage(
             val activity = LocalActivity.current
             LookupView(
                 wordbase = wordbase,
-                query = query,
+                sentence = query,
+                cursor = 0UL,
                 insets = insets,
                 onExit = { activity?.finish() }
             )
