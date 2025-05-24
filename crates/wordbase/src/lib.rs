@@ -19,10 +19,9 @@ use {
     deinflect::Deinflectors,
     derive_more::{Display, Error},
     dictionary::Dictionaries,
-    directories::ProjectDirs,
     profile::Profiles,
     sqlx::{Pool, Sqlite},
-    std::path::{Path, PathBuf},
+    std::path::Path,
     tera::Tera,
     texthook::Texthookers,
     tokio::sync::broadcast,
@@ -164,8 +163,8 @@ pub struct NotFound;
 const CHANNEL_BUF_CAP: usize = 4;
 
 #[cfg(feature = "desktop")]
-pub fn data_dir() -> Result<PathBuf> {
-    let dirs = ProjectDirs::from("io.github", "aecsocket", "Wordbase")
+pub fn data_dir() -> Result<std::path::PathBuf> {
+    let dirs = directories::ProjectDirs::from("io.github", "aecsocket", "Wordbase")
         .context("failed to get default app directories")?;
     Ok(dirs.data_dir().to_path_buf())
 }
