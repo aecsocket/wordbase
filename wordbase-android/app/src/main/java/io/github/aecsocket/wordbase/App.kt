@@ -24,7 +24,6 @@ import uniffi.wordbase_api.Dictionary
 import uniffi.wordbase_api.DictionaryId
 import uniffi.wordbase_api.Profile
 import uniffi.wordbase_api.ProfileId
-import java.io.File
 
 class App : Application() {
     lateinit var wordbase: Deferred<Wordbase>

@@ -6,11 +6,14 @@ import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.displayCutoutPadding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -31,7 +34,9 @@ import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
+import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,8 +47,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.compose.ui.unit.dp
 import androidx.window.core.layout.WindowWidthSizeClass
 import io.github.aecsocket.wordbase.ui.theme.WordbaseTheme
@@ -65,7 +70,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@PreviewScreenSizes
+//@PreviewScreenSizes
 @Preview(showSystemUi = true)
 @Composable
 fun PreviewUi() {
@@ -133,6 +138,7 @@ fun Ui(manageContent: @Composable (Modifier) -> Unit) {
 
                 val layoutDir = LocalLayoutDirection.current
                 SearchPage(
+                    padding = padding,
                     insets = WindowInsets(
                         left = padding.calculateLeftPadding(layoutDir),
                         right = padding.calculateRightPadding(layoutDir),
@@ -188,6 +194,7 @@ fun Ui(manageContent: @Composable (Modifier) -> Unit) {
                     }
 
                     SearchPage(
+                        padding = PaddingValues(0.dp),
                         insets = WindowInsets.displayCutout,
                         query = query
                     )
@@ -198,7 +205,11 @@ fun Ui(manageContent: @Composable (Modifier) -> Unit) {
 }
 
 @Composable
-fun SearchPage(insets: WindowInsets, query: String) {
+fun SearchPage(
+    padding: PaddingValues,
+    insets: WindowInsets,
+    query: String
+) {
     Column {
         var wordbase by rememberWordbase()
 
@@ -210,6 +221,25 @@ fun SearchPage(insets: WindowInsets, query: String) {
                 insets = insets,
                 onExit = { activity?.finish() }
             )
+        } ?: run {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "Loading engine",
+                    style = MaterialTheme.typography.headlineMedium
+                )
+
+                Text(
+                    text = "If migrating to a new version, this may take a while",
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
     }
 }

@@ -61,14 +61,12 @@
 
   :root {
     --card-bg-color: #ffffff;
-    --card-fg-color: rgb(0 0 6 / 80%);
     --headerbar-shade-color: rgba(0 0 6 / 12%);
   }
 
   @media (prefers-color-scheme: dark) {
     :root {
       --card-bg-color: rgb(255 255 255 / 8%);
-      --card-fg-color: #ffffff;
       --headerbar-shade-color: rgba(0 0 6 / 36%);
     }
   }
@@ -132,7 +130,7 @@
   }
 
   .card {
-    color: var(--card-fg-color);
+    color: var(--fg-color);
     background-color: var(--card-bg-color);
     border-radius: var(--card-radius);
     box-shadow:

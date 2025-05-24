@@ -4,6 +4,8 @@ package io.github.aecsocket.wordbase
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -203,9 +205,16 @@ fun AppManagePage(modifier: Modifier = Modifier) {
             val importId = Uuid.random()
             var meta: DictionaryMeta? = null
 
+            val fileName = try {
+                Uri.decode(DocumentsContract.getDocumentId(uri))
+                    .substringAfterLast('/')
+            } catch (_: IllegalArgumentException) {
+                uri.toString()
+            }
+
             importState = DictionaryImport.Started(
                 id = importId,
-                fileName = uri.toString(),
+                fileName = fileName,
             )
 
             try {

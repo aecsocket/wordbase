@@ -1,7 +1,6 @@
 package io.github.aecsocket.wordbase
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -17,8 +16,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.dp
 import com.kevinnzou.web.WebView
 import com.kevinnzou.web.rememberWebViewNavigator
 import com.kevinnzou.web.rememberWebViewStateWithHTMLData
@@ -44,7 +41,7 @@ fun LookupView(
         :root {
             --bg-color: ${containerColor.css()};
             --fg-color: ${contentColor.css()};
-            --accent-color: #3584e4;
+            --accent-color: ${MaterialTheme.colorScheme.primary.css()};
         }
 
         .content {
@@ -83,6 +80,8 @@ fun LookupView(
             captureBackPresses = false,
             onCreated = {
                 it.settings.javaScriptEnabled = true
+                it.settings.allowFileAccess = false
+                it.settings.allowContentAccess = false
             }
         )
 

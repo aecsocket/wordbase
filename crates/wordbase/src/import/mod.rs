@@ -200,15 +200,16 @@ impl Engine {
                 "Importing {:?} dictionary {:?} version {:?}",
                 meta.kind, meta.name, meta.version
             );
+            let name = meta.name.clone();
+            yield ImportEvent::ParsedMeta(meta);
 
-            let already_exists = dictionary_exists_by_name(&self.db, &meta.name)
+            let already_exists = dictionary_exists_by_name(&self.db, &name)
                 .await
                 .context("failed to fetch if this dictionary already exists")?;
             if already_exists {
                 Err(ImportError::AlreadyExists)?;
                 return;
             }
-            yield ImportEvent::ParsedMeta(meta);
             trace!("Dictionary does not exist yet, spawning import continuation");
 
             let continue_task = AbortOnDropHandle::new(tokio::spawn(continue_task));
@@ -311,7 +312,7 @@ const _: () = {
         pub async fn import_dictionary(
             &self,
             callback: Arc<dyn ImportDictionaryCallback>,
-        ) -> Result<DictionaryId, ImportError> {
+        ) -> FfiResult<DictionaryId> {
             let events = self.0.import_dictionary({
                 let callback = callback.clone();
                 move || {
@@ -326,7 +327,7 @@ const _: () = {
                 }
             });
             tokio::pin!(events);
-            while let Some(event) = events.try_next().await? {
+            while let Some(event) = events.try_next().await.map_err(anyhow::Error::new)? {
                 match event {
                     ImportEvent::Done(id) => return Ok(id),
                     event => {
