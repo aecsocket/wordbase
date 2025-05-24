@@ -40,7 +40,7 @@ foldhash             = { workspace = true }
 futures              = { workspace = true }
 indexmap             = { workspace = true, features = ["serde"] }
 itertools            = { workspace = true }
-lindera              = { workspace = true, features = ["unidic"] }
+lindera              = { workspace = true, features = ["unidic", "compress"] }
 maud                 = { workspace = true }
 paste                = { workspace = true }
 pin-project          = { version = "1.1" }

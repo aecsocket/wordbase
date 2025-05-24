@@ -32,9 +32,6 @@ fn connect_options(path: &Path) -> SqliteConnectOptions {
         // slow statements are not uncommon for us,
         // so let's log them at a lower level than the default Warn
         .log_slow_statements(LevelFilter::Debug, Duration::from_secs(1))
-        // if this is off, `ON DELETE CASCADE` doesn't work,
-        // breaking deletion entirely
-        .pragma("foreign_keys", "ON")
 }
 
 pub fn serialize(

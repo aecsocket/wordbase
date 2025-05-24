@@ -3,9 +3,10 @@ use {
     anyhow::{Context, Result, bail},
     derive_more::Deref,
     futures::TryStreamExt,
-    sqlx::{Pool, Sqlite},
-    std::sync::Arc,
+    sqlx::{Acquire, Pool, Sqlite},
+    std::{sync::Arc, time::Instant},
     tokio_stream::StreamExt,
+    tracing::info,
     wordbase_api::{Dictionary, DictionaryId, DictionaryMeta, ProfileId},
 };
 
@@ -39,12 +40,58 @@ impl Engine {
     }
 
     pub async fn remove_dictionary(&self, id: DictionaryId) -> Result<()> {
+        let mut conn = self.db.acquire().await?;
+
+        // FK constraints are slow to uphold when deleting in bulk like this
+        // so we disable them (for this connection only) to do a bulk delete
+        // it's now on us to uphold the constraints, but we're good programmers :)
+        sqlx::query!("PRAGMA foreign_keys = OFF")
+            .execute(&mut *conn)
+            .await
+            .context("failed to disable foreign keys")?;
+
+        let mut tx = conn.begin().await.context("failed to begin transaction")?;
+
+        info!("Deleting {id:?}");
+        let start = Instant::now();
+
+        sqlx::query!("DELETE FROM term_record WHERE source = $1", id.0)
+            .execute(&mut *tx)
+            .await
+            .context("failed to delete term records")?;
+        info!("Deleted term records");
+
+        sqlx::query!("DELETE FROM record WHERE source = $1", id.0)
+            .execute(&mut *tx)
+            .await
+            .context("failed to delete records")?;
+        info!("Deleted records");
+
+        sqlx::query!("DELETE FROM frequency WHERE source = $1", id.0)
+            .execute(&mut *tx)
+            .await
+            .context("failed to delete frequency rows")?;
+        info!("Deleted frequency records");
+
         let result = sqlx::query!("DELETE FROM dictionary WHERE id = $1", id.0)
-            .execute(&self.db)
-            .await?;
+            .execute(&mut *tx)
+            .await
+            .context("failed to delete dictionary row")?;
         if result.rows_affected() == 0 {
             bail!(NotFound);
         }
+        info!("Deleted dictionary record");
+
+        tx.commit().await.context("failed to commit transaction")?;
+        info!("Committed");
+
+        sqlx::query!("VACUUM")
+            .execute(&self.db)
+            .await
+            .context("failed to vacuum")?;
+
+        let end = Instant::now();
+        info!("Finished delete in {:?}", end.duration_since(start));
 
         self.sync_dictionaries().await?;
         _ = self

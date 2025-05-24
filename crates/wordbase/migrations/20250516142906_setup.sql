@@ -34,8 +34,6 @@ CREATE TABLE profile_enabled_dictionary (
     dictionary  INTEGER NOT NULL REFERENCES dictionary(id)  ON DELETE CASCADE,
     UNIQUE      (profile, dictionary)
 );
-CREATE INDEX profile_enabled_dictionary_profile    ON profile_enabled_dictionary(profile);
-CREATE INDEX profile_enabled_dictionary_dictionary ON profile_enabled_dictionary(dictionary);
 
 CREATE TABLE config (
     id                      INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
@@ -52,25 +50,25 @@ END;
 
 CREATE TABLE record (
     id          INTEGER NOT NULL PRIMARY KEY,
-    source      INTEGER NOT NULL REFERENCES dictionary(id) ON DELETE CASCADE,
+    source      INTEGER NOT NULL REFERENCES dictionary(id),
     kind        INTEGER NOT NULL,
     data        BLOB    NOT NULL
 );
 
 CREATE TABLE term_record (
-    source      INTEGER NOT NULL REFERENCES dictionary(id) ON DELETE CASCADE,
+    source      INTEGER NOT NULL REFERENCES dictionary(id),
     headword    TEXT,
     reading     TEXT,
     -- this needs to be deferred so that we can insert into `term_record`
     -- before inserting the referenced record into `record` -
     -- see the test in `insert.rs`
-    record      INTEGER NOT NULL REFERENCES record(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    record      INTEGER NOT NULL REFERENCES record(id) DEFERRABLE INITIALLY DEFERRED,
     UNIQUE (source, headword, reading, record)
     CHECK (headword IS NOT NULL OR reading IS NOT NULL)
 );
 
 CREATE TABLE frequency (
-    source      INTEGER NOT NULL REFERENCES dictionary(id) ON DELETE CASCADE,
+    source      INTEGER NOT NULL REFERENCES dictionary(id),
     headword    TEXT,
     reading     TEXT,
     -- 0: rank
