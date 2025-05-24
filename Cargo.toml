@@ -106,11 +106,9 @@ zbus                 = { version = "5.5", default-features = false }
 [workspace.metadata.cargo-shear]
 ignored = ["bzip2"]
 
-[workspace.metadata.cross.build.env]
-volumes = ["LINDERA_CACHE=lindera-cache"]
-passthrough = ["CARGO_TARGET_DIR=target/cross"]
-
-[workspace.metadata.cross.target.aarch64-linux-android]
+[workspace.metadata.cross.build]
+env.volumes = ["LINDERA_CACHE=lindera-cache"]
+env.passthrough = ["CARGO_TARGET_DIR=target/cross"]
 pre-build = [
   "dpkg --add-architecture $CROSS_DEB_ARCH",
   "apt-get update && apt-get --assume-yes install libssl-dev:$CROSS_DEB_ARCH",
