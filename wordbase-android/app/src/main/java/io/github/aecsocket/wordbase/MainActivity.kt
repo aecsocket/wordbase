@@ -6,7 +6,6 @@ import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -35,9 +34,7 @@ import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
-import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberDrawerState
-import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -207,39 +204,50 @@ fun SearchPage(
     insets: WindowInsets,
     query: String
 ) {
-    Column {
-        var wordbase by rememberWordbase()
+    var wordbase by rememberWordbase()
 
-        wordbase?.let { wordbase ->
-            val activity = LocalActivity.current
-            LookupView(
+    wordbase?.let { wordbase ->
+        val activity = LocalActivity.current
+
+        val records = rememberRecordLookup(
+            wordbase = wordbase,
+            profileId = 1L,
+            sentence = query,
+            cursor = 0UL,
+        )
+
+        if (records.isEmpty()) {
+            if (query.isNotEmpty()) {
+                NoRecordsView()
+            }
+        } else {
+            RecordsView(
                 wordbase = wordbase,
-                sentence = query,
-                cursor = 0UL,
+                records = records,
                 insets = insets,
                 onExit = { activity?.finish() }
             )
-        } ?: run {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(horizontal = 32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                CircularProgressIndicator()
+        }
+    } ?: run {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            CircularProgressIndicator()
 
-                Text(
-                    text = stringResource(R.string.loading_title),
-                    style = MaterialTheme.typography.headlineMedium
-                )
+            Text(
+                text = stringResource(R.string.loading_title),
+                style = MaterialTheme.typography.headlineMedium
+            )
 
-                Text(
-                    text = stringResource(R.string.loading_body),
-                    textAlign = TextAlign.Center,
-                )
-            }
+            Text(
+                text = stringResource(R.string.loading_body),
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }

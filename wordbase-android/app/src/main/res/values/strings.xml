@@ -7,6 +7,7 @@
     <string name="loading_title">Loading engine</string>
     <string name="loading_body">If you just updated to a new version, migration may take a while.</string>
     <string name="search_title">Search a word or phrase</string>
+    <string name="records_empty">No results</string>
 
     <string name="dictionaries">Dictionaries</string>
     <string name="dictionary_description">Description</string>

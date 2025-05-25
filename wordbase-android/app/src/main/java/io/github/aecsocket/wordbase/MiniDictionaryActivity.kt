@@ -9,13 +9,17 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -27,13 +31,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.view.HapticFeedbackConstantsCompat
 import androidx.core.view.ViewCompat
@@ -82,6 +86,10 @@ fun MiniDictionaryUi(sentence: String) {
                 clickable = LinkAnnotation.Clickable(
                     tag = "",
                     linkInteractionListener = {
+                        if (cursor.chars == thisCharIndex) {
+                            // don't trigger recomposition/re-lookup
+                            return@Clickable
+                        }
                         cursor = Cursor(
                             chars = thisCharIndex,
                             bytes = thisByteIndex,
@@ -138,6 +146,7 @@ fun MiniDictionaryUi(sentence: String) {
                             style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.primary,
                             softWrap = false,
+                            maxLines = 1,
                             modifier = Modifier.padding(
                                 horizontal = 16.dp,
                                 vertical = 4.dp,
@@ -147,24 +156,43 @@ fun MiniDictionaryUi(sentence: String) {
                 }
             }
 
-            wordbase?.let { wordbase ->
-                item {
-                    LookupView(
+            item {
+                wordbase?.let { wordbase ->
+                    val records = rememberRecordLookup(
                         wordbase = wordbase,
+                        profileId = 1L,
                         sentence = sentence,
                         cursor = cursor.bytes,
-                        insets = WindowInsets(0.dp),
-                        containerColor = BottomSheetDefaults.ContainerColor,
-                        onRecords = { records ->
-                            scanChars = records.maxOfOrNull { it.charsScanned } ?: 0UL
-                        },
-                        onExit = {
-                            coroutineScope.launch {
-                                sheetState.hide()
-                                activity?.finish()
-                            }
-                        },
                     )
+                    scanChars = records.maxOfOrNull { it.charsScanned } ?: 1UL
+
+                    if (records.isEmpty()) {
+                        NoRecordsView()
+                    } else {
+                        RecordsView(
+                            wordbase = wordbase,
+                            records = records,
+                            containerColor = BottomSheetDefaults.ContainerColor,
+                            onExit = {
+                                coroutineScope.launch {
+                                    sheetState.hide()
+                                    activity?.finish()
+                                }
+                            },
+                        )
+                    }
+                } ?: run {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .height(128.dp)
+                                .aspectRatio(1f)
+                                .padding(16.dp)
+                        )
+                    }
                 }
             }
         }
