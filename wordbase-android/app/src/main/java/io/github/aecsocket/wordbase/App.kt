@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -30,6 +31,8 @@ class App : Application() {
 
     private var _profiles by mutableStateOf(mapOf<ProfileId, Profile>())
     val profiles get() = _profiles
+
+    val profileId by mutableLongStateOf(1L)
 
     override fun onCreate() {
         super.onCreate()

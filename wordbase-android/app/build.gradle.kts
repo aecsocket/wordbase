@@ -75,4 +75,5 @@ dependencies {
             type = "aar"
         }
     }
+    implementation(libs.anki.android)
 }

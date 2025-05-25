@@ -1,5 +1,7 @@
 package io.github.aecsocket.wordbase
 
+import android.util.Log
+import android.webkit.JavascriptInterface
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -14,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,27 +29,32 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.ichi2.anki.api.AddContentApi
 import com.kevinnzou.web.WebView
 import com.kevinnzou.web.rememberWebViewNavigator
 import com.kevinnzou.web.rememberWebViewStateWithHTMLData
+import kotlinx.coroutines.launch
+import uniffi.wordbase.RenderConfig
 import uniffi.wordbase.Wordbase
 import uniffi.wordbase_api.ProfileId
 import uniffi.wordbase_api.RecordKind
 import uniffi.wordbase_api.RecordLookup
+import uniffi.wordbase_api.Term
+
+const val TAG = "RecordsView"
 
 @Composable
 fun rememberRecordLookup(
     wordbase: Wordbase,
-    profileId: ProfileId,
     sentence: String,
     cursor: ULong,
 ): List<RecordLookup> {
     var records by remember { mutableStateOf(listOf<RecordLookup>()) }
 
     val app = LocalContext.current.app()
-    LaunchedEffect(arrayOf(profileId, sentence, cursor, app.dictionaries, app.profiles)) {
+    LaunchedEffect(arrayOf(sentence, cursor, app.dictionaries, app.profiles, app.profileId)) {
         records = wordbase.lookup(
-            profileId = profileId,
+            profileId = app.profileId,
             sentence = sentence,
             cursor = cursor,
             recordKinds = RecordKind.entries,
@@ -63,8 +71,17 @@ fun RecordsView(
     insets: WindowInsets = WindowInsets(0.dp),
     containerColor: Color = MaterialTheme.colorScheme.surface,
     contentColor: Color = contentColorFor(containerColor),
+    onAddCard: ((Term) -> Unit)? = null,
     onExit: (() -> Unit)? = null,
 ) {
+    class JsBridge(val onAddCard: (Term) -> Unit) {
+        @Suppress("unused") // used by JS
+        @JavascriptInterface
+        fun addCard(headword: String?, reading: String?) {
+            onAddCard(Term(headword = headword, reading = reading))
+        }
+    }
+
     // amazingly, this scales perfectly
     val density = LocalDensity.current
     val layoutDir = LocalLayoutDirection.current
@@ -74,6 +91,7 @@ fun RecordsView(
             --bg-color: ${containerColor.css()};
             --fg-color: ${contentColor.css()};
             --accent-color: ${MaterialTheme.colorScheme.primary.css()};
+            --on-accent-color: ${MaterialTheme.colorScheme.onPrimary.css()};
         }
 
         .content {
@@ -93,7 +111,13 @@ fun RecordsView(
         }
         """.trimIndent()
     }
-    val html = wordbase.renderToHtml(records) + "<style>$extraCss</style>"
+    val html = wordbase.renderToHtml(
+        records = records,
+        config = RenderConfig(
+            addCardText = stringResource(R.string.add_card),
+            addCardJsFn = "Wordbase.addCard",
+        ),
+    ) + "<style>$extraCss</style>"
 
     val webViewState = rememberWebViewStateWithHTMLData(html)
     val navigator = rememberWebViewNavigator()
@@ -112,9 +136,13 @@ fun RecordsView(
         captureBackPresses = false,
         onCreated = {
             it.setBackgroundColor(containerColor.toArgb())
-            it.settings.javaScriptEnabled = true
             it.settings.allowFileAccess = false
             it.settings.allowContentAccess = false
+
+            it.settings.javaScriptEnabled = true
+            onAddCard?.let { onAddCard ->
+                it.addJavascriptInterface(JsBridge(onAddCard), "Wordbase")
+            }
         }
     )
 
@@ -126,6 +154,26 @@ fun RecordsView(
         }
     }
 }
+
+//fun addCard(wordbase: Wordbase, term: Term) {
+//    Log.i(TAG, "Adding card for (${term.headword}, ${term.reading})")
+//    AddContentApi.getAnkiDroidPackageName(context) // todo checks
+//    val anki = AddContentApi(context)
+//
+//    coroutineScope.launch {
+//        wordbase.buildTermNote(
+//            profileId = app.profileId,
+//            sentence = sente
+//        )
+//    }
+//
+//    val deckId = anki.deckList
+//        .firstNotNullOfOrNull { (id, name) -> if (name == "Testing") id else null }
+//    val modelId = anki.modelList
+//        .firstNotNullOfOrNull { (id, name) -> if (name == "Lapis") id else null }
+//
+//    anki.addNote(modelId!!, deckId!!, arrayOf())
+//}
 
 @Composable
 fun NoRecordsView() {

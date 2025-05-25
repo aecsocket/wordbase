@@ -212,9 +212,9 @@ const _: () = {
         pub fn render_to_html(
             &self,
             records: &[RecordLookup],
-            translations: &RenderConfig,
+            config: &RenderConfig,
         ) -> FfiResult<String> {
-            Ok(self.0.render_to_html(records, translations)?)
+            Ok(self.0.render_to_html(records, config)?)
         }
     }
 };

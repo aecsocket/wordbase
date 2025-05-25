@@ -256,7 +256,7 @@ const _: () = {
             cursor: u64,
             record_kinds: &[RecordKind],
         ) -> FfiResult<Vec<RecordLookup>> {
-            let cursor = usize::try_from(cursor).unwrap_or(usize::MAX);
+            let cursor = usize::try_from(cursor).context("cursor too large")?;
             Ok(self
                 .0
                 .lookup(profile_id, sentence, cursor, record_kinds)

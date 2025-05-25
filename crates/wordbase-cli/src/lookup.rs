@@ -70,6 +70,7 @@ const EXTRA_CSS: &str = "
     --bg-color: #fafafb;
     --fg-color: rgb(0 0 6 / 80%);
     --accent-color: #3584e4;
+    --on-accent-color: var(--fg-color);
 }
 
 @media (prefers-color-scheme: dark) {

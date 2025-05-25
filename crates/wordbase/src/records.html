@@ -90,7 +90,7 @@
     background: var(--button-color);
     border: none;
     border-radius: var(--button-radius);
-    color: inherit;
+    color: var(--fg-color);
     cursor: pointer;
     font: inherit;
     line-height: 1;
@@ -116,6 +116,7 @@
   }
 
   button.suggested-action {
+    color: var(--on-accent-color);
     background: var(--accent-color);
   }
 
@@ -257,19 +258,21 @@
           </ruby>
         </div>
 
+        {% if config.add_card_text and config.add_card_js_fn %}
         <div
           style="display: flex; flex-direction: column; justify-content: center"
         >
           <button
             class="suggested-action"
-            onclick='{{ config.add_card_js_fn }}({
-              headword: {% if group.term.headword %}"{{ group.term.headword | addslashes }}"{% else %}null{% endif %},
-              reading: {% if group.term.reading %}"{{ group.term.reading | addslashes }}"{% else %}null{% endif %},
-            })'
+            onclick='{{ config.add_card_js_fn }}(
+              {% if group.term.headword %}"{{ group.term.headword | addslashes }}"{% else %}null{% endif %},
+              {% if group.term.reading %}"{{ group.term.reading | addslashes }}"{% else %}null{% endif %},
+            )'
           >
             {{ config.add_card_text }}
           </button>
         </div>
+        {% endif %}
       </div>
     </div>
 

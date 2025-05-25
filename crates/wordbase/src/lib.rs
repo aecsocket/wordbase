@@ -1,7 +1,7 @@
 #![doc = include_str!("../README.md")]
 #![allow(missing_docs, clippy::missing_errors_doc)]
 
-// pub mod anki;
+pub mod anki;
 mod db;
 pub mod deinflect;
 pub mod dictionary;
