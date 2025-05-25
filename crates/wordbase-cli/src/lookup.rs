@@ -2,7 +2,7 @@ use {
     anyhow::{Context, Result},
     std::{fmt::Write as _, path::Path, time::Instant},
     tokio::fs,
-    wordbase::{Engine, Profile, RecordKind},
+    wordbase::{Engine, Profile, RecordKind, render::RenderConfig},
 };
 
 pub fn deinflect(engine: &Engine, text: &str) {
@@ -46,7 +46,13 @@ pub async fn render(engine: &Engine, profile: &Profile, text: &str, output: &Pat
 
     let start = Instant::now();
     let mut html = engine
-        .render_to_html(&records)
+        .render_to_html(
+            &records,
+            &RenderConfig {
+                add_card_text: "Add Card".into(),
+                add_card_js_fn: "unimplemented".into(),
+            },
+        )
         .context("failed to render HTML")?;
     let end = Instant::now();
     println!("Rendered HTML in {:?}", end.duration_since(start));

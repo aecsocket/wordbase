@@ -115,6 +115,10 @@
     background-color: var(--button-active-color);
   }
 
+  button.suggested-action {
+    background: var(--accent-color);
+  }
+
   table {
     border-collapse: collapse;
     margin: 8px 0;
@@ -241,13 +245,30 @@
   {% for group in terms %}
   <div style="display: flex; flex-direction: column; gap: 8px">
     <div class="header">
-      <div class="content">
-        <div style="padding: 16px 0; font-size: 2em">
+      <div
+        class="content"
+        style="width: 100%; display: flex; flex-direction: row; gap: 16px"
+      >
+        <div style="padding: 16px 0; font-size: 2em; flex: 1">
           <ruby>
             {%- for part in group.furigana_parts -%}
             <span>{{- part[0] -}}</span><rt>{{- part[1] -}}</rt>
             {%- endfor -%}
           </ruby>
+        </div>
+
+        <div
+          style="display: flex; flex-direction: column; justify-content: center"
+        >
+          <button
+            class="suggested-action"
+            onclick='{{ config.add_card_js_fn }}({
+              headword: {% if group.term.headword %}"{{ group.term.headword | addslashes }}"{% else %}null{% endif %},
+              reading: {% if group.term.reading %}"{{ group.term.reading | addslashes }}"{% else %}null{% endif %},
+            })'
+          >
+            {{ config.add_card_text }}
+          </button>
         </div>
       </div>
     </div>

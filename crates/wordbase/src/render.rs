@@ -8,16 +8,28 @@ use wordbase_api::{DictionaryId, Record, RecordKind, RecordLookup, Term, dict};
 use crate::{Engine, IndexMap};
 
 impl Engine {
-    pub fn render_to_html(&self, records: &[RecordLookup]) -> Result<String> {
+    pub fn render_to_html(
+        &self,
+        records: &[RecordLookup],
+        config: &RenderConfig,
+    ) -> Result<String> {
         let terms = group_terms(records);
 
         let mut context = tera::Context::new();
         context.insert("dictionaries", &self.dictionaries().0);
         context.insert("terms", &terms);
+        context.insert("config", config);
 
         let html = self.renderer.render("records.html", &context)?;
         Ok(html)
     }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct RenderConfig {
+    pub add_card_text: String,
+    pub add_card_js_fn: String,
 }
 
 fn group_terms(records: &[RecordLookup]) -> Vec<RecordTerm> {
@@ -197,8 +209,12 @@ const _: () = {
 
     #[uniffi::export]
     impl Wordbase {
-        pub fn render_to_html(&self, records: &[RecordLookup]) -> FfiResult<String> {
-            Ok(self.0.render_to_html(records)?)
+        pub fn render_to_html(
+            &self,
+            records: &[RecordLookup],
+            translations: &RenderConfig,
+        ) -> FfiResult<String> {
+            Ok(self.0.render_to_html(records, translations)?)
         }
     }
 };
