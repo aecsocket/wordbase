@@ -1,7 +1,7 @@
 #![doc = include_str!("../README.md")]
 #![allow(missing_docs, clippy::missing_errors_doc)]
 
-pub mod anki;
+// pub mod anki;
 mod db;
 pub mod deinflect;
 pub mod dictionary;
@@ -14,7 +14,6 @@ pub mod texthook;
 
 pub use wordbase_api::*;
 use {
-    anki::Anki,
     anyhow::{Context, Result},
     arc_swap::ArcSwap,
     deinflect::Deinflectors,
@@ -39,7 +38,7 @@ pub struct Engine {
     #[cfg(feature = "desktop")]
     texthookers: texthook::Texthookers,
     deinflectors: Deinflectors,
-    anki: Anki,
+    // anki: Anki,
     event_tx: broadcast::Sender<EngineEvent>,
     db: Pool<Sqlite>,
 }
@@ -112,6 +111,7 @@ pub type IndexMap<K, V> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
 pub type IndexSet<T> = indexmap::IndexSet<T, foldhash::fast::RandomState>;
 
 impl Engine {
+    #[expect(clippy::missing_panics_doc, reason = "shouldn't panic")]
     pub async fn new(data_dir: impl AsRef<Path>) -> Result<Self> {
         let data_dir = data_dir.as_ref();
         info!("Creating engine using {data_dir:?} as data directory");
@@ -132,11 +132,8 @@ impl Engine {
             ),
             renderer: {
                 let mut tera = Tera::default();
-                tera.add_raw_template(
-                    "records.html",
-                    include_str!("../../../record-templates/records.html"),
-                )
-                .unwrap();
+                tera.add_raw_template("records.html", include_str!("records.html"))
+                    .expect("template should be valid");
                 tera
             },
             #[cfg(feature = "desktop")]
@@ -144,9 +141,9 @@ impl Engine {
                 .await
                 .context("failed to create texthooker listener")?,
             deinflectors: Deinflectors::new().context("failed to create deinflectors")?,
-            anki: Anki::new(&db)
-                .await
-                .context("failed to create Anki integration")?,
+            // anki: Anki::new(&db)
+            //     .await
+            //     .context("failed to create Anki integration")?,
             event_tx,
             db,
         })

@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 
-mod anki;
+// mod anki;
 mod dict;
 mod lookup;
 mod profile;
@@ -58,11 +58,11 @@ enum Command {
         #[command(subcommand)]
         command: DictCommand,
     },
-    /// Manage AnkiConnect functions
-    Anki {
-        #[command(subcommand)]
-        command: AnkiCommand,
-    },
+    // /// Manage AnkiConnect functions
+    // Anki {
+    //     #[command(subcommand)]
+    //     command: AnkiCommand,
+    // },
     // /// Manage texthooker functions
     // #[command(alias = "hook")]
     // Texthooker {
@@ -271,31 +271,31 @@ async fn main() -> Result<()> {
             command: DictCommand::Rm { dict_id },
         } => dict::rm(&engine, DictionaryId(dict_id)).await?,
         // anki
-        Command::Anki {
-            command:
-                AnkiCommand::CreateNote {
-                    sentence,
-                    headword,
-                    reading,
-                },
-        } => {
-            anki::create_note(
-                &engine,
-                &*require_profile()?,
-                &sentence,
-                &headword,
-                &reading,
-            )
-            .await?;
-        }
-        Command::Anki {
-            command:
-                AnkiCommand::Set {
-                    command: AnkiSetCommand::Url { url },
-                },
-        } => {
-            anki::set_url(&engine, &url).await?;
-        }
+        // Command::Anki {
+        //     command:
+        //         AnkiCommand::CreateNote {
+        //             sentence,
+        //             headword,
+        //             reading,
+        //         },
+        // } => {
+        //     anki::create_note(
+        //         &engine,
+        //         &*require_profile()?,
+        //         &sentence,
+        //         &headword,
+        //         &reading,
+        //     )
+        //     .await?;
+        // }
+        // Command::Anki {
+        //     command:
+        //         AnkiCommand::Set {
+        //             command: AnkiSetCommand::Url { url },
+        //         },
+        // } => {
+        //     anki::set_url(&engine, &url).await?;
+        // }
     }
 
     Ok(())
