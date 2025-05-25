@@ -76,6 +76,7 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import uniffi.wordbase.ImportDictionaryCallback
 import uniffi.wordbase.ImportEvent
+import uniffi.wordbase.wordbase
 import uniffi.wordbase_api.Dictionary
 import uniffi.wordbase_api.DictionaryKind
 import uniffi.wordbase_api.DictionaryMeta
@@ -219,41 +220,45 @@ fun AppManagePage(modifier: Modifier = Modifier) {
                 fileName = fileName,
             )
 
-            try {
-                val dictId = wordbase.importDictionary(object : ImportDictionaryCallback {
-                    @SuppressLint("Recycle") // we are passing the fd to native code
-                    override fun openArchiveFile(): Int {
-                        val fd = context.contentResolver.openFileDescriptor(uri, "r")
-                            ?: throw Exception("failed to open file")
-                        return fd.detachFd()
-                    }
+            val callback = object : ImportDictionaryCallback {
+                @SuppressLint("Recycle") // we are passing the fd to native code
+                override fun openArchiveFile(): Int {
+                    val fd = context.contentResolver.openFileDescriptor(uri, "r")
+                        ?: throw Exception("failed to open file")
+                    return fd.detachFd()
+                }
 
-                    override fun onEvent(event: ImportEvent) {
-                        when (event) {
-                            is ImportEvent.DeterminedKind -> {}
-                            is ImportEvent.Done -> {}
-                            is ImportEvent.ParsedMeta -> {
-                                meta = event.v1
+                override fun onEvent(event: ImportEvent) {
+                    when (event) {
+                        is ImportEvent.DeterminedKind -> {}
+                        is ImportEvent.Done -> {}
+                        is ImportEvent.ParsedMeta -> {
+                            meta = event.v1
+                            importState = DictionaryImport.ReadMeta(
+                                id = importId,
+                                meta = meta,
+                                progress = 0f,
+                            )
+                        }
+
+                        is ImportEvent.Progress -> {
+                            meta?.let { meta ->
                                 importState = DictionaryImport.ReadMeta(
                                     id = importId,
                                     meta = meta,
-                                    progress = 0f,
+                                    progress = event.v1.toFloat()
                                 )
-                            }
-
-                            is ImportEvent.Progress -> {
-                                meta?.let { meta ->
-                                    importState = DictionaryImport.ReadMeta(
-                                        id = importId,
-                                        meta = meta,
-                                        progress = event.v1.toFloat()
-                                    )
-                                }
                             }
                         }
                     }
-                })
-                wordbase.enableDictionary(profile.id, dictId)
+                }
+            }
+
+            try {
+                app.writeToWordbase(wordbase) {
+                    val dictId = wordbase.importDictionary(callback)
+                    wordbase.enableDictionary(profile.id, dictId)
+                }
                 importState = null
             } catch (ex: Exception) {
                 importState = importState?.withError(ex.toString())
@@ -270,23 +275,31 @@ fun AppManagePage(modifier: Modifier = Modifier) {
         dictionaries = app.dictionaries.values.sortedBy { it.position },
         dictionaryImports = importState?.let { listOf(it) } ?: listOf(),
         onDictionaryReorder = { from, to ->
-            app.swapDictionaryPositions(from.id, to.id)
+            app.writeToWordbase(wordbase) {
+                wordbase.swapDictionaryPositions(from.id, to.id)
+            }
         },
         onDictionarySortingSet = { dict ->
             coroutineScope.launch {
-                wordbase.setSortingDictionary(profile.id, dict.id)
+                app.writeToWordbase(wordbase) {
+                    wordbase.setSortingDictionary(profile.id, dict.id)
+                }
             }
         },
         onDictionarySortingUnset = {
             coroutineScope.launch {
-                wordbase.setSortingDictionary(profile.id, null)
+                app.writeToWordbase(wordbase) {
+                    wordbase.setSortingDictionary(profile.id, null)
+                }
             }
         },
         onDictionaryDelete = { dict ->
             coroutineScope.launch {
                 locked = true
                 try {
-                    wordbase.removeDictionary(dict.id)
+                    app.writeToWordbase(wordbase) {
+                        wordbase.removeDictionary(dict.id)
+                    }
                 } finally {
                     locked = false
                 }
@@ -294,10 +307,12 @@ fun AppManagePage(modifier: Modifier = Modifier) {
         },
         onDictionaryEnabledChange = { dictionary, enabled ->
             coroutineScope.launch {
-                if (enabled) {
-                    wordbase.enableDictionary(profile.id, dictionary.id)
-                } else {
-                    wordbase.disableDictionary(profile.id, dictionary.id)
+                app.writeToWordbase(wordbase) {
+                    if (enabled) {
+                        wordbase.enableDictionary(profile.id, dictionary.id)
+                    } else {
+                        wordbase.disableDictionary(profile.id, dictionary.id)
+                    }
                 }
             }
         },
@@ -435,6 +450,15 @@ fun ManagePage(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 val context = LocalContext.current
+                val version = context.packageManager.getPackageInfo(context.packageName, 0)?.versionName
+
+                Text(
+                    text = "Current app version: $version",
+                    textAlign = TextAlign.Center,
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {

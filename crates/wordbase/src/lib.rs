@@ -9,6 +9,7 @@ pub mod import;
 pub mod lookup;
 pub mod profile;
 pub mod render;
+#[cfg(feature = "desktop")]
 pub mod texthook;
 
 pub use wordbase_api::*;
@@ -23,7 +24,6 @@ use {
     sqlx::{Pool, Sqlite},
     std::path::Path,
     tera::Tera,
-    texthook::Texthookers,
     tokio::sync::broadcast,
     tracing::info,
 };
@@ -36,7 +36,8 @@ pub struct Engine {
     profiles: ArcSwap<Profiles>,
     dictionaries: ArcSwap<Dictionaries>,
     renderer: Tera,
-    texthookers: Texthookers,
+    #[cfg(feature = "desktop")]
+    texthookers: texthook::Texthookers,
     deinflectors: Deinflectors,
     anki: Anki,
     event_tx: broadcast::Sender<EngineEvent>,
@@ -138,7 +139,8 @@ impl Engine {
                 .unwrap();
                 tera
             },
-            texthookers: Texthookers::new(&db, event_tx.clone())
+            #[cfg(feature = "desktop")]
+            texthookers: texthook::Texthookers::new(&db, event_tx.clone())
                 .await
                 .context("failed to create texthooker listener")?,
             deinflectors: Deinflectors::new().context("failed to create deinflectors")?,

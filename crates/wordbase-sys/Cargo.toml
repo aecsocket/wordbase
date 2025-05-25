@@ -22,8 +22,3 @@ name       = "wordbase"
 
 [dependencies]
 wordbase = { workspace = true, features = ["uniffi"] }
-
-uniffi = { workspace = true }
-
-[build-dependencies]
-uniffi = { workspace = true, features = ["build"] }

@@ -20,7 +20,6 @@ wordbase = { workspace = true, features = ["desktop"] }
 
 anyhow             = { workspace = true }
 ascii_table        = { workspace = true, features = ["wide_characters"] }
-bytes              = { workspace = true }
 clap               = { workspace = true, features = ["derive"] }
 futures            = { workspace = true }
 tokio              = { workspace = true, features = ["full"] }

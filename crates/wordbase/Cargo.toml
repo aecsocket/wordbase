@@ -20,7 +20,7 @@ all-features = true
 [features]
 poem   = ["wordbase-api/poem", "dep:poem-openapi"]
 uniffi = ["wordbase-api/uniffi", "dep:uniffi"]
-desktop = ["dep:directories"]
+desktop = ["dep:directories", "dep:tokio-tungstenite"]
 
 [dependencies]
 wordbase-api = { workspace = true, features = ["render-html"] }
@@ -31,11 +31,9 @@ async-compression    = { workspace = true, features = ["xz"] }
 async-stream         = { workspace = true }
 async-tar            = { workspace = true }
 async_zip            = { workspace = true, features = ["deflate", "tokio"] }
-blocking             = { workspace = true }
 bytes                = { workspace = true }
 data-encoding        = { workspace = true }
 directories          = { workspace = true, optional = true }
-either               = { workspace = true }
 foldhash             = { workspace = true }
 futures              = { workspace = true }
 indexmap             = { workspace = true, features = ["serde"] }
@@ -45,7 +43,6 @@ maud                 = { workspace = true }
 paste                = { workspace = true }
 pin-project          = { version = "1.1" }
 poem-openapi         = { workspace = true, optional = true }
-rayon                = { workspace = true }
 regex                = { workspace = true }
 reqwest              = { workspace = true, features = ["json"] }
 rmp-serde            = { workspace = true }
@@ -56,10 +53,9 @@ sqlx                 = { workspace = true, features = ["runtime-tokio", "sqlite"
 tera                 = { workspace = true, features = ["preserve_order"] }
 tokio                = { workspace = true, features = ["sync", "macros"] }
 tokio-stream         = { workspace = true }
-tokio-tungstenite    = { workspace = true }
+tokio-tungstenite    = { workspace = true, optional = true }
 tokio-util           = { workspace = true, features = ["rt"] }
 tracing              = { workspace = true }
-unicode-segmentation = { workspace = true }
 uniffi               = { workspace = true, optional = true, features = ["tokio"] }
 
 derive_more = { workspace = true, features = [

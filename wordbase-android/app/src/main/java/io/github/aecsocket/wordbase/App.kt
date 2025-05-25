@@ -15,9 +15,6 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
-import kotlinx.coroutines.launch
-import uniffi.wordbase.DictionaryEvent
-import uniffi.wordbase.EngineEvent
 import uniffi.wordbase.Wordbase
 import uniffi.wordbase.wordbase
 import uniffi.wordbase_api.Dictionary
@@ -42,42 +39,15 @@ class App : Application() {
             val engine = wordbase(filesDir.absolutePath)
             _dictionaries = engine.dictionaries()
             _profiles = engine.profiles()
-
-            appScope.launch {
-                val eventRx = engine.eventRx()
-                while (true) {
-                    val event = eventRx.recv() ?: return@launch
-                    onWordbaseEvent(engine, event)
-                }
-            }
-
             engine
         }
     }
 
-    private fun onWordbaseEvent(wordbase: Wordbase, event: EngineEvent) {
-        // TODO clean this up on rust side as well
-        when (event) {
-            is EngineEvent.TexthookerConnected -> {}
-            is EngineEvent.TexthookerDisconnected -> {}
-            is EngineEvent.Sentence -> {}
-            is EngineEvent.Dictionary -> {
-                if (event.v1 !is DictionaryEvent.PositionsSwapped) {
-                    _dictionaries = wordbase.dictionaries()
-                    _profiles = wordbase.profiles()
-                }
-            }
-            else -> {
-                _dictionaries = wordbase.dictionaries()
-                _profiles = wordbase.profiles()
-            }
-        }
-    }
-
-    suspend fun swapDictionaryPositions(aId: DictionaryId, bId: DictionaryId) {
-        val wordbase = wordbase.await()
-        wordbase.swapDictionaryPositions(aId, bId)
+    suspend fun <R> writeToWordbase(wordbase: Wordbase, block: suspend () -> R): R {
+        val r = block()
         _dictionaries = wordbase.dictionaries()
+        _profiles = wordbase.profiles()
+        return r
     }
 }
 

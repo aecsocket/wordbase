@@ -48,6 +48,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.window.core.layout.WindowWidthSizeClass
 import io.github.aecsocket.wordbase.ui.theme.WordbaseTheme
 import kotlinx.coroutines.launch
@@ -139,7 +140,7 @@ fun Ui(manageContent: @Composable (Modifier) -> Unit) {
                         top = padding.calculateTopPadding(),
                         bottom = padding.calculateBottomPadding()
                     ),
-                    query = query
+                    query = query,
                 )
             }
         }

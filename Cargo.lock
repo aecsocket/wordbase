@@ -2799,26 +2799,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rayon"
-version = "1.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b418a60154510ca1a002a752ca9714984e21e4241e804d32555251faf8b78ffa"
-dependencies = [
- "either",
- "rayon-core",
-]
-
-[[package]]
-name = "rayon-core"
-version = "1.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1465873a3dfdaa8ae7cb14b4383657caab0b3e8a0aa9ae8e04b044854c8dfce2"
-dependencies = [
- "crossbeam-deque",
- "crossbeam-utils",
-]
-
-[[package]]
 name = "redox_syscall"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4092,7 +4072,6 @@ dependencies = [
  "cargo_metadata",
  "clap",
  "uniffi_bindgen",
- "uniffi_build",
  "uniffi_core",
  "uniffi_macros",
  "uniffi_pipeline",
@@ -4129,17 +4108,6 @@ dependencies = [
  "uniffi_meta",
  "uniffi_pipeline",
  "uniffi_udl",
-]
-
-[[package]]
-name = "uniffi_build"
-version = "0.29.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aed2f0204e942bb9c11c9f11a323b4abf70cf11b2e5957d60b3f2728430f6c6f"
-dependencies = [
- "anyhow",
- "camino",
- "uniffi_bindgen",
 ]
 
 [[package]]
@@ -4817,13 +4785,11 @@ dependencies = [
  "async-stream",
  "async-tar",
  "async_zip",
- "blocking",
  "bytes",
  "clap",
  "data-encoding",
  "derive_more 2.0.1",
  "directories",
- "either",
  "foldhash",
  "futures",
  "indexmap",
@@ -4833,7 +4799,6 @@ dependencies = [
  "paste",
  "pin-project",
  "poem-openapi",
- "rayon",
  "regex",
  "reqwest",
  "rmp-serde",
@@ -4847,7 +4812,6 @@ dependencies = [
  "tokio-tungstenite",
  "tokio-util",
  "tracing",
- "unicode-segmentation",
  "uniffi",
  "wordbase-api",
 ]
@@ -4875,7 +4839,6 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "ascii_table",
- "bytes",
  "clap",
  "futures",
  "tokio",
@@ -4888,7 +4851,6 @@ dependencies = [
 name = "wordbase-sys"
 version = "0.0.0"
 dependencies = [
- "uniffi",
  "wordbase",
 ]
 

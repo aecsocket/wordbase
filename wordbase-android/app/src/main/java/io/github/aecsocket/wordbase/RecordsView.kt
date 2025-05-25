@@ -18,6 +18,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -98,9 +100,18 @@ fun RecordsView(
     WebView(
         state = webViewState,
         navigator = navigator,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            // Sometimes during recomposition (and loading new HTML),
+            // the WebView will briefly flash to a default state.
+            // During this, it will flash to its background color.
+            // But for some reason, it will also draw OVER some other content.
+            // (E.g. the search bar in the main activity view).
+            // To prevent this, we clip the WebView like so.
+            .graphicsLayer { clip = true },
         captureBackPresses = false,
         onCreated = {
+            it.setBackgroundColor(containerColor.toArgb())
             it.settings.javaScriptEnabled = true
             it.settings.allowFileAccess = false
             it.settings.allowContentAccess = false
