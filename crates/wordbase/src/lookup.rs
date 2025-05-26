@@ -6,8 +6,8 @@ use {
     itertools::Itertools,
     std::borrow::Borrow,
     wordbase_api::{
-        DictionaryId, FrequencyValue, NoHeadwordOrReading, ProfileId, Record, RecordId, RecordKind,
-        RecordLookup, Term, for_kinds,
+        DictionaryId, FrequencyValue, NoHeadwordOrReading, ProfileId, Record, RecordEntry,
+        RecordId, RecordKind, Term, for_kinds,
     },
 };
 
@@ -17,8 +17,9 @@ impl Engine {
         profile_id: ProfileId,
         lemma: impl AsRef<str> + Send + Sync,
         record_kinds: &[impl Borrow<RecordKind> + Send + Sync],
-    ) -> Result<Vec<RecordLookup>> {
+    ) -> Result<Vec<RecordEntry>> {
         let lemma = lemma.as_ref();
+
         // we do a hack where we turn `record_kinds` into a JSON array of ints
         // because SQLite doesn't support placeholders of tuples or arrays
         let record_kinds = format!(
@@ -176,9 +177,9 @@ impl Engine {
                         )
                     })?;
 
-                Ok(RecordLookup {
-                    bytes_scanned: lemma.len() as u64,
-                    chars_scanned: lemma.chars().count() as u64,
+                Ok(RecordEntry {
+                    span_bytes: (0..lemma.len() as u64).into(),
+                    span_chars: (0..lemma.chars().count() as u64).into(),
                     source: DictionaryId(record.source),
                     record_id: RecordId(record.id),
                     term,
@@ -202,11 +203,12 @@ impl Engine {
         sentence: &'a str,
         cursor: usize,
         record_kinds: &[impl Borrow<RecordKind> + Send + Sync],
-    ) -> Result<Vec<RecordLookup>> {
+    ) -> Result<Vec<RecordEntry>> {
         // TODO: languages with words separated by e.g. spaces need a different strategy
-        let (_, query) = sentence
+        let (pre, query) = sentence
             .split_at_checked(cursor)
             .context("cursor is not on a UTF-8 character boundary")?;
+        let cursor_chars = pre.chars().count();
 
         let mut records = Vec::new();
         let mut seen_record_ids = HashSet::new();
@@ -221,10 +223,19 @@ impl Engine {
             })
             .collect::<FuturesOrdered<_>>();
         while let Some((deinflection, lookup)) = lookup_tasks.try_next().await? {
+            let scan_len_chars = sentence
+                .get(..deinflection.scan_len)
+                .context("invalid deinflection scan length")?
+                .chars()
+                .count();
+            let span_bytes = (cursor as u64)..(cursor + deinflection.scan_len) as u64;
+            let span_chars = (cursor_chars as u64)..(cursor_chars + scan_len_chars) as u64;
+
             for record in lookup {
                 if seen_record_ids.insert(record.record_id) {
-                    records.push(RecordLookup {
-                        bytes_scanned: deinflection.scan_len as u64, // TODO properly
+                    records.push(RecordEntry {
+                        span_bytes: span_bytes.clone().into(),
+                        span_chars: span_chars.clone().into(),
                         ..record
                     });
                 }
@@ -255,7 +266,7 @@ const _: () = {
             sentence: &'a str,
             cursor: u64,
             record_kinds: &[RecordKind],
-        ) -> FfiResult<Vec<RecordLookup>> {
+        ) -> FfiResult<Vec<RecordEntry>> {
             let cursor = usize::try_from(cursor).context("cursor too large")?;
             Ok(self
                 .0

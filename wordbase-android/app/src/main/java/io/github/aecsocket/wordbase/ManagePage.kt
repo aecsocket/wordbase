@@ -76,7 +76,6 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import uniffi.wordbase.ImportDictionaryCallback
 import uniffi.wordbase.ImportEvent
-import uniffi.wordbase.wordbase
 import uniffi.wordbase_api.Dictionary
 import uniffi.wordbase_api.DictionaryKind
 import uniffi.wordbase_api.DictionaryMeta

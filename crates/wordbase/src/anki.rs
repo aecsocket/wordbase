@@ -2,9 +2,9 @@ use anyhow::{Context, Result};
 use itertools::Itertools;
 use maud::html;
 use serde::Serialize;
-use std::{collections::HashMap, fmt::Write as _};
+use std::{collections::HashMap, fmt::Write as _, ops::Range};
 use wordbase_api::{
-    DictionaryId, FrequencyValue, NormString, ProfileId, Record, RecordKind, RecordLookup, Term,
+    DictionaryId, FrequencyValue, NormString, ProfileId, Record, RecordEntry, RecordKind, Term,
     dict,
 };
 
@@ -21,13 +21,23 @@ impl Engine {
         let records = self
             .lookup(profile_id, sentence, cursor, NOTE_RECORD_KINDS)
             .await
-            .context("failed to look up records")?;
-        let bytes_scanned = records
+            .context("failed to look up records")?
+            .into_iter()
+            .filter(|record| record.term == *term)
+            .collect::<Vec<_>>();
+
+        let span_min = records
             .iter()
-            .map(|record| record.bytes_scanned)
+            .map(|record| record.span_bytes.start)
+            .min()
+            .context("no records")?;
+        let span_max = records
+            .iter()
+            .map(|record| record.span_bytes.end)
             .max()
             .context("no records")?;
-        let bytes_scanned = usize::try_from(bytes_scanned).unwrap_or(usize::MAX);
+        let term_span = (usize::try_from(span_min).unwrap_or(usize::MAX))
+            ..(usize::try_from(span_max).unwrap_or(usize::MAX));
 
         let dictionaries = self.dictionaries();
         let dict_name = |dict_id: DictionaryId| {
@@ -40,7 +50,10 @@ impl Engine {
             ("Expression", term_part(term.headword())),
             ("ExpressionReading", term_part(term.reading())),
             ("ExpressionFurigana", term_ruby_plain(term)),
-            ("Sentence", sentence_cloze(sentence, cursor, bytes_scanned)),
+            (
+                "Sentence",
+                sentence_cloze(sentence, term_span).unwrap_or_default(),
+            ),
             (
                 "MainDefinition",
                 glossaries.first().cloned().unwrap_or_default(),
@@ -95,19 +108,15 @@ fn term_ruby_plain(term: &Term) -> String {
     }
 }
 
-fn sentence_cloze(sentence: &str, cursor: usize, byte_scan_len: usize) -> String {
-    let scan_end = cursor + byte_scan_len;
-    (|| {
-        let cloze_prefix = sentence.get(..cursor)?;
-        let cloze_body = sentence.get(cursor..scan_end)?;
-        let cloze_suffix = sentence.get(scan_end..)?;
-        Some(format!("{cloze_prefix}<b>{cloze_body}</b>{cloze_suffix}"))
-    })()
-    .unwrap_or_default()
+fn sentence_cloze(sentence: &str, term_span: Range<usize>) -> Option<String> {
+    let cloze_prefix = sentence.get(..term_span.start)?;
+    let cloze_body = sentence.get(term_span.clone())?;
+    let cloze_suffix = sentence.get(term_span.end..)?;
+    Some(format!("{cloze_prefix}<b>{cloze_body}</b>{cloze_suffix}"))
 }
 
-fn glossaries(records: &[RecordLookup]) -> Vec<String> {
-    records
+fn glossaries(entries: &[RecordEntry]) -> Vec<String> {
+    entries
         .iter()
         .filter_map(|record| match &record.record {
             Record::YomitanGlossary(glossary) => Some(
@@ -140,8 +149,8 @@ fn all_glossaries(glossaries: &[String]) -> String {
     .0
 }
 
-fn pitch_positions(records: &[RecordLookup]) -> String {
-    records
+fn pitch_positions(entries: &[RecordEntry]) -> String {
+    entries
         .iter()
         .filter_map(|record| match &record.record {
             Record::YomitanPitch(dict::yomitan::Pitch { position, .. }) => Some(*position),
@@ -156,10 +165,10 @@ fn pitch_positions(records: &[RecordLookup]) -> String {
 }
 
 fn frequency_list<'a>(
-    records: &[RecordLookup],
+    entries: &[RecordEntry],
     dict_name: impl Fn(DictionaryId) -> &'a str,
 ) -> String {
-    records
+    entries
         .iter()
         .filter_map(|record| match &record.record {
             Record::YomitanFrequency(dict::yomitan::Frequency { value, display }) => {
@@ -180,9 +189,9 @@ fn frequency_list<'a>(
         .join("")
 }
 
-fn frequency_harmonic_mean(records: &[RecordLookup]) -> String {
+fn frequency_harmonic_mean(entries: &[RecordEntry]) -> String {
     harmonic_mean(
-        records
+        entries
             .iter()
             .filter_map(|record| match &record.record {
                 Record::YomitanFrequency(dict::yomitan::Frequency {

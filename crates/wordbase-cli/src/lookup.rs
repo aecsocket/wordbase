@@ -7,7 +7,7 @@ use {
 
 pub fn deinflect(engine: &Engine, text: &str) {
     for lemma in engine.deinflect(text) {
-        let scan_len = lemma.scan_len;
+        let scan_len = lemma.scan_bytes;
         let text_part = text.get(..scan_len).map_or_else(
             || format!("(invalid scan len {scan_len})"),
             ToOwned::to_owned,
@@ -49,8 +49,8 @@ pub async fn render(engine: &Engine, profile: &Profile, text: &str, output: &Pat
         .render_to_html(
             &records,
             &RenderConfig {
-                add_card_text: "Add Card".into(),
-                add_card_js_fn: "unimplemented".into(),
+                add_note_text: "Add Card".into(),
+                add_note_js_fn: "unimplemented".into(),
             },
         )
         .context("failed to render HTML")?;

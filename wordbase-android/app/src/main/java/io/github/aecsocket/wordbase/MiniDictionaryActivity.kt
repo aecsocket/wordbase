@@ -8,9 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -23,6 +21,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -37,7 +38,6 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.view.HapticFeedbackConstantsCompat
 import androidx.core.view.ViewCompat
@@ -71,7 +71,7 @@ fun MiniDictionaryUi(sentence: String) {
 
     var wordbase by rememberWordbase()
     var cursor by remember { mutableStateOf(Cursor()) }
-    var scanChars by remember { mutableStateOf(0UL) }
+    var scanRange by remember { mutableStateOf(0 to 0) }
 
     val view = LocalView.current
     val annotatedQuery = buildAnnotatedString {
@@ -94,7 +94,7 @@ fun MiniDictionaryUi(sentence: String) {
                             chars = thisCharIndex,
                             bytes = thisByteIndex,
                         )
-                        scanChars = 1UL
+                        scanRange = thisCharIndex to thisCharIndex + 1
 
                         ViewCompat.performHapticFeedback(
                             view,
@@ -115,86 +115,97 @@ fun MiniDictionaryUi(sentence: String) {
                 color = MaterialTheme.colorScheme.surface,
                 background = MaterialTheme.colorScheme.primary,
             ),
-            start = cursor.chars,
-            end = cursor.chars + scanChars.toInt(),
+            start = scanRange.first,
+            end = scanRange.second,
         )
     }
 
-    val coroutineScope = rememberCoroutineScope()
-    val sheetState = rememberModalBottomSheetState()
-    val activity = LocalActivity.current
-    ModalBottomSheet(
-        sheetState = sheetState,
-        onDismissRequest = {
-            activity?.finish()
-        },
-        modifier = Modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-    ) {
-        // the column lets you scroll the webview
-        // why? idk!!
-        // https://medium.com/@itsuki.enjoy/android-kotlin-jetpack-compose-make-your-nested-webview-scroll-cbf023e821a1
-        LazyColumn {
-            item {
-                Box(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                ) {
-                    SelectionContainer {
-                        Text(
-                            text = annotatedQuery,
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            softWrap = false,
-                            maxLines = 1,
-                            modifier = Modifier.padding(
-                                horizontal = 16.dp,
-                                vertical = 4.dp,
+    val snackbarHostState = remember { SnackbarHostState() }
+//    SnackbarHost(
+//        hostState = snackbarHostState
+//    ) {
+        val coroutineScope = rememberCoroutineScope()
+        val sheetState = rememberModalBottomSheetState()
+        val activity = LocalActivity.current
+        ModalBottomSheet(
+            sheetState = sheetState,
+            onDismissRequest = {
+                activity?.finish()
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+        ) {
+            // the column lets you scroll the webview
+            // why? idk!!
+            // https://medium.com/@itsuki.enjoy/android-kotlin-jetpack-compose-make-your-nested-webview-scroll-cbf023e821a1
+            LazyColumn {
+                item {
+                    Box(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    ) {
+                        SelectionContainer {
+                            Text(
+                                text = annotatedQuery,
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                softWrap = false,
+                                maxLines = 1,
+                                modifier = Modifier.padding(
+                                    horizontal = 16.dp,
+                                    vertical = 4.dp,
+                                )
                             )
-                        )
+                        }
                     }
                 }
-            }
 
-            item {
-                wordbase?.let { wordbase ->
-                    val records = rememberRecordLookup(
-                        wordbase = wordbase,
-                        profileId = 1L,
-                        sentence = sentence,
-                        cursor = cursor.bytes,
-                    )
-                    scanChars = records.maxOfOrNull { it.charsScanned } ?: 1UL
-
-                    if (records.isEmpty()) {
-                        NoRecordsView()
-                    } else {
-                        RecordsView(
+                item {
+                    wordbase?.let { wordbase ->
+                        val records = rememberLookup(
                             wordbase = wordbase,
-                            records = records,
-                            containerColor = BottomSheetDefaults.ContainerColor,
-                            onExit = {
-                                coroutineScope.launch {
-                                    sheetState.hide()
-                                    activity?.finish()
-                                }
-                            },
+                            sentence = sentence,
+                            cursor = cursor.bytes,
+                            onRecords = { records ->
+                                val spanMin = records.minOfOrNull { it.spanChars.start } ?: 0UL
+                                val spanMax = records.maxOfOrNull { it.spanChars.end } ?: 0UL
+                                scanRange = spanMin.toInt() to spanMax.toInt()
+                            }
                         )
-                    }
-                } ?: run {
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier
-                                .height(128.dp)
-                                .aspectRatio(1f)
-                                .padding(16.dp)
-                        )
+
+                        if (records.isEmpty()) {
+                            NoRecordsView()
+                        } else {
+                            RecordsView(
+                                wordbase = wordbase,
+                                snackbarHostState = snackbarHostState,
+                                sentence = sentence,
+                                cursor = cursor.bytes,
+                                records = records,
+                                containerColor = BottomSheetDefaults.ContainerColor,
+                                onExit = {
+                                    coroutineScope.launch {
+                                        sheetState.hide()
+                                        activity?.finish()
+                                    }
+                                },
+                            )
+                        }
+                    } ?: run {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier
+                                    .height(128.dp)
+                                    .aspectRatio(1f)
+                                    .padding(16.dp)
+                            )
+                        }
                     }
                 }
             }
         }
-    }
+//    }
 }

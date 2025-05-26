@@ -8,7 +8,22 @@
     <string name="loading_body">If you just updated to a new version, migration may take a while.</string>
     <string name="search_title">Search a word or phrase</string>
     <string name="records_empty">No results</string>
-    <string name="add_card">Add Card</string>
+
+    <!--
+    | Internal name | User-facing name |
+    |===============|==================|
+    |          note | card             |
+    |          deck | deck             |
+    |         model | note type        |
+    -->
+    <string name="add_note">Add Card</string>
+    <string name="add_note_no_anki">Anki is not installed</string>
+    <string name="add_note_no_deck">No Anki deck ‘%s’</string>
+    <string name="add_note_no_model">No Anki note type ‘%s’</string>
+    <string name="add_note_err_model_fields">Failed to get fields for ‘%s’</string>
+    <string name="add_note_err_build_note">Failed to build term card</string>
+    <string name="add_note_err_add">Failed to add card</string>
+    <string name="add_note_added">Added card ‘%s’</string>
 
     <string name="dictionaries">Dictionaries</string>
     <string name="dictionary_description">Description</string>

@@ -170,9 +170,11 @@ pub fn data_dir() -> Result<std::path::PathBuf> {
 
 #[cfg(feature = "uniffi")]
 mod ffi {
-    use crate::{Engine, EngineEvent};
-    use derive_more::{Display, Error, From};
-    use tokio::sync::{Mutex, broadcast};
+    use {
+        crate::{Engine, EngineEvent},
+        derive_more::{Display, Error, From},
+        tokio::sync::{Mutex, broadcast},
+    };
 
     #[derive(Debug, uniffi::Object)]
     pub struct Wordbase(pub Engine);

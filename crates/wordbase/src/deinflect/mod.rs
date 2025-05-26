@@ -1,3 +1,4 @@
+mod latin;
 mod lindera;
 
 use {
@@ -12,8 +13,6 @@ use {
 };
 
 pub trait Deinflector: Sized + Send + Sync + 'static {
-    fn new() -> Result<Self>;
-
     fn deinflect<'a>(&'a self, text: &'a str) -> impl Iterator<Item = Deinflection<'a>>;
 }
 
@@ -21,6 +20,7 @@ pub trait Deinflector: Sized + Send + Sync + 'static {
 pub struct Deinflectors {
     identity: Identity,
     lindera: lindera::Lindera,
+    latin: latin::Latin,
 }
 
 impl Deinflectors {
@@ -28,6 +28,7 @@ impl Deinflectors {
         Ok(Self {
             identity: Identity,
             lindera: lindera::Lindera::new().context("failed to create Lindera deinflector")?,
+            latin: latin::Latin,
         })
     }
 }
@@ -38,6 +39,7 @@ impl Engine {
         iter::empty()
             .chain(self.deinflectors.identity.deinflect(text))
             .chain(self.deinflectors.lindera.deinflect(text))
+            .chain(self.deinflectors.latin.deinflect(text))
             .collect()
     }
 }
@@ -76,10 +78,6 @@ impl Eq for Deinflection<'_> {}
 struct Identity;
 
 impl Deinflector for Identity {
-    fn new() -> Result<Self> {
-        Ok(Self)
-    }
-
     fn deinflect<'a>(&'a self, text: &'a str) -> impl Iterator<Item = Deinflection<'a>> {
         iter::once(Deinflection {
             lemma: Cow::Borrowed(text),
@@ -87,3 +85,34 @@ impl Deinflector for Identity {
         })
     }
 }
+
+#[cfg(feature = "uniffi")]
+const _: () = {
+    use crate::Wordbase;
+
+    #[derive(uniffi::Record)]
+    pub struct Deinflection {
+        pub lemma: String,
+        pub scan_len: u64,
+    }
+
+    impl From<self::Deinflection<'_>> for Deinflection {
+        fn from(value: self::Deinflection) -> Self {
+            Self {
+                lemma: value.lemma.into_owned(),
+                scan_len: value.scan_len as u64,
+            }
+        }
+    }
+
+    #[uniffi::export]
+    impl Wordbase {
+        pub fn deinflect(&self, text: &str) -> Vec<Deinflection> {
+            self.0
+                .deinflect(text)
+                .into_iter()
+                .map(Deinflection::from)
+                .collect::<Vec<Deinflection>>()
+        }
+    }
+};

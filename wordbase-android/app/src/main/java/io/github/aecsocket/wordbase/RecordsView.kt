@@ -1,5 +1,6 @@
 package io.github.aecsocket.wordbase
 
+import android.annotation.SuppressLint
 import android.util.Log
 import android.webkit.JavascriptInterface
 import androidx.activity.compose.BackHandler
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
@@ -36,20 +38,21 @@ import com.kevinnzou.web.rememberWebViewStateWithHTMLData
 import kotlinx.coroutines.launch
 import uniffi.wordbase.RenderConfig
 import uniffi.wordbase.Wordbase
-import uniffi.wordbase_api.ProfileId
+import uniffi.wordbase.WordbaseException
+import uniffi.wordbase_api.RecordEntry
 import uniffi.wordbase_api.RecordKind
-import uniffi.wordbase_api.RecordLookup
 import uniffi.wordbase_api.Term
 
 const val TAG = "RecordsView"
 
 @Composable
-fun rememberRecordLookup(
+fun rememberLookup(
     wordbase: Wordbase,
     sentence: String,
     cursor: ULong,
-): List<RecordLookup> {
-    var records by remember { mutableStateOf(listOf<RecordLookup>()) }
+    onRecords: (List<RecordEntry>) -> Unit = {},
+): List<RecordEntry> {
+    var records by remember { mutableStateOf(listOf<RecordEntry>()) }
 
     val app = LocalContext.current.app()
     LaunchedEffect(arrayOf(sentence, cursor, app.dictionaries, app.profiles, app.profileId)) {
@@ -59,6 +62,7 @@ fun rememberRecordLookup(
             cursor = cursor,
             recordKinds = RecordKind.entries,
         )
+        onRecords(records)
     }
 
     return records
@@ -67,11 +71,105 @@ fun rememberRecordLookup(
 @Composable
 fun RecordsView(
     wordbase: Wordbase,
-    records: List<RecordLookup>,
+    snackbarHostState: SnackbarHostState,
+    sentence: String,
+    cursor: ULong,
+    records: List<RecordEntry> = rememberLookup(wordbase, sentence, cursor),
     insets: WindowInsets = WindowInsets(0.dp),
     containerColor: Color = MaterialTheme.colorScheme.surface,
     contentColor: Color = contentColorFor(containerColor),
-    onAddCard: ((Term) -> Unit)? = null,
+    onExit: (() -> Unit)? = null,
+) {
+    val context = LocalContext.current
+    val app = context.app()
+    val coroutineScope = rememberCoroutineScope()
+
+    suspend fun addNote(term: Term) {
+        Log.i(TAG, "Adding card for (${term.headword}, ${term.reading})")
+        if (AddContentApi.getAnkiDroidPackageName(context) == null) {
+            snackbarHostState.showSnackbar(
+                message = "Anki is not installed"
+            )
+            return
+        }
+        val anki = AddContentApi(context)
+
+        val deckName = "Testing"
+        val modelName = "Lapis"
+
+        val deckId = anki.deckList
+            .firstNotNullOfOrNull { (id, name) -> if (name == deckName) id else null }
+            ?: run {
+                snackbarHostState.showSnackbar(
+                    message = "No deck named '$deckName'"
+                )
+                return
+            }
+        val modelId = anki.modelList
+            .firstNotNullOfOrNull { (id, name) -> if (name == modelName) id else null }
+            ?: run {
+                snackbarHostState.showSnackbar(
+                    message = "No note type named '$modelName'"
+                )
+                return
+            }
+
+        val fieldNames = anki.getFieldList(modelId) ?: run {
+            snackbarHostState.showSnackbar(
+                message = "Failed to get fields for '$modelName'"
+            )
+            return
+        }
+
+        val termNote = try {
+            wordbase.buildTermNote(
+                profileId = app.profileId,
+                sentence = sentence,
+                cursor = cursor,
+                term = term,
+            )
+        } catch (ex: WordbaseException) {
+            snackbarHostState.showSnackbar(
+                message = "Failed to build term note: $ex"
+            )
+            return
+        }
+
+        val fields = fieldNames.map { fieldName ->
+            termNote.fields[fieldName] ?: ""
+        }
+
+        anki.addNote(modelId, deckId, fields.toTypedArray(), setOf("wordbase"))
+            ?: run {
+                snackbarHostState.showSnackbar(
+                    message = "Failed to add note"
+                )
+            }
+    }
+
+    RawRecordsView(
+        wordbase = wordbase,
+        records = records,
+        insets = insets,
+        containerColor = containerColor,
+        contentColor = contentColor,
+        onAddNote = { term ->
+            coroutineScope.launch {
+                addNote(term)
+            }
+        },
+        onExit = onExit,
+    )
+}
+
+@Composable
+fun RawRecordsView(
+    wordbase: Wordbase,
+    records: List<RecordEntry>,
+    insets: WindowInsets = WindowInsets(0.dp),
+    containerColor: Color = MaterialTheme.colorScheme.surface,
+    contentColor: Color = contentColorFor(containerColor),
+    onAddNote: ((Term) -> Unit)? = null,
     onExit: (() -> Unit)? = null,
 ) {
     class JsBridge(val onAddCard: (Term) -> Unit) {
@@ -114,8 +212,8 @@ fun RecordsView(
     val html = wordbase.renderToHtml(
         records = records,
         config = RenderConfig(
-            addCardText = stringResource(R.string.add_card),
-            addCardJsFn = "Wordbase.addCard",
+            addNoteText = stringResource(R.string.add_note),
+            addNoteJsFn = "Wordbase.addNote",
         ),
     ) + "<style>$extraCss</style>"
 
@@ -139,8 +237,10 @@ fun RecordsView(
             it.settings.allowFileAccess = false
             it.settings.allowContentAccess = false
 
+            @SuppressLint("SetJavaScriptEnabled") // it is what it is
             it.settings.javaScriptEnabled = true
-            onAddCard?.let { onAddCard ->
+            onAddNote?.let { onAddCard ->
+                @SuppressLint("JavascriptInterface") // false positive
                 it.addJavascriptInterface(JsBridge(onAddCard), "Wordbase")
             }
         }
@@ -154,26 +254,6 @@ fun RecordsView(
         }
     }
 }
-
-//fun addCard(wordbase: Wordbase, term: Term) {
-//    Log.i(TAG, "Adding card for (${term.headword}, ${term.reading})")
-//    AddContentApi.getAnkiDroidPackageName(context) // todo checks
-//    val anki = AddContentApi(context)
-//
-//    coroutineScope.launch {
-//        wordbase.buildTermNote(
-//            profileId = app.profileId,
-//            sentence = sente
-//        )
-//    }
-//
-//    val deckId = anki.deckList
-//        .firstNotNullOfOrNull { (id, name) -> if (name == "Testing") id else null }
-//    val modelId = anki.modelList
-//        .firstNotNullOfOrNull { (id, name) -> if (name == "Lapis") id else null }
-//
-//    anki.addNote(modelId!!, deckId!!, arrayOf())
-//}
 
 @Composable
 fun NoRecordsView() {

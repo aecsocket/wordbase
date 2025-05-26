@@ -4812,6 +4812,7 @@ dependencies = [
  "tokio-tungstenite",
  "tokio-util",
  "tracing",
+ "unicode-segmentation",
  "uniffi",
  "wordbase-api",
 ]

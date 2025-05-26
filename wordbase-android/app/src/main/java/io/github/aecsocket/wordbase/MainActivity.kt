@@ -31,13 +31,16 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SearchBarDefaults
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
+import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -48,7 +51,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import androidx.window.core.layout.WindowWidthSizeClass
 import io.github.aecsocket.wordbase.ui.theme.WordbaseTheme
 import kotlinx.coroutines.launch
@@ -112,8 +114,14 @@ fun Ui(manageContent: @Composable (Modifier) -> Unit) {
         )
     }
 
+    val snackbarHostState = remember { SnackbarHostState() }
     if (currentWindowAdaptiveInfo().windowSizeClass.windowWidthSizeClass == WindowWidthSizeClass.COMPACT) {
+        val scaffoldState = rememberBottomSheetScaffoldState(
+            snackbarHostState = snackbarHostState
+        )
+
         BottomSheetScaffold(
+            scaffoldState = scaffoldState,
             sheetContent = {
                 manageContent(Modifier.navigationBarsPadding())
             },
@@ -134,6 +142,7 @@ fun Ui(manageContent: @Composable (Modifier) -> Unit) {
                 val layoutDir = LocalLayoutDirection.current
                 SearchPage(
                     padding = padding,
+                    snackbarHostState = snackbarHostState,
                     insets = WindowInsets(
                         left = padding.calculateLeftPadding(layoutDir),
                         right = padding.calculateRightPadding(layoutDir),
@@ -190,6 +199,7 @@ fun Ui(manageContent: @Composable (Modifier) -> Unit) {
 
                     SearchPage(
                         padding = PaddingValues(0.dp),
+                        snackbarHostState = snackbarHostState,
                         insets = WindowInsets.displayCutout,
                         query = query
                     )
@@ -201,6 +211,7 @@ fun Ui(manageContent: @Composable (Modifier) -> Unit) {
 
 @Composable
 fun SearchPage(
+    snackbarHostState: SnackbarHostState,
     padding: PaddingValues,
     insets: WindowInsets,
     query: String
@@ -210,9 +221,8 @@ fun SearchPage(
     wordbase?.let { wordbase ->
         val activity = LocalActivity.current
 
-        val records = rememberRecordLookup(
+        val records = rememberLookup(
             wordbase = wordbase,
-            profileId = 1L,
             sentence = query,
             cursor = 0UL,
         )
@@ -224,6 +234,9 @@ fun SearchPage(
         } else {
             RecordsView(
                 wordbase = wordbase,
+                snackbarHostState = snackbarHostState,
+                sentence = query,
+                cursor = 0UL,
                 records = records,
                 insets = insets,
                 onExit = { activity?.finish() }

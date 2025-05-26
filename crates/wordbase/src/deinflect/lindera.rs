@@ -20,19 +20,22 @@ pub struct Lindera {
 
 const TOKEN_LOOKAHEAD: usize = 8;
 
-impl Deinflector for Lindera {
-    fn new() -> Result<Self> {
+impl Lindera {
+    pub fn new() -> Result<Self> {
         let dictionary = load_dictionary_from_kind(DictionaryKind::UniDic)
             .context("failed to load dictionary")?;
         let segmenter = Segmenter::new(Mode::Normal, dictionary, None);
         let tokenizer = Tokenizer::new(segmenter);
         Ok(Self { tokenizer })
     }
+}
 
+impl Deinflector for Lindera {
     fn deinflect<'a>(&'a self, text: &'a str) -> impl Iterator<Item = Deinflection<'a>> {
         let Ok(mut tokens) = self.tokenizer.tokenize(text) else {
             return Vec::new().into_iter();
         };
+
         // some tokens may genuinely not be able to be mapped to `Details`,
         // i.e. an UNK token, so we filter them out, rather than failing entirely
         let mut tokens = tokens
@@ -99,7 +102,6 @@ impl Deinflector for Lindera {
                 ])
             })
             .flatten();
-
         lemmas.collect::<Vec<_>>().into_iter()
     }
 }

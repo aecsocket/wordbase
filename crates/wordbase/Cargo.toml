@@ -28,7 +28,6 @@ wordbase-api = { workspace = true, features = ["render-html"] }
 anyhow               = { workspace = true }
 arc-swap             = { workspace = true }
 async-compression    = { workspace = true, features = ["xz"] }
-async-stream         = { workspace = true }
 async-tar            = { workspace = true }
 async_zip            = { workspace = true, features = ["deflate", "tokio"] }
 bytes                = { workspace = true }
@@ -41,21 +40,23 @@ itertools            = { workspace = true }
 lindera              = { workspace = true, features = ["unidic", "compress"] }
 maud                 = { workspace = true }
 paste                = { workspace = true }
-pin-project          = { version = "1.1" }
-poem-openapi         = { workspace = true, optional = true }
 regex                = { workspace = true }
+poem-openapi         = { workspace = true, optional = true }
 reqwest              = { workspace = true, features = ["json"] }
 rmp-serde            = { workspace = true }
 serde                = { workspace = true, features = ["derive"] }
 serde_json           = { workspace = true }
 serde_repr           = { workspace = true }
 sqlx                 = { workspace = true, features = ["runtime-tokio", "sqlite"] }
+pin-project          = { workspace = true }
 tera                 = { workspace = true, features = ["preserve_order"] }
 tokio                = { workspace = true, features = ["sync", "macros"] }
 tokio-stream         = { workspace = true }
 tokio-tungstenite    = { workspace = true, optional = true }
 tokio-util           = { workspace = true, features = ["rt"] }
 tracing              = { workspace = true }
+unicode-segmentation = { workspace = true }
+async-stream         = { workspace = true }
 uniffi               = { workspace = true, optional = true, features = ["tokio"] }
 
 derive_more = { workspace = true, features = [

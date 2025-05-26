@@ -3,16 +3,12 @@ use data_encoding::BASE64;
 use foldhash::HashSet;
 use maud::Render as _;
 use serde::Serialize;
-use wordbase_api::{DictionaryId, Record, RecordKind, RecordLookup, Term, dict};
+use wordbase_api::{DictionaryId, Record, RecordEntry, RecordKind, Term, dict};
 
 use crate::{Engine, IndexMap};
 
 impl Engine {
-    pub fn render_to_html(
-        &self,
-        records: &[RecordLookup],
-        config: &RenderConfig,
-    ) -> Result<String> {
+    pub fn render_to_html(&self, records: &[RecordEntry], config: &RenderConfig) -> Result<String> {
         let terms = group_terms(records);
 
         let mut context = tera::Context::new();
@@ -28,17 +24,17 @@ impl Engine {
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct RenderConfig {
-    pub add_card_text: String,
-    pub add_card_js_fn: String,
+    pub add_note_text: String,
+    pub add_note_js_fn: String,
 }
 
-fn group_terms(records: &[RecordLookup]) -> Vec<RecordTerm> {
+fn group_terms(entries: &[RecordEntry]) -> Vec<RecordTerm> {
     // note on ordering:
     // by default, tera will not preserve the order of IndexMap entries,
     // because serde_json doesn't either.
     // we enable `tera/preserve_order` to make sure that order stays.
     let mut groups = IndexMap::<Term, TermInfo>::default();
-    for record in records {
+    for record in entries {
         let source = record.source;
         let term = &record.term;
         let info = groups.entry(term.clone()).or_insert_with(|| TermInfo {
@@ -211,7 +207,7 @@ const _: () = {
     impl Wordbase {
         pub fn render_to_html(
             &self,
-            records: &[RecordLookup],
+            records: &[RecordEntry],
             config: &RenderConfig,
         ) -> FfiResult<String> {
             Ok(self.0.render_to_html(records, config)?)

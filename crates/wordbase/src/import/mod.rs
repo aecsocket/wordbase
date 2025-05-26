@@ -185,7 +185,9 @@ impl Engine {
     ) -> impl Stream<Item = Result<ImportEvent, ImportError>> {
         async_stream::try_stream! {
             debug!("Attempting to determine dictionary kind");
-            let kind = kind_of(open_archive.clone()).await.map_err(ImportError::GetKind)?;
+            let kind = kind_of(open_archive.clone())
+                .await
+                .map_err(ImportError::GetKind)?;
             debug!("Importing as {kind:?} dictionary");
             yield ImportEvent::DeterminedKind(kind);
 
@@ -219,15 +221,17 @@ impl Engine {
 
             let id = continue_task
                 .await
-                .map_err(|source| ImportError::Import { kind, source: source.into() })?
+                .map_err(|source| ImportError::Import {
+                    kind,
+                    source: source.into(),
+                })?
                 .map_err(|source| ImportError::Import { kind, source })?;
 
             self.sync_dictionaries().await?;
-            yield ImportEvent::Done(id);
-
             _ = self
                 .event_tx
                 .send(EngineEvent::Dictionary(DictionaryEvent::Added { id }));
+            yield ImportEvent::Done(id);
         }
     }
 }
@@ -260,11 +264,11 @@ async fn insert_dictionary(
 
 #[cfg(feature = "uniffi")]
 const _: () = {
-    use std::os::fd::{FromRawFd, RawFd};
-
-    use tokio::{fs::File, io::BufReader};
-
-    use crate::{FfiResult, Wordbase};
+    use {
+        crate::{FfiResult, Wordbase},
+        std::os::fd::{FromRawFd, RawFd},
+        tokio::{fs::File, io::BufReader},
+    };
 
     #[uniffi::export(with_foreign)]
     pub trait ImportDictionaryCallback: Send + Sync {

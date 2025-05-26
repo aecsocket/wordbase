@@ -1,6 +1,7 @@
 use {
     crate::{DictionaryId, FrequencyValue, Record, RecordId, Term},
     serde::{Deserialize, Serialize},
+    std::ops::Range,
 };
 
 // /// Parameters for performing a lookup against the engine's database.
@@ -42,16 +43,16 @@ use {
 //     pub cursor: usize,
 // }
 
-/// Single record returned in response to a [`Lookup`].
+/// Single [`Record`] and its metadata returned in response to a [`Lookup`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-pub struct RecordLookup {
-    /// How far along [`Lookup::sentence`] the engine scanned to find the
-    /// [`Term`] in this record, in UTF-8 bytes.
-    pub bytes_scanned: u64,
-    /// How far along [`Lookup::sentence`] the engine scanned to find the
-    /// [`Term`] in this record, in characters.
-    pub chars_scanned: u64,
+pub struct RecordEntry {
+    /// Span in the lookup input sentence which corresponds to this entry's
+    /// [`RecordEntry::term`], in UTF-8 string bytes.
+    pub span_bytes: QuerySpan,
+    /// Span in the lookup input sentence which corresponds to this entry's
+    /// [`RecordEntry::term`], in Unicode characters.
+    pub span_chars: QuerySpan,
     /// ID of the [`Dictionary`] from which the record was retrieved.
     pub source: DictionaryId,
     /// [`Term`] that this record is for.
@@ -63,9 +64,35 @@ pub struct RecordLookup {
     /// [`FrequencyValue`] of the record, as found in the profile's sorting
     /// dictionary.
     pub profile_sorting_frequency: Option<FrequencyValue>,
-    /// [`FrequencyValue`] of the record, as found in [`RecordLookup::source`]'s
+    /// [`FrequencyValue`] of the record, as found in [`RecordEntry::source`]'s
     /// frequency information.
     pub source_sorting_frequency: Option<FrequencyValue>,
+}
+
+/// A (half-open) range bounded inclusively below and exclusively above
+/// (`start..end`).
+///
+/// The range `start..end` contains all values with `start <= x < end`.
+/// It is empty if `start >= end`.
+///
+/// We use this wrapper because [`Range`] is not supported by `poem-openapi`
+/// or `uniffi`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct QuerySpan {
+    /// The lower bound of the range (inclusive).
+    pub start: u64,
+    /// The upper bound of the range (exclusive).
+    pub end: u64,
+}
+
+impl From<Range<u64>> for QuerySpan {
+    fn from(value: Range<u64>) -> Self {
+        Self {
+            start: value.start,
+            end: value.end,
+        }
+    }
 }
 
 // #[derive(Debug, Clone, Default, Serialize, Deserialize)]
