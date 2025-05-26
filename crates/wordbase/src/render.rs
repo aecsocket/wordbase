@@ -24,8 +24,8 @@ impl Engine {
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct RenderConfig {
-    pub add_note_text: String,
-    pub add_note_js_fn: String,
+    pub add_note_text: Option<String>,
+    pub add_note_js_fn: Option<String>,
 }
 
 fn group_terms(entries: &[RecordEntry]) -> Vec<RecordTerm> {

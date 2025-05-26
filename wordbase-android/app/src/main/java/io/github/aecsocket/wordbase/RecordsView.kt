@@ -172,11 +172,11 @@ fun RawRecordsView(
     onAddNote: ((Term) -> Unit)? = null,
     onExit: (() -> Unit)? = null,
 ) {
-    class JsBridge(val onAddCard: (Term) -> Unit) {
+    class JsBridge(val onAddNote: (Term) -> Unit) {
         @Suppress("unused") // used by JS
         @JavascriptInterface
         fun addCard(headword: String?, reading: String?) {
-            onAddCard(Term(headword = headword, reading = reading))
+            onAddNote(Term(headword = headword, reading = reading))
         }
     }
 
@@ -213,7 +213,8 @@ fun RawRecordsView(
         records = records,
         config = RenderConfig(
             addNoteText = stringResource(R.string.add_note),
-            addNoteJsFn = "Wordbase.addNote",
+            addNoteJsFn = null,
+//            addNoteJsFn = "Wordbase.addNote",
         ),
     ) + "<style>$extraCss</style>"
 

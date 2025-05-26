@@ -258,18 +258,18 @@
           </ruby>
         </div>
 
-        {% if config.add_card_text and config.add_card_js_fn %}
+        {% if config.add_note_text and config.add_note_js_fn %}
         <div
           style="display: flex; flex-direction: column; justify-content: center"
         >
           <button
             class="suggested-action"
-            onclick='{{ config.add_card_js_fn }}(
+            onclick='{{ config.add_note_js_fn }}(
               {% if group.term.headword %}"{{ group.term.headword | addslashes }}"{% else %}null{% endif %},
               {% if group.term.reading %}"{{ group.term.reading | addslashes }}"{% else %}null{% endif %},
             )'
           >
-            {{ config.add_card_text }}
+            {{ config.add_note_text }}
           </button>
         </div>
         {% endif %}
