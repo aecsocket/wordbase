@@ -39,6 +39,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardColors
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,6 +49,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -68,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.core.view.HapticFeedbackConstantsCompat
 import androidx.core.view.ViewCompat
+import com.ichi2.anki.api.AddContentApi
 import io.github.aecsocket.wordbase.ui.theme.WordbaseTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -127,8 +131,12 @@ fun PreviewManagePage(modifier: Modifier = Modifier) {
             )
         }
 
+        var ankiDeck by remember { mutableStateOf("Mining") }
+        var ankiModel by remember { mutableStateOf("Lapis") }
+
         ManagePage(
             modifier = modifier,
+            enabled = true,
             dictionaries = dictionaries,
             dictionaryImports = listOf(
                 DictionaryImport.Started(
@@ -170,7 +178,7 @@ fun PreviewManagePage(modifier: Modifier = Modifier) {
                 )
             },
             onDictionaryImport = {},
-            enabled = true,
+            anki = { AnkiPagePreview() }
         )
     }
 }
@@ -265,11 +273,11 @@ fun AppManagePage(modifier: Modifier = Modifier) {
                 locked = false
             }
         }
-
     }
 
     ManagePage(
         modifier = modifier,
+        enabled = !locked,
         profile = profile,
         dictionaries = app.dictionaries.values.sortedBy { it.position },
         dictionaryImports = importState?.let { listOf(it) } ?: listOf(),
@@ -324,7 +332,7 @@ fun AppManagePage(modifier: Modifier = Modifier) {
                 )
             )
         },
-        enabled = !locked,
+        anki = { AnkiPageApp() },
     )
 }
 
@@ -332,6 +340,7 @@ fun AppManagePage(modifier: Modifier = Modifier) {
 fun ManagePage(
     modifier: Modifier = Modifier,
     profile: Profile,
+    enabled: Boolean = true,
     dictionaries: List<Dictionary>,
     dictionaryImports: List<DictionaryImport>,
     onDictionaryReorder: suspend CoroutineScope.(Dictionary, Dictionary) -> Unit,
@@ -340,9 +349,12 @@ fun ManagePage(
     onDictionaryDelete: (Dictionary) -> Unit,
     onDictionaryEnabledChange: (Dictionary, Boolean) -> Unit,
     onDictionaryImport: () -> Unit,
-    enabled: Boolean = true,
+    anki: @Composable () -> Unit,
 ) {
     val view = LocalView.current
+    val context = LocalContext.current
+    val anki =
+        if (AddContentApi.getAnkiDroidPackageName(context) == null) null else AddContentApi(context);
     val lazyListState = rememberLazyListState()
     val reorderableLazyListState = rememberReorderableLazyListState(lazyListState) { from, to ->
         val from = dictionaries[from.index - 1]
@@ -367,7 +379,7 @@ fun ManagePage(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = stringResource(R.string.dictionaries),
+                    text = stringResource(R.string.section_dictionaries),
                     style = MaterialTheme.typography.headlineLarge,
                     modifier = Modifier.weight(1f),
                 )
@@ -428,6 +440,17 @@ fun ManagePage(
         }
 
         item {
+            Text(
+                text = stringResource(R.string.manage_anki),
+                style = MaterialTheme.typography.headlineLarge,
+            )
+        }
+
+        item {
+            anki()
+        }
+
+        item {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -449,7 +472,8 @@ fun ManagePage(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 val context = LocalContext.current
-                val version = context.packageManager.getPackageInfo(context.packageName, 0)?.versionName
+                val version =
+                    context.packageManager.getPackageInfo(context.packageName, 0)?.versionName
 
                 Text(
                     text = "Current app version: $version",
@@ -463,7 +487,12 @@ fun ManagePage(
                 ) {
                     Button(
                         onClick = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/aecsocket/wordbase/releases".toUri()))
+                            context.startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    "https://github.com/aecsocket/wordbase/releases".toUri()
+                                )
+                            )
                         },
                     ) {
                         Text("Download latest version")
@@ -471,7 +500,12 @@ fun ManagePage(
 
                     Button(
                         onClick = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/aecsocket/wordbase/issues".toUri()))
+                            context.startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    "https://github.com/aecsocket/wordbase/issues".toUri()
+                                )
+                            )
                         },
                     ) {
                         Text("Report bug")

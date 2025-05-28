@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import com.ichi2.anki.api.AddContentApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -56,7 +57,8 @@ class App : Application() {
 
 fun Context.app() = applicationContext as App
 
-@Composable fun rememberWordbase(): MutableState<Wordbase?> {
+@Composable
+fun rememberWordbase(): MutableState<Wordbase?> {
     val state = remember { mutableStateOf<Wordbase?>(null) }
     val context = LocalContext.current
     LaunchedEffect(Unit) {
@@ -64,3 +66,6 @@ fun Context.app() = applicationContext as App
     }
     return state
 }
+
+fun Context.anki() =
+    if (AddContentApi.getAnkiDroidPackageName(this) == null) null else AddContentApi(this)

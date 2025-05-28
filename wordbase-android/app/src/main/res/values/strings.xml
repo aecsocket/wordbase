@@ -25,7 +25,7 @@
     <string name="add_note_err_add">Failed to add card</string>
     <string name="add_note_added">Added card ‘%s’</string>
 
-    <string name="dictionaries">Dictionaries</string>
+    <string name="section_dictionaries">Dictionaries</string>
     <string name="dictionary_description">Description</string>
     <string name="dictionary_attribution">Attribution</string>
     <string name="dictionary_used_as_sorting">Used as sorting dictionary</string>
@@ -41,4 +41,10 @@
     <string name="dictionary_format_yomichan_audio">Yomichan Audio</string>
     <string name="dictionary_delete_title">Delete dictionary?</string>
     <string name="dictionary_delete_body">Are you sure you want to delete ‘%s’?</string>
+
+    <string name="manage_anki">Anki</string>
+    <string name="manage_anki_not_installed">Deck</string>
+    <string name="manage_anki_install">Install Anki</string>
+    <string name="manage_anki_deck">Deck</string>
+    <string name="manage_anki_note_type">Note Type</string>
 </resources>

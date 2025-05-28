@@ -74,6 +74,36 @@ impl Engine {
                 .collect(),
         })
     }
+
+    pub async fn set_anki_deck(&self, profile_id: ProfileId, deck: Option<&str>) -> Result<()> {
+        sqlx::query!(
+            "UPDATE profile SET anki_deck = $1 WHERE id = $2",
+            deck,
+            profile_id.0,
+        )
+        .execute(&self.db)
+        .await?;
+
+        self.sync_profiles().await?;
+        Ok(())
+    }
+
+    pub async fn set_anki_note_type(
+        &self,
+        profile_id: ProfileId,
+        note_type: Option<&str>,
+    ) -> Result<()> {
+        sqlx::query!(
+            "UPDATE profile SET anki_note_type = $1 WHERE id = $2",
+            note_type,
+            profile_id.0,
+        )
+        .execute(&self.db)
+        .await?;
+
+        self.sync_profiles().await?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -236,6 +266,25 @@ const _: () = {
             Ok(self
                 .0
                 .build_term_note(profile_id, sentence, cursor, term)
+                .await?)
+        }
+
+        pub async fn set_anki_deck(
+            &self,
+            profile_id: ProfileId,
+            deck: Option<String>,
+        ) -> FfiResult<()> {
+            Ok(self.0.set_anki_deck(profile_id, deck.as_deref()).await?)
+        }
+
+        pub async fn set_anki_note_type(
+            &self,
+            profile_id: ProfileId,
+            note_type: Option<String>,
+        ) -> FfiResult<()> {
+            Ok(self
+                .0
+                .set_anki_note_type(profile_id, note_type.as_deref())
                 .await?)
         }
     }
