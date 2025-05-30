@@ -5,16 +5,15 @@ use {
     crate::{Engine, IndexSet},
     anyhow::{Context, Result},
     serde::{Deserialize, Serialize},
-    std::{
-        borrow::Cow,
-        hash::{Hash, Hasher},
-        iter,
-        ops::Range,
-    },
+    std::{borrow::Cow, iter, ops::Range},
 };
 
 pub trait Deinflector: Send + Sync + 'static {
-    fn deinflect<'a>(&'a self, text: &'a str) -> impl Iterator<Item = Deinflection<'a>>;
+    fn deinflect<'a>(
+        &'a self,
+        sentence: &'a str,
+        cursor: usize,
+    ) -> impl Iterator<Item = Deinflection<'a>>;
 }
 
 #[derive(Debug)]
@@ -36,69 +35,63 @@ impl Deinflectors {
 
 impl Engine {
     #[must_use]
-    pub fn deinflect<'a>(&'a self, text: &'a str) -> IndexSet<Deinflection<'a>> {
+    pub fn deinflect<'a>(&'a self, sentence: &'a str, cursor: usize) -> IndexSet<Deinflection<'a>> {
         iter::empty()
-            .chain(self.deinflectors.identity.deinflect(text))
-            .chain(self.deinflectors.lindera.deinflect(text))
-            .chain(self.deinflectors.latin.deinflect(text))
+            // TODO: disable deinflectors based on language
+            .chain(self.deinflectors.identity.deinflect(sentence, cursor))
+            .chain(self.deinflectors.lindera.deinflect(sentence, cursor))
+            .chain(self.deinflectors.latin.deinflect(sentence, cursor))
             .inspect(|deinflect| {
                 debug_assert!(
-                    text.get(deinflect.span.clone()).is_some(),
-                    "text = {text:?}, span = {:?}",
+                    sentence.get(deinflect.span.clone()).is_some(),
+                    "text = {sentence:?}, cursor = {cursor}, span = {:?}",
                     deinflect.span
                 );
             })
-            .collect()
+            .collect::<IndexSet<_>>()
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Single deinflection produced by [`Engine::deinflect`], mapping to a lemma
+/// that should be looked up using [`Engine::lookup_lemma`].
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Deinflection<'s> {
-    pub lemma: Cow<'s, str>,
+    /// Byte span in the input sentence which this deinflection maps to.
+    ///
+    /// For example, if you input "食べなかった", the lemma would be "食べる", but the
+    /// span would cover the entire range of "食べなかった", not just "食べな".
     pub span: Range<usize>,
+    /// Lemma to look up using the engine.
+    ///
+    /// This might not correspond to a slice of text in the input sentence! For
+    /// example, "walked" would deinflect to "walk" (a slice of the input
+    /// sentence), but "run" would deinflect to "ran", which is a newly
+    /// allocated string entirely.
+    pub lemma: Cow<'s, str>,
 }
 
 impl<'a> Deinflection<'a> {
-    pub fn new(lemma: impl Into<Cow<'a, str>>) -> Self {
-        let lemma = lemma.into();
+    pub fn new(start: usize, src: &str, lemma: impl Into<Cow<'a, str>>) -> Self {
         Self {
-            span: 0..lemma.len(),
-            lemma,
-        }
-    }
-
-    pub fn with_start(start: usize, lemma: impl Into<Cow<'a, str>>) -> Self {
-        let lemma = lemma.into();
-        Self {
-            span: start..(start + lemma.len()),
-            lemma,
+            lemma: lemma.into(),
+            span: start..(start + src.len()),
         }
     }
 }
-
-impl Hash for Deinflection<'_> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.lemma.hash(state);
-    }
-}
-
-impl PartialEq for Deinflection<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        self.lemma == other.lemma
-    }
-}
-
-impl Eq for Deinflection<'_> {}
 
 #[derive(Debug)]
 struct Identity;
 
 impl Deinflector for Identity {
-    fn deinflect<'a>(&'a self, text: &'a str) -> impl Iterator<Item = Deinflection<'a>> {
-        iter::once(Deinflection {
-            lemma: Cow::Borrowed(text),
-            span: 0..text.len(),
-        })
+    fn deinflect<'a>(
+        &'a self,
+        sentence: &'a str,
+        cursor: usize,
+    ) -> impl Iterator<Item = Deinflection<'a>> {
+        sentence
+            .get(cursor..)
+            .map(|lemma| Deinflection::new(cursor, lemma, lemma))
+            .into_iter()
     }
 }
 
@@ -116,10 +109,11 @@ const _: () = {
 
     #[uniffi::export]
     impl Wordbase {
-        pub fn deinflect(&self, text: &str) -> FfiResult<Vec<Deinflection>> {
+        pub fn deinflect(&self, sentence: &str, cursor: u64) -> FfiResult<Vec<Deinflection>> {
+            let cursor = usize::try_from(cursor).context("cursor too large")?;
             Ok(self
                 .0
-                .deinflect(text)
+                .deinflect(sentence, cursor)
                 .into_iter()
                 .map(|deinflect| {
                     anyhow::Ok(Deinflection {
@@ -133,13 +127,38 @@ const _: () = {
 };
 
 #[cfg(test)]
-fn assert_deinflects<'a>(
-    deinflector: &impl Deinflector,
-    text: &str,
-    expected: impl IntoIterator<Item = Deinflection<'a>>,
-) {
-    assert_eq!(
-        deinflector.deinflect(text).collect::<IndexSet<_>>(),
-        expected.into_iter().collect::<IndexSet<_>>(),
-    );
+mod tests {
+    use super::*;
+
+    #[track_caller]
+    pub fn assert_deinflects<'a>(
+        deinflector: &impl Deinflector,
+        sentence: &str,
+        cursor: usize,
+        expected: impl IntoIterator<Item = Deinflection<'a>>,
+    ) {
+        assert_eq!(
+            deinflector
+                .deinflect(sentence, cursor)
+                .collect::<IndexSet<_>>(),
+            expected.into_iter().collect::<IndexSet<_>>(),
+        );
+    }
+
+    pub fn deinf(text: &str) -> Deinflection {
+        Deinflection::new(0, text, text)
+    }
+
+    #[test]
+    fn identity() {
+        let deinflector = Identity;
+        assert_deinflects(&deinflector, "hello", 0, [deinf("hello")]);
+        assert_deinflects(&deinflector, "hello world", 0, [deinf("hello world")]);
+        assert_deinflects(
+            &deinflector,
+            "hello world",
+            "hello ".len(),
+            [deinf("world")],
+        );
+    }
 }

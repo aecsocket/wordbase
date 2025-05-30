@@ -7,7 +7,7 @@ use {
     std::borrow::Borrow,
     wordbase_api::{
         DictionaryId, FrequencyValue, NoHeadwordOrReading, ProfileId, Record, RecordEntry,
-        RecordId, RecordKind, Term, for_kinds,
+        RecordId, RecordKind, Span, Term, for_kinds,
     },
 };
 
@@ -206,60 +206,42 @@ impl Engine {
         cursor: usize,
         record_kinds: &[impl Borrow<RecordKind> + Send + Sync],
     ) -> Result<Vec<RecordEntry>> {
-        // TODO: languages with words separated by e.g. spaces need a different strategy
-        let (pre, query) = sentence
-            .split_at_checked(cursor)
-            .context("cursor is not on a UTF-8 character boundary")?;
-        let pre_bytes = pre.len();
-        let pre_chars = pre.chars().count();
-
         let mut records = Vec::new();
         let mut seen_record_ids = HashSet::new();
-
-        let deinflections = self.deinflect(query);
+        let deinflections = self.deinflect(sentence, cursor);
         let mut lookup_tasks = deinflections
             .iter()
             .map(|deinflection| async move {
                 self.lookup_lemma(profile_id, &deinflection.lemma, record_kinds)
                     .await
-                    .map(|records| (deinflection.lemma.clone(), deinflection, records))
+                    .map(|entries| (deinflection, entries))
             })
             .collect::<FuturesOrdered<_>>();
-        while let Some((lemma, deinflection, lookup)) = lookup_tasks.try_next().await? {
+        while let Some((deinflection, entries)) = lookup_tasks.try_next().await? {
             let span_bytes =
-                (pre_bytes + deinflection.span.start)..(pre_bytes + deinflection.span.end);
+                Span::try_from(deinflection.span.clone()).context("byte span too large")?;
 
-            debug_assert!(
-                sentence.get(..span_bytes.start).is_some(),
-                "sentence = {sentence:?}, span_bytes = {span_bytes:?}",
-            );
-            debug_assert!(
-                sentence.get(span_bytes.clone()).is_some(),
-                "sentence = {sentence:?}, span_bytes = {span_bytes:?}",
-            );
+            let span_chars_start = sentence
+                .get(..deinflection.span.start)
+                .context("deinflection span start is invalid")?
+                .chars()
+                .count();
+            let span_chars_len = sentence
+                .get(deinflection.span.clone())
+                .context("deinflection span is invalid")?
+                .chars()
+                .count();
+            let span_chars = Span::try_from(span_chars_start..(span_chars_start + span_chars_len))
+                .context("char span too large")?;
 
-            let (pre_lemma, lemma) = lemma
-                .split_at_checked(deinflection.span.start)
-                .context("deinflection start is not on a UTF-8 character boundary")?;
-
-            let pre_lemma_chars = pre_lemma.chars().count();
-            let span_chars = (pre_chars + pre_lemma_chars)
-                ..(pre_chars + pre_lemma_chars + lemma.chars().count());
-
-            for record in lookup {
+            for record in entries {
                 if !seen_record_ids.insert(record.record_id) {
                     continue;
                 }
 
                 records.push(RecordEntry {
-                    span_bytes: span_bytes
-                        .clone()
-                        .try_into()
-                        .context("byte span too large")?,
-                    span_chars: span_chars
-                        .clone()
-                        .try_into()
-                        .context("char span too large")?,
+                    span_bytes,
+                    span_chars,
                     ..record
                 });
             }

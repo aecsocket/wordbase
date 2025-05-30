@@ -39,7 +39,14 @@ impl Lindera {
 }
 
 impl Deinflector for Lindera {
-    fn deinflect<'a>(&'a self, text: &'a str) -> impl Iterator<Item = Deinflection<'a>> {
+    fn deinflect<'a>(
+        &'a self,
+        sentence: &'a str,
+        cursor: usize,
+    ) -> impl Iterator<Item = Deinflection<'a>> {
+        let Some(text) = sentence.get(cursor..) else {
+            return Vec::new().into_iter();
+        };
         let Ok(mut tokens) = self.tokenizer.tokenize(text) else {
             return Vec::new().into_iter();
         };
@@ -103,11 +110,11 @@ impl Deinflector for Lindera {
                 Some([
                     Deinflection {
                         lemma: Cow::Owned(full_lemma),
-                        span: 0..scan_len,
+                        span: cursor..(cursor + scan_len),
                     },
                     Deinflection {
                         lemma: Cow::Owned(full_orthography),
-                        span: 0..scan_len,
+                        span: cursor..(cursor + scan_len),
                     },
                 ])
             })
@@ -196,7 +203,11 @@ fn is_word_continuation(last_lookahead: &Details, token: &Details) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::deinflect::assert_deinflects, std::sync::LazyLock};
+    use {
+        super::*,
+        crate::deinflect::tests::{assert_deinflects, deinf},
+        std::sync::LazyLock,
+    };
 
     #[test]
     fn generate_details() {
@@ -351,27 +362,71 @@ mod tests {
             lookahead: TOKEN_LOOKAHEAD,
         };
 
-        // some token patterns might result in UNK tokens, like this trailing whitespace
-        // here we test that we handle UNKs gracefully
+        assert_deinflects(&deinflector, "食べる", 0, [deinf("食べる")]);
+
         assert_deinflects(
             &deinflector,
-            "ある。　",
+            "食べなかった",
+            0,
             [
-                Deinflection::new("有る。"),
-                Deinflection::new("ある。"),
-                Deinflection::new("有る"),
-                Deinflection::new("ある"),
+                Deinflection::new(0, "食べなかった", "食べるないた"),
+                Deinflection::new(0, "食べなかった", "食べなかった"),
+                Deinflection::new(0, "食べなかっ", "食べるない"),
+                Deinflection::new(0, "食べなかっ", "食べなかっ"),
+                Deinflection::new(0, "食べなかった", "食べる"),
+                Deinflection::new(0, "食べなかった", "食べ"),
+            ],
+        );
+
+        let cursor = "あいう".len();
+        assert_deinflects(
+            &deinflector,
+            "あいう食べなかった",
+            cursor,
+            [
+                Deinflection::new(cursor, "食べなかった", "食べるないた"),
+                Deinflection::new(cursor, "食べなかった", "食べなかった"),
+                Deinflection::new(cursor, "食べなかっ", "食べるない"),
+                Deinflection::new(cursor, "食べなかっ", "食べなかっ"),
+                Deinflection::new(cursor, "食べなかった", "食べる"),
+                Deinflection::new(cursor, "食べなかった", "食べ"),
             ],
         );
 
         assert_deinflects(
             &deinflector,
             "東京大学",
+            0,
             [
-                Deinflection::new("トウキョウ大学"),
-                Deinflection::new("東京大学"),
-                Deinflection::new("トウキョウ"),
-                Deinflection::new("東京"),
+                Deinflection::new(0, "東京大学", "トウキョウ大学"),
+                Deinflection::new(0, "東京大学", "東京大学"),
+                Deinflection::new(0, "東京", "トウキョウ"),
+                Deinflection::new(0, "東京", "東京"),
+            ],
+        );
+
+        assert_deinflects(
+            &deinflector,
+            "店内に散らばっている",
+            0,
+            [
+                Deinflection::new(0, "店内", "店内"),
+                Deinflection::new(0, "店", "店"),
+            ],
+        );
+
+        // some token patterns might result in UNK tokens, like this trailing whitespace
+        // here we test that we handle UNKs gracefully
+        // TODO: it broke :(
+        assert_deinflects(
+            &deinflector,
+            "ある。　",
+            0,
+            [
+                Deinflection::new(0, "ある。", "有る。"),
+                Deinflection::new(0, "ある。", "ある。"),
+                Deinflection::new(0, "ある。", "有る"),
+                Deinflection::new(0, "ある。", "ある"),
             ],
         );
     }

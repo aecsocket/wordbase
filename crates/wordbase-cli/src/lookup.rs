@@ -6,7 +6,7 @@ use {
 };
 
 pub fn deinflect(engine: &Engine, text: &str) {
-    for deinflect in engine.deinflect(text) {
+    for deinflect in engine.deinflect(text, 0) {
         let text_part = text.get(deinflect.span).unwrap_or("(?)");
         println!("{text_part} -> {:?}", deinflect.lemma);
     }
