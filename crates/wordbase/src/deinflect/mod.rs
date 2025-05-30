@@ -9,10 +9,11 @@ use {
         borrow::Cow,
         hash::{Hash, Hasher},
         iter,
+        ops::Range,
     },
 };
 
-pub trait Deinflector: Sized + Send + Sync + 'static {
+pub trait Deinflector: Send + Sync + 'static {
     fn deinflect<'a>(&'a self, text: &'a str) -> impl Iterator<Item = Deinflection<'a>>;
 }
 
@@ -40,6 +41,13 @@ impl Engine {
             .chain(self.deinflectors.identity.deinflect(text))
             .chain(self.deinflectors.lindera.deinflect(text))
             .chain(self.deinflectors.latin.deinflect(text))
+            .inspect(|deinflect| {
+                debug_assert!(
+                    text.get(deinflect.span.clone()).is_some(),
+                    "text = {text:?}, span = {:?}",
+                    deinflect.span
+                );
+            })
             .collect()
     }
 }
@@ -47,14 +55,22 @@ impl Engine {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Deinflection<'s> {
     pub lemma: Cow<'s, str>,
-    pub scan_len: usize,
+    pub span: Range<usize>,
 }
 
 impl<'a> Deinflection<'a> {
     pub fn new(lemma: impl Into<Cow<'a, str>>) -> Self {
         let lemma = lemma.into();
         Self {
-            scan_len: lemma.len(),
+            span: 0..lemma.len(),
+            lemma,
+        }
+    }
+
+    pub fn with_start(start: usize, lemma: impl Into<Cow<'a, str>>) -> Self {
+        let lemma = lemma.into();
+        Self {
+            span: start..(start + lemma.len()),
             lemma,
         }
     }
@@ -81,38 +97,49 @@ impl Deinflector for Identity {
     fn deinflect<'a>(&'a self, text: &'a str) -> impl Iterator<Item = Deinflection<'a>> {
         iter::once(Deinflection {
             lemma: Cow::Borrowed(text),
-            scan_len: text.len(),
+            span: 0..text.len(),
         })
     }
 }
 
 #[cfg(feature = "uniffi")]
 const _: () = {
-    use crate::Wordbase;
+    use wordbase_api::Span;
+
+    use crate::{FfiResult, Wordbase};
 
     #[derive(uniffi::Record)]
     pub struct Deinflection {
         pub lemma: String,
-        pub scan_len: u64,
-    }
-
-    impl From<self::Deinflection<'_>> for Deinflection {
-        fn from(value: self::Deinflection) -> Self {
-            Self {
-                lemma: value.lemma.into_owned(),
-                scan_len: value.scan_len as u64,
-            }
-        }
+        pub span: Span,
     }
 
     #[uniffi::export]
     impl Wordbase {
-        pub fn deinflect(&self, text: &str) -> Vec<Deinflection> {
-            self.0
+        pub fn deinflect(&self, text: &str) -> FfiResult<Vec<Deinflection>> {
+            Ok(self
+                .0
                 .deinflect(text)
                 .into_iter()
-                .map(Deinflection::from)
-                .collect::<Vec<Deinflection>>()
+                .map(|deinflect| {
+                    anyhow::Ok(Deinflection {
+                        lemma: deinflect.lemma.into_owned(),
+                        span: deinflect.span.try_into().context("span too large")?,
+                    })
+                })
+                .collect::<Result<Vec<Deinflection>, _>>()?)
         }
     }
 };
+
+#[cfg(test)]
+fn assert_deinflects<'a>(
+    deinflector: &impl Deinflector,
+    text: &str,
+    expected: impl IntoIterator<Item = Deinflection<'a>>,
+) {
+    assert_eq!(
+        deinflector.deinflect(text).collect::<IndexSet<_>>(),
+        expected.into_iter().collect::<IndexSet<_>>(),
+    );
+}

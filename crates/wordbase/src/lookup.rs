@@ -178,8 +178,10 @@ impl Engine {
                     })?;
 
                 Ok(RecordEntry {
-                    span_bytes: (0..lemma.len() as u64).into(),
-                    span_chars: (0..lemma.chars().count() as u64).into(),
+                    span_bytes: (0..lemma.len()).try_into()
+                        .context("byte span too large")?,
+                    span_chars: (0..lemma.chars().count()).try_into()
+                        .context("char span too large")?,
                     source: DictionaryId(record.source),
                     record_id: RecordId(record.id),
                     term,
@@ -208,7 +210,8 @@ impl Engine {
         let (pre, query) = sentence
             .split_at_checked(cursor)
             .context("cursor is not on a UTF-8 character boundary")?;
-        let cursor_chars = pre.chars().count();
+        let pre_bytes = pre.len();
+        let pre_chars = pre.chars().count();
 
         let mut records = Vec::new();
         let mut seen_record_ids = HashSet::new();
@@ -219,26 +222,46 @@ impl Engine {
             .map(|deinflection| async move {
                 self.lookup_lemma(profile_id, &deinflection.lemma, record_kinds)
                     .await
-                    .map(|records| (deinflection, records))
+                    .map(|records| (deinflection.lemma.clone(), deinflection, records))
             })
             .collect::<FuturesOrdered<_>>();
-        while let Some((deinflection, lookup)) = lookup_tasks.try_next().await? {
-            let scan_len_chars = sentence
-                .get(..deinflection.scan_len)
-                .context("invalid deinflection scan length")?
-                .chars()
-                .count();
-            let span_bytes = (cursor as u64)..(cursor + deinflection.scan_len) as u64;
-            let span_chars = (cursor_chars as u64)..(cursor_chars + scan_len_chars) as u64;
+        while let Some((lemma, deinflection, lookup)) = lookup_tasks.try_next().await? {
+            let span_bytes =
+                (pre_bytes + deinflection.span.start)..(pre_bytes + deinflection.span.end);
+
+            debug_assert!(
+                sentence.get(..span_bytes.start).is_some(),
+                "sentence = {sentence:?}, span_bytes = {span_bytes:?}",
+            );
+            debug_assert!(
+                sentence.get(span_bytes.clone()).is_some(),
+                "sentence = {sentence:?}, span_bytes = {span_bytes:?}",
+            );
+
+            let (pre_lemma, lemma) = lemma
+                .split_at_checked(deinflection.span.start)
+                .context("deinflection start is not on a UTF-8 character boundary")?;
+
+            let pre_lemma_chars = pre_lemma.chars().count();
+            let span_chars = (pre_chars + pre_lemma_chars)
+                ..(pre_chars + pre_lemma_chars + lemma.chars().count());
 
             for record in lookup {
-                if seen_record_ids.insert(record.record_id) {
-                    records.push(RecordEntry {
-                        span_bytes: span_bytes.clone().into(),
-                        span_chars: span_chars.clone().into(),
-                        ..record
-                    });
+                if !seen_record_ids.insert(record.record_id) {
+                    continue;
                 }
+
+                records.push(RecordEntry {
+                    span_bytes: span_bytes
+                        .clone()
+                        .try_into()
+                        .context("byte span too large")?,
+                    span_chars: span_chars
+                        .clone()
+                        .try_into()
+                        .context("char span too large")?,
+                    ..record
+                });
             }
         }
 

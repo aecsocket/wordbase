@@ -16,17 +16,25 @@ use {
 pub struct Lindera {
     #[debug(skip)]
     tokenizer: Tokenizer,
+    lookahead: usize,
 }
 
 const TOKEN_LOOKAHEAD: usize = 8;
 
 impl Lindera {
     pub fn new() -> Result<Self> {
+        Self::with_lookahead(TOKEN_LOOKAHEAD)
+    }
+
+    pub fn with_lookahead(lookahead: usize) -> Result<Self> {
         let dictionary = load_dictionary_from_kind(DictionaryKind::UniDic)
             .context("failed to load dictionary")?;
         let segmenter = Segmenter::new(Mode::Normal, dictionary, None);
         let tokenizer = Tokenizer::new(segmenter);
-        Ok(Self { tokenizer })
+        Ok(Self {
+            tokenizer,
+            lookahead,
+        })
     }
 }
 
@@ -48,34 +56,36 @@ impl Deinflector for Lindera {
         // if there's an entry for "東京大学"
         // to do this, we turn the first `TOKEN_LOOKAHEAD` tokens into a lemma,
         // then turn the first `TOKEN_LOOKAHEAD - 1` into another lemma, etc.
-        let lemmas = (1..=TOKEN_LOOKAHEAD)
+        let lemmas = (1..=self.lookahead)
             .rev()
             .filter_map(move |up_to| {
                 #[expect(clippy::option_if_let_else, reason = "borrow checker")]
                 let (lookahead, rem) = if let Some(split) = tokens.split_at_mut_checked(up_to) {
                     split
                 } else {
+                    // we may be trying to join the next L tokens into a lemma,
+                    // but we only have N tokens, where N < L
                     (tokens.as_mut_slice(), [].as_mut_slice())
                 };
 
                 // each slice of tokens actually turns into 2 lemmas:
-                // - the result of joining the reading of each token together
-                // - the result of joining the pronunciation of each token together
+                // - the result of joining the lemma of each token together
+                // - the result of joining the orthography of each token together
                 //
                 // in UniDic, for a word like "食べる":
-                //     reading = 食べる (good)
-                //       lemma = たべる (bad)
+                //     lemma = 食べる (good)
+                //     ortho = たべる (bad)
                 // for a word like "東京":
-                //     reading = トウキョウ (bad)
-                //       lemma = 東京 (good)
+                //     lemma = トウキョウ (bad)
+                //     ortho = 東京 (good)
                 //
                 // so we need to do a lookup for both
-                let full_reading = lookahead
+                let full_lemma = lookahead
                     .iter_mut()
                     .map(|token| token.lemma)
                     .collect::<Vec<_>>()
                     .join("");
-                let full_pronunciation = lookahead
+                let full_orthography = lookahead
                     .iter_mut()
                     .map(|token| token.orthography)
                     .collect::<Vec<_>>()
@@ -92,12 +102,12 @@ impl Deinflector for Lindera {
 
                 Some([
                     Deinflection {
-                        lemma: Cow::Owned(full_reading),
-                        scan_len,
+                        lemma: Cow::Owned(full_lemma),
+                        span: 0..scan_len,
                     },
                     Deinflection {
-                        lemma: Cow::Owned(full_pronunciation),
-                        scan_len,
+                        lemma: Cow::Owned(full_orthography),
+                        span: 0..scan_len,
                     },
                 ])
             })
@@ -186,7 +196,7 @@ fn is_word_continuation(last_lookahead: &Details, token: &Details) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::IndexSet, std::sync::LazyLock};
+    use {super::*, crate::deinflect::assert_deinflects, std::sync::LazyLock};
 
     #[test]
     fn generate_details() {
@@ -338,32 +348,31 @@ mod tests {
     fn deinflect() {
         let deinflector = Lindera {
             tokenizer: TOKENIZER.clone(),
+            lookahead: TOKEN_LOOKAHEAD,
         };
 
         // some token patterns might result in UNK tokens, like this trailing whitespace
         // here we test that we handle UNKs gracefully
-        assert_eq!(
-            deinflector.deinflect("ある。 ").collect::<IndexSet<_>>(),
+        assert_deinflects(
+            &deinflector,
+            "ある。　",
             [
                 Deinflection::new("有る。"),
                 Deinflection::new("ある。"),
                 Deinflection::new("有る"),
                 Deinflection::new("ある"),
-            ]
-            .into_iter()
-            .collect::<IndexSet<_>>()
+            ],
         );
 
-        assert_eq!(
-            deinflector.deinflect("東京大学").collect::<IndexSet<_>>(),
+        assert_deinflects(
+            &deinflector,
+            "東京大学",
             [
                 Deinflection::new("トウキョウ大学"),
                 Deinflection::new("東京大学"),
                 Deinflection::new("トウキョウ"),
                 Deinflection::new("東京"),
-            ]
-            .into_iter()
-            .collect::<IndexSet<_>>()
+            ],
         );
     }
 

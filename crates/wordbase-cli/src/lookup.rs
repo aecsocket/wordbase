@@ -6,14 +6,9 @@ use {
 };
 
 pub fn deinflect(engine: &Engine, text: &str) {
-    for lemma in engine.deinflect(text) {
-        let scan_len = lemma.scan_len;
-        let text_part = text.get(..scan_len).map_or_else(
-            || format!("(invalid scan len {scan_len})"),
-            ToOwned::to_owned,
-        );
-        let lemma = lemma.lemma;
-        println!("{text_part:?} -> {:?}", &*lemma);
+    for deinflect in engine.deinflect(text) {
+        let text_part = text.get(deinflect.span).unwrap_or("(?)");
+        println!("{text_part} -> {:?}", deinflect.lemma);
     }
 }
 

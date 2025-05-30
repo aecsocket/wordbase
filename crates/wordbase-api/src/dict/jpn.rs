@@ -220,6 +220,7 @@ pub fn furigana_parts<'a>(headword: &'a str, mut reading: &'a str) -> Vec<(&'a s
     #[derive(Debug)]
     struct HeadwordPart<'a> {
         text: &'a str,
+        rem: &'a str,
         is_kana: bool,
     }
 
@@ -238,7 +239,8 @@ pub fn furigana_parts<'a>(headword: &'a str, mut reading: &'a str) -> Vec<(&'a s
         let last_pos = last.0 + last.1.len_utf8();
 
         let text = &headword[first_pos..last_pos];
-        Some(HeadwordPart { text, is_kana })
+        let rem = &headword[first_pos..];
+        Some(HeadwordPart { text, rem, is_kana })
     });
 
     let mut headword_parts = headword_parts.peekable();
@@ -311,8 +313,14 @@ pub fn furigana_parts<'a>(headword: &'a str, mut reading: &'a str) -> Vec<(&'a s
                 reading = rem;
                 (part.text, part_reading)
             } else {
-                // this shouldn't happen; we do the best we can
-                (part.text, reading)
+                // this can happen if the reading is a bit non-standard
+                // e.g. 鬼ヶ島 (おにがしま) doesn't have a "proper" split,
+                // so we just return what's left of the reading and headword,
+                // consuming it all
+                let reading_rem = reading;
+                reading = "";
+                for _ in &mut headword_parts {}
+                (part.rem, reading_rem)
             }
         } else {
             // let's say we're on "説明書"
@@ -362,6 +370,14 @@ mod tests {
         assert_eq!(
             super::furigana_parts("言い争い", "いいあらそい"),
             [("言", "い"), ("い", ""), ("争", "あらそ"), ("い", "")]
+        );
+        assert_eq!(
+            super::furigana_parts("鬼ヶ島", "おにがしま"),
+            [("鬼ヶ島", "おにがしま")]
+        );
+        assert_eq!(
+            super::furigana_parts("食べる鬼ヶ島", "たべるおにがしま"),
+            [("食", "た"), ("べる", ""), ("鬼ヶ島", "おにがしま")]
         );
 
         // TODO: these are broken, idk how to fix it

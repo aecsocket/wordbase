@@ -49,10 +49,10 @@ use {
 pub struct RecordEntry {
     /// Span in the lookup input sentence which corresponds to this entry's
     /// [`RecordEntry::term`], in UTF-8 string bytes.
-    pub span_bytes: QuerySpan,
+    pub span_bytes: Span,
     /// Span in the lookup input sentence which corresponds to this entry's
     /// [`RecordEntry::term`], in Unicode characters.
-    pub span_chars: QuerySpan,
+    pub span_chars: Span,
     /// ID of the [`Dictionary`] from which the record was retrieved.
     pub source: DictionaryId,
     /// [`Term`] that this record is for.
@@ -79,19 +79,21 @@ pub struct RecordEntry {
 /// or `uniffi`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-pub struct QuerySpan {
+pub struct Span {
     /// The lower bound of the range (inclusive).
     pub start: u64,
     /// The upper bound of the range (exclusive).
     pub end: u64,
 }
 
-impl From<Range<u64>> for QuerySpan {
-    fn from(value: Range<u64>) -> Self {
-        Self {
-            start: value.start,
-            end: value.end,
-        }
+impl<T: TryInto<u64>> TryFrom<Range<T>> for Span {
+    type Error = T::Error;
+
+    fn try_from(value: Range<T>) -> Result<Self, Self::Error> {
+        Ok(Self {
+            start: value.start.try_into()?,
+            end: value.end.try_into()?,
+        })
     }
 }
 

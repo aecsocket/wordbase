@@ -54,13 +54,15 @@ fun AnkiPagePreview() {
 fun AnkiPageApp() {
     val context = LocalContext.current
     val app = context.app()
+
     context.anki()?.let { anki ->
         val profile = app.profiles[app.profileId]
 
         AnkiPage(
             deck = profile?.ankiDeck ?: "",
             decks = anki.deckList.values.toList(),
-            onDeckChange = { },
+            onDeckChange = {
+            },
             model = profile?.ankiNoteType ?: "",
             models = anki.modelList.values.toList(),
             onModelChange = {},
