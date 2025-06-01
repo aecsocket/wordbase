@@ -6,24 +6,44 @@ use async_zip::base::read::seek::ZipFileReader;
 use foldhash::HashMap;
 use futures::AsyncReadExt;
 
+/// Headword/reading pair.
 pub type Term<'a> = (&'a str, &'a str);
+
+/// Furigana segments, where each segment is a pair of (headword part, reading part).
 pub type Furigana<'a> = &'a [(&'a str, &'a str)];
 
-pub fn get<'a>(headword: &str, reading: &str) -> Option<Furigana<'static>> {
-    let entries = ENTRIES
-        .get()
-        .unwrap_or_else(|| futures::executor::block_on(entries()));
-    entries.get(&(headword, reading)).copied()
+/// Gets furigana sections for the given headword/reading pair.
+///
+/// # Panics
+///
+/// Panics if the furigana map has not yet been [initialized][init].
+#[must_use]
+pub fn get(headword: &str, reading: &str) -> Option<Furigana<'static>> {
+    entries().get(&(headword, reading)).copied()
 }
 
 type EntryMap = HashMap<Term<'static>, Furigana<'static>>;
 
-static ENTRIES: OnceLock<EntryMap> = OnceLock::new();
+/// Gets the map of all headword/reading pairs to furigana sections.
+///
+/// # Panics
+///
+/// Panics if the furigana map has not yet been [initialized][init].
+#[must_use]
+pub fn entries() -> &'static EntryMap {
+    ENTRIES.get().expect(
+        "furigana entry map is not initialized yet - \
+        make sure to call `jmdict_furigana::init()` before `get()`",
+    )
+}
 
+/// Initializes the entry map, reading and parsing it into memory.
+///
+/// Call this before reading the entry map.
 #[expect(clippy::missing_panics_doc, reason = "shouldn't panic")]
-pub async fn entries() -> &'static EntryMap {
-    if let Some(entries) = ENTRIES.get() {
-        return entries;
+pub async fn init() {
+    if ENTRIES.get().is_some() {
+        return;
     }
 
     let archive = include_bytes!("jmdict_furigana.json.zip");
@@ -55,15 +75,10 @@ pub async fn entries() -> &'static EntryMap {
             )
         })
         .collect();
-    ENTRIES.get_or_init(|| entries)
+    _ = ENTRIES.set(entries);
 }
 
-/// Initializes the entry map, reading and parsing it into memory.
-///
-/// Call this before [`get`] to avoid blocking in [`get`].
-pub async fn init() {
-    entries().await;
-}
+static ENTRIES: OnceLock<EntryMap> = OnceLock::new();
 
 mod schema {
     use serde::Deserialize;
@@ -87,7 +102,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn foo() {
+    #[should_panic = "furigana entry map is not initialized yet - make sure to call `jmdict_furigana::init()` before `get()`"]
+    fn get_before_init() {
+        _ = get("", "");
+    }
+
+    #[tokio::test]
+    async fn furigana() {
+        init().await;
         assert_eq!(
             *get("食べる", "たべる").unwrap(),
             vec![("食", "た"), ("べる", "")]

@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -23,6 +24,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import kotlinx.coroutines.launch
 
 @Preview(showBackground = true)
 @Composable
@@ -54,6 +56,8 @@ fun AnkiPagePreview() {
 fun AnkiPageApp() {
     val context = LocalContext.current
     val app = context.app()
+    val wordbase by rememberWordbase()
+    val coroutineScope = rememberCoroutineScope()
 
     context.anki()?.let { anki ->
         val profile = app.profiles[app.profileId]
@@ -61,11 +65,24 @@ fun AnkiPageApp() {
         AnkiPage(
             deck = profile?.ankiDeck ?: "",
             decks = anki.deckList.values.toList(),
-            onDeckChange = {
+            onDeckChange = { deck ->
+                val wordbase = wordbase ?: return@AnkiPage
+                coroutineScope.launch {
+                    app.writeToWordbase(wordbase) {
+                        wordbase.setAnkiDeck(app.profileId, deck)
+                    }
+                }
             },
             model = profile?.ankiNoteType ?: "",
             models = anki.modelList.values.toList(),
-            onModelChange = {},
+            onModelChange = { model ->
+                val wordbase = wordbase ?: return@AnkiPage
+                coroutineScope.launch {
+                    app.writeToWordbase(wordbase) {
+                        wordbase.setAnkiNoteType(app.profileId, model)
+                    }
+                }
+            },
         )
     } ?: run {
         Column(
@@ -164,7 +181,10 @@ fun DropdownField(
             options.forEach {
                 DropdownMenuItem(
                     text = { Text(text = it) },
-                    onClick = { onSelectedChange(it) },
+                    onClick = {
+                        onSelectedChange(it)
+                        expanded = false
+                    },
                     contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
                 )
             }

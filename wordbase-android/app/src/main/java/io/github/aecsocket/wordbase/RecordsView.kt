@@ -3,6 +3,7 @@ package io.github.aecsocket.wordbase
 import android.annotation.SuppressLint
 import android.util.Log
 import android.webkit.JavascriptInterface
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -10,7 +11,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
@@ -71,7 +71,6 @@ fun rememberLookup(
 @Composable
 fun RecordsView(
     wordbase: Wordbase,
-    snackbarHostState: SnackbarHostState,
     sentence: String,
     cursor: ULong,
     records: List<RecordEntry> = rememberLookup(wordbase, sentence, cursor),
@@ -84,40 +83,30 @@ fun RecordsView(
     val app = context.app()
     val coroutineScope = rememberCoroutineScope()
 
-    suspend fun addNote(term: Term) {
+    suspend fun addNote(term: Term, deckName: String, modelName: String) {
         Log.i(TAG, "Adding card for (${term.headword}, ${term.reading})")
         if (AddContentApi.getAnkiDroidPackageName(context) == null) {
-            snackbarHostState.showSnackbar(
-                message = "Anki is not installed"
-            )
+            Toast.makeText(context, "Anki is not installed", Toast.LENGTH_SHORT).show()
             return
         }
         val anki = AddContentApi(context)
 
-        val deckName = "Testing"
-        val modelName = "Lapis"
-
         val deckId = anki.deckList
             .firstNotNullOfOrNull { (id, name) -> if (name == deckName) id else null }
             ?: run {
-                snackbarHostState.showSnackbar(
-                    message = "No deck named '$deckName'"
-                )
+                Toast.makeText(context, "No deck '$deckName'", Toast.LENGTH_SHORT).show()
                 return
             }
         val modelId = anki.modelList
             .firstNotNullOfOrNull { (id, name) -> if (name == modelName) id else null }
             ?: run {
-                snackbarHostState.showSnackbar(
-                    message = "No note type named '$modelName'"
-                )
+                Toast.makeText(context, "No note type '$modelName'", Toast.LENGTH_SHORT).show()
                 return
             }
 
         val fieldNames = anki.getFieldList(modelId) ?: run {
-            snackbarHostState.showSnackbar(
-                message = "Failed to get fields for '$modelName'"
-            )
+            Toast.makeText(context, "Failed to get fields for '$modelName'", Toast.LENGTH_SHORT)
+                .show()
             return
         }
 
@@ -129,9 +118,8 @@ fun RecordsView(
                 term = term,
             )
         } catch (ex: WordbaseException) {
-            snackbarHostState.showSnackbar(
-                message = "Failed to build term note: $ex"
-            )
+            Toast.makeText(context, "Failed to build term note", Toast.LENGTH_SHORT).show()
+            ex.printStackTrace()
             return
         }
 
@@ -139,12 +127,23 @@ fun RecordsView(
             termNote.fields[fieldName] ?: ""
         }
 
-        anki.addNote(modelId, deckId, fields.toTypedArray(), setOf("wordbase"))
-            ?: run {
-                snackbarHostState.showSnackbar(
-                    message = "Failed to add note"
-                )
+        val noteId = anki.addNote(modelId, deckId, fields.toTypedArray(), setOf("wordbase"))
+        if (noteId == null) {
+            Toast.makeText(context, "Failed to add note", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "Added note", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val onAddNote = app.profile?.ankiDeck?.let { ankiDeck ->
+        app.profile?.ankiNoteType?.let { noteType ->
+            { term: Term ->
+                coroutineScope.launch {
+                    addNote(term, ankiDeck, noteType)
+                }
+                Unit
             }
+        }
     }
 
     RawRecordsView(
@@ -153,11 +152,7 @@ fun RecordsView(
         insets = insets,
         containerColor = containerColor,
         contentColor = contentColor,
-        onAddNote = { term ->
-            coroutineScope.launch {
-                addNote(term)
-            }
-        },
+        onAddNote = onAddNote,
         onExit = onExit,
     )
 }
@@ -175,7 +170,7 @@ fun RawRecordsView(
     class JsBridge(val onAddNote: (Term) -> Unit) {
         @Suppress("unused") // used by JS
         @JavascriptInterface
-        fun addCard(headword: String?, reading: String?) {
+        fun addNote(headword: String?, reading: String?) {
             onAddNote(Term(headword = headword, reading = reading))
         }
     }
@@ -213,8 +208,7 @@ fun RawRecordsView(
         records = records,
         config = RenderConfig(
             addNoteText = stringResource(R.string.add_note),
-            addNoteJsFn = null,
-//            addNoteJsFn = "Wordbase.addNote",
+            addNoteJsFn = "Wordbase.addNote",
         ),
     ) + "<style>$extraCss</style>"
 

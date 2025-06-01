@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +35,7 @@ class App : Application() {
     val profiles get() = _profiles
 
     val profileId by mutableLongStateOf(1L)
+    val profile by derivedStateOf { profiles[profileId] }
 
     override fun onCreate() {
         super.onCreate()
