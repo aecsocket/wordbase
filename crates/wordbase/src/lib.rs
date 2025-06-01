@@ -6,6 +6,7 @@ mod db;
 pub mod deinflect;
 pub mod dictionary;
 pub mod import;
+pub mod lang;
 pub mod lookup;
 pub mod profile;
 pub mod render;
@@ -116,8 +117,15 @@ impl Engine {
         let data_dir = data_dir.as_ref();
         info!("Creating engine using {data_dir:?} as data directory");
 
-        let db_path = data_dir.join("wordbase.db");
-        let db = db::setup(&db_path).await?;
+        let (db, ()) = tokio::join!(
+            async {
+                let db_path = data_dir.join("wordbase.db");
+                db::setup(&db_path).await
+            },
+            jmdict_furigana::init(),
+        );
+        let db = db?;
+
         let (event_tx, _) = broadcast::channel(CHANNEL_BUF_CAP);
         Ok(Self {
             profiles: ArcSwap::from_pointee(

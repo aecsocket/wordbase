@@ -5,7 +5,7 @@ use maud::Render as _;
 use serde::Serialize;
 use wordbase_api::{DictionaryId, Record, RecordEntry, RecordKind, Term, dict};
 
-use crate::{Engine, IndexMap};
+use crate::{Engine, IndexMap, lang};
 
 impl Engine {
     pub fn render_to_html(&self, records: &[RecordEntry], config: &RenderConfig) -> Result<String> {
@@ -39,8 +39,7 @@ fn group_terms(entries: &[RecordEntry]) -> Vec<RecordTerm> {
         let term = &record.term;
         let info = groups.entry(term.clone()).or_insert_with(|| TermInfo {
             furigana_parts: match term {
-                Term::Full(headword, reading) => dict::jpn::furigana_parts(headword, reading)
-                    .into_iter()
+                Term::Full(headword, reading) => lang::jpn::furigana_parts(headword, reading)
                     .map(|(a, b)| (a.to_owned(), b.to_owned()))
                     .collect::<Vec<_>>(),
                 Term::Headword(text) | Term::Reading(text) => {

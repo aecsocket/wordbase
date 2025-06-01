@@ -251,7 +251,7 @@ fn term_ruby_plain(term: &Term) -> String {
     match term {
         Term::Full(headword, reading) => {
             let mut result = String::new();
-            for (headword_part, reading_part) in dict::jpn::furigana_parts(headword, reading) {
+            for (headword_part, reading_part) in lang::jpn::furigana_parts(headword, reading) {
                 _ = write!(&mut result, "{headword_part}");
                 if !reading_part.is_empty() {
                     _ = write!(&mut result, "[{reading_part}]");

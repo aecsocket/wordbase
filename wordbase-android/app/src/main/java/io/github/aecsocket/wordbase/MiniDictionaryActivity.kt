@@ -121,91 +121,87 @@ fun MiniDictionaryUi(sentence: String) {
     }
 
     val snackbarHostState = remember { SnackbarHostState() }
-//    SnackbarHost(
-//        hostState = snackbarHostState
-//    ) {
-        val coroutineScope = rememberCoroutineScope()
-        val sheetState = rememberModalBottomSheetState()
-        val activity = LocalActivity.current
-        ModalBottomSheet(
-            sheetState = sheetState,
-            onDismissRequest = {
-                activity?.finish()
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-        ) {
-            // the column lets you scroll the webview
-            // why? idk!!
-            // https://medium.com/@itsuki.enjoy/android-kotlin-jetpack-compose-make-your-nested-webview-scroll-cbf023e821a1
-            LazyColumn {
-                item {
-                    Box(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    ) {
-                        SelectionContainer {
-                            Text(
-                                text = annotatedQuery,
-                                style = MaterialTheme.typography.headlineSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                softWrap = false,
-                                maxLines = 1,
-                                modifier = Modifier.padding(
-                                    horizontal = 16.dp,
-                                    vertical = 4.dp,
-                                )
+    val coroutineScope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState()
+    val activity = LocalActivity.current
+    ModalBottomSheet(
+        sheetState = sheetState,
+        onDismissRequest = {
+            activity?.finish()
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+    ) {
+        // the column lets you scroll the webview
+        // why? idk!!
+        // https://medium.com/@itsuki.enjoy/android-kotlin-jetpack-compose-make-your-nested-webview-scroll-cbf023e821a1
+        LazyColumn {
+            item {
+                Box(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                ) {
+                    SelectionContainer {
+                        Text(
+                            text = annotatedQuery,
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            softWrap = false,
+                            maxLines = 1,
+                            modifier = Modifier.padding(
+                                horizontal = 16.dp,
+                                vertical = 4.dp,
                             )
-                        }
+                        )
                     }
                 }
+            }
 
-                item {
-                    wordbase?.let { wordbase ->
-                        val records = rememberLookup(
+            item {
+                wordbase?.let { wordbase ->
+                    val records = rememberLookup(
+                        wordbase = wordbase,
+                        sentence = sentence,
+                        cursor = cursor.bytes,
+                        onRecords = { records ->
+                            val spanMin = records.minOfOrNull { it.spanChars.start } ?: 0UL
+                            val spanMax = records.maxOfOrNull { it.spanChars.end } ?: 0UL
+                            scanRange = spanMin.toInt() to spanMax.toInt()
+                        }
+                    )
+
+                    if (records.isEmpty()) {
+                        NoRecordsView()
+                    } else {
+                        RecordsView(
                             wordbase = wordbase,
+                            snackbarHostState = snackbarHostState,
                             sentence = sentence,
                             cursor = cursor.bytes,
-                            onRecords = { records ->
-                                val spanMin = records.minOfOrNull { it.spanChars.start } ?: 0UL
-                                val spanMax = records.maxOfOrNull { it.spanChars.end } ?: 0UL
-                                scanRange = spanMin.toInt() to spanMax.toInt()
-                            }
+                            records = records,
+                            containerColor = BottomSheetDefaults.ContainerColor,
+                            onExit = {
+                                coroutineScope.launch {
+                                    sheetState.hide()
+                                    activity?.finish()
+                                }
+                            },
                         )
-
-                        if (records.isEmpty()) {
-                            NoRecordsView()
-                        } else {
-                            RecordsView(
-                                wordbase = wordbase,
-                                snackbarHostState = snackbarHostState,
-                                sentence = sentence,
-                                cursor = cursor.bytes,
-                                records = records,
-                                containerColor = BottomSheetDefaults.ContainerColor,
-                                onExit = {
-                                    coroutineScope.launch {
-                                        sheetState.hide()
-                                        activity?.finish()
-                                    }
-                                },
-                            )
-                        }
-                    } ?: run {
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier
-                                    .height(128.dp)
-                                    .aspectRatio(1f)
-                                    .padding(16.dp)
-                            )
-                        }
+                    }
+                } ?: run {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .height(128.dp)
+                                .aspectRatio(1f)
+                                .padding(16.dp)
+                        )
                     }
                 }
             }
         }
-//    }
+    }
 }

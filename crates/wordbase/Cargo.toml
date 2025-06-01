@@ -24,6 +24,7 @@ desktop = ["dep:directories", "dep:tokio-tungstenite"]
 
 [dependencies]
 wordbase-api = { workspace = true, features = ["render-html"] }
+jmdict-furigana = { workspace = true }
 
 anyhow               = { workspace = true }
 arc-swap             = { workspace = true }

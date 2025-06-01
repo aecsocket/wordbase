@@ -32,6 +32,7 @@ too_many_lines          = "allow"
 type_complexity         = "allow"
 
 [workspace.dependencies]
+jmdict-furigana = { path = "crates/jmdict-furigana" }
 wordbase = { path = "crates/wordbase" }
 # wordbase-ankiconnect = { path = "crates/wordbase-ankiconnect" }
 # wordbase-client-tokio = { path = "crates/wordbase-client-tokio" }
@@ -100,6 +101,8 @@ tracing-subscriber   = { version = "0.3" }
 uniffi               = { version = "0.29.2" }
 webkit6              = { version = "0.4" }
 xz2                  = { version = "0.1" }
+zip = { version = "4.0"}
+quote = { version = "1.0" }
 zbus                 = { version = "5.5", default-features = false }
 
 [patch.crates-io]
