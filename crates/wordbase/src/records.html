@@ -351,7 +351,10 @@
         </span>
 
         {% for glossary in glossary_group %}
-        <div class="card" style="padding: 8px">
+        <div
+          class="card"
+          style="padding: 8px; display: flex; flex-direction: column; gap: 8px"
+        >
           {% if glossary.tags | length > 0 %}
           <span class="flow" style="gap: 6px">
             {% for tag in glossary.tags %}
@@ -365,7 +368,7 @@
           <!-- -->
 
           {% for content in glossary.content %}
-          <p>{{ content | safe }}</p>
+          <div>{{ content | safe }}</div>
           {% endfor %}
         </div>
         {% endfor %}

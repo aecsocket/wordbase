@@ -1,5 +1,5 @@
 [package]
-# description = "Dictionary and word lookup service - API types"
+description = "Provides furigana segmentation for Japanese headword/reading pairs via JmdictFurigana"
 name        = "jmdict-furigana"
 version     = "0.1.0"
 
@@ -18,13 +18,11 @@ workspace = true
 all-features = true
 
 [dependencies]
-foldhash = { workspace = true }
-async_zip = { workspace = true, features = ["deflate", "tokio"] }
-serde        = { workspace = true, features = ["derive"] }
-serde_json   = { workspace = true }
-anyhow = { workspace = true }
-tokio = { workspace = true }
-futures = { workspace = true }
+async_zip  = { workspace = true, features = ["deflate", "tokio"] }
+foldhash   = { workspace = true }
+futures    = { workspace = true }
+serde      = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }

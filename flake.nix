@@ -27,6 +27,7 @@
 
             # Rust
             rustToolchain
+            taplo
             cargo-shear
             pkg-config
             openssl

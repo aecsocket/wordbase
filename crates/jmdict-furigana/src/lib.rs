@@ -1,16 +1,14 @@
 #![doc = include_str!("../README.md")]
 
-use std::{io::Cursor, sync::OnceLock};
+use std::sync::OnceLock;
 
 use async_zip::base::read::seek::ZipFileReader;
 use foldhash::HashMap;
-use futures::AsyncReadExt;
+use futures::{AsyncReadExt, io::Cursor};
 
-/// Headword/reading pair.
-pub type Term<'a> = (&'a str, &'a str);
-
-/// Furigana segments, where each segment is a pair of (headword part, reading part).
-pub type Furigana<'a> = &'a [(&'a str, &'a str)];
+type Term<'a> = (&'a str, &'a str);
+type Furigana<'a> = &'a [(&'a str, &'a str)];
+type EntryMap = HashMap<Term<'static>, Furigana<'static>>;
 
 /// Gets furigana sections for the given headword/reading pair.
 ///
@@ -21,8 +19,6 @@ pub type Furigana<'a> = &'a [(&'a str, &'a str)];
 pub fn get(headword: &str, reading: &str) -> Option<Furigana<'static>> {
     entries().get(&(headword, reading)).copied()
 }
-
-type EntryMap = HashMap<Term<'static>, Furigana<'static>>;
 
 /// Gets the map of all headword/reading pairs to furigana sections.
 ///
@@ -47,7 +43,7 @@ pub async fn init() {
     }
 
     let archive = include_bytes!("jmdict_furigana.json.zip");
-    let archive = ZipFileReader::with_tokio(Cursor::new(&archive[..]))
+    let archive = ZipFileReader::new(Cursor::new(&archive[..]))
         .await
         .expect("failed to read archive as zip file");
 

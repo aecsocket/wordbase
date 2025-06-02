@@ -33,19 +33,19 @@ type_complexity         = "allow"
 
 [workspace.dependencies]
 jmdict-furigana = { path = "crates/jmdict-furigana" }
-wordbase = { path = "crates/wordbase" }
+wordbase        = { path = "crates/wordbase" }
 # wordbase-ankiconnect = { path = "crates/wordbase-ankiconnect" }
 # wordbase-client-tokio = { path = "crates/wordbase-client-tokio" }
 wordbase-api = { path = "crates/wordbase-api" }
 # wordbase-server = { path = "crates/wordbase-server" }
 
-async-stream         = { version = "0.3.6" }
 ankiconnect          = { version = "0.2" }
 anyhow               = { version = "1.0" }
 arc-swap             = { version = "1.7" }
 ascii_table          = { version = "4.0" }
 ashpd                = { version = "0.11" }
 async-compression    = { version = "0.4" }
+async-stream         = { version = "0.3.6" }
 async-tar            = { version = "0.5" }
 async_zip            = { version = "0.0.17" }
 bimap                = { version = "0.6" }
@@ -59,6 +59,7 @@ directories          = { version = "6.0" }
 foldhash             = { version = "0.1.4" }
 form_urlencoded      = { version = "1.2" }
 futures              = { version = "0.3" }
+genawaiter           = { version = "0.99" }
 gio                  = { version = "0.20.9" }
 glib                 = { version = "0.20" }
 gtk4                 = { version = "0.9" }
@@ -66,20 +67,20 @@ html-escape          = { version = "0.2" }
 indexmap             = { version = "2.8" }
 itertools            = { version = "0.14" }
 libadwaita           = { version = "0.7.2" }
-unicode-segmentation = { version = "1.12" }
 libspa               = { version = "0.8" }
 lindera              = { version = "0.43.0" }
 maud                 = { version = "0.27" }
 mecab                = { version = "0.1.6" }
 notify               = { version = "8.0" }
 paste                = { version = "1.0" }
+pin-project          = { version = "1.1" }
 pipewire             = { version = "0.8" }
 poem                 = { version = "3.1.9" }
 poem-openapi         = { version = "5.1" }
+quote                = { version = "1.0" }
 rand                 = { version = "0.9" }
 regex                = { version = "1.11" }
 relm4                = { version = "0.9.1" }
-genawaiter           = { version = "0.99" }
 relm4-components     = { version = "0.9.1" }
 relm4-icons          = { version = "0.10.0-beta.2" }
 relm4-icons-build    = { version = "0.10.0-beta.2" }
@@ -96,14 +97,13 @@ tokio-stream         = { version = "0.1" }
 tokio-tungstenite    = { version = "0.26" }
 tokio-util           = { version = "0.7" }
 tracing              = { version = "0.1" }
-pin-project          = { version = "1.1" }
 tracing-subscriber   = { version = "0.3" }
+unicode-segmentation = { version = "1.12" }
 uniffi               = { version = "0.29.2" }
 webkit6              = { version = "0.4" }
 xz2                  = { version = "0.1" }
-zip = { version = "4.0"}
-quote = { version = "1.0" }
 zbus                 = { version = "5.5", default-features = false }
+zip                  = { version = "4.0" }
 
 [patch.crates-io]
 lindera = { git = "https://github.com/aecsocket/lindera" }
@@ -112,16 +112,16 @@ lindera = { git = "https://github.com/aecsocket/lindera" }
 ignored = ["bzip2"]
 
 [workspace.metadata.cross.build]
-env.volumes = ["LINDERA_CACHE=lindera-cache"]
 env.passthrough = ["CARGO_TARGET_DIR=target/cross"]
+env.volumes = ["LINDERA_CACHE=lindera-cache"]
 pre-build = [
   "dpkg --add-architecture $CROSS_DEB_ARCH",
   "apt-get update && apt-get --assume-yes install libssl-dev:$CROSS_DEB_ARCH",
 ]
 
 [profile.release]
-strip = true
-opt-level = "z"
-lto = true
 codegen-units = 1
-panic = "abort"
+lto           = true
+opt-level     = "z"
+panic         = "abort"
+strip         = true

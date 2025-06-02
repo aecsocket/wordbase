@@ -132,10 +132,7 @@ fn write_style_css(w: &mut impl fmt::Write, s: &ContentStyle) -> fmt::Result {
         ($field:expr, $prop:expr) => {
             if let Some(value) = &($field) {
                 write!(w, $prop)?;
-                write!(w, ":")?;
-                let value = format!("{value}");
-                write!(w, "{}", html_escape::encode_safe(&value))?;
-                write!(w, ";")?;
+                write!(w, ":{value};")?;
             }
         };
     }
@@ -174,4 +171,27 @@ fn write_style_css(w: &mut impl fmt::Write, s: &ContentStyle) -> fmt::Result {
     forward_to_css!(s.list_style_type, "list-style-type");
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::dict::yomitan::structured::StyledElement;
+
+    use super::*;
+
+    #[test]
+    fn style_escape() {
+        assert_eq!(
+            r#"<ul style="list-style-type:&quot;X&quot;;"></ul>"#,
+            Element::Ul(StyledElement {
+                style: Some(ContentStyle {
+                    list_style_type: Some("\"X\"".into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            })
+            .render()
+            .0
+        );
+    }
 }
