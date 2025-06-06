@@ -68,6 +68,7 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 
+    implementation(libs.androidx.work)
     implementation(libs.webview)
     implementation(libs.reorderable)
     implementation(libs.jna) {

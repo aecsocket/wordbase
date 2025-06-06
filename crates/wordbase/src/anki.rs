@@ -154,7 +154,7 @@ fn glossaries(entries: &[RecordEntry]) -> Vec<String> {
                     ul {
                         @for content in &glossary.content {
                             li {
-                                (content)
+                                (dict::yomitan::render_html(content))
                             }
                         }
                     }

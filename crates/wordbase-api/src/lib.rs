@@ -78,17 +78,17 @@ uniffi::setup_scaffolding!();
 ///     }
 /// }
 ///
-/// wordbase::for_kinds!(define_types);
+/// wordbase_api::for_kinds!(define_types);
 /// ```
 ///
 /// Generate code which performs the same action for all record kinds:
 ///
 /// ```
-/// # use wordbase::Record;
+/// # use wordbase_api::Record;
 /// fn deserialize_record(kind: u32, data: &[u8]) {
 ///     macro_rules! deserialize_record { ($($dict_kind:ident($dict_path:ident) { $($record_kind:ident),* $(,)? }),* $(,)?) => { paste::paste! {{
 ///         mod discrim {
-///             use wordbase::RecordKind;
+///             use wordbase_api::RecordKind;
 ///
 ///             $($(
 ///             pub const [< $dict_kind $record_kind >]: u32 = RecordKind::[< $dict_kind $record_kind >] as u32;
@@ -106,7 +106,7 @@ uniffi::setup_scaffolding!();
 ///         }
 ///     }}}}
 ///
-///     wordbase::for_kinds!(deserialize_record);
+///     wordbase_api::for_kinds!(deserialize_record);
 /// }
 /// # fn deserialize<T>(_: &[u8]) -> T { unimplemented!() }
 /// ```
@@ -249,9 +249,8 @@ pub struct Dictionary {
 /// # Examples
 ///
 /// ```
-/// # use wordbase::DictionaryMeta;
-///
-/// let mut meta = DictionaryMeta::new(DictionaryKind::YomitanDictionary, "My Dictionary");
+/// # use wordbase_api::{DictionaryMeta, DictionaryKind};
+/// let mut meta = DictionaryMeta::new(DictionaryKind::Yomitan, "My Dictionary");
 /// meta.version = Some("1.0.0".into());
 /// meta.url = Some("https://example.com".into());
 /// ```
@@ -330,9 +329,6 @@ pub enum FrequencyValue {
 /// The engine does not have a concept of a current profile - instead, it is the
 /// app's responsibility to manage a current profile, and pass that profile ID
 /// into operations which require it (e.g. lookups).
-///
-/// This represents a profile which already exists in the engine, whereas
-/// [`ProfileMeta`] may not.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem", derive(poem_openapi::Object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -362,9 +358,10 @@ pub struct Profile {
     pub anki_deck: Option<String>,
     /// Name of the Anki note type used for creating new notes.
     pub anki_note_type: Option<String>,
-    /// Set of [`Dictionary`] entries which are [enabled] under this profile.
+    /// Set of [`Dictionary`] entries which are enabled under this profile.
     ///
-    /// [enabled]: Dictionary::enabled
+    /// If a dictionary is enabled, it will be used to provide results for
+    /// lookups when using this profile.
     pub enabled_dictionaries: Vec<DictionaryId>,
 }
 

@@ -7,6 +7,9 @@
 
 #[cfg(feature = "render-html")]
 mod html;
+#[cfg(feature = "render-html")]
+pub use html::render_html;
+
 pub mod structured;
 
 use {

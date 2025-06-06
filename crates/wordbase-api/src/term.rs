@@ -17,6 +17,9 @@ use crate::NormString;
 ///
 /// For languages without the concept of a reading, only the headword should be
 /// specified.
+///
+/// [`Record`]: crate::Record
+/// [`Dictionary`]: crate::Dictionary
 #[derive(Debug, Display, Clone, PartialEq, Eq, Hash)]
 pub enum Term {
     /// Headword only.
@@ -232,7 +235,7 @@ mod tests {
 
         assert_eq!(
             Term::from_full("hello", "world").unwrap(),
-            Term::Full(ns("hello"), ns("reading")),
+            Term::Full(ns("hello"), ns("world")),
         );
         assert_eq!(
             Term::from_full("foo", "").unwrap(),

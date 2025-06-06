@@ -1,7 +1,6 @@
 use anyhow::Result;
 use data_encoding::BASE64;
 use foldhash::HashSet;
-use maud::Render as _;
 use serde::Serialize;
 use wordbase_api::{DictionaryId, Record, RecordEntry, RecordKind, Term, dict};
 
@@ -62,7 +61,7 @@ fn group_terms(entries: &[RecordEntry]) -> Vec<RecordTerm> {
                         content: glossary
                             .content
                             .iter()
-                            .map(|content| content.render().0)
+                            .map(|content| dict::yomitan::render_html(content).0)
                             .collect(),
                     });
             }

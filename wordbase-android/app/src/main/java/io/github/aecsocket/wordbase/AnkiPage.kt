@@ -89,7 +89,7 @@ fun AnkiPageApp() {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = stringResource(R.string.manage_anki_not_installed)
+                text = stringResource(R.string.add_note_no_anki)
             )
 
             val context = LocalContext.current

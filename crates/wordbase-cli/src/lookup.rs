@@ -1,7 +1,6 @@
 use {
     anyhow::{Context, Result},
-    std::{fmt::Write as _, path::Path, time::Instant},
-    tokio::fs,
+    std::{fmt::Write as _, time::Instant},
     wordbase::{Engine, Profile, RecordKind, render::RenderConfig},
 };
 
@@ -33,11 +32,11 @@ pub async fn lookup_lemma(engine: &Engine, profile: &Profile, lemma: &str) -> Re
     Ok(())
 }
 
-pub async fn render(engine: &Engine, profile: &Profile, text: &str, output: &Path) -> Result<()> {
+pub async fn render(engine: &Engine, profile: &Profile, text: &str) -> Result<()> {
     let start = Instant::now();
     let records = engine.lookup(profile.id, text, 0, RecordKind::ALL).await?;
     let end = Instant::now();
-    println!("Fetched records in {:?}", end.duration_since(start));
+    eprintln!("Fetched records in {:?}", end.duration_since(start));
 
     let start = Instant::now();
     let mut html = engine
@@ -49,23 +48,23 @@ pub async fn render(engine: &Engine, profile: &Profile, text: &str, output: &Pat
             },
         )
         .context("failed to render HTML")?;
-    let end = Instant::now();
-    println!("Rendered HTML in {:?}", end.duration_since(start));
-
     _ = write!(&mut html, "<style>{EXTRA_CSS}</style>");
-    fs::write(output, &html)
-        .await
-        .context("failed to write to file")?;
+    let end = Instant::now();
+    eprintln!("Rendered HTML in {:?}", end.duration_since(start));
 
+    println!("{html}");
     Ok(())
 }
 
 const EXTRA_CSS: &str = "
 :root {
+    --accent-color: #3584e4;
+    --on-accent-color: #ffffff;
+}
+
+:root {
     --bg-color: #fafafb;
     --fg-color: rgb(0 0 6 / 80%);
-    --accent-color: #3584e4;
-    --on-accent-color: var(--fg-color);
 }
 
 @media (prefers-color-scheme: dark) {

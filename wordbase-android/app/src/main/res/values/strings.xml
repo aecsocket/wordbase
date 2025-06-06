@@ -44,7 +44,6 @@
     <string name="dictionary_delete_body">Are you sure you want to delete ‘%s’?</string>
 
     <string name="manage_anki">Anki</string>
-    <string name="manage_anki_not_installed">Deck</string>
     <string name="manage_anki_install">Install Anki</string>
     <string name="manage_anki_deck">Deck</string>
     <string name="manage_anki_note_type">Note Type</string>

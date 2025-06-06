@@ -7,7 +7,7 @@ mod profile;
 
 use {
     anyhow::{Context, Result},
-    std::path::PathBuf,
+    std::{io, path::PathBuf},
     tracing::level_filters::LevelFilter,
     tracing_subscriber::EnvFilter,
     wordbase::{DictionaryId, Engine, ProfileId},
@@ -44,9 +44,6 @@ enum Command {
     Render {
         /// Text to look up
         text: String,
-        /// File to write HTML to
-        #[arg(short, long)]
-        output: PathBuf,
     },
     /// Manage profiles
     Profile {
@@ -182,6 +179,7 @@ enum TexthookerCommand {
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
+        .with_writer(io::stderr)
         .with_env_filter(
             EnvFilter::builder()
                 .with_default_directive(LevelFilter::INFO.into())
@@ -215,8 +213,8 @@ async fn main() -> Result<()> {
         Command::LookupLemma { lemma } => {
             lookup::lookup_lemma(&engine, &*require_profile()?, &lemma).await?;
         }
-        Command::Render { text, output } => {
-            lookup::render(&engine, &*require_profile()?, &text, &output).await?;
+        Command::Render { text } => {
+            lookup::render(&engine, &*require_profile()?, &text).await?;
         }
         Command::Deinflect { text } => {
             lookup::deinflect(&engine, &text);

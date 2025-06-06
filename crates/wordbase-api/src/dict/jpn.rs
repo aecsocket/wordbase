@@ -79,7 +79,7 @@ pub fn is_hiragana(c: char) -> bool {
 /// # Examples
 ///
 /// ```
-/// # use wordbase_api::dict::jpn::is_hiragana;
+/// # use wordbase_api::dict::jpn::is_katakana;
 /// assert!(is_katakana('ア'));
 /// assert!(is_katakana('ン'));
 /// assert!(!is_katakana('あ'));
@@ -95,7 +95,7 @@ pub fn is_katakana(c: char) -> bool {
 /// # Examples
 ///
 /// ```
-/// # use wordbase_api::dict::jpn::is_hiragana;
+/// # use wordbase_api::dict::jpn::is_kana;
 /// assert!(is_kana('あ'));
 /// assert!(is_kana('ア'));
 /// assert!(!is_kana('A'));
@@ -195,13 +195,13 @@ pub const fn pitch_category_of(n_morae: usize, downstep: usize) -> PitchCategory
 /// Note that this function may not generate the most accurate furigana reading
 /// possible, which is a fundamental limitation of using heuristics instead of
 /// a hardcoded mapping between terms and furigana pairs. It is recommended to
-/// use a hardcoded furigana map first from e.g. `jmdict-furigana`, and use this
+/// use a hardcoded furigana map first from e.g. [`jmdict-furigana`], and use this
 /// function as a fallback.
 ///
 /// # Examples
 ///
 /// ```
-/// # use wordbase_engine::lang::jpn::furigana_parts;
+/// # use wordbase_api::dict::jpn::furigana_parts;
 /// assert_eq!(furigana_parts("日本", "にほん"), [("日本", "にほん")]);
 /// assert_eq!(
 ///     furigana_parts("食べる", "たべる"),
@@ -218,6 +218,8 @@ pub const fn pitch_category_of(n_morae: usize, downstep: usize) -> PitchCategory
 ///     ]
 /// );
 /// ```
+///
+/// [`jmdict-furigana`]: https://docs.rs/jmdict-furigana
 #[must_use]
 #[expect(clippy::missing_panics_doc, reason = "shouldn't panic")]
 pub fn furigana_parts<'a>(headword: &'a str, mut reading: &'a str) -> Vec<(&'a str, &'a str)> {

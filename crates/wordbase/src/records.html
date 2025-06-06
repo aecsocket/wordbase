@@ -21,6 +21,19 @@
 {%- endmacro dictionary_name -%}
 -->
 
+<!-- prettier-ignore -->
+<!--
+{#
+we use a macro to define styles here, because we insert the stylesheet in 2 places:
+- in the document itself
+- when rendering a glossary, inside the shadow root of the glossary
+
+we use a shadow root to prevent glossary contents (which are raw HTML) from leaking out
+into the outer document
+#}
+-->
+
+{% macro style() %}
 <style>
   :root {
     color: var(--fg-color);
@@ -196,6 +209,12 @@
     content: "・";
   }
 
+  .glossaries[data-count="1"] {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+  }
+
   [data-pitch-category="Heiban"] {
     color: var(--heiban);
   }
@@ -228,6 +247,7 @@
     margin-right: 2px;
   }
 </style>
+{% endmacro style %} {{ self::style() }}
 
 <div style="display: none">
   <svg
@@ -367,9 +387,17 @@
 
           <!-- -->
 
-          {% for content in glossary.content %}
-          <div>{{ content | safe }}</div>
-          {% endfor %}
+          <ul class="glossaries" data-count="{{ glossary.content | length }}">
+            {% for content in glossary.content %}
+            <li>
+              <div>
+                <template shadowrootmode="open">
+                  {{ self::style() }} {{ content | safe }}
+                </template>
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
         </div>
         {% endfor %}
       </div>
