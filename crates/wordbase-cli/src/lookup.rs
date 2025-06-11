@@ -1,25 +1,24 @@
 use {
     anyhow::{Context, Result},
     std::{fmt::Write as _, time::Instant},
-    wordbase::{Engine, Profile, RecordKind, render::RenderConfig},
+    tracing::info,
+    wordbase::{Engine, Profile, RecordEntry, RecordKind, render::RenderConfig},
 };
 
 pub fn deinflect(engine: &Engine, text: &str) {
     for deinflect in engine.deinflect(text, 0) {
         let text_part = text.get(deinflect.span).unwrap_or("(?)");
-        println!("{text_part} -> {:?}", deinflect.lemma);
+        info!("{text_part} -> {:?}", deinflect.lemma);
     }
 }
 
-pub async fn lookup(engine: &Engine, profile: &Profile, text: &str) -> Result<()> {
+pub async fn lookup(engine: &Engine, profile: &Profile, text: &str) -> Result<Vec<RecordEntry>> {
     let start = Instant::now();
     let records = engine.lookup(profile.id, text, 0, RecordKind::ALL).await?;
     let end = Instant::now();
-    for result in records {
-        println!("{result:#?}");
-    }
-    println!("Fetched records in {:?}", end.duration_since(start));
-    Ok(())
+    // TODO: a nice, sort-of-human-readable output
+    info!("Fetched records in {:?}", end.duration_since(start));
+    Ok(records)
 }
 
 pub async fn lookup_lemma(engine: &Engine, profile: &Profile, lemma: &str) -> Result<()> {
@@ -36,7 +35,7 @@ pub async fn render(engine: &Engine, profile: &Profile, text: &str) -> Result<()
     let start = Instant::now();
     let records = engine.lookup(profile.id, text, 0, RecordKind::ALL).await?;
     let end = Instant::now();
-    eprintln!("Fetched records in {:?}", end.duration_since(start));
+    info!("Fetched records in {:?}", end.duration_since(start));
 
     let start = Instant::now();
     let mut html = engine
@@ -50,12 +49,13 @@ pub async fn render(engine: &Engine, profile: &Profile, text: &str) -> Result<()
         .context("failed to render HTML")?;
     _ = write!(&mut html, "<style>{EXTRA_CSS}</style>");
     let end = Instant::now();
-    eprintln!("Rendered HTML in {:?}", end.duration_since(start));
+    info!("Rendered HTML in {:?}", end.duration_since(start));
 
     println!("{html}");
     Ok(())
 }
 
+// TODO: this should probably be put into the renderer somehow
 const EXTRA_CSS: &str = "
 :root {
     --accent-color: #3584e4;

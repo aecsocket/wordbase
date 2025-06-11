@@ -3,6 +3,7 @@ use {
     anyhow::{Context, Result, bail},
     derive_more::Deref,
     futures::TryStreamExt,
+    serde::{Deserialize, Serialize},
     sqlx::{Acquire, Pool, Sqlite},
     std::{sync::Arc, time::Instant},
     tokio_stream::StreamExt,
@@ -10,7 +11,7 @@ use {
     wordbase_api::{Dictionary, DictionaryId, DictionaryMeta, ProfileId},
 };
 
-#[derive(Debug, Default, Deref)]
+#[derive(Debug, Default, Deref, Serialize, Deserialize)]
 pub struct Dictionaries(pub IndexMap<DictionaryId, Arc<Dictionary>>);
 
 impl Dictionaries {

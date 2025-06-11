@@ -3,10 +3,11 @@ use {
     ascii_table::AsciiTable,
     futures::TryStreamExt,
     std::{path::PathBuf, sync::Arc, time::Instant},
-    wordbase::{DictionaryId, Engine, Profile, import::ImportEvent},
+    tracing::info,
+    wordbase::{Dictionary, DictionaryId, Engine, Profile, import::ImportEvent},
 };
 
-pub fn ls(engine: &Engine, profile: &Profile) {
+pub fn ls(engine: &Engine, profile: &Profile) -> Vec<Arc<Dictionary>> {
     let mut table = AsciiTable::default();
     table.column(0).set_header("Sort");
     table.column(1).set_header("On");
@@ -39,7 +40,8 @@ pub fn ls(engine: &Engine, profile: &Profile) {
             ]
         })
         .collect::<Vec<_>>();
-    table.print(&data);
+    info!("\n{}", table.format(&data));
+    dictionaries.iter().map(|(_, dict)| dict.clone()).collect()
 }
 
 pub fn info(engine: &Engine, dict_id: DictionaryId) -> Result<()> {
@@ -49,28 +51,28 @@ pub fn info(engine: &Engine, dict_id: DictionaryId) -> Result<()> {
         .cloned()
         .context("no dictionary with this ID")?;
 
-    println!("{:?} version {:?}", dict.meta.name, dict.meta.version);
-    println!("  ID {} | Position {}", dict.id.0, dict.position);
+    info!("{:?} version {:?}", dict.meta.name, dict.meta.version);
+    info!("  ID {} | Position {}", dict.id.0, dict.position);
 
     if let Some(url) = &dict.meta.url {
-        println!("  URL: {url}");
+        info!("  URL: {url}");
     }
 
     if let Some(description) = &dict.meta.description {
         if !description.trim().is_empty() {
-            println!();
-            println!("--- Description ---");
-            println!();
-            println!("{description}");
+            info!("");
+            info!("--- Description ---");
+            info!("");
+            info!("{description}");
         }
     }
 
     if let Some(attribution) = &dict.meta.attribution {
         if !attribution.trim().is_empty() {
-            println!();
-            println!("--- Attribution ---");
-            println!();
-            println!("{attribution}");
+            info!("");
+            info!("--- Attribution ---");
+            info!("");
+            info!("{attribution}");
         }
     }
 
@@ -90,16 +92,16 @@ pub async fn import(engine: &Engine, profile: &Profile, path: PathBuf) -> Result
     {
         match event {
             ImportEvent::DeterminedKind(kind) => {
-                println!("Kind: {kind:?}");
+                info!("Kind: {kind:?}");
             }
             ImportEvent::ParsedMeta(meta) => {
-                println!("Importing {:?} version {:?}", meta.name, meta.version);
+                info!("Importing {:?} version {:?}", meta.name, meta.version);
             }
             ImportEvent::Progress(progress) => {
-                println!("{:.02}% imported", progress * 100.0);
+                info!("{:.02}% imported", progress * 100.0);
             }
             ImportEvent::Done(id) => {
-                println!("Imported as {id:?}");
+                info!("Imported as {id:?}");
                 engine
                     .enable_dictionary(profile.id, id)
                     .await
@@ -109,7 +111,7 @@ pub async fn import(engine: &Engine, profile: &Profile, path: PathBuf) -> Result
     }
 
     let elapsed = Instant::now().duration_since(start);
-    println!("Import complete in {elapsed:?}");
+    info!("Import complete in {elapsed:?}");
     Ok(())
 }
 
@@ -132,7 +134,7 @@ pub async fn rm(engine: &Engine, dict_id: DictionaryId) -> Result<()> {
     let start = Instant::now();
     engine.remove_dictionary(dict_id).await?;
     let end = Instant::now();
-    println!("Removal complete in {:?}", end.duration_since(start));
+    info!("Removal complete in {:?}", end.duration_since(start));
 
     Ok(())
 }

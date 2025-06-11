@@ -4740,6 +4740,8 @@ dependencies = [
  "ascii_table",
  "clap",
  "futures",
+ "serde",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",

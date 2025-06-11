@@ -7,6 +7,7 @@ mod profile;
 
 use {
     anyhow::{Context, Result, bail},
+    serde::Serialize,
     std::{io, path::PathBuf},
     tracing::level_filters::LevelFilter,
     tracing_subscriber::EnvFilter,
@@ -15,12 +16,30 @@ use {
 
 #[derive(Debug, clap::Parser)]
 struct Args {
+    /// Wordbase engine data directory.
+    ///
+    /// Defaults to the desktop data directory.
     #[arg(long)]
     data_dir: Option<PathBuf>,
+    /// ID of the profile to use for commands.
+    ///
+    /// If there is only 1 profile present, this may be omitted.
     #[arg(long, short)]
     profile: Option<i64>,
+    /// Output format printed to stdout.
+    ///
+    /// If not specified, nothing will be output to stdout. Log messages will be
+    /// output to stderr regardless of this option.
+    #[arg(long, short)]
+    output: Option<OutputFormat>,
     #[command(subcommand)]
     command: Command,
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+enum OutputFormat {
+    /// JSON format.
+    Json,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -218,10 +237,14 @@ async fn main() -> Result<()> {
 
     match args.command {
         // lookup
-        Command::Lookup { text } => lookup::lookup(&engine, &*require_profile()?, &text).await?,
-        Command::LookupLemma { lemma } => {
-            lookup::lookup_lemma(&engine, &*require_profile()?, &lemma).await?;
-        }
+        Command::Lookup { text } => output(
+            args.output,
+            lookup::lookup(&engine, &*require_profile()?, &text).await?,
+        ),
+        Command::LookupLemma { lemma } => output(
+            args.output,
+            lookup::lookup_lemma(&engine, &*require_profile()?, &lemma).await?,
+        ),
         Command::Render { text } => {
             lookup::render(&engine, &*require_profile()?, &text).await?;
         }
@@ -231,7 +254,7 @@ async fn main() -> Result<()> {
         // profile
         Command::Profile {
             command: ProfileCommand::Ls,
-        } => profile::ls(&engine),
+        } => output(args.output, profile::ls(&engine)),
         Command::Profile {
             command: ProfileCommand::Copy { name },
         } => profile::copy(&engine, &*require_profile()?, name).await?,
@@ -250,7 +273,7 @@ async fn main() -> Result<()> {
         // dictionary
         Command::Dict {
             command: DictCommand::Ls,
-        } => dict::ls(&engine, &*require_profile()?),
+        } => output(args.output, dict::ls(&engine, &*require_profile()?)),
         Command::Dict {
             command: DictCommand::Info { dict_id },
         } => dict::info(&engine, DictionaryId(dict_id))?,
@@ -306,4 +329,13 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn output<T: Serialize + 'static>(output: Option<OutputFormat>, t: T) {
+    match output {
+        Some(OutputFormat::Json) => {
+            _ = serde_json::to_writer(io::stdout(), &t);
+        }
+        None => {}
+    }
 }

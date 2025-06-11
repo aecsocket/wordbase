@@ -1,10 +1,12 @@
 use {
     anyhow::{Context, Result},
     ascii_table::AsciiTable,
+    std::sync::Arc,
+    tracing::info,
     wordbase::{DictionaryId, Engine, NormString, Profile},
 };
 
-pub fn ls(engine: &Engine) {
+pub fn ls(engine: &Engine) -> Vec<Arc<Profile>> {
     let mut table = AsciiTable::default();
     table.column(1).set_header("ID");
     table.column(2).set_header("Name");
@@ -49,7 +51,11 @@ pub fn ls(engine: &Engine) {
             ]
         })
         .collect::<Vec<_>>();
-    table.print(&data);
+    info!("\n{}", table.format(&data));
+    profiles
+        .iter()
+        .map(|(_, profile)| profile.clone())
+        .collect()
 }
 
 pub async fn copy(engine: &Engine, profile: &Profile, name: String) -> Result<()> {
