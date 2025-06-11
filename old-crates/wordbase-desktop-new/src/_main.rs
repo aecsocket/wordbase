@@ -134,7 +134,7 @@ fn pipewire_thread(
         })
         .process(move |stream, ()| {
             let mut buf = stream.dequeue_buffer().expect("Failed to dequeue buffer");
-            let data = buf.datas_mut().first().expect("No data found in buffer");
+            let data = buf.data_mut().first().expect("No data found in buffer");
             let chunk = data.chunk();
             println!("chunk size = {}", chunk.size());
         })

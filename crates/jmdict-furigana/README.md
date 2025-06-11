@@ -35,5 +35,5 @@ The source code is dual-licensed under MIT or Apache-2.0.
 
 The JmdictFurigana archive is licensed under Creative Commons Attribution-ShareAlike Licence, same as JmdictFurigana and JMDict itself.
 
-[JmdictFurigana]: https://github.com/Doublevil/JmdictFurigana?tab=readme-ov-file
+[JmdictFurigana]: https://github.com/Doublevil/JmdictFurigana
 [`wordbase-api`]: https://docs.rs/wordbase-api

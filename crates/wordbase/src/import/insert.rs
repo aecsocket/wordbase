@@ -21,7 +21,8 @@
 //! inserts, meaning we break the foreign key constraint.
 //!
 //! We can't fix this by just disabling `PRAGMA foreign_keys`, because that
-//! breaks `ON DELETE CASCADE`.
+//! breaks `ON DELETE CASCADE`. Instead, we use `DEFERRABLE INITIALLY DEFERRED`
+//! to make the constraints only be checked once we `COMMIT`.
 
 use std::marker::PhantomData;
 
@@ -33,6 +34,7 @@ use wordbase_api::{
 
 use crate::db;
 
+/// SQLite bind parameter count limit.
 const BIND_LIMIT: usize = 32766;
 
 pub struct Inserter<'tx, 'c> {

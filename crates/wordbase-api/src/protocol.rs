@@ -43,7 +43,7 @@ use {
 //     pub cursor: usize,
 // }
 
-/// Single [`Record`] and its metadata returned in response to a [`Lookup`].
+/// Single [`Record`] and its metadata returned in response to a lookup.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct RecordEntry {
@@ -54,6 +54,8 @@ pub struct RecordEntry {
     /// [`RecordEntry::term`], in Unicode characters.
     pub span_chars: Span,
     /// ID of the [`Dictionary`] from which the record was retrieved.
+    ///
+    /// [`Dictionary`]: crate::Dictionary
     pub source: DictionaryId,
     /// [`Term`] that this record is for.
     pub term: Term,

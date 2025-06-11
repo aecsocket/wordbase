@@ -233,7 +233,7 @@ pub struct Dictionary {
     /// Meta information about this dictionary.
     pub meta: DictionaryMeta,
     /// What position [`Record`]s from this dictionary will be returned during
-    /// [`Lookup`]s, relative to other dictionaries.
+    /// lookups, relative to other dictionaries.
     ///
     /// A higher position means records from this dictionary will be returned
     /// later, and should be displayed to the user with a lower priority.

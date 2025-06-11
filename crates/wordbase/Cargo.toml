@@ -19,7 +19,7 @@ all-features = true
 
 [features]
 desktop = ["dep:directories", "dep:tokio-tungstenite"]
-poem    = ["wordbase-api/poem", "dep:poem-openapi"]
+poem    = ["wordbase-api/poem"]
 uniffi  = ["wordbase-api/uniffi", "dep:uniffi"]
 
 [dependencies]
@@ -43,9 +43,7 @@ lindera              = { workspace = true, features = ["unidic", "compress"] }
 maud                 = { workspace = true }
 paste                = { workspace = true }
 pin-project          = { workspace = true }
-poem-openapi         = { workspace = true, optional = true }
 regex                = { workspace = true }
-reqwest              = { workspace = true, features = ["json"] }
 rmp-serde            = { workspace = true }
 serde                = { workspace = true, features = ["derive"] }
 serde_json           = { workspace = true }
@@ -70,6 +68,5 @@ derive_more = { workspace = true, features = [
 ] }
 
 [dev-dependencies]
-clap  = { workspace = true, features = ["derive"] }
-tokio = { workspace = true, features = ["full"] }
 tempfile = { workspace = true }
+tokio    = { workspace = true, features = ["full"] }

@@ -1,2 +1,2 @@
 allow-unwrap-in-tests = true
-doc-valid-idents      = ["AnkiConnect", ".."]
+doc-valid-idents      = ["AnkiConnect", "SQLite", ".."]

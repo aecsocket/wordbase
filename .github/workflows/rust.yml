@@ -64,7 +64,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: ./.github/actions/install-bevy-deps
       - run: cargo check --workspace --all-features
 
   test:

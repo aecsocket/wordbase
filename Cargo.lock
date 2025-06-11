@@ -4084,13 +4084,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "uniffi-bindgen"
-version = "0.0.0"
-dependencies = [
- "uniffi",
-]
-
-[[package]]
 name = "uniffi_bindgen"
 version = "0.29.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4693,7 +4686,6 @@ dependencies = [
  "async-tar",
  "async_zip",
  "bytes",
- "clap",
  "data-encoding",
  "derive_more 2.0.1",
  "directories",
@@ -4706,9 +4698,7 @@ dependencies = [
  "maud",
  "paste",
  "pin-project",
- "poem-openapi",
  "regex",
- "reqwest",
  "rmp-serde",
  "serde",
  "serde_json",
@@ -4761,6 +4751,13 @@ name = "wordbase-sys"
 version = "0.0.0"
 dependencies = [
  "wordbase",
+]
+
+[[package]]
+name = "wordbase-uniffi-bindgen"
+version = "0.0.0"
+dependencies = [
+ "uniffi",
 ]
 
 [[package]]

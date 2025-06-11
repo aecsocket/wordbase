@@ -1,6 +1,6 @@
 bindings:
     cargo build --package wordbase-sys
-    cargo run --release --bin uniffi-bindgen generate \
+    cargo run --release --bin wordbase-uniffi-bindgen generate \
         --library target/debug/libwordbase.so \
         --language kotlin \
         --out-dir wordbase-android/app/build/generated/

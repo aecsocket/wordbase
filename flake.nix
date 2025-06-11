@@ -26,6 +26,7 @@
           buildInputs = with pkgs; [
             just
             fish
+            typos
 
             # Nix
             nixd

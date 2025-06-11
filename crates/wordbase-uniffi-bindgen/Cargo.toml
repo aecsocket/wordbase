@@ -1,5 +1,5 @@
 [package]
-name    = "uniffi-bindgen"
+name    = "wordbase-uniffi-bindgen"
 publish = false
 
 edition.workspace = true

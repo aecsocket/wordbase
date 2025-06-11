@@ -87,7 +87,7 @@ I've ironed out a bunch of design issues, and AnkiConnect is like almost functio
 - [x] wrong furigana generation - 黄色い声 (きいろいこえ)
   - added test case - it's the same issue as before. I'll have to fix them together
 - interesting dictionary quirk: ぶいぶいいわせる - we have records for ブイブイ言わす with reading ぶいぶいいわせる - this doesn't match! and even yomitan fails to generate furigana in this case.
-  - [ ] its fallback is better than ours I think, we should use its strat
+  - [ ] its fallback is better than ours I think, we should use its strategy
 
 ## Test session 3 - 12 Apr
 
@@ -106,7 +106,7 @@ Now that I've done a bunch of generic bug fixing and improvements, I want to do 
 ## Test session 2 - 11 Apr
 
 - IPAex Gothic looks *really* nice
-- [x] まじない -> deinflects as 呪い, and prioritises 呪い (のろい). can we make it prioritse まじない?
+- [x] まじない -> deinflects as 呪い, and prioritises 呪い (のろい). can we make it prioritise まじない?
   - fixed with new deinflect algo
 - [ ] my top priority HAS to be making anki notes from lookups
 - [x] 頼りなさげな目を... - scans as <頼りな>さげな... we need extra lindera continuation rules for this case
@@ -234,6 +234,6 @@ CREATE TABLE IF NOT EXISTS term (
 
 OR: have a headword and term tables
 
-super basic yomitan async becnhmark:
+super basic yomitan async benchmark:
 - async: 65.8 sec
 - sync: 74.6 sec
