@@ -126,6 +126,32 @@ const _: () = {
     }
 };
 
+macro_rules! sentence {
+    (/ $a:literal) => {{
+        let text = $a;
+        (text, 0usize)
+    }};
+    ($a:literal /) => {{
+        let text = $a;
+        (text, $a.len())
+    }};
+    ($a:literal / $b:literal) => {{
+        let text = concat!($a, $b);
+        (text, $a.len())
+    }};
+    //
+    (/ $a:literal / $b:literal) => {{
+        let text = concat!($a, $b);
+        (text, 0usize, $a.len())
+    }};
+    ($a:literal / $b:literal / $c:literal) => {{
+        let text = concat!($a, $b, $c);
+        (text, $a.len(), concat!($a, $b).len())
+    }};
+}
+
+pub(crate) use sentence;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -133,8 +159,7 @@ mod tests {
     #[track_caller]
     pub fn assert_deinflects<'a>(
         deinflector: &impl Deinflector,
-        sentence: &str,
-        cursor: usize,
+        (sentence, cursor): (&str, usize),
         expected: impl IntoIterator<Item = Deinflection<'a>>,
     ) {
         assert_eq!(
@@ -152,13 +177,36 @@ mod tests {
     #[test]
     fn identity() {
         let deinflector = Identity;
-        assert_deinflects(&deinflector, "hello", 0, [deinf("hello")]);
-        assert_deinflects(&deinflector, "hello world", 0, [deinf("hello world")]);
+        assert_deinflects(&deinflector, sentence!(/ "hello"), [deinf("hello")]);
         assert_deinflects(
             &deinflector,
-            "hello world",
-            "hello ".len(),
-            [deinf("world")],
+            sentence!(/ "hello world"),
+            [deinf("hello world")],
+        );
+
+        let (text, start) = sentence!("hello " / "world");
+        assert_deinflects(
+            &deinflector,
+            (text, start),
+            [Deinflection::new(start, "world", "world")],
+        );
+    }
+
+    #[test]
+    fn sentence() {
+        assert_eq!(sentence!(/ "hello"), ("hello", 0usize));
+        assert_eq!(sentence!("hello" /), ("hello", "hello".len()));
+        assert_eq!(
+            sentence!("hello " / "world"),
+            ("hello world", "hello ".len())
+        );
+        assert_eq!(
+            sentence!(/ "hello " / "world"),
+            ("hello world", 0usize, "hello ".len())
+        );
+        assert_eq!(
+            sentence!("hello " / "and" / " goodbye"),
+            ("hello and goodbye", "hello ".len(), "hello and".len()),
         );
     }
 }

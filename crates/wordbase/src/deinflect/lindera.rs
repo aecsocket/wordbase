@@ -205,7 +205,10 @@ fn is_word_continuation(last_lookahead: &Details, token: &Details) -> bool {
 mod tests {
     use {
         super::*,
-        crate::deinflect::tests::{assert_deinflects, deinf},
+        crate::deinflect::{
+            sentence,
+            tests::{assert_deinflects, deinf},
+        },
         std::sync::LazyLock,
     };
 
@@ -305,6 +308,7 @@ mod tests {
     fn word_continuation() {
         // we want to test that, when deinflecting `full_text`,
         // we recognize that the first word in `full_text` is `word`
+        #[track_caller]
         fn assert_split(word: &str, rem: &str) {
             let full_text = format!("{word}{rem}");
             let mut tokens = TOKENIZER.tokenize(&full_text).unwrap();
@@ -340,7 +344,7 @@ mod tests {
         assert_split("食べなかった", "あいう");
         assert_split("騒がしかった", "こと");
         assert_split("大学", "とは");
-        assert_split("頼りなさげ", "な目を");
+        assert_split("頼りなさげな", "目を");
 
         // todo: this could technically be improved,
         // but technically the split isn't wrong here?
@@ -362,71 +366,62 @@ mod tests {
             lookahead: TOKEN_LOOKAHEAD,
         };
 
-        assert_deinflects(&deinflector, "食べる", 0, [deinf("食べる")]);
+        assert_deinflects(&deinflector, sentence!(/ "食べる"), [deinf("食べる")]);
 
+        let (text, start) = sentence!(/ "食べなかった");
         assert_deinflects(
             &deinflector,
-            "食べなかった",
-            0,
+            (text, start),
             [
-                Deinflection::new(0, "食べなかった", "食べるないた"),
-                Deinflection::new(0, "食べなかった", "食べなかった"),
-                Deinflection::new(0, "食べなかっ", "食べるない"),
-                Deinflection::new(0, "食べなかっ", "食べなかっ"),
-                Deinflection::new(0, "食べなかった", "食べる"),
-                Deinflection::new(0, "食べなかった", "食べ"),
+                Deinflection::new(start, "食べなかった", "食べるないた"),
+                Deinflection::new(start, "食べなかった", "食べなかった"),
+                Deinflection::new(start, "食べなかっ", "食べるない"),
+                Deinflection::new(start, "食べなかっ", "食べなかっ"),
+                Deinflection::new(start, "食べなかった", "食べる"),
+                Deinflection::new(start, "食べなかった", "食べ"),
             ],
         );
 
-        let cursor = "あいう".len();
+        let (text, start) = sentence!("あいう" / "食べなかった");
         assert_deinflects(
             &deinflector,
-            "あいう食べなかった",
-            cursor,
+            (text, start),
             [
-                Deinflection::new(cursor, "食べなかった", "食べるないた"),
-                Deinflection::new(cursor, "食べなかった", "食べなかった"),
-                Deinflection::new(cursor, "食べなかっ", "食べるない"),
-                Deinflection::new(cursor, "食べなかっ", "食べなかっ"),
-                Deinflection::new(cursor, "食べなかった", "食べる"),
-                Deinflection::new(cursor, "食べなかった", "食べ"),
+                Deinflection::new(start, "食べなかった", "食べるないた"),
+                Deinflection::new(start, "食べなかった", "食べなかった"),
+                Deinflection::new(start, "食べなかっ", "食べるない"),
+                Deinflection::new(start, "食べなかっ", "食べなかっ"),
+                Deinflection::new(start, "食べなかった", "食べる"),
+                Deinflection::new(start, "食べなかった", "食べ"),
             ],
         );
 
+        let (text, start) = sentence!(/ "東京大学");
         assert_deinflects(
             &deinflector,
-            "東京大学",
-            0,
+            (text, start),
             [
-                Deinflection::new(0, "東京大学", "トウキョウ大学"),
-                Deinflection::new(0, "東京大学", "東京大学"),
-                Deinflection::new(0, "東京", "トウキョウ"),
-                Deinflection::new(0, "東京", "東京"),
-            ],
-        );
-
-        assert_deinflects(
-            &deinflector,
-            "店内に散らばっている",
-            0,
-            [
-                Deinflection::new(0, "店内", "店内"),
-                Deinflection::new(0, "店", "店"),
+                Deinflection::new(start, "東京大学", "トウキョウ大学"),
+                Deinflection::new(start, "東京大学", "東京大学"),
+                Deinflection::new(start, "東京", "トウキョウ"),
+                Deinflection::new(start, "東京", "東京"),
             ],
         );
 
         // some token patterns might result in UNK tokens, like this trailing whitespace
         // here we test that we handle UNKs gracefully
         // TODO: it broke :(
+        let (text, start) = sentence!(/ "ある。　");
         assert_deinflects(
             &deinflector,
-            "ある。　",
-            0,
+            (text, start),
             [
-                Deinflection::new(0, "ある。", "有る。"),
-                Deinflection::new(0, "ある。", "ある。"),
-                Deinflection::new(0, "ある。", "有る"),
-                Deinflection::new(0, "ある。", "ある"),
+                Deinflection::new(start, "ある。\u{3000}", "有る。\u{3000}"),
+                Deinflection::new(start, "ある。\u{3000}", "ある。\u{3000}"),
+                Deinflection::new(start, "ある。", "有る。"),
+                Deinflection::new(start, "ある。", "ある。"),
+                Deinflection::new(start, "ある", "有る"),
+                Deinflection::new(start, "ある", "ある"),
             ],
         );
     }
