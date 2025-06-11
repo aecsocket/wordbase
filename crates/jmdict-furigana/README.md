@@ -19,6 +19,8 @@ If a headword/reading pair is missing from the dictionary, `None` is returned. I
 
 ```rust
 async fn main() {
+    // make sure to call `init` first to parse and load the dictionary
+    // otherwise `get` calls will panic
     jmdict_furigana::init().await;
 
     let segments: &[(&str, &str)] = jmdict_furigana::get("関係無い", "かんけいない").unwrap();
