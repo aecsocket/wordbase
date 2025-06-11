@@ -4,11 +4,12 @@ This project is nowhere near ready for serious use! While some core functionalit
 
 Also, I haven't decided on a license yet.
 
-- The GNOME extension is licensed under GPL 3 due to GNOME Shell being licensed under GPL 2 or later ([source](https://gjs.guide/extensions/review-guidelines/review-guidelines.html#legal-restrictions))
+- `wordbase-integration` (GNOME extension) is licensed under GPL 3 due to GNOME Shell being licensed under GPL 2 or later ([source](https://gjs.guide/extensions/review-guidelines/review-guidelines.html#legal-restrictions))
+- `jmdict-furigana` has its own licensing
 
 # Features
 
-- Engine (`wordbase-engine`)
+- Engine (`wordbase`)
   - Importing and managing dictionaries in various formats
     - [x] [Yomitan]
     - [x] [Yomichan Local Audio]
@@ -21,18 +22,30 @@ Also, I haven't decided on a license yet.
     - [x] Japanese
       - Deinflection powered by [Lindera] using UniDic
       - Furigana generation
+    - [x] Basic Latin
+      - Split on word boundaries
+      - No language-specific support yet
     - more to come...
   - [x] Creating and managing profiles
+- Android app (`wordbase-android`)
+  - [x] Importing, managing, and removing dictionaries
+  - [x] Look up words in the app
+  - [x] Look up words from other apps
+    - Use the "Wordbase" action, or set it as your translator app
+  - [ ] Add cards to Anki
+- Desktop app (`wordbase-desktop`)
+  - WIP
   - [x] Connecting to texthookers via the [exSTATic]/[TextractorSender] protocol
   - [ ] AnkiConnect integration
+  - [ ] GNOME Wayland support via an extension
 
 # Usage
 
 At this point, the only thing you can really use is the core engine functionality, which is intended for developers*. There's no real user-facing app or functionality yet. All of the instructions in this section will change in the future to be more user-friendly. But for now:
 
 - Clone the repo
-- Run `cargo run -p wordbase-engine-cli` to interact with the database (import a dictionary, do a lookup, etc.)
-- If you can program in Rust, you can write a crate which imports `wordbase-engine` and interact with the engine through that
+- Run `cargo run -p wordbase-cli` to interact with the database (import a dictionary, do a lookup, etc.)
+- If you can program in Rust, you can write a crate which imports `wordbase` and interact with the engine through that
 
 I plan on writing a server (`wordbase-server`) to allow you to interact with the engine via a WebSocket, although I'm not sure if that will be a binary or embedded into the desktop app. Maybe both?
 
@@ -100,7 +113,11 @@ You can also mark a single dictionary as a *sorting dictionary*, which will be u
 
 You may want different settings for different situations, e.g. use a different set of dictionaries when studying Japanese versus when studying Mandarin. For this, you can create different *profiles* and switch between them in the app or when performing lookups. Each profile stores its own settings, and tracks which dictionaries are enabled separately.
 
-Not all state is separate between profiles - for example, the actual dictionaries you have imported, and their ordering, is common across all profiles. App-level settings such as the selected theme are also shared across profiles.
+Not all state is separate between profiles - for example, the actual dictionaries you have imported, and their ordering, is common across all profiles.
+
+## Outdated
+
+*Note: all architecture info below this point was written for an older version.*
 
 ### API and the popup dictionary
 
@@ -142,11 +159,11 @@ After looking up a word, you may want to add it to your Anki deck to study it la
 
 ## Projects
 
-### 📦 `wordbase`
+### 📦 `wordbase-api`
 
 Provides the core API types, and defines the protocol for communicating with the engine (which actually performs most of the logic). This includes all of the kinds of records that the engine may store and provide.
 
-### 📦 `wordbase-engine`
+### 📦 `wordbase`
 
 This is the heart of Wordbase, which implements the logic for:
 - managing and selecting profiles
@@ -161,7 +178,7 @@ The engine also does not handle allowing clients to communicate with the engine,
 
 ### ⚙️ `wordbase-desktop`
 
-This is a GTK/Adwaita app which runs on the desktop, and runs `wordbase-engine` plus exposes ways for clients to talk to the engine via a WebSocket server and DBus. This app targets the Linux GNOME desktop as the first-class target, and aims to follow modern Linux desktop app standards, including using Wayland and being compatible with Flatpak sandboxing. However, it also aims to be as cross-platform as possible (though not necessarily as native as possible on other platforms). This implements the logic for:
+GTK/Adwaita app which runs on the desktop, and runs `wordbase-engine` plus exposes ways for clients to talk to the engine via a WebSocket server and DBus. This app targets the Linux GNOME desktop as the first-class target, and aims to follow modern Linux desktop app standards, including using Wayland and being compatible with Flatpak sandboxing. However, it also aims to be as cross-platform as possible (though not necessarily as native as possible on other platforms). This implements the logic for:
 - running and persisting an engine instance
 - rendering dictionary contents, and allowing users to search all dictionaries
 - showing a user-friendly GUI to manage the engine
@@ -172,13 +189,24 @@ This is a GTK/Adwaita app which runs on the desktop, and runs `wordbase-engine` 
 
 Currently, this app uses Relm4 on top of GTK/Adwaita, but we might switch this to raw GTK/Adwaita in the future. Relm4 doesn't help us much, considering that state is mostly stored outside of memory (in SQLite, the filesystem, etc.), and its component model adds complexity.
 
-### ⚙️ `wordbase-mobile`
+### ⚙️ `wordbase-android`
 
-TODO: could we make a mobile app? Have it use accessibility APIs to render on top of other app content, and show a popup?
+![Screenshot of the Wordbase app, displaying lookup results and the dictionary management page](./static/wordbase-android.png)
 
-### 📦 `wordbase-client-tokio`
+Android app which bundles the Wordbase engine: this allows users to manage dictionaries, perform lookups, and exposes intents for other apps to display lookups to users.
 
-Provides API for interacting with a Wordbase engine through a WebSocket server. Uses Tokio and Tungstenite for the WebSocket implementation.
+The app activity provides an interface to manage dictionaries and type in a search query to get results for. The app also exposes a "mini dictionary" activity which can be triggered from other apps via the `android.intent.action.PROCESS_TEXT` or `android.intent.action.TRANSLATE` intents, which opens a dialog with the text passed in and lookup results.
+
+In the future, this could also be used for:
+- allowing lookups on an image
+  - from a user-taken photo
+  - from a screenshot (hook into accessibility API?)
+
+This is developed in Android Studio using Kotlin and Android Compose, and bundles Wordbase shared libraries which it communicates with via FFI ([`uniffi`](https://github.com/mozilla/uniffi-rs)). We do not use Flutter or any other multiplatform libraries to provide the most native-like feel available, and use platform-specific features when we need to.
+
+### ⚙️ `wordbase-ios`
+
+This is planned, but I have no Apple devices to develop or test on, so this is impossible for me to make. This would take the same approach as the Android app - use native APIs and FFI for engine integration.
 
 ### 🧩 `wordbase-integration`
 

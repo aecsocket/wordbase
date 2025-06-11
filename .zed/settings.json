@@ -12,6 +12,16 @@
           "command": "clippy"
         }
       }
+    },
+    "nixd": {
+      "binary": {
+        "path": "nixd"
+      }
+    },
+    "nil": {
+      "binary": {
+        "path": "nil"
+      }
     }
   }
 }

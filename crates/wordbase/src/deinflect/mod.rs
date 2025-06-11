@@ -126,6 +126,7 @@ const _: () = {
     }
 };
 
+#[allow(unused_macros, reason = "used in tests")]
 macro_rules! sentence {
     (/ $a:literal) => {{
         let text = $a;
@@ -150,6 +151,7 @@ macro_rules! sentence {
     }};
 }
 
+#[allow(unused_imports, reason = "used in tests")]
 pub(crate) use sentence;
 
 #[cfg(test)]

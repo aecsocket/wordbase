@@ -19,12 +19,11 @@ all-features = true
 
 [features]
 poem        = ["dep:poem", "dep:poem-openapi"]
-render-html = ["dep:maud", "dep:html-escape"]
+render-html = ["dep:maud"]
 uniffi      = ["dep:uniffi"]
 
 [dependencies]
 bytes        = { workspace = true, features = ["serde"] }
-html-escape  = { workspace = true, optional = true }
 itertools    = { workspace = true }
 maud         = { workspace = true, optional = true }
 paste        = { workspace = true }

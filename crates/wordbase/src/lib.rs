@@ -13,6 +13,7 @@ pub mod render;
 #[cfg(feature = "desktop")]
 pub mod texthook;
 
+use tokio::fs;
 pub use wordbase_api::*;
 use {
     anyhow::{Context, Result},
@@ -39,7 +40,6 @@ pub struct Engine {
     #[cfg(feature = "desktop")]
     texthookers: texthook::Texthookers,
     deinflectors: Deinflectors,
-    // anki: Anki,
     event_tx: broadcast::Sender<EngineEvent>,
     db: Pool<Sqlite>,
 }
@@ -119,6 +119,9 @@ impl Engine {
 
         let (db, ()) = tokio::join!(
             async {
+                fs::create_dir_all(data_dir)
+                    .await
+                    .context("failed to create data directory")?;
                 let db_path = data_dir.join("wordbase.db");
                 db::setup(&db_path).await
             },
@@ -221,3 +224,16 @@ mod ffi {
 
 #[cfg(feature = "uniffi")]
 pub use ffi::*;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn create_data_dir_if_not_exists() {
+        let data_dir = tempfile::tempdir().unwrap();
+        let data_path = data_dir.path().to_path_buf();
+        data_dir.close().unwrap();
+        Engine::new(&data_path).await.unwrap();
+    }
+}

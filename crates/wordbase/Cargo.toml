@@ -72,3 +72,4 @@ derive_more = { workspace = true, features = [
 [dev-dependencies]
 clap  = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["full"] }
+tempfile = { workspace = true }

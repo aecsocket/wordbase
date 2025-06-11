@@ -7,14 +7,21 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
-  outputs = { nixpkgs, flake-utils, rust-overlay, ... }:
-    flake-utils.lib.eachDefaultSystem (system:
+  outputs =
+    {
+      nixpkgs,
+      flake-utils,
+      rust-overlay,
+      ...
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
       let
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs { inherit system overlays; };
-        rustToolchain = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile
-          ./rust-toolchain.toml;
-      in {
+        rustToolchain = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+      in
+      {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             just
@@ -24,6 +31,7 @@
             nixd
             nil
             nixfmt-rfc-style
+            nixfmt-tree
 
             # Rust
             rustToolchain
@@ -37,7 +45,7 @@
             # Binding generation
             ktlint
           ];
-          # LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath buildInputs;
         };
-      });
+      }
+    );
 }

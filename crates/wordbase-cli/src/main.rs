@@ -6,7 +6,7 @@ mod lookup;
 mod profile;
 
 use {
-    anyhow::{Context, Result},
+    anyhow::{Context, Result, bail},
     std::{io, path::PathBuf},
     tracing::level_filters::LevelFilter,
     tracing_subscriber::EnvFilter,
@@ -199,12 +199,21 @@ async fn main() -> Result<()> {
         .await
         .context("failed to create engine")?;
     let require_profile = || {
-        let selected_id = args.profile.context("profile ID not specified")?;
-        engine
-            .profiles()
-            .get(&ProfileId(selected_id))
-            .cloned()
-            .with_context(|| format!("no profile with ID {selected_id}"))
+        if let Some(profile_id) = args.profile {
+            engine
+                .profiles()
+                .get(&ProfileId(profile_id))
+                .cloned()
+                .with_context(|| format!("no profile with ID {profile_id}"))
+        } else {
+            let profiles = engine.profiles();
+            match (profiles.len(), profiles.first()) {
+                (1, Some((_, profile))) => Ok(profile.clone()),
+                (_, _) => bail!(
+                    "more than 1 profile exists - you must explicitly specify which profile to use using `--profile [id]`"
+                ),
+            }
+        }
     };
 
     match args.command {
