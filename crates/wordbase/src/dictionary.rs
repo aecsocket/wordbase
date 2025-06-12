@@ -53,26 +53,26 @@ impl Engine {
 
         let mut tx = conn.begin().await.context("failed to begin transaction")?;
 
-        info!("Deleting {id:?}");
+        info!("Deleting term records for {id:?}");
         let start = Instant::now();
 
         sqlx::query!("DELETE FROM term_record WHERE source = $1", id.0)
             .execute(&mut *tx)
             .await
             .context("failed to delete term records")?;
-        info!("Deleted term records");
+        info!("Deleting records");
 
         sqlx::query!("DELETE FROM record WHERE source = $1", id.0)
             .execute(&mut *tx)
             .await
             .context("failed to delete records")?;
-        info!("Deleted records");
+        info!("Deleting frequency records");
 
         sqlx::query!("DELETE FROM frequency WHERE source = $1", id.0)
             .execute(&mut *tx)
             .await
             .context("failed to delete frequency rows")?;
-        info!("Deleted frequency records");
+        info!("Deleting dictionary record");
 
         let result = sqlx::query!("DELETE FROM dictionary WHERE id = $1", id.0)
             .execute(&mut *tx)
@@ -81,10 +81,10 @@ impl Engine {
         if result.rows_affected() == 0 {
             bail!(NotFound);
         }
-        info!("Deleted dictionary record");
+        info!("Committing");
 
         tx.commit().await.context("failed to commit transaction")?;
-        info!("Committed");
+        info!("Vacuuming");
 
         sqlx::query!("VACUUM")
             .execute(&self.db)

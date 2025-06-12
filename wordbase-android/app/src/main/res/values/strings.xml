@@ -37,6 +37,7 @@
     <string name="dictionary_import_cancel">Cancel import</string>
     <string name="dictionary_import_failed">Failed to import</string>
     <string name="dictionary_import_error">Import error</string>
+    <string name="dictionary_import_progress">Importing</string>
     <string name="dictionary_format">Format</string>
     <string name="dictionary_format_yomitan">Yomitan</string>
     <string name="dictionary_format_yomichan_audio">Yomichan Audio</string>

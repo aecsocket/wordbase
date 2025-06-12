@@ -4,6 +4,7 @@
 mod dict;
 mod lookup;
 mod profile;
+mod query;
 
 use {
     anyhow::{Context, Result, bail},
@@ -241,15 +242,16 @@ async fn main() -> Result<()> {
             args.output,
             lookup::lookup(&engine, &*require_profile()?, &text).await?,
         ),
+        // query
         Command::LookupLemma { lemma } => output(
             args.output,
-            lookup::lookup_lemma(&engine, &*require_profile()?, &lemma).await?,
+            query::lookup_lemma(&engine, &*require_profile()?, &lemma).await?,
         ),
         Command::Render { text } => {
-            lookup::render(&engine, &*require_profile()?, &text).await?;
+            query::render(&engine, &*require_profile()?, &text).await?;
         }
         Command::Deinflect { text } => {
-            lookup::deinflect(&engine, &text);
+            query::deinflect(&engine, &text);
         }
         // profile
         Command::Profile {

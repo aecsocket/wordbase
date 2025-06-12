@@ -27,7 +27,7 @@ pub struct RenderConfig {
     pub add_note_js_fn: Option<String>,
 }
 
-fn group_terms(entries: &[RecordEntry]) -> Vec<RecordTerm> {
+pub fn group_terms(entries: &[RecordEntry]) -> Vec<RecordTerm> {
     // note on ordering:
     // by default, tera will not preserve the order of IndexMap entries,
     // because serde_json doesn't either.
@@ -135,37 +135,38 @@ fn group_terms(entries: &[RecordEntry]) -> Vec<RecordTerm> {
 }
 
 #[derive(Debug, Serialize)]
-struct RecordTerm<'a> {
-    term: Term,
+pub struct RecordTerm<'a> {
+    pub term: Term,
     #[serde(flatten)]
-    info: TermInfo<'a>,
+    pub info: TermInfo<'a>,
 }
 
 #[derive(Debug, Default, Serialize)]
-struct TermInfo<'a> {
-    furigana_parts: Vec<(String, String)>,
-    morae: Vec<String>,
-    glossary_groups: IndexMap<DictionaryId, Vec<Glossary<'a>>>,
-    frequencies: IndexMap<DictionaryId, Vec<&'a dict::yomitan::Frequency>>,
-    pitches: IndexMap<dict::jpn::PitchPosition, Pitch<'a>>,
-    audio_no_pitch: IndexMap<DictionaryId, Vec<Audio>>,
+pub struct TermInfo<'a> {
+    pub furigana_parts: Vec<(String, String)>,
+    pub morae: Vec<String>,
+    pub glossary_groups: IndexMap<DictionaryId, Vec<Glossary<'a>>>,
+    pub frequencies: IndexMap<DictionaryId, Vec<&'a dict::yomitan::Frequency>>,
+    pub pitches: IndexMap<dict::jpn::PitchPosition, Pitch<'a>>,
+    pub audio_no_pitch: IndexMap<DictionaryId, Vec<Audio>>,
 }
 
 #[derive(Debug, Serialize)]
-struct Glossary<'a> {
-    tags: &'a Vec<dict::yomitan::GlossaryTag>,
-    content: Vec<String>,
+pub struct Glossary<'a> {
+    pub tags: &'a Vec<dict::yomitan::GlossaryTag>,
+    pub content: Vec<String>,
 }
 
 #[derive(Debug, Default, Serialize)]
-struct Pitch<'a> {
-    category: Option<dict::jpn::PitchCategory>,
-    high: Vec<bool>,
-    info: Option<&'a dict::yomitan::Pitch>,
-    audio: Vec<Audio>,
+pub struct Pitch<'a> {
+    pub category: Option<dict::jpn::PitchCategory>,
+    pub high: Vec<bool>,
+    pub info: Option<&'a dict::yomitan::Pitch>,
+    pub audio: Vec<Audio>,
 }
 
-fn base_pitch<'a>(term: &Term, downstep: dict::jpn::PitchPosition) -> Pitch<'a> {
+#[must_use]
+pub fn base_pitch<'a>(term: &Term, downstep: dict::jpn::PitchPosition) -> Pitch<'a> {
     let Some(reading) = term.reading() else {
         return Pitch::default();
     };
@@ -183,9 +184,9 @@ fn base_pitch<'a>(term: &Term, downstep: dict::jpn::PitchPosition) -> Pitch<'a> 
 }
 
 #[derive(Debug, Clone, Serialize)]
-struct Audio {
-    blob: String,
-    kind: RecordKind,
+pub struct Audio {
+    pub blob: String,
+    pub kind: RecordKind,
 }
 
 fn audio_blob(audio: &dict::yomichan_audio::Audio) -> String {

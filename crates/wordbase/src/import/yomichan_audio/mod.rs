@@ -1,8 +1,11 @@
 mod schema;
 
 use {
-    super::{Archive, ImportContinue, ImportKind, OpenArchive},
-    crate::import::{insert::Inserter, insert_dictionary},
+    super::{Archive, ImportContinue, ImportKind, ImportProgress, OpenArchive},
+    crate::{
+        IndexSet,
+        import::{insert::Inserter, insert_dictionary},
+    },
     anyhow::{Context, Result, bail},
     async_compression::futures::bufread::XzDecoder,
     async_tar::EntryType,
@@ -33,7 +36,7 @@ use {
     },
     tokio::sync::mpsc,
     tokio_util::compat::{Compat, TokioAsyncReadCompatExt},
-    tracing::{debug, trace},
+    tracing::{debug, trace, warn},
     wordbase_api::{
         DictionaryId, DictionaryKind, DictionaryMeta, NormString, RecordType, Term,
         dict::{
@@ -54,7 +57,7 @@ impl ImportKind for YomichanAudio {
         &self,
         db: Pool<Sqlite>,
         open_archive: Arc<dyn OpenArchive>,
-        progress_tx: mpsc::Sender<f64>,
+        progress_tx: mpsc::Sender<ImportProgress>,
     ) -> BoxFuture<Result<(DictionaryMeta, ImportContinue)>> {
         Box::pin(async move {
             let mut meta = DictionaryMeta::new(
@@ -183,7 +186,7 @@ async fn import(
     db: Pool<Sqlite>,
     open_archive: Arc<dyn OpenArchive>,
     meta: DictionaryMeta,
-    progress_tx: mpsc::Sender<f64>,
+    progress_tx: mpsc::Sender<ImportProgress>,
 ) -> Result<DictionaryId> {
     let mut tx = db.begin().await.context("failed to begin transaction")?;
     let dictionary_id = insert_dictionary(&mut tx, &meta)
@@ -238,11 +241,21 @@ async fn import(
         num_entries += 1;
         if num_entries % 2000 == 0 {
             let cursor_pos = cursor_pos.load(atomic::Ordering::SeqCst);
-            let progress = (cursor_pos as f64) / (buf_len as f64);
-            _ = progress_tx.try_send(progress * 0.5);
+            let stage_frac = (cursor_pos as f64) / (buf_len as f64);
+            _ = progress_tx.try_send(ImportProgress {
+                frac: stage_frac * 0.5,
+            });
+            trace!("{num_entries} entries found in archive - {cursor_pos} / {buf_len} bytes read");
+        }
+
+        if jpod_rev_index.is_some() && nhk16_rev_index.is_some() && shinmeikai8_rev_index.is_some()
+        {
+            debug!("All indexes populated, inserting entries");
+            break;
         }
     }
     debug!("{num_entries} total entries");
+    _ = progress_tx.try_send(ImportProgress { frac: 0.5 });
 
     let jpod_rev_index =
         jpod_rev_index.with_context(|| format!("no JPod index at `{JPOD_INDEX}`"))?;
@@ -268,12 +281,15 @@ async fn import(
             .with_context(|| format!("path {path:?} is not UTF-8"))?
             .to_owned();
 
+        trace!("Importing {path:?}");
         (async {
             if let Some(path) = path.strip_prefix(FORVO_PATH) {
+                trace!("Importing as Forvo");
                 import_forvo(&mut insert, path, &mut entry)
                     .await
                     .context("failed to import Forvo file")?;
             } else if let Some(path) = path.strip_prefix(JPOD_MEDIA) {
+                trace!("Importing as JPod");
                 import_by_rev_index(
                     &mut insert,
                     path,
@@ -284,6 +300,7 @@ async fn import(
                 )
                 .await?;
             } else if let Some(path) = path.strip_prefix(NHK16_AUDIO) {
+                trace!("Importing as NHK");
                 import_by_rev_index(
                     &mut insert,
                     path,
@@ -305,6 +322,7 @@ async fn import(
                 )
                 .await?;
             } else if let Some(path) = path.strip_prefix(SHINMEIKAI8_MEDIA) {
+                trace!("Importing as Shinmeikai");
                 import_by_rev_index(
                     &mut insert,
                     path,
@@ -326,8 +344,11 @@ async fn import(
 
         entries_done += 1;
         if entries_done % 2000 == 0 {
-            let progress = (entries_done as f64) / (num_entries as f64);
-            _ = progress_tx.try_send(progress.mul_add(0.5, 0.5));
+            trace!("{entries_done} / {num_entries} entries inserted");
+            let stage_frac = (entries_done as f64) / (num_entries as f64);
+            _ = progress_tx.try_send(ImportProgress {
+                frac: stage_frac.mul_add(0.5, 0.5),
+            });
         }
     }
 
@@ -405,7 +426,7 @@ impl TryFrom<schema::generic::Index> for RevIndex<GenericInfo> {
 
 #[derive(Debug, Default)]
 struct Nhk16Info {
-    terms: Vec<Term>,
+    terms: IndexSet<Term>,
     pitch_positions: Vec<u64>,
 }
 
@@ -428,7 +449,7 @@ impl TryFrom<schema::nhk16::Index> for RevIndex<Nhk16Info> {
                     continue;
                 };
                 let entry = for_path.entry(sound_file).or_default();
-                entry.terms.extend_from_slice(&terms);
+                entry.terms.extend(terms.clone());
 
                 entry.pitch_positions.extend(
                     accent
@@ -438,8 +459,20 @@ impl TryFrom<schema::nhk16::Index> for RevIndex<Nhk16Info> {
                 );
             }
 
-            // subentries are usually just conjugations of top-level entries,
-            // so we ignore them
+            // some files, like NHK `20170616125948.opus`, are in a subentry
+            for subentry in entry.subentries {
+                let Some(term) = subentry.head.and_then(Term::from_headword) else {
+                    continue;
+                };
+
+                for accent in subentry.accents {
+                    let Some(sound_file) = accent.sound_file else {
+                        continue;
+                    };
+                    let entry = for_path.entry(sound_file).or_default();
+                    entry.terms.insert(term.clone());
+                }
+            }
         }
         Ok(Self { for_path })
     }
@@ -502,9 +535,9 @@ where
     Terms: Iterator<Item = &'a Term>,
 {
     let Some(info) = index.for_path.get(path) else {
-        // some files literally just don't have an index entry
-        // like NHK `20170616125948.opus`
-        trace!(
+        // some entries, like NHK `20170616125959.mp3`, literally do not exist
+        // not even in subentries
+        warn!(
             "{path} of type `{}` does not have an index entry, skipping",
             type_name::<T>()
         );
@@ -515,6 +548,7 @@ where
         format: format_of(path)?,
         data: encode(entry).await?,
     };
+
     let record = into_record(audio, info);
     let record_id = insert
         .record(&record)
@@ -527,6 +561,10 @@ where
             .await
             .with_context(|| format!("failed to insert term record {term:?}"))?;
     }
+
+    // we need to flush after each insert, otherwise we get stuck while importing NHK
+    // for some godforsaken unknown reason
+    insert.flush().await.context("failed to flush")?;
     Ok(())
 }
 

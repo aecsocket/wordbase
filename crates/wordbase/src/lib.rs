@@ -10,8 +10,8 @@ pub mod lang;
 pub mod lookup;
 pub mod profile;
 pub mod render;
-#[cfg(feature = "desktop")]
-pub mod texthook;
+// #[cfg(feature = "desktop")]
+// pub mod texthook;
 
 use tokio::fs;
 pub use wordbase_api::*;
@@ -37,8 +37,8 @@ pub struct Engine {
     profiles: ArcSwap<Profiles>,
     dictionaries: ArcSwap<Dictionaries>,
     renderer: Tera,
-    #[cfg(feature = "desktop")]
-    texthookers: texthook::Texthookers,
+    // #[cfg(feature = "desktop")]
+    // texthookers: texthook::Texthookers,
     deinflectors: Deinflectors,
     event_tx: broadcast::Sender<EngineEvent>,
     db: Pool<Sqlite>,
@@ -147,10 +147,10 @@ impl Engine {
                     .expect("template should be valid");
                 tera
             },
-            #[cfg(feature = "desktop")]
-            texthookers: texthook::Texthookers::new(&db, event_tx.clone())
-                .await
-                .context("failed to create texthooker listener")?,
+            // #[cfg(feature = "desktop")]
+            // texthookers: texthook::Texthookers::new(&db, event_tx.clone())
+            //     .await
+            //     .context("failed to create texthooker listener")?,
             deinflectors: Deinflectors::new().context("failed to create deinflectors")?,
             // anki: Anki::new(&db)
             //     .await

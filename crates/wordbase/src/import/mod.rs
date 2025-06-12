@@ -44,7 +44,7 @@ pub trait ImportKind: Send + Sync {
         &self,
         db: Pool<Sqlite>,
         open_archive: Arc<dyn OpenArchive>,
-        progress_tx: mpsc::Sender<f64>,
+        progress_tx: mpsc::Sender<ImportProgress>,
     ) -> BoxFuture<Result<(DictionaryMeta, ImportContinue)>>;
 }
 
@@ -83,8 +83,14 @@ pub type ImportContinue = BoxFuture<'static, Result<DictionaryId>>;
 pub enum ImportEvent {
     DeterminedKind(DictionaryKind),
     ParsedMeta(DictionaryMeta),
-    Progress(f64),
+    Progress(ImportProgress),
     Done(DictionaryId),
+}
+
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct ImportProgress {
+    pub frac: f64,
 }
 
 #[derive(Debug, Display, Error)]

@@ -5,6 +5,9 @@ package io.github.aecsocket.wordbase
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.icu.number.NumberFormatter
+import android.icu.number.Precision
+import android.icu.text.NumberFormat
 import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -81,10 +84,12 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import uniffi.wordbase.ImportDictionaryCallback
 import uniffi.wordbase.ImportEvent
+import uniffi.wordbase.ImportProgress
 import uniffi.wordbase_api.Dictionary
 import uniffi.wordbase_api.DictionaryKind
 import uniffi.wordbase_api.DictionaryMeta
 import uniffi.wordbase_api.Profile
+import java.util.Locale
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -143,6 +148,13 @@ fun PreviewManagePage(modifier: Modifier = Modifier) {
                 DictionaryImport.Started(
                     id = Uuid.random(),
                     fileName = "dict.zip",
+                ),
+                DictionaryImport.ReadMeta(
+                    id = Uuid.random(),
+                    meta = DictionaryMeta("Another Dict"),
+                    progress = ImportProgress(
+                        frac = 0.25,
+                    ),
                 ),
             ),
             profile = profile,
@@ -211,8 +223,6 @@ fun AppManagePage(modifier: Modifier = Modifier) {
     ) { uri ->
         val uri = uri ?: return@rememberLauncherForActivityResult
 
-
-
         coroutineScope.launch {
             locked = true
             val importId = Uuid.random()
@@ -247,7 +257,7 @@ fun AppManagePage(modifier: Modifier = Modifier) {
                             importState = DictionaryImport.ReadMeta(
                                 id = importId,
                                 meta = meta,
-                                progress = 0f,
+                                progress = ImportProgress(frac = 0.0),
                             )
                         }
 
@@ -256,7 +266,7 @@ fun AppManagePage(modifier: Modifier = Modifier) {
                                 importState = DictionaryImport.ReadMeta(
                                     id = importId,
                                     meta = meta,
-                                    progress = event.v1.toFloat()
+                                    progress = event.v1,
                                 )
                             }
                         }
@@ -615,7 +625,7 @@ sealed class DictionaryImport {
     data class ReadMeta(
         override val id: Uuid,
         val meta: DictionaryMeta,
-        val progress: Float,
+        val progress: ImportProgress,
         override val error: String? = null,
     ) : DictionaryImport() {
         override fun withError(error: String) =
@@ -658,7 +668,7 @@ fun ImportRow(import: DictionaryImport) {
                     is DictionaryImport.ReadMeta -> {
                         CircularProgressIndicator(
                             modifier = Modifier.alpha(progressAlpha),
-                            progress = { import.progress }
+                            progress = { import.progress.frac.toFloat() }
                         )
                     }
                 }
@@ -721,6 +731,20 @@ fun ImportRow(import: DictionaryImport) {
                     key = stringResource(R.string.dictionary_import_error),
                     value = error
                 )
+            }
+
+            when (import) {
+                is DictionaryImport.Started -> {}
+                is DictionaryImport.ReadMeta -> {
+                    val fmt = NumberFormat.getPercentInstance()
+                    fmt.minimumFractionDigits = 2
+                    fmt.maximumFractionDigits = 2
+
+                    DictionaryMetaItem(
+                        key = stringResource(R.string.dictionary_import_progress),
+                        value = fmt.format(import.progress.frac),
+                    )
+                }
             }
 
             when (import) {

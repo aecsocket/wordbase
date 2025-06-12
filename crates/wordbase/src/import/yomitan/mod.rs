@@ -1,7 +1,7 @@
 mod schema;
 
 use {
-    super::{Archive, ImportContinue, ImportKind, OpenArchive},
+    super::{Archive, ImportContinue, ImportKind, ImportProgress, OpenArchive},
     crate::import::{insert::Inserter, insert_dictionary},
     anyhow::{Context, Result},
     async_zip::base::read::seek::ZipFileReader,
@@ -41,7 +41,7 @@ impl ImportKind for Yomitan {
         &self,
         db: Pool<Sqlite>,
         open_archive: Arc<dyn OpenArchive>,
-        progress_tx: mpsc::Sender<f64>,
+        progress_tx: mpsc::Sender<ImportProgress>,
     ) -> BoxFuture<Result<(DictionaryMeta, ImportContinue)>> {
         Box::pin(async move {
             let (meta, continuation) = start_import(db, open_archive, progress_tx).await?;
@@ -82,7 +82,7 @@ async fn validate(open_archive: Arc<dyn OpenArchive>) -> Result<()> {
 async fn start_import(
     db: Pool<Sqlite>,
     open_archive: Arc<dyn OpenArchive>,
-    progress_tx: mpsc::Sender<f64>,
+    progress_tx: mpsc::Sender<ImportProgress>,
 ) -> Result<(DictionaryMeta, impl Future<Output = Result<DictionaryId>>)> {
     let mut archive = archive_reader(&*open_archive).await?;
     let index_index = archive
@@ -130,7 +130,7 @@ async fn continue_import(
     open_archive: Arc<dyn OpenArchive>,
     meta: DictionaryMeta,
     index: schema::Index,
-    progress_tx: mpsc::Sender<f64>,
+    progress_tx: mpsc::Sender<ImportProgress>,
 ) -> Result<DictionaryId> {
     trace!("Importing Yomitan");
 
@@ -228,9 +228,9 @@ async fn continue_import(
     let notify_progress = |banks_done: usize, rows_done: usize, rows_len: usize| {
         // +1 to not trigger on the first row
         if (rows_done + 1) % 500 == 0 {
-            let bank_progress = rows_done as f64 / rows_len as f64;
-            let progress = (banks_done as f64 + bank_progress) / (num_banks as f64);
-            _ = progress_tx.try_send(progress);
+            let bank_frac = rows_done as f64 / rows_len as f64;
+            let frac = (banks_done as f64 + bank_frac) / (num_banks as f64);
+            _ = progress_tx.try_send(ImportProgress { frac });
         }
     };
 
@@ -268,8 +268,8 @@ async fn continue_import(
             }
         }
         banks_done += 1;
-        let progress = banks_done as f64 / num_banks as f64;
-        _ = progress_tx.try_send(progress);
+        let frac = banks_done as f64 / num_banks as f64;
+        _ = progress_tx.try_send(ImportProgress { frac });
     }
     while let Some(res) = tasks.join_next().await {
         res.context("task canceled")??;

@@ -98,7 +98,7 @@ pub async fn import(engine: &Engine, profile: &Profile, path: PathBuf) -> Result
                 info!("Importing {:?} version {:?}", meta.name, meta.version);
             }
             ImportEvent::Progress(progress) => {
-                info!("{:.02}% imported", progress * 100.0);
+                info!("{:.02}% imported", progress.frac * 100.0);
             }
             ImportEvent::Done(id) => {
                 info!("Imported as {id:?}");
