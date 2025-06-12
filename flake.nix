@@ -1,39 +1,206 @@
 {
+  description = "Build a cargo workspace";
+
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
-    rust-overlay = {
-      url = "github:oxalica/rust-overlay";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+
     crane.url = "github:ipetkov/crane";
+
+    flake-utils.url = "github:numtide/flake-utils";
+
+    advisory-db = {
+      url = "github:rustsec/advisory-db";
+      flake = false;
+    };
   };
+
   outputs =
     {
+      self,
       nixpkgs,
-      flake-utils,
-      rust-overlay,
       crane,
+      flake-utils,
+      advisory-db,
       ...
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
       let
-        overlays = [ (import rust-overlay) ];
-        pkgs = import nixpkgs { inherit system overlays; };
-        rustToolchain = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+        pkgs = nixpkgs.legacyPackages.${system};
 
+        inherit (pkgs) lib;
+
+        # the lindera-unidic v0.32.2 crate uses [1] an outdated unidic-mecab fork [2] and builds it in pure rust
+        # [1] https://github.com/lindera/lindera/blob/v0.32.2/lindera-unidic/build.rs#L5-L11
+        # [2] https://github.com/lindera/unidic-mecab
+        lindera-unidic-src = pkgs.fetchurl {
+          url = "https://dlwqk3ibdg1xh.cloudfront.net/unidic-mecab-2.1.2.tar.gz";
+          hash = "sha256-JKx1/k5E2XO1XmWEfDX6Suwtt6QaB7ScoSUUbbn8EYk=";
+        };
         craneLib = crane.mkLib pkgs;
+        src = craneLib.cleanCargoSource ./.;
+
+        # Common arguments can be set here to avoid repeating them later
+        commonArgs = {
+          inherit src;
+          strictDeps = true;
+
+          buildInputs =
+            [
+              # Add additional build inputs here
+            ]
+            ++ lib.optionals pkgs.stdenv.isDarwin [
+              # Additional darwin specific inputs can be set here
+              pkgs.libiconv
+            ];
+
+          # Additional environment variables can be set directly
+          # MY_CUSTOM_VAR = "some value";
+          # LINDERA_CACHE="${lindera-unidic-src}";
+        };
+
+        # Build *just* the cargo dependencies (of the entire workspace),
+        # so we can reuse all of that work (e.g. via cachix) when running in CI
+        # It is *highly* recommended to use something like cargo-hakari to avoid
+        # cache misses when building individual top-level-crates
+        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+
+        individualCrateArgs = commonArgs // {
+          inherit cargoArtifacts;
+          inherit (craneLib.crateNameFromCargoToml { inherit src; }) version;
+          # NB: we disable tests since we'll run them all via cargo-nextest
+          doCheck = false;
+        };
+
+        fileSetForCrate =
+          crate:
+          lib.fileset.toSource {
+            root = ./.;
+            fileset = lib.fileset.unions [
+              ./Cargo.toml
+              ./Cargo.lock
+              (lib.fileset.fileFilter (file: file.hasExt "md") ./.)
+              (craneLib.fileset.commonCargoSources ./crates/wordbase)
+              ./crates/wordbase-cli
+              (craneLib.fileset.commonCargoSources ./crates/jmdict-furigana)
+              ./crates/jmdict-furigana/README.md
+              ./crates/jmdict-furigana/src/jmdict_furigana.json.zip
+              (craneLib.fileset.commonCargoSources ./crates/wordbase-api)
+              ./crates/wordbase/src/records.html
+              ./crates/wordbase/README.md
+              ./crates/wordbase/migrations
+              ./crates/wordbase-api/README.md
+              ./.sqlx
+
+              # (craneLib.fileset.commonCargoSources ./crates/my-workspace-hack)
+              (craneLib.fileset.commonCargoSources crate)
+            ];
+          };
+
+        # Build the top-level crates of the workspace as individual derivations.
+        # This allows consumers to only depend on (and build) only what they need.
+        # Though it is possible to build the entire workspace as a single derivation,
+        # so this is left up to you on how to organize things
+        #
+        # Note that the cargo workspace must define `workspace.members` using wildcards,
+        # otherwise, omitting a crate (like we do below) will result in errors since
+        # cargo won't be able to find the sources for all members.
+        wordbase-cli = craneLib.buildPackage (
+          individualCrateArgs
+          // {
+            pname = "wordbase-cli";
+            cargoExtraArgs = "-p wordbase-cli";
+            src = fileSetForCrate ./crates/wordbase-cli;
+          }
+        );
+
+        # my-server = craneLib.buildPackage (
+        #   individualCrateArgs
+        #   // {
+        #     pname = "my-server";
+        #     cargoExtraArgs = "-p my-server";
+        #     src = fileSetForCrate ./crates/my-server;
+        #   }
+        # );
       in
       {
-        packages.default = craneLib.buildPackage {
-          src = craneLib.cleanCargoSource ./.;
+        checks = {
+          # Build the crates as part of `nix flake check` for convenience
+          inherit wordbase-cli;
 
-          # Add extra inputs here or any other derivation settings
-          # doCheck = true;
-          # buildInputs = [];
-          # nativeBuildInputs = [];
+          # Run clippy (and deny all warnings) on the workspace source,
+          # again, reusing the dependency artifacts from above.
+          #
+          # Note that this is done as a separate derivation so that
+          # we can block the CI if there are issues here, but not
+          # prevent downstream consumers from building our crate by itself.
+          # my-workspace-clippy = craneLib.cargoClippy (
+          #   commonArgs
+          #   // {
+          #     inherit cargoArtifacts;
+          #     cargoClippyExtraArgs = "--all-targets -- --deny warnings";
+          #   }
+          # );
+
+          wordbase-workspace-doc = craneLib.cargoDoc (
+            commonArgs
+            // {
+              inherit cargoArtifacts;
+            }
+          );
+
+          # Check formatting
+          wordbase-workspace-fmt = craneLib.cargoFmt {
+            inherit src;
+          };
+
+          my-workspace-toml-fmt = craneLib.taploFmt {
+            src = pkgs.lib.sources.sourceFilesBySuffices src [ ".toml" ];
+            # taplo arguments can be further customized below as needed
+            # taploExtraArgs = "--config ./taplo.toml";
+          };
+
+          # Ensure that cargo-hakari is up to date
+          # my-workspace-hakari = craneLib.mkCargoDerivation {
+          #   inherit src;
+          #   pname = "my-workspace-hakari";
+          #   cargoArtifacts = null;
+          #   doInstallCargoArtifacts = false;
+          #
+          #   buildPhaseCargoCommand = ''
+          #     cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
+          #     cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
+          #     cargo hakari verify
+          #   '';
+          #
+          #   nativeBuildInputs = [
+          #     pkgs.cargo-hakari
+          #   ];
+          # };
         };
+
+        packages = {
+          inherit wordbase-cli;
+        };
+
+        apps = {
+          wordbase-cli = flake-utils.lib.mkApp {
+            drv = wordbase-cli;
+          };
+        };
+
+        # devShells.default = craneLib.devShell {
+        #   # Inherit inputs from checks.
+        #   checks = self.checks.${system};
+        #
+        #   # Additional dev-shell environment variables can be set directly
+        #   # MY_CUSTOM_DEVELOPMENT_VAR = "something else";
+        #
+        #   # Extra inputs can be added here; cargo and rustc are provided by default.
+        #   packages = [
+        #     pkgs.cargo-hakari
+        #   ];
+        # };
 
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
@@ -59,7 +226,14 @@
             # Binding generation
             ktlint
           ];
+
+    #       shellHook = ''
+    # # Caching for lindera-unidic
+    # [ "''${LINDERA_CACHE+x}" ] ||
+    #   export LINDERA_CACHE="''${XDG_CACHE_HOME:-$HOME/.cache}/lindera"
+    #         '';
         };
+
       }
     );
 }
