@@ -55,6 +55,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -214,6 +215,7 @@ fun AppManagePage(modifier: Modifier = Modifier) {
     // to avoid locking the UI on every tiny change.
     // TODO: This is effectively a hand-rolled mutex. Can we use an actual mutex somehow?
     var locked by remember { mutableStateOf(false) }
+    val enabled by remember { derivedStateOf { !locked } }
 
     var importState by remember { mutableStateOf<DictionaryImport?>(null) }
 
@@ -290,7 +292,7 @@ fun AppManagePage(modifier: Modifier = Modifier) {
 
     ManagePage(
         modifier = modifier,
-        enabled = !locked,
+        enabled = enabled,
         profile = profile,
         dictionaries = app.dictionaries.values.sortedBy { it.position },
         dictionaryImports = importState?.let { listOf(it) } ?: listOf(),
@@ -345,7 +347,11 @@ fun AppManagePage(modifier: Modifier = Modifier) {
                 )
             )
         },
-        anki = { AnkiPageApp() },
+        anki = {
+            AnkiPageApp(
+                enabled = enabled,
+            )
+       },
     )
 }
 

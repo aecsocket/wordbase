@@ -49,11 +49,14 @@ fun AnkiPagePreview() {
         model = model,
         models = models,
         onModelChange = { model = it },
+        enabled = true,
     )
 }
 
 @Composable
-fun AnkiPageApp() {
+fun AnkiPageApp(
+    enabled: Boolean,
+) {
     val context = LocalContext.current
     val app = context.app()
     val wordbase by rememberWordbase()
@@ -83,6 +86,7 @@ fun AnkiPageApp() {
                     }
                 }
             },
+            enabled = enabled,
         )
     } ?: run {
         Column(
@@ -120,6 +124,7 @@ fun AnkiPage(
     model: String,
     models: List<String>,
     onModelChange: (String) -> Unit,
+    enabled: Boolean,
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -133,6 +138,7 @@ fun AnkiPage(
             selected = deck,
             options = decks,
             onSelectedChange = onDeckChange,
+            enabled = enabled,
         )
 
         DropdownField(
@@ -144,6 +150,7 @@ fun AnkiPage(
             selected = model,
             options = models,
             onSelectedChange = onModelChange,
+            enabled = enabled,
         )
     }
 }
@@ -155,6 +162,7 @@ fun DropdownField(
     selected: String,
     options: List<String>,
     onSelectedChange: (String) -> Unit,
+    enabled: Boolean = true,
 ) {
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(
@@ -172,6 +180,7 @@ fun DropdownField(
             label = label,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = ExposedDropdownMenuDefaults.textFieldColors(),
+            enabled = enabled,
         )
 
         ExposedDropdownMenu(
@@ -180,6 +189,7 @@ fun DropdownField(
         ) {
             options.forEach {
                 DropdownMenuItem(
+                    enabled = enabled,
                     text = { Text(text = it) },
                     onClick = {
                         onSelectedChange(it)
