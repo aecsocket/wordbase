@@ -14,8 +14,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,7 +45,6 @@ import uniffi.wordbase.RenderConfig
 import uniffi.wordbase.Wordbase
 import uniffi.wordbase.WordbaseException
 import uniffi.wordbase_api.RecordEntry
-import uniffi.wordbase_api.RecordId
 import uniffi.wordbase_api.RecordKind
 import uniffi.wordbase_api.Term
 
@@ -75,6 +74,80 @@ fun rememberLookup(
 }
 
 @Composable
+fun addNoteFn(
+    wordbase: Wordbase,
+    sentence: String,
+    cursor: ULong,
+    deck: String,
+    noteType: String,
+): suspend (Term) -> Unit {
+    val context = LocalContext.current
+    val app = context.app()
+    val textNoAnki = stringResource(R.string.add_note_no_anki)
+    val textNoDeck = stringResource(R.string.add_note_no_deck)
+    val textNoNoteType = stringResource(R.string.add_note_no_note_type)
+    val textErrGetFields = stringResource(R.string.add_note_err_get_fields)
+    val textErrBuildNote = stringResource(R.string.add_note_err_build_note)
+    val textErrAdd = stringResource(R.string.add_note_err_add)
+    val textAdded = stringResource(R.string.add_note_added)
+
+    return fn@{ term ->
+        Log.i(
+            TAG,
+            "Adding card for (${term.headword}, ${term.reading}), cursor: $cursor, sentence: $sentence"
+        )
+        if (AddContentApi.getAnkiDroidPackageName(context) == null) {
+            Toast.makeText(context, textNoAnki, Toast.LENGTH_SHORT).show()
+            return@fn
+        }
+        val anki = AddContentApi(context)
+
+        val deckId = anki.deckList
+            .firstNotNullOfOrNull { (id, name) -> if (name == deck) id else null }
+            ?: run {
+                Toast.makeText(context, textNoDeck.format(deck), Toast.LENGTH_SHORT).show()
+                return@fn
+            }
+        val noteTypeId = anki.modelList
+            .firstNotNullOfOrNull { (id, name) -> if (name == noteType) id else null }
+            ?: run {
+                Toast.makeText(context, textNoNoteType.format(noteType), Toast.LENGTH_SHORT).show()
+                return@fn
+            }
+
+        val fieldNames = anki.getFieldList(noteTypeId) ?: run {
+            Toast.makeText(context, textErrGetFields.format(noteType), Toast.LENGTH_SHORT)
+                .show()
+            return@fn
+        }
+
+        val termNote = try {
+            wordbase.buildTermNote(
+                profileId = app.profileId,
+                sentence = sentence,
+                cursor = cursor,
+                term = term,
+            )
+        } catch (ex: WordbaseException) {
+            Toast.makeText(context, textErrBuildNote, Toast.LENGTH_SHORT).show()
+            ex.printStackTrace()
+            return@fn
+        }
+
+        val fields = fieldNames.map { fieldName ->
+            termNote.fields[fieldName] ?: ""
+        }
+
+        val noteId = anki.addNote(noteTypeId, deckId, fields.toTypedArray(), setOf("wordbase"))
+        if (noteId == null) {
+            Toast.makeText(context, textErrAdd, Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, textAdded, Toast.LENGTH_SHORT).show()
+        }
+    }
+}
+
+@Composable
 fun RecordsView(
     wordbase: Wordbase,
     sentence: String,
@@ -89,74 +162,29 @@ fun RecordsView(
     val app = context.app()
     val coroutineScope = rememberCoroutineScope()
 
-    val textNoAnki = stringResource(R.string.add_note_no_anki)
-    val textNoDeck = stringResource(R.string.add_note_no_deck)
-    val textNoNoteType = stringResource(R.string.add_note_no_note_type)
-    val textErrGetFields = stringResource(R.string.add_note_err_get_fields)
-    val textErrBuildNote = stringResource(R.string.add_note_err_build_note)
-    val textErrAdd = stringResource(R.string.add_note_err_add)
-    val textAdded = stringResource(R.string.add_note_added)
+    val deck by derivedStateOf { app.profile?.ankiDeck }
+    val noteType by derivedStateOf { app.profile?.ankiNoteType }
 
-    suspend fun addNote(term: Term, deckName: String, modelName: String) {
-        Log.i(TAG, "Adding card for (${term.headword}, ${term.reading})")
-        if (AddContentApi.getAnkiDroidPackageName(context) == null) {
-            Toast.makeText(context, textNoAnki, Toast.LENGTH_SHORT).show()
-            return
-        }
-        val anki = AddContentApi(context)
-
-        val deckId = anki.deckList
-            .firstNotNullOfOrNull { (id, name) -> if (name == deckName) id else null }
-            ?: run {
-                Toast.makeText(context, textNoDeck.format(deckName), Toast.LENGTH_SHORT).show()
-                return
-            }
-        val modelId = anki.modelList
-            .firstNotNullOfOrNull { (id, name) -> if (name == modelName) id else null }
-            ?: run {
-                Toast.makeText(context, textNoNoteType.format(modelName), Toast.LENGTH_SHORT).show()
-                return
-            }
-
-        val fieldNames = anki.getFieldList(modelId) ?: run {
-            Toast.makeText(context, textErrGetFields.format(modelName), Toast.LENGTH_SHORT)
-                .show()
-            return
-        }
-
-        val termNote = try {
-            wordbase.buildTermNote(
-                profileId = app.profileId,
-                sentence = sentence,
-                cursor = cursor,
-                term = term,
-            )
-        } catch (ex: WordbaseException) {
-            Toast.makeText(context, textErrBuildNote, Toast.LENGTH_SHORT).show()
-            ex.printStackTrace()
-            return
-        }
-
-        val fields = fieldNames.map { fieldName ->
-            termNote.fields[fieldName] ?: ""
-        }
-
-        val noteId = anki.addNote(modelId, deckId, fields.toTypedArray(), setOf("wordbase"))
-        if (noteId == null) {
-            Toast.makeText(context, textErrAdd, Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(context, textAdded, Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    val onAddNote = app.profile?.ankiDeck?.let { ankiDeck ->
-        app.profile?.ankiNoteType?.let { noteType ->
-            { term: Term ->
-                coroutineScope.launch {
-                    addNote(term, ankiDeck, noteType)
+    val addNote =
+        app.profile?.ankiDeck?.let { deck ->
+            app.profile?.ankiNoteType?.let { noteType ->
+                remember(sentence, cursor, deck, noteType) {
+                    addNoteFn(
+                        wordbase = wordbase,
+                        sentence = sentence,
+                        cursor = cursor,
+                        deck = deck,
+                        noteType = noteType,
+                    )
                 }
-                Unit
             }
+        }
+    val onAddNote = addNote?.let { addNote ->
+        { term: Term ->
+            coroutineScope.launch {
+                addNote(term)
+            }
+            Unit
         }
     }
 
@@ -315,3 +343,17 @@ fun StatusPageTitle(text: String) {
 }
 
 fun Color.css() = "rgb(${red * 100}% ${green * 100}% ${blue * 100}%)"
+
+fun Term.asString() = if (headword == null) {
+    if (reading == null) {
+        "?"
+    } else {
+        "$reading"
+    }
+} else {
+    if (reading == null) {
+        "$headword"
+    } else {
+        "$headword ($reading)"
+    }
+}

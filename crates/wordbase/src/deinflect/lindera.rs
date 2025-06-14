@@ -426,7 +426,6 @@ mod tests {
 
         // some token patterns might result in UNK tokens, like this trailing whitespace
         // here we test that we handle UNKs gracefully
-        // TODO: it broke :(
         let (text, start) = sentence!(/ "ある。　");
         assert_deinflects(
             &deinflector,

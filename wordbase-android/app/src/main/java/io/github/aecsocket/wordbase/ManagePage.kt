@@ -3,10 +3,7 @@
 package io.github.aecsocket.wordbase
 
 import android.annotation.SuppressLint
-import android.content.Context
 import android.content.Intent
-import android.icu.number.NumberFormatter
-import android.icu.number.Precision
 import android.icu.text.NumberFormat
 import android.net.Uri
 import android.provider.DocumentsContract
@@ -43,8 +40,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardColors
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -53,7 +48,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -90,7 +84,6 @@ import uniffi.wordbase_api.Dictionary
 import uniffi.wordbase_api.DictionaryKind
 import uniffi.wordbase_api.DictionaryMeta
 import uniffi.wordbase_api.Profile
-import java.util.Locale
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -138,9 +131,6 @@ fun PreviewManagePage(modifier: Modifier = Modifier) {
             )
         }
 
-        var ankiDeck by remember { mutableStateOf("Mining") }
-        var ankiModel by remember { mutableStateOf("Lapis") }
-
         ManagePage(
             modifier = modifier,
             enabled = true,
@@ -161,8 +151,9 @@ fun PreviewManagePage(modifier: Modifier = Modifier) {
             profile = profile,
             onDictionaryReorder = { from, to ->
                 dictionaries = dictionaries.toMutableList().run {
-                    val newFrom = from.copy(position = to.position)
-                    val newTo = to.copy(position = from.position)
+                    val oldFrom = from.position
+                    from.position = to.position
+                    to.position = oldFrom
                     sortedBy { it.position }
                 }
             },
@@ -205,7 +196,7 @@ fun AppManagePage(modifier: Modifier = Modifier) {
 
     val coroutineScope = rememberCoroutineScope()
     val app = LocalContext.current.app()
-    val profile = app.profiles.values.first() // TODO switchable profile
+    val profile = app.profile ?: return
 
     // Some actions, like deleting a dictionary, may take a long time
     // during this, if the user performs another action, it may fail
