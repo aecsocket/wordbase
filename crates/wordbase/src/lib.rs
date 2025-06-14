@@ -13,6 +13,7 @@ pub mod render;
 // #[cfg(feature = "desktop")]
 // pub mod texthook;
 
+use render::Renderer;
 use tokio::fs;
 pub use wordbase_api::*;
 use {
@@ -24,7 +25,6 @@ use {
     profile::Profiles,
     sqlx::{Pool, Sqlite},
     std::path::Path,
-    tera::Tera,
     tokio::sync::broadcast,
     tracing::info,
 };
@@ -36,7 +36,7 @@ uniffi::setup_scaffolding!();
 pub struct Engine {
     profiles: ArcSwap<Profiles>,
     dictionaries: ArcSwap<Dictionaries>,
-    renderer: Tera,
+    renderer: Renderer,
     // #[cfg(feature = "desktop")]
     // texthookers: texthook::Texthookers,
     deinflectors: Deinflectors,
@@ -112,7 +112,6 @@ pub type IndexMap<K, V> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
 pub type IndexSet<T> = indexmap::IndexSet<T, foldhash::fast::RandomState>;
 
 impl Engine {
-    #[expect(clippy::missing_panics_doc, reason = "shouldn't panic")]
     pub async fn new(data_dir: impl AsRef<Path>) -> Result<Self> {
         let data_dir = data_dir.as_ref();
         info!("Creating engine using {data_dir:?} as data directory");
@@ -141,12 +140,7 @@ impl Engine {
                     .await
                     .context("failed to fetch initial dictionaries")?,
             ),
-            renderer: {
-                let mut tera = Tera::default();
-                tera.add_raw_template("records.html", include_str!("records.html"))
-                    .expect("template should be valid");
-                tera
-            },
+            renderer: Renderer::new().context("failed to create renderer")?,
             // #[cfg(feature = "desktop")]
             // texthookers: texthook::Texthookers::new(&db, event_tx.clone())
             //     .await

@@ -20,7 +20,7 @@ all-features = true
 [features]
 poem        = ["dep:poem", "dep:poem-openapi"]
 render-html = ["dep:maud"]
-uniffi      = ["dep:uniffi"]
+uniffi      = ["dep:uniffi", "dep:data-encoding"]
 
 [dependencies]
 bytes        = { workspace = true, features = ["serde"] }
@@ -32,6 +32,7 @@ poem-openapi = { workspace = true, optional = true }
 serde        = { workspace = true, features = ["derive"] }
 serde_json   = { workspace = true }
 uniffi       = { workspace = true, optional = true }
+data-encoding        = { workspace = true, optional = true }
 
 derive_more = { workspace = true, features = [
   "debug",

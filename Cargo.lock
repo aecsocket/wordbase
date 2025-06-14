@@ -4721,6 +4721,7 @@ name = "wordbase-api"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "data-encoding",
  "derive_more 2.0.1",
  "itertools",
  "maud",

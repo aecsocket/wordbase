@@ -155,25 +155,25 @@ fun MiniDictionaryUi(sentence: String) {
 
             item {
                 wordbase?.let { wordbase ->
-                    val records = rememberLookup(
+                    val entries = rememberLookup(
                         wordbase = wordbase,
                         sentence = sentence,
                         cursor = cursor.bytes,
-                        onRecords = { records ->
-                            val spanMin = records.minOfOrNull { it.spanChars.start } ?: 0UL
-                            val spanMax = records.maxOfOrNull { it.spanChars.end } ?: 0UL
+                        onEntries = { entries ->
+                            val spanMin = entries.minOfOrNull { it.spanChars.start } ?: 0UL
+                            val spanMax = entries.maxOfOrNull { it.spanChars.end } ?: 0UL
                             scanRange = spanMin.toInt() to spanMax.toInt()
                         }
                     )
 
-                    if (records.isEmpty()) {
+                    if (entries.isEmpty()) {
                         NoRecordsView()
                     } else {
                         RecordsView(
                             wordbase = wordbase,
                             sentence = sentence,
                             cursor = cursor.bytes,
-                            records = records,
+                            entries = entries,
                             containerColor = BottomSheetDefaults.ContainerColor,
                             onExit = {
                                 coroutineScope.launch {

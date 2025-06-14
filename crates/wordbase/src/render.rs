@@ -1,30 +1,125 @@
-use anyhow::Result;
+use std::collections::HashMap;
+
+use anyhow::{Context, Result};
+use arc_swap::ArcSwap;
 use data_encoding::BASE64;
 use foldhash::HashSet;
 use serde::Serialize;
-use wordbase_api::{DictionaryId, Record, RecordEntry, RecordKind, Term, dict};
+use tera::Tera;
+use wordbase_api::{DictionaryId, Record, RecordEntry, RecordId, RecordKind, Term, dict};
 
 use crate::{Engine, IndexMap, lang};
 
+#[derive(Debug)]
+pub struct Renderer {
+    tera: ArcSwap<Tera>,
+}
+
+impl Renderer {
+    pub fn new() -> Result<Self> {
+        let mut tera = Tera::default();
+        tera.add_raw_template("records.html", include_str!("records.html"))
+            .context("failed to add record render template")?;
+        Ok(Self {
+            tera: ArcSwap::from_pointee(tera),
+        })
+    }
+}
+
 impl Engine {
-    pub fn render_to_html(&self, records: &[RecordEntry], config: &RenderConfig) -> Result<String> {
-        let terms = group_terms(records);
+    /// Renders the results of [`Engine::lookup`] to parts of an HTML document,
+    /// so you can display it to the user in a web view or similar.
+    ///
+    /// # Errors
+    ///
+    /// Errors if the HTML template cannot be rendered by [`tera`]. This should
+    /// not happen normally, but if you are modifying the template and
+    /// hot-reloading it, then this may error. It is usually safe to just
+    /// `expect` this to be [`Ok`].
+    pub fn render_html(
+        &self,
+        entries: &[RecordEntry],
+        config: &RenderConfig,
+    ) -> Result<HtmlRender> {
+        let terms = group_terms(entries);
 
         let mut context = tera::Context::new();
         context.insert("dictionaries", &self.dictionaries().0);
         context.insert("terms", &terms);
         context.insert("config", config);
+        let body = self.renderer.tera.load().render("records.html", &context)?;
 
-        let html = self.renderer.render("records.html", &context)?;
-        Ok(html)
+        Ok(HtmlRender {
+            body,
+            audio_blobs: render_audio_blobs(entries),
+        })
     }
+}
+
+/// Parts of an HTML document rendered by [`Engine::render_html`].
+///
+/// This intentionally does not contain a complete HTML document, since you must
+/// do some extra platform-specific things to be able to render this in a web
+/// view.
+///
+/// [`HtmlRender::body`] holds the main HTML content of the rendering, but it
+/// does not contain some assets such as audio blobs. This is because the
+/// base 64 audio blobs may be very large, and platforms such as Android's
+/// default web view cannot handle that much data in an HTML document.
+///
+/// Finally, you must wrap the HTML content in:
+/// - `<!doctype html>`
+/// - `<html>`
+/// - `<body>`
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct HtmlRender {
+    /// Main HTML body content of the render.
+    pub body: String,
+    pub audio_blobs: HashMap<RecordId, String>,
+}
+
+fn render_audio_blobs(entries: &[RecordEntry]) -> HashMap<RecordId, String> {
+    entries
+        .iter()
+        .filter_map(|record| {
+            if let Record::YomichanAudioForvo(dict::yomichan_audio::Forvo { audio, .. })
+            | Record::YomichanAudioJpod(dict::yomichan_audio::Jpod { audio })
+            | Record::YomichanAudioNhk16(dict::yomichan_audio::Nhk16 { audio, .. })
+            | Record::YomichanAudioShinmeikai8(dict::yomichan_audio::Shinmeikai8 {
+                audio,
+                ..
+            }) = &record.record
+            {
+                let blob = audio_blob(audio);
+                Some((record.record_id, blob))
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct RenderConfig {
-    pub add_note_text: Option<String>,
-    pub add_note_js_fn: Option<String>,
+    /// Translated text string "Add Note".
+    pub s_add_note: String,
+    /// JavaScript function name to add a note for a given term.
+    ///
+    /// Arguments:
+    /// - `headword`: `string?`
+    /// - `reading`: `string?`
+    pub fn_add_note: Option<String>,
+    /// JavaScript function name to return a [`HtmlRender::audio_blobs`] string
+    /// for a given record ID.
+    ///
+    /// Arguments:
+    /// - `record_id`: `number`
+    ///
+    /// Returns:
+    /// - `string` - corresponding audio blob from [`HtmlRender::audio_blobs`].
+    pub fn_audio_blob: String,
 }
 
 pub fn group_terms(entries: &[RecordEntry]) -> Vec<RecordTerm> {
@@ -76,20 +171,23 @@ pub fn group_terms(entries: &[RecordEntry]) -> Vec<RecordTerm> {
             }
             Record::YomichanAudioForvo(audio) => {
                 info.audio_no_pitch.entry(source).or_default().push(Audio {
-                    blob: audio_blob(&audio.audio),
                     kind: RecordKind::YomichanAudioForvo,
+                    mime_type: audio_mime_type(&audio.audio),
+                    record_id: record.record_id,
                 });
             }
             Record::YomichanAudioJpod(audio) => {
                 info.audio_no_pitch.entry(source).or_default().push(Audio {
-                    blob: audio_blob(&audio.audio),
                     kind: RecordKind::YomichanAudioJpod,
+                    mime_type: audio_mime_type(&audio.audio),
+                    record_id: record.record_id,
                 });
             }
             Record::YomichanAudioNhk16(audio) => {
                 let conv = Audio {
-                    blob: audio_blob(&audio.audio),
                     kind: RecordKind::YomichanAudioNhk16,
+                    mime_type: audio_mime_type(&audio.audio),
+                    record_id: record.record_id,
                 };
                 if audio.pitch_positions.is_empty() {
                     info.audio_no_pitch.entry(source).or_default().push(conv);
@@ -111,8 +209,9 @@ pub fn group_terms(entries: &[RecordEntry]) -> Vec<RecordTerm> {
             }
             Record::YomichanAudioShinmeikai8(audio) => {
                 let conv = Audio {
-                    blob: audio_blob(&audio.audio),
                     kind: RecordKind::YomichanAudioShinmeikai8,
+                    mime_type: audio_mime_type(&audio.audio),
+                    record_id: record.record_id,
                 };
                 if let Some(pos) = audio.pitch_number {
                     info.pitches
@@ -185,15 +284,20 @@ pub fn base_pitch<'a>(term: &Term, downstep: dict::jpn::PitchPosition) -> Pitch<
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Audio {
-    pub blob: String,
     pub kind: RecordKind,
+    pub mime_type: &'static str,
+    pub record_id: RecordId,
+}
+
+fn audio_mime_type(audio: &dict::yomichan_audio::Audio) -> &'static str {
+    match audio.format {
+        dict::yomichan_audio::AudioFormat::Opus => "audio/opus",
+        dict::yomichan_audio::AudioFormat::Mp3 => "audio/mp3",
+    }
 }
 
 fn audio_blob(audio: &dict::yomichan_audio::Audio) -> String {
-    let mime_type = match audio.format {
-        dict::yomichan_audio::AudioFormat::Opus => "audio/opus",
-        dict::yomichan_audio::AudioFormat::Mp3 => "audio/mp3",
-    };
+    let mime_type = audio_mime_type(audio);
     let data = BASE64.encode(&audio.data);
     format!("data:{mime_type};base64,{data}")
 }
@@ -204,12 +308,12 @@ const _: () = {
 
     #[uniffi::export]
     impl Wordbase {
-        pub fn render_to_html(
+        pub fn render_html(
             &self,
-            records: &[RecordEntry],
+            entries: &[RecordEntry],
             config: &RenderConfig,
-        ) -> FfiResult<String> {
-            Ok(self.0.render_to_html(records, config)?)
+        ) -> FfiResult<HtmlRender> {
+            Ok(self.0.render_html(entries, config)?)
         }
     }
 };

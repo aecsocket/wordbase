@@ -1,25 +1,32 @@
 use {
     anyhow::{Context, Result},
-    wordbase::{Engine, Profile, Term},
+    ascii_table::AsciiTable,
+    tracing::info,
+    wordbase::{Engine, Profile, Term, anki::TermNote},
 };
 
-pub async fn create_note(
+pub async fn note(
     engine: &Engine,
     profile: &Profile,
-    sentence: &str,
     headword: &str,
-    reading: &str,
-) -> Result<()> {
-    let term = Term::from_full(headword, reading).context("invalid term")?;
-    // TODO
-    // engine
-    //     .connect_anki("http://host.docker.internal:8765", "")
-    //     .await?;
-    // engine.add_anki_note(profile.id, sentence, 0, &term).await?;
-    Ok(())
-}
+    sentence: Option<&str>,
+    reading: Option<&str>,
+) -> Result<TermNote> {
+    let term = Term::from_parts(Some(headword), reading).context("invalid term")?;
+    let sentence = sentence.unwrap_or(headword);
+    let term_note = engine
+        .build_term_note(profile.id, sentence, 0, &term)
+        .await?;
 
-pub async fn set_url(engine: &Engine, url: &str) -> Result<()> {
-    // engine.connect_anki(url, "").await?;
-    Ok(())
+    let mut table = AsciiTable::default();
+    table.column(0).set_header("Field");
+    table.column(1).set_header("Value");
+
+    let data = term_note
+        .fields
+        .iter()
+        .map(|(key, value)| vec![key, value])
+        .collect::<Vec<_>>();
+    info!("\n{}", table.format(&data));
+    Ok(term_note)
 }

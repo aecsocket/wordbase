@@ -1,8 +1,12 @@
 use {
     anyhow::{Context, Result},
-    std::{fmt::Write as _, time::Instant},
+    itertools::Itertools,
+    std::time::Instant,
     tracing::info,
-    wordbase::{Engine, Profile, RecordKind, render::RenderConfig},
+    wordbase::{
+        Engine, Profile, RecordId, RecordKind,
+        render::{HtmlRender, RenderConfig},
+    },
 };
 
 pub fn deinflect(engine: &Engine, text: &str) {
@@ -29,20 +33,45 @@ pub async fn render(engine: &Engine, profile: &Profile, text: &str) -> Result<()
     info!("Fetched records in {:?}", end.duration_since(start));
 
     let start = Instant::now();
-    let mut html = engine
-        .render_to_html(
+    let HtmlRender { body, audio_blobs } = engine
+        .render_html(
             &records,
             &RenderConfig {
-                add_note_text: Some("Add Card".into()),
-                add_note_js_fn: Some("unimplemented".into()),
+                s_add_note: "Add Card".into(),
+                fn_add_note: Some("unimplemented".into()),
+                fn_audio_blob: "Wordbase.audio_blob".into(),
             },
         )
         .context("failed to render HTML")?;
-    _ = write!(&mut html, "<style>{EXTRA_CSS}</style>");
+
+    let audio_blobs = audio_blobs
+        .into_iter()
+        .map(|(RecordId(record_id), blob)| format!("{record_id}: '{blob}'"))
+        .join(",");
+
+    let js = format!(
+        "Wordbase.audio_blob = function(record_id) {{
+            const audio_blobs = {{ {audio_blobs} }};
+            return audio_blobs[record_id];
+        }}"
+    );
+
+    let document = format!(
+        "
+<!doctype html>
+<html>
+    <body>
+        {body}
+        <script>{js}</script>
+        <style>{EXTRA_CSS}</style>
+    </body>
+</html>
+"
+    );
     let end = Instant::now();
     info!("Rendered HTML in {:?}", end.duration_since(start));
 
-    println!("{html}");
+    println!("{document}");
     Ok(())
 }
 

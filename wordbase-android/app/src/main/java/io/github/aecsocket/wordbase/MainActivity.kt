@@ -34,7 +34,6 @@ import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
@@ -47,7 +46,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -225,13 +223,13 @@ fun SearchPage(
     wordbase?.let { wordbase ->
         val activity = LocalActivity.current
 
-        val records = rememberLookup(
+        val entries = rememberLookup(
             wordbase = wordbase,
             sentence = query,
             cursor = 0UL,
         )
 
-        if (records.isEmpty()) {
+        if (entries.isEmpty()) {
             if (query.isNotEmpty()) {
                 NoRecordsView()
             }
@@ -240,7 +238,7 @@ fun SearchPage(
                 wordbase = wordbase,
                 sentence = query,
                 cursor = 0UL,
-                records = records,
+                entries = entries,
                 insets = insets,
                 onExit = { activity?.finish() }
             )

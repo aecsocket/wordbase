@@ -248,11 +248,8 @@ async fn import(
             trace!("{num_entries} entries found in archive - {cursor_pos} / {buf_len} bytes read");
         }
 
-        if jpod_rev_index.is_some() && nhk16_rev_index.is_some() && shinmeikai8_rev_index.is_some()
-        {
-            debug!("All indexes populated, inserting entries");
-            break;
-        }
+        // we can't just break as soon as all indexes are populated,
+        // because we still need to count the total number of entries
     }
     debug!("{num_entries} total entries");
     _ = progress_tx.try_send(ImportProgress { frac: 0.5 });

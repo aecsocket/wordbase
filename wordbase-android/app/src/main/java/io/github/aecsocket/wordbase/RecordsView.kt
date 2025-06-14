@@ -14,7 +14,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,11 +37,15 @@ import com.ichi2.anki.api.AddContentApi
 import com.kevinnzou.web.WebView
 import com.kevinnzou.web.rememberWebViewNavigator
 import com.kevinnzou.web.rememberWebViewStateWithHTMLData
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.launch
 import uniffi.wordbase.RenderConfig
 import uniffi.wordbase.Wordbase
 import uniffi.wordbase.WordbaseException
 import uniffi.wordbase_api.RecordEntry
+import uniffi.wordbase_api.RecordId
 import uniffi.wordbase_api.RecordKind
 import uniffi.wordbase_api.Term
 
@@ -50,9 +56,9 @@ fun rememberLookup(
     wordbase: Wordbase,
     sentence: String,
     cursor: ULong,
-    onRecords: (List<RecordEntry>) -> Unit = {},
-): List<RecordEntry> {
-    var records by remember { mutableStateOf(listOf<RecordEntry>()) }
+    onEntries: (ImmutableList<RecordEntry>) -> Unit = {},
+): ImmutableList<RecordEntry> {
+    var records by remember { mutableStateOf(persistentListOf<RecordEntry>()) }
 
     val app = LocalContext.current.app()
     LaunchedEffect(arrayOf(sentence, cursor, app.dictionaries, app.profiles, app.profileId)) {
@@ -61,8 +67,8 @@ fun rememberLookup(
             sentence = sentence,
             cursor = cursor,
             recordKinds = RecordKind.entries,
-        )
-        onRecords(records)
+        ).toPersistentList()
+        onEntries(records)
     }
 
     return records
@@ -73,7 +79,7 @@ fun RecordsView(
     wordbase: Wordbase,
     sentence: String,
     cursor: ULong,
-    records: List<RecordEntry> = rememberLookup(wordbase, sentence, cursor),
+    entries: ImmutableList<RecordEntry> = rememberLookup(wordbase, sentence, cursor),
     insets: WindowInsets = WindowInsets(0.dp),
     containerColor: Color = MaterialTheme.colorScheme.surface,
     contentColor: Color = contentColorFor(containerColor),
@@ -83,10 +89,18 @@ fun RecordsView(
     val app = context.app()
     val coroutineScope = rememberCoroutineScope()
 
+    val textNoAnki = stringResource(R.string.add_note_no_anki)
+    val textNoDeck = stringResource(R.string.add_note_no_deck)
+    val textNoNoteType = stringResource(R.string.add_note_no_note_type)
+    val textErrGetFields = stringResource(R.string.add_note_err_get_fields)
+    val textErrBuildNote = stringResource(R.string.add_note_err_build_note)
+    val textErrAdd = stringResource(R.string.add_note_err_add)
+    val textAdded = stringResource(R.string.add_note_added)
+
     suspend fun addNote(term: Term, deckName: String, modelName: String) {
         Log.i(TAG, "Adding card for (${term.headword}, ${term.reading})")
         if (AddContentApi.getAnkiDroidPackageName(context) == null) {
-            Toast.makeText(context, "Anki is not installed", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, textNoAnki, Toast.LENGTH_SHORT).show()
             return
         }
         val anki = AddContentApi(context)
@@ -94,18 +108,18 @@ fun RecordsView(
         val deckId = anki.deckList
             .firstNotNullOfOrNull { (id, name) -> if (name == deckName) id else null }
             ?: run {
-                Toast.makeText(context, "No deck '$deckName'", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, textNoDeck.format(deckName), Toast.LENGTH_SHORT).show()
                 return
             }
         val modelId = anki.modelList
             .firstNotNullOfOrNull { (id, name) -> if (name == modelName) id else null }
             ?: run {
-                Toast.makeText(context, "No note type '$modelName'", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, textNoNoteType.format(modelName), Toast.LENGTH_SHORT).show()
                 return
             }
 
         val fieldNames = anki.getFieldList(modelId) ?: run {
-            Toast.makeText(context, "Failed to get fields for '$modelName'", Toast.LENGTH_SHORT)
+            Toast.makeText(context, textErrGetFields.format(modelName), Toast.LENGTH_SHORT)
                 .show()
             return
         }
@@ -118,7 +132,7 @@ fun RecordsView(
                 term = term,
             )
         } catch (ex: WordbaseException) {
-            Toast.makeText(context, "Failed to build term note", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, textErrBuildNote, Toast.LENGTH_SHORT).show()
             ex.printStackTrace()
             return
         }
@@ -129,9 +143,9 @@ fun RecordsView(
 
         val noteId = anki.addNote(modelId, deckId, fields.toTypedArray(), setOf("wordbase"))
         if (noteId == null) {
-            Toast.makeText(context, "Failed to add note", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, textErrAdd, Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(context, "Added note", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, textAdded, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -148,7 +162,7 @@ fun RecordsView(
 
     RawRecordsView(
         wordbase = wordbase,
-        records = records,
+        entries = entries,
         insets = insets,
         containerColor = containerColor,
         contentColor = contentColor,
@@ -160,59 +174,85 @@ fun RecordsView(
 @Composable
 fun RawRecordsView(
     wordbase: Wordbase,
-    records: List<RecordEntry>,
+    entries: ImmutableList<RecordEntry>,
     insets: WindowInsets = WindowInsets(0.dp),
     containerColor: Color = MaterialTheme.colorScheme.surface,
     contentColor: Color = contentColorFor(containerColor),
     onAddNote: ((Term) -> Unit)? = null,
     onExit: (() -> Unit)? = null,
 ) {
+    @Suppress("unused") // used by JS
     class JsBridge(val onAddNote: (Term) -> Unit) {
-        @Suppress("unused") // used by JS
         @JavascriptInterface
         fun addNote(headword: String?, reading: String?) {
             onAddNote(Term(headword = headword, reading = reading))
+        }
+
+        @JavascriptInterface
+        fun audioBlob(recordId: RecordId): String {
+            return "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAwFIAfgAAABAAEAA8AQAAEpgADhEAARUAIgcEAgAAh0EoHy1qAAAOoBwaqABhUHQAAAA=";
         }
     }
 
     // amazingly, this scales perfectly
     val density = LocalDensity.current
     val layoutDir = LocalLayoutDirection.current
-    val extraCss = with(density) {
+    val colorScheme = MaterialTheme.colorScheme
+    val extraCss by derivedStateOf {
+        with(density) {
+            """
+            :root {
+                --bg-color: ${containerColor.css()};
+                --fg-color: ${contentColor.css()};
+                --accent-color: ${colorScheme.primary.css()};
+                --on-accent-color: ${colorScheme.onPrimary.css()};
+            }
+
+            .content {
+                margin:
+                    0
+                    ${insets.getRight(density, layoutDir).toDp().value}px
+                    0
+                    ${insets.getLeft(density, layoutDir).toDp().value}px;
+            }
+
+            body {
+                padding:
+                    ${insets.getTop(density).toDp().value}px
+                    0
+                    ${insets.getBottom(density).toDp().value}px
+                    0;
+            }
+            """.trimIndent()
+        }
+    }
+
+
+    val sAddNote = stringResource(R.string.add_note)
+    val document by derivedStateOf {
+        val html = wordbase.renderHtml(
+            entries = entries,
+            config = RenderConfig(
+                sAddNote = sAddNote,
+                fnAddNote = "WordbaseAndroid.addNote",
+                fnAudioBlob = "WordbaseAndroid.audioBlob",
+            ),
+        )
+
+        println("rebuilt document!")
+
         """
-        :root {
-            --bg-color: ${containerColor.css()};
-            --fg-color: ${contentColor.css()};
-            --accent-color: ${MaterialTheme.colorScheme.primary.css()};
-            --on-accent-color: ${MaterialTheme.colorScheme.onPrimary.css()};
-        }
-
-        .content {
-            margin:
-                0
-                ${insets.getRight(density, layoutDir).toDp().value}px
-                0
-                ${insets.getLeft(density, layoutDir).toDp().value}px;
-        }
-
-        body {
-            padding:
-                ${insets.getTop(density).toDp().value}px
-                0
-                ${insets.getBottom(density).toDp().value}px
-                0;
-        }
+        <!doctype html>
+        <html>
+            <body>
+                ${html.body}
+                <style>$extraCss</style>
+            </body>
+        </html>
         """.trimIndent()
     }
-    val html = wordbase.renderToHtml(
-        records = records,
-        config = RenderConfig(
-            addNoteText = stringResource(R.string.add_note),
-            addNoteJsFn = "Wordbase.addNote",
-        ),
-    ) + "<style>$extraCss</style>"
 
-    val webViewState = rememberWebViewStateWithHTMLData(html)
+    val webViewState = rememberWebViewStateWithHTMLData(document)
     val navigator = rememberWebViewNavigator()
     WebView(
         state = webViewState,
@@ -234,9 +274,9 @@ fun RawRecordsView(
 
             @SuppressLint("SetJavaScriptEnabled") // it is what it is
             it.settings.javaScriptEnabled = true
-            onAddNote?.let { onAddCard ->
+            onAddNote?.let { onAddNote ->
                 @SuppressLint("JavascriptInterface") // false positive
-                it.addJavascriptInterface(JsBridge(onAddCard), "Wordbase")
+                it.addJavascriptInterface(JsBridge(onAddNote), "WordbaseAndroid")
             }
         }
     )

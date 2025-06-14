@@ -3,6 +3,7 @@ use itertools::Itertools;
 use maud::html;
 use serde::Serialize;
 use std::{collections::HashMap, fmt::Write as _, ops::Range};
+use tracing::info;
 use wordbase_api::{
     DictionaryId, FrequencyValue, NormString, ProfileId, Record, RecordEntry, RecordKind, Term,
     dict,
@@ -21,7 +22,13 @@ impl Engine {
         let records = self
             .lookup(profile_id, sentence, cursor, NOTE_RECORD_KINDS)
             .await
-            .context("failed to look up records")?
+            .context("failed to look up records")?;
+
+        info!(
+            "records = {:?}",
+            records.iter().map(|e| e.term.clone()).collect::<Vec<_>>()
+        );
+        let records = records
             .into_iter()
             .filter(|record| record.term == *term)
             .collect::<Vec<_>>();

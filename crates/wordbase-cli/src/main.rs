@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 
-// mod anki;
+mod anki;
 mod dict;
 mod lookup;
 mod profile;
@@ -75,17 +75,11 @@ enum Command {
         #[command(subcommand)]
         command: DictCommand,
     },
-    // /// Manage AnkiConnect functions
-    // Anki {
-    //     #[command(subcommand)]
-    //     command: AnkiCommand,
-    // },
-    // /// Manage texthooker functions
-    // #[command(alias = "hook")]
-    // Texthooker {
-    //     #[command(subcommand)]
-    //     command: TexthookerCommand,
-    // },
+    /// Manage AnkiConnect functions
+    Anki {
+        #[command(subcommand)]
+        command: AnkiCommand,
+    },
 }
 
 #[derive(Debug, clap::Parser)]
@@ -162,38 +156,14 @@ enum DictSetCommand {
 
 #[derive(Debug, clap::Parser)]
 enum AnkiCommand {
-    Set {
-        #[command(subcommand)]
-        command: AnkiSetCommand,
-    },
-    /// Create an Anki note for the given term
-    CreateNote {
-        sentence: String,
+    /// Build and output an Anki note for the given term
+    Note {
         headword: String,
-        reading: String,
+        #[arg(long, short)]
+        sentence: Option<String>,
+        #[arg(long, short)]
+        reading: Option<String>,
     },
-}
-
-#[derive(Debug, clap::Parser)]
-enum AnkiSetCommand {
-    /// Set the AnkiConnect server URL
-    Url {
-        /// Server URL, should start with `http://`
-        url: String,
-    },
-}
-
-#[derive(Debug, clap::Parser)]
-enum TexthookerCommand {
-    /// Get the texthooker pull server URL
-    GetUrl,
-    /// Set the texthooker pull server URL
-    SetUrl {
-        /// Server URL, should start with `ws://`
-        url: String,
-    },
-    /// Print incoming texthooker sentences from the pull server
-    Watch,
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -302,32 +272,24 @@ async fn main() -> Result<()> {
         Command::Dict {
             command: DictCommand::Rm { dict_id },
         } => dict::rm(&engine, DictionaryId(dict_id)).await?,
-        // anki
-        // Command::Anki {
-        //     command:
-        //         AnkiCommand::CreateNote {
-        //             sentence,
-        //             headword,
-        //             reading,
-        //         },
-        // } => {
-        //     anki::create_note(
-        //         &engine,
-        //         &*require_profile()?,
-        //         &sentence,
-        //         &headword,
-        //         &reading,
-        //     )
-        //     .await?;
-        // }
-        // Command::Anki {
-        //     command:
-        //         AnkiCommand::Set {
-        //             command: AnkiSetCommand::Url { url },
-        //         },
-        // } => {
-        //     anki::set_url(&engine, &url).await?;
-        // }
+        Command::Anki {
+            command:
+                AnkiCommand::Note {
+                    sentence,
+                    headword,
+                    reading,
+                },
+        } => output(
+            args.output,
+            anki::note(
+                &engine,
+                &*require_profile()?,
+                &headword,
+                sentence.as_deref(),
+                reading.as_deref(),
+            )
+            .await?,
+        ),
     }
 
     Ok(())

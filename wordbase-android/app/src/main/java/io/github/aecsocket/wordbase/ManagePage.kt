@@ -160,10 +160,11 @@ fun PreviewManagePage(modifier: Modifier = Modifier) {
             ),
             profile = profile,
             onDictionaryReorder = { from, to ->
-                val fromOld = from.position
-                from.position = to.position
-                to.position = fromOld
-                dictionaries = dictionaries.sortedBy { it.position }
+                dictionaries = dictionaries.toMutableList().run {
+                    val newFrom = from.copy(position = to.position)
+                    val newTo = to.copy(position = from.position)
+                    sortedBy { it.position }
+                }
             },
             onDictionarySortingSet = { dictionary ->
                 profile = profile.copy(
