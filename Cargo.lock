@@ -954,6 +954,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "distance"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d9d8664cf849d7d0f3114a3a387d2f5e4303176d746d5a951aaddc66dfe9240"
+
+[[package]]
 name = "dotenvy"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4689,6 +4695,7 @@ dependencies = [
  "data-encoding",
  "derive_more 2.0.1",
  "directories",
+ "distance",
  "foldhash",
  "futures",
  "indexmap",

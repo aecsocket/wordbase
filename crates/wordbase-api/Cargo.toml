@@ -23,16 +23,16 @@ render-html = ["dep:maud"]
 uniffi      = ["dep:uniffi", "dep:data-encoding"]
 
 [dependencies]
-bytes        = { workspace = true, features = ["serde"] }
-itertools    = { workspace = true }
-maud         = { workspace = true, optional = true }
-paste        = { workspace = true }
-poem         = { workspace = true, optional = true }
-poem-openapi = { workspace = true, optional = true }
-serde        = { workspace = true, features = ["derive"] }
-serde_json   = { workspace = true }
-uniffi       = { workspace = true, optional = true }
-data-encoding        = { workspace = true, optional = true }
+bytes         = { workspace = true, features = ["serde"] }
+data-encoding = { workspace = true, optional = true }
+itertools     = { workspace = true }
+maud          = { workspace = true, optional = true }
+paste         = { workspace = true }
+poem          = { workspace = true, optional = true }
+poem-openapi  = { workspace = true, optional = true }
+serde         = { workspace = true, features = ["derive"] }
+serde_json    = { workspace = true }
+uniffi        = { workspace = true, optional = true }
 
 derive_more = { workspace = true, features = [
   "debug",

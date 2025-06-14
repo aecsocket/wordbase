@@ -9,7 +9,7 @@ use {
         token::Token,
         tokenizer::Tokenizer,
     },
-    std::borrow::Cow,
+    std::{borrow::Cow, cmp},
 };
 
 #[derive(derive_more::Debug)]
@@ -61,8 +61,8 @@ impl Deinflector for Lindera {
         // in text like "東京大学", lindera tokenizes it as "東京" and "大学"
         // our dictionary will have an entry for "東京", but we also want to check
         // if there's an entry for "東京大学"
-        // to do this, we turn the first `TOKEN_LOOKAHEAD` tokens into a lemma,
-        // then turn the first `TOKEN_LOOKAHEAD - 1` into another lemma, etc.
+        // to do this, we turn the first `lookahead` tokens into a lemma,
+        // then turn the first `lookahead - 1` into another lemma, etc.
         let lemmas = (1..=self.lookahead)
             .rev()
             .filter_map(move |up_to| {
@@ -92,7 +92,7 @@ impl Deinflector for Lindera {
                     .map(|token| token.lemma)
                     .collect::<Vec<_>>()
                     .join("");
-                let full_orthography = lookahead
+                let full_ortho = lookahead
                     .iter_mut()
                     .map(|token| token.orthography)
                     .collect::<Vec<_>>()
@@ -106,17 +106,33 @@ impl Deinflector for Lindera {
                     .last();
                 let scan_len =
                     word_last_token.map_or(last_lookahead.byte_end, |token| token.byte_end);
+                let scan_end = cursor + scan_len;
+                let span = cursor..scan_end;
+                let scanned_text = sentence.get(span.clone()).unwrap_or_default();
 
-                Some([
-                    Deinflection {
-                        lemma: Cow::Owned(full_lemma),
-                        span: cursor..(cursor + scan_len),
-                    },
-                    Deinflection {
-                        lemma: Cow::Owned(full_orthography),
-                        span: cursor..(cursor + scan_len),
-                    },
-                ])
+                // The order in which we return `full_lemma` and `full_ortho` matters!
+                // `full_lemma` will usually be the kanji form of a word,
+                // even if the input text was in the kana form.
+                // We want to first return the form which is closest to `scanned_text`.
+                // i.e. if the input is in kana, we want to give the deinflection in kana.
+                // For this we'll use Levenshtein distance.
+                let lemma_distance = distance::levenshtein(scanned_text, &full_lemma);
+                let ortho_distance = distance::levenshtein(scanned_text, &full_ortho);
+                let deinflection_lemma = Deinflection {
+                    lemma: Cow::Owned(full_lemma),
+                    span: span.clone(),
+                };
+                let deinflection_ortho = Deinflection {
+                    lemma: Cow::Owned(full_ortho),
+                    span,
+                };
+
+                match lemma_distance.cmp(&ortho_distance) {
+                    cmp::Ordering::Less | cmp::Ordering::Equal => {
+                        Some([deinflection_lemma, deinflection_ortho])
+                    }
+                    cmp::Ordering::Greater => Some([deinflection_ortho, deinflection_lemma]),
+                }
             })
             .flatten();
         lemmas.collect::<Vec<_>>().into_iter()
@@ -423,6 +439,29 @@ mod tests {
                 Deinflection::new(start, "ある", "有る"),
                 Deinflection::new(start, "ある", "ある"),
             ],
+        );
+
+        // we want the deinflector to return words in the form
+        // closest to what was originally written, rather than arbitrarily
+        // choose to return the kanji or kana first
+        let (text, start) = sentence!(/ "ありがとう");
+        assert_deinflects(
+            &deinflector,
+            (text, start),
+            [
+                Deinflection::new(start, text, "ありがとう"),
+                Deinflection::new(start, text, "有り難う"),
+            ],
+        );
+
+        // here's the kanji form of ありがとう;
+        // Lindera doesn't even give us the kana form, but that's fine.
+        // it is what it is
+        let (text, start) = sentence!(/ "有り難う");
+        assert_deinflects(
+            &deinflector,
+            (text, start),
+            [Deinflection::new(start, text, "有り難う")],
         );
     }
 

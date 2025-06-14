@@ -33,6 +33,7 @@ Also, I haven't decided on a license yet.
   - [x] Look up words from other apps
     - Use the "Wordbase" action, or set it as your translator app
   - [ ] Add cards to Anki
+  - [ ] Profiles
 - Desktop app (`wordbase-desktop`)
   - WIP
   - [x] Connecting to texthookers via the [exSTATic]/[TextractorSender] protocol

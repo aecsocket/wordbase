@@ -187,11 +187,6 @@ fun RawRecordsView(
         fun addNote(headword: String?, reading: String?) {
             onAddNote(Term(headword = headword, reading = reading))
         }
-
-        @JavascriptInterface
-        fun audioBlob(recordId: RecordId): String {
-            return "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAwFIAfgAAABAAEAA8AQAAEpgADhEAARUAIgcEAgAAh0EoHy1qAAAOoBwaqABhUHQAAAA=";
-        }
     }
 
     // amazingly, this scales perfectly
@@ -236,8 +231,6 @@ fun RawRecordsView(
                 fnAddNote = "WordbaseAndroid.addNote",
             ),
         )
-
-        println("rebuilt document!")
 
         """
         <!doctype html>
