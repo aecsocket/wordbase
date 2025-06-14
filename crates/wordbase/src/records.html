@@ -245,33 +245,10 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
   }
 </style>
 {% endmacro style %}
-
+</html></title></head>
 <!-- {# content #} -->
 
 {{ self::style() }}
-
-<script>
-  class Wordbase {
-    static audio = {};
-
-    static audio_for_record(record_id) {
-      if (this.audio[record_id]) {
-        return this.audio[record_id];
-      } else {
-        const blob = {{ config.fn_audio_blob }}(record_id);
-        const audio = new Audio(blob);
-        this.audio[record_id] = audio;
-        return audio;
-      }
-    }
-
-    static play_audio_for_record(record_id) {
-      const audio = this.audio_for_record(record_id);
-      audio.currentTime = 0;
-      audio.play();
-    }
-  }
-</script>
 
 <div style="display: none">
   <svg
@@ -339,11 +316,13 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
           {%- endfor -%}
         </span>
         {% for audio in pitch.audio %}
+        <audio src="{{ audio.blob | safe }}"></audio>
+
         <button
           class="pill"
           style="width: 2em; height: 2em; padding: 4px"
           title="{{ self::audio_kind_name(kind=audio.kind) }}"
-          onclick="Wordbase.play_audio_for_record({{ audio.record_id }})"
+          onclick="this.previousElementSibling.play()"
         >
           <svg class="icon">
             <use href="#speakers-symbolic"></use>
@@ -357,7 +336,9 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
 
       {% for source, audio_group in group.audio_no_pitch %} {% for audio in
       audio_group %}
-      <button onclick="Wordbase.play_audio_for_record({{ audio.record_id }})">
+      <audio src="{{ audio.blob | safe }}"></audio>
+
+      <button onclick="this.previousElementSibling.play()">
         <svg class="icon">
           <use href="#speakers-symbolic"></use>
         </svg>

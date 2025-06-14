@@ -1,12 +1,8 @@
 use {
     anyhow::{Context, Result},
-    itertools::Itertools,
     std::time::Instant,
     tracing::info,
-    wordbase::{
-        Engine, Profile, RecordId, RecordKind,
-        render::{HtmlRender, RenderConfig},
-    },
+    wordbase::{Engine, Profile, RecordKind, render::RenderConfig},
 };
 
 pub fn deinflect(engine: &Engine, text: &str) {
@@ -33,28 +29,15 @@ pub async fn render(engine: &Engine, profile: &Profile, text: &str) -> Result<()
     info!("Fetched records in {:?}", end.duration_since(start));
 
     let start = Instant::now();
-    let HtmlRender { body, audio_blobs } = engine
-        .render_html(
+    let body = engine
+        .render_html_body(
             &records,
             &RenderConfig {
                 s_add_note: "Add Card".into(),
                 fn_add_note: Some("unimplemented".into()),
-                fn_audio_blob: "Wordbase.audio_blob".into(),
             },
         )
         .context("failed to render HTML")?;
-
-    let audio_blobs = audio_blobs
-        .into_iter()
-        .map(|(RecordId(record_id), blob)| format!("{record_id}: '{blob}'"))
-        .join(",");
-
-    let js = format!(
-        "Wordbase.audio_blob = function(record_id) {{
-            const audio_blobs = {{ {audio_blobs} }};
-            return audio_blobs[record_id];
-        }}"
-    );
 
     let document = format!(
         "
@@ -62,7 +45,6 @@ pub async fn render(engine: &Engine, profile: &Profile, text: &str) -> Result<()
 <html>
     <body>
         {body}
-        <script>{js}</script>
         <style>{EXTRA_CSS}</style>
     </body>
 </html>

@@ -227,15 +227,13 @@ fun RawRecordsView(
         }
     }
 
-
     val sAddNote = stringResource(R.string.add_note)
     val document by derivedStateOf {
-        val html = wordbase.renderHtml(
+        val body = wordbase.renderHtmlBody(
             entries = entries,
             config = RenderConfig(
                 sAddNote = sAddNote,
                 fnAddNote = "WordbaseAndroid.addNote",
-                fnAudioBlob = "WordbaseAndroid.audioBlob",
             ),
         )
 
@@ -245,7 +243,7 @@ fun RawRecordsView(
         <!doctype html>
         <html>
             <body>
-                ${html.body}
+                $body
                 <style>$extraCss</style>
             </body>
         </html>
