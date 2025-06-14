@@ -40,9 +40,65 @@
         craneLib = crane.mkLib pkgs;
         src = craneLib.cleanCargoSource ./.;
 
+        baseArgs = {
+          src = craneLib.cleanCargoSource ./.;
+          # src = fileSetForCrate;
+        };
+
+        # cargoVendorDir
+
+        # isLinderaRepo = p: lib.hasPrefix
+        #     "git+https://github.com/seanmonstar/num_cpus.git"
+        #     p.source;
+        httplz_port = "34567";
+        cargoVendorDir = craneLib.vendorCargoDeps (baseArgs // {
+          # Use this function to override crates coming from git dependencies
+          # overrideVendorGitCheckout = ps: drv:
+          #   # For example, patch a specific repository and tag, in this case num_cpus-1.13.1
+          #   # if lib.any (p: (isLinderaRepo p) ) ps then
+          #   #   drv.overrideAttrs (_old: {
+          #   #   })
+          #   # else
+          #     # Nothing to change, leave the derivations as is
+          #     drv;
+
+
+          # Use this function to override crates coming from any registry checkout
+          overrideVendorCargoPackage = p: drv:
+            # For example, patch a specific crate, in this case byteorder-1.5.0
+            if p.name == "lindera-unidic" then
+              builtins.trace "MATCHED LINDERA-UNIDIC" drv.overrideAttrs(_old: {
+                CARGO_BUILD_RUSTFLAGS = "--verbose";
+
+                # Specifying an arbitrary patch to apply
+                # patches = [
+                #   ./0001-patch-num-cpus.patch
+                # ];
+
+                # Similarly we can also run additional hooks to make changes
+                # lindera              = { version = "0.43.1" }
+
+                postPatch = ''
+                   echo "PATCHING"
+                   ls -l
+                  cat build.rs
+                   substituteInPlace build.rs --replace-fail \
+                       "https://Lindera.dev/unidic-mecab-2.1.2.tar.gz" \
+                       "http://localhost:${httplz_port}/unidic-mecab-2.1.2.tar.gz"
+
+                  cat build.rs
+
+                  '';
+              })
+            else
+              # Nothing to change, leave the derivations as is
+              drv;
+        });
+
         # Common arguments can be set here to avoid repeating them later
         commonArgs = {
           inherit src;
+          inherit cargoVendorDir;
           strictDeps = true;
 
           buildInputs =
@@ -63,7 +119,39 @@
         # so we can reuse all of that work (e.g. via cachix) when running in CI
         # It is *highly* recommended to use something like cargo-hakari to avoid
         # cache misses when building individual top-level-crates
-        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+        cargoArtifacts = (craneLib.buildDepsOnly commonArgs).overrideAttrs(oa: {
+          pname = builtins.trace "pname=${oa.pname}" oa.pname;
+
+          nativeBuildInputs = oa.nativeBuildInputs ++ [ pkgs.httplz];
+          doCheck = false;
+          preBuild = ''
+            echo "PATCHING"
+            ls -l
+            set -x
+            (
+            set -x
+            # serve lindera-unidic on localhost vacant port
+            httplz_port="${
+              if pkgs.stdenv.buildPlatform.isDarwin then
+                ''$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')''
+              else
+                "34567"
+            }"
+            mkdir .lindera-http-plz
+            ln -s ${lindera-unidic-src} .lindera-http-plz/unidic-mecab-2.1.2.tar.gz
+            httplz --port "$httplz_port" -- .lindera-http-plz/ &
+            echo $! >$TMPDIR/.httplz_pid
+
+            echo "$out"
+            echo "Trying to substitute"
+            ls -l
+
+            # not needed with useFetchCargoVendor=true, but kept in case it is required again
+            #newHash=$(sha256sum build.rs | cut -d " " -f 1)
+            #substituteInPlace .cargo-checksum.json --replace-fail $oldHash $newHash
+          )'';
+
+        });
 
         individualCrateArgs = commonArgs // {
           inherit cargoArtifacts;
@@ -215,8 +303,8 @@
             nixfmt-tree
 
             # Rust
-            rustToolchain
-            taplo
+            # rustToolchain
+            # taplo
             cargo-shear
             pkg-config
             openssl
