@@ -124,7 +124,9 @@
 
           nativeBuildInputs = oa.nativeBuildInputs ++ [ pkgs.httplz];
           doCheck = false;
-          preBuild = ''
+          buildPhase =
+          # preBuild =
+                  ''
             echo "PATCHING"
             ls -l
             set -x
@@ -149,7 +151,11 @@
             # not needed with useFetchCargoVendor=true, but kept in case it is required again
             #newHash=$(sha256sum build.rs | cut -d " " -f 1)
             #substituteInPlace .cargo-checksum.json --replace-fail $oldHash $newHash
-          )'';
+             )
+            ''
+            + oa.buildPhase
+            # + oa.buildPhaseCargoCommand
+            ;
 
         });
 
@@ -162,6 +168,7 @@
 
         fileSetForCrate =
           crate:
+           # "./${crate}"
           lib.fileset.toSource {
             root = ./.;
             fileset = lib.fileset.unions [
@@ -169,21 +176,22 @@
               ./Cargo.lock
               (lib.fileset.fileFilter (file: file.hasExt "md") ./.)
               (craneLib.fileset.commonCargoSources ./crates/wordbase)
-              ./crates/wordbase-cli
               (craneLib.fileset.commonCargoSources ./crates/jmdict-furigana)
               ./crates/jmdict-furigana/README.md
               ./crates/jmdict-furigana/src/jmdict_furigana.json.zip
               (craneLib.fileset.commonCargoSources ./crates/wordbase-api)
-              ./crates/wordbase/src/records.html
-              ./crates/wordbase/README.md
-              ./crates/wordbase/migrations
-              ./crates/wordbase-api/README.md
-              ./.sqlx
+              (craneLib.fileset.commonCargoSources ./crates/wordbase-sys)
+              # ./crates/wordbase/src/records.html
+              # ./crates/wordbase/README.md
+              # ./crates/wordbase/migrations
+              # ./crates/wordbase-api/README.md
+              # ./.sqlx
 
               # (craneLib.fileset.commonCargoSources ./crates/my-workspace-hack)
               (craneLib.fileset.commonCargoSources crate)
             ];
-          };
+          }
+          ;
 
         # Build the top-level crates of the workspace as individual derivations.
         # This allows consumers to only depend on (and build) only what they need.
@@ -196,6 +204,7 @@
         wordbase-cli = craneLib.buildPackage (
           individualCrateArgs
           // {
+            # inherit (craneLib.crateNameFromCargoToml { inherit src; }) version;
             pname = "wordbase-cli";
             cargoExtraArgs = "-p wordbase-cli";
             src = fileSetForCrate ./crates/wordbase-cli;
@@ -248,27 +257,12 @@
             # taploExtraArgs = "--config ./taplo.toml";
           };
 
-          # Ensure that cargo-hakari is up to date
-          # my-workspace-hakari = craneLib.mkCargoDerivation {
-          #   inherit src;
-          #   pname = "my-workspace-hakari";
-          #   cargoArtifacts = null;
-          #   doInstallCargoArtifacts = false;
-          #
-          #   buildPhaseCargoCommand = ''
-          #     cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
-          #     cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
-          #     cargo hakari verify
-          #   '';
-          #
-          #   nativeBuildInputs = [
-          #     pkgs.cargo-hakari
-          #   ];
-          # };
         };
 
         packages = {
           inherit wordbase-cli;
+          inherit cargoArtifacts;
+          inherit cargoVendorDir;
         };
 
         apps = {
