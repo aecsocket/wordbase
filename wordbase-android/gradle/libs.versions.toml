@@ -6,7 +6,7 @@ agp                         = "8.10.1"
 ankiAndroid                 = "api-v1.1.0"
 appcompat                   = "1.7.1"
 composeBom                  = "2025.06.00"
-composeWebview              = "0.33.6"
+composeWebviewMultiplatform = "2.0.0"
 constraintlayout            = "2.2.1"
 coreKtx                     = "1.16.0"
 espressoCore                = "3.6.1"
@@ -46,7 +46,7 @@ jna                           = { group = "net.java.dev.jna", name = "jna", vers
 kotlinx-collections-immutable = { group = "org.jetbrains.kotlinx", name = "kotlinx-collections-immutable", version.ref = "kotlinxCollectionsImmutable" }
 material                      = { group = "com.google.android.material", name = "material", version.ref = "material" }
 reorderable                   = { group = "sh.calvin.reorderable", name = "reorderable", version.ref = "reorderable" }
-webview                       = { group = "io.github.kevinnzou", name = "compose-webview", version.ref = "composeWebview" }
+webview                       = { group = "io.github.kevinnzou", name = "compose-webview-multiplatform", version.ref = "composeWebviewMultiplatform" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

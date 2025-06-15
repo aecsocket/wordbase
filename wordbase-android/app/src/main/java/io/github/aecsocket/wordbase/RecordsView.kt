@@ -15,7 +15,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,7 +24,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -34,9 +32,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.ichi2.anki.api.AddContentApi
-import com.kevinnzou.web.WebView
-import com.kevinnzou.web.rememberWebViewNavigator
-import com.kevinnzou.web.rememberWebViewStateWithHTMLData
+import com.multiplatform.webview.jsbridge.IJsMessageHandler
+import com.multiplatform.webview.jsbridge.JsMessage
+import com.multiplatform.webview.jsbridge.WebViewJsBridge
+import com.multiplatform.webview.jsbridge.rememberWebViewJsBridge
+import com.multiplatform.webview.web.WebView
+import com.multiplatform.webview.web.WebViewNavigator
+import com.multiplatform.webview.web.rememberWebViewNavigator
+import com.multiplatform.webview.web.rememberWebViewStateWithHTMLData
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toPersistentList
@@ -142,7 +145,7 @@ fun addNoteFn(
         if (noteId == null) {
             Toast.makeText(context, textErrAdd, Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(context, textAdded, Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, textAdded.format(term.asString()), Toast.LENGTH_SHORT).show()
         }
     }
 }
@@ -165,20 +168,19 @@ fun RecordsView(
     val deck by derivedStateOf { app.profile?.ankiDeck }
     val noteType by derivedStateOf { app.profile?.ankiNoteType }
 
-    val addNote =
-        app.profile?.ankiDeck?.let { deck ->
-            app.profile?.ankiNoteType?.let { noteType ->
-                remember(sentence, cursor, deck, noteType) {
-                    addNoteFn(
-                        wordbase = wordbase,
-                        sentence = sentence,
-                        cursor = cursor,
-                        deck = deck,
-                        noteType = noteType,
-                    )
-                }
-            }
+    val addNote = deck?.let { deck ->
+        noteType?.let { noteType ->
+            println("create new addNoteFn, sentence = $sentence")
+
+            addNoteFn(
+                wordbase = wordbase,
+                sentence = sentence,
+                cursor = cursor,
+                deck = deck,
+                noteType = noteType,
+            )
         }
+    }
     val onAddNote = addNote?.let { addNote ->
         { term: Term ->
             coroutineScope.launch {
@@ -256,7 +258,16 @@ fun RawRecordsView(
             entries = entries,
             config = RenderConfig(
                 sAddNote = sAddNote,
-                fnAddNote = "WordbaseAndroid.addNote",
+                fnAddNote = """
+                    window.wordbase.callNative(
+                        'add_note',
+                        JSON.stringify({
+                            headword: {{ js_headword }},
+                            reading: {{ js_reading }},
+                        }),
+                        null,
+                    )
+                """.trimIndent(),
             ),
         )
 
@@ -272,33 +283,48 @@ fun RawRecordsView(
     }
 
     val webViewState = rememberWebViewStateWithHTMLData(document)
+    var webViewInitialized by remember { mutableStateOf(false) }
+
+    LaunchedEffect(entries, webViewInitialized) {
+        if (webViewInitialized) {
+            webViewState.nativeWebView.clearHistory()
+        }
+    }
+
     val navigator = rememberWebViewNavigator()
+    val jsBridge = remember {
+        WebViewJsBridge(
+            navigator = navigator,
+            jsBridgeName = "wordbase",
+        )
+    }
     WebView(
         state = webViewState,
         navigator = navigator,
-        modifier = Modifier
-            .fillMaxSize()
-            // Sometimes during recomposition (and loading new HTML),
-            // the WebView will briefly flash to a default state.
-            // During this, it will flash to its background color.
-            // But for some reason, it will also draw OVER some other content.
-            // (E.g. the search bar in the main activity view).
-            // To prevent this, we clip the WebView like so.
-            .graphicsLayer { clip = true },
+        webViewJsBridge = jsBridge,
+        modifier = Modifier.fillMaxSize(),
         captureBackPresses = false,
-        onCreated = {
-            it.setBackgroundColor(containerColor.toArgb())
-            it.settings.allowFileAccess = false
-            it.settings.allowContentAccess = false
-
-            @SuppressLint("SetJavaScriptEnabled") // it is what it is
-            it.settings.javaScriptEnabled = true
-            onAddNote?.let { onAddNote ->
-                @SuppressLint("JavascriptInterface") // false positive
-                it.addJavascriptInterface(JsBridge(onAddNote), "WordbaseAndroid")
-            }
+        onCreated = { webView ->
+            webView.setBackgroundColor(containerColor.toArgb())
+            webView.settings.allowFileAccess = false
+            webView.settings.allowContentAccess = false
+            webViewInitialized = true
         }
     )
+
+    LaunchedEffect(jsBridge) {
+        jsBridge.register(object : IJsMessageHandler {
+            override fun methodName() = "add_note"
+
+            override fun handle(
+                message: JsMessage,
+                navigator: WebViewNavigator?,
+                callback: (String) -> Unit
+            ) {
+                println("TODO: make note")
+            }
+        })
+    }
 
     BackHandler {
         if (navigator.canGoBack) {

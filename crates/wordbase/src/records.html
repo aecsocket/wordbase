@@ -56,17 +56,21 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
 
     --blue-2: #62a0ea;
     --blue-3: #3584e4;
+    --blue-5: #1a5fb4;
     --green-2: #57e389;
     --green-3: #33d17a;
+    --green-5: #26a269;
     --yellow-2: #f8e45c;
     --yellow-3: #f6d32d;
+    --yellow-5: #e5a50a;
     --red-2: #ed333b;
     --red-3: #e01b24;
+    --red-5: #a51d2d;
 
-    --heiban: var(--blue-2);
-    --atamadaka: var(--red-2);
-    --nakadaka: var(--yellow-2);
-    --odaka: var(--green-2);
+    --heiban: var(--blue-5);
+    --atamadaka: var(--red-5);
+    --nakadaka: var(--yellow-5);
+    --odaka: var(--green-5);
   }
 
   :root {
@@ -283,12 +287,24 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
         <div
           style="display: flex; flex-direction: column; justify-content: center"
         >
+          <!--
+          {% if group.term.headword %}
+            {% set js_headword = group.term.headword | addslashes %}
+            {% set js_headword = "'" ~ js_headword ~ "'" %}
+          {% else %}
+            {% set js_headword = "null" %}
+          {% endif %}
+
+          {% if group.term.reading %}
+            {% set js_reading = group.term.reading | addslashes %}
+            {% set js_reading = "'" ~ js_reading ~ "'" %}
+          {% else %}
+            {% set js_reading = "null" %}
+          {% endif %}
+          -->
           <button
             class="suggested-action"
-            onclick='{{ config.fn_add_note }}(
-              {% if group.term.headword %}"{{ group.term.headword | addslashes }}"{% else %}null{% endif %},
-              {% if group.term.reading %}"{{ group.term.reading | addslashes }}"{% else %}null{% endif %},
-            )'
+            onclick="{{ config.fn_add_note | replace(from="{{ js_headword }}", to=js_headword) | replace(from="{{ js_reading }}", to=js_reading) }}"
           >
             {{ config.s_add_note }}
           </button>

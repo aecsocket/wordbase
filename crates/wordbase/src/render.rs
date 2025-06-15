@@ -1,12 +1,13 @@
-use anyhow::{Context, Result};
-use arc_swap::ArcSwap;
-use data_encoding::BASE64;
-use foldhash::HashSet;
-use serde::Serialize;
-use tera::Tera;
-use wordbase_api::{DictionaryId, Record, RecordEntry, RecordKind, Term, dict};
-
-use crate::{Engine, IndexMap, lang};
+use {
+    crate::{Engine, IndexMap, lang},
+    anyhow::{Context, Result},
+    arc_swap::ArcSwap,
+    data_encoding::BASE64,
+    foldhash::HashSet,
+    serde::Serialize,
+    tera::Tera,
+    wordbase_api::{DictionaryId, Record, RecordEntry, RecordKind, Term, dict},
+};
 
 #[derive(Debug)]
 pub struct Renderer {
@@ -65,11 +66,20 @@ impl Engine {
 pub struct RenderConfig {
     /// Translated text string "Add Note".
     pub s_add_note: String,
-    /// JavaScript function name to add a note for a given term.
+    /// Template for calling a JS function to add a note for a given term.
     ///
-    /// Arguments:
-    /// - `headword`: `string?`
-    /// - `reading`: `string?`
+    /// # Examples
+    ///
+    /// ```text
+    /// Wordbase.add_note({{ js_headword }}, {{ js_reading }})
+    /// ```
+    ///
+    /// ```text
+    /// window.wordbase.callNative(
+    ///     'add_note',
+    ///     { headword: {{ js_headword }}, reading: {{ js_reading }} },
+    /// )
+    /// ```
     pub fn_add_note: Option<String>,
 }
 

@@ -34,7 +34,7 @@ pub async fn render(engine: &Engine, profile: &Profile, text: &str) -> Result<()
             &records,
             &RenderConfig {
                 s_add_note: "Add Card".into(),
-                fn_add_note: Some("unimplemented".into()),
+                fn_add_note: Some("unimplemented({{ js_headword }}, {{ js_reading }})".into()),
             },
         )
         .context("failed to render HTML")?;
