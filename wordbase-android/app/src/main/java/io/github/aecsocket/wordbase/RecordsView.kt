@@ -35,7 +35,6 @@ import com.ichi2.anki.api.AddContentApi
 import com.multiplatform.webview.jsbridge.IJsMessageHandler
 import com.multiplatform.webview.jsbridge.JsMessage
 import com.multiplatform.webview.jsbridge.WebViewJsBridge
-import com.multiplatform.webview.jsbridge.rememberWebViewJsBridge
 import com.multiplatform.webview.web.WebView
 import com.multiplatform.webview.web.WebViewNavigator
 import com.multiplatform.webview.web.rememberWebViewNavigator
@@ -49,7 +48,6 @@ import uniffi.wordbase.RenderConfig
 import uniffi.wordbase.Wordbase
 import uniffi.wordbase.WordbaseException
 import uniffi.wordbase_api.RecordEntry
-import uniffi.wordbase_api.RecordKind
 import uniffi.wordbase_api.Term
 
 const val TAG = "RecordsView"
@@ -69,7 +67,6 @@ fun rememberLookup(
             profileId = app.profileId,
             sentence = sentence,
             cursor = cursor,
-            recordKinds = RecordKind.entries,
         ).toPersistentList()
         onEntries(records)
     }
@@ -81,12 +78,11 @@ fun rememberLookup(
 fun addNoteFn(
     wordbase: Wordbase,
     sentence: String,
-    cursor: ULong,
+    entries: ImmutableList<RecordEntry>,
     deck: String,
     noteType: String,
 ): suspend (Term) -> Unit {
     val context = LocalContext.current
-    val app = context.app()
     val textNoAnki = stringResource(R.string.add_note_no_anki)
     val textNoDeck = stringResource(R.string.add_note_no_deck)
     val textNoNoteType = stringResource(R.string.add_note_no_note_type)
@@ -98,8 +94,13 @@ fun addNoteFn(
     return fn@{ term ->
         Log.i(
             TAG,
-            "Adding card for (${term.headword}, ${term.reading}), cursor: $cursor, sentence: $sentence"
+            """
+                Adding card for ${term.asString()}
+                  "$sentence"
+                  Terms: ${entries.map { it.term }.toSet()}
+            """.trimIndent()
         )
+
         if (AddContentApi.getAnkiDroidPackageName(context) == null) {
             Toast.makeText(context, textNoAnki, Toast.LENGTH_SHORT).show()
             return@fn
@@ -127,9 +128,8 @@ fun addNoteFn(
 
         val termNote = try {
             wordbase.buildTermNote(
-                profileId = app.profileId,
+                entries = entries,
                 sentence = sentence,
-                cursor = cursor,
                 term = term,
             )
         } catch (ex: WordbaseException) {
@@ -146,7 +146,7 @@ fun addNoteFn(
         if (noteId == null) {
             Toast.makeText(context, textErrAdd, Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(context, textAdded.format(term.asString()), Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, textAdded.format(term.displayString()), Toast.LENGTH_SHORT).show()
         }
     }
 }
@@ -174,7 +174,7 @@ fun RecordsView(
             addNoteFn(
                 wordbase = wordbase,
                 sentence = sentence,
-                cursor = cursor,
+                entries = entries,
                 deck = deck,
                 noteType = noteType,
             )
@@ -316,9 +316,13 @@ fun RawRecordsView(
                     callback: (String) -> Unit
                 ) {
                     val json = JSONObject(message.params)
+                    // spent like 2 hours trying to figure out why `reading` was "null", not null
+                    // a proper type system fixes this!!! fucking java legacy code!!!
+                    val headword = if (json.isNull(HEADWORD)) null else json.getString("headword")
+                    val reading = if (json.isNull(READING)) null else json.getString("reading")
                     val term = Term(
-                        headword = json.getString("headword"),
-                        reading = json.getString("reading"),
+                        headword = headword,
+                        reading = reading,
                     )
                     onAddNote(term)
                 }
@@ -336,6 +340,9 @@ fun RawRecordsView(
         }
     }
 }
+
+const val HEADWORD = "headword"
+const val READING = "reading"
 
 @Composable
 fun NoRecordsView() {
@@ -372,16 +379,16 @@ fun StatusPageTitle(text: String) {
 
 fun Color.css() = "rgb(${red * 100}% ${green * 100}% ${blue * 100}%)"
 
-fun Term.asString() = if (headword == null) {
-    if (reading == null) {
-        "?"
-    } else {
-        "$reading"
-    }
-} else {
-    if (reading == null) {
-        "$headword"
-    } else {
-        "$headword ($reading)"
-    }
+fun Term.asString(): String {
+    val headword = headword?.let { "\"$headword\"" } ?: "-"
+    val reading = reading?.let { "\"$reading\"" } ?: "-"
+    return "($headword, $reading)"
 }
+
+fun Term.displayString() = headword?.let { headword ->
+    reading?.let { reading ->
+        "($headword, $reading)"
+    } ?: headword
+} ?: reading?.let { reading ->
+    "(-, $reading)"
+} ?: "-"

@@ -21,5 +21,8 @@ crate-type = ["cdylib"]
 doc        = false
 name       = "wordbase"
 
+[features]
+android = ["wordbase/android"]
+
 [dependencies]
 wordbase = { workspace = true, features = ["uniffi"] }

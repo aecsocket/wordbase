@@ -1,9 +1,9 @@
-use std::mem;
-
-use derive_more::{Display, Error};
-use serde::{Deserialize, Serialize};
-
-use crate::NormString;
+use {
+    crate::NormString,
+    derive_more::{Display, Error},
+    serde::{Deserialize, Serialize},
+    std::mem,
+};
 
 /// Key for [`Record`]s in a [`Dictionary`].
 ///
@@ -23,13 +23,13 @@ use crate::NormString;
 #[derive(Debug, Display, Clone, PartialEq, Eq, Hash)]
 pub enum Term {
     /// Headword only.
-    #[display("{_0}")]
+    #[display("({_0}, -)")]
     Headword(NormString),
     /// Reading only.
-    #[display("{_0}")]
+    #[display("(-, {_0})")]
     Reading(NormString),
     /// Headword and reading.
-    #[display("{_0} ({_1})")]
+    #[display("({_0}, {_1})")]
     Full(NormString, NormString),
 }
 

@@ -1,18 +1,19 @@
-use std::{fmt::Write, iter, time::Instant};
-
-use anyhow::Result;
-use itertools::Itertools;
-use tracing::info;
-use wordbase::{
-    DictionaryId, Engine, FrequencyValue, Profile, RecordEntry, RecordKind,
-    dict::{self, jpn::PitchPosition},
-    dictionary::Dictionaries,
-    render,
+use {
+    anyhow::Result,
+    itertools::Itertools,
+    std::{fmt::Write, iter, time::Instant},
+    tracing::info,
+    wordbase::{
+        DictionaryId, Engine, FrequencyValue, Profile, RecordEntry,
+        dict::{self, jpn::PitchPosition},
+        dictionary::Dictionaries,
+        render,
+    },
 };
 
 pub async fn lookup(engine: &Engine, profile: &Profile, text: &str) -> Result<Vec<RecordEntry>> {
     let start = Instant::now();
-    let entries = engine.lookup(profile.id, text, 0, RecordKind::ALL).await?;
+    let entries = engine.lookup(profile.id, text, 0).await?;
     let end = Instant::now();
 
     let dictionaries = engine.dictionaries();

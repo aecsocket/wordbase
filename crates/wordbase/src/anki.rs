@@ -14,20 +14,20 @@ impl Engine {
     pub fn build_term_note(
         &self,
         sentence: &str,
-        records: &[RecordEntry],
+        entries: &[RecordEntry],
         term: &Term,
     ) -> Result<TermNote> {
-        let records = records
+        let entries = entries
             .iter()
             .filter(|record| record.term == *term)
             .collect::<Vec<_>>();
 
-        let span_min = records
+        let span_min = entries
             .iter()
             .map(|record| record.span_bytes.start)
             .min()
             .context("no records")?;
-        let span_max = records
+        let span_max = entries
             .iter()
             .map(|record| record.span_bytes.end)
             .max()
@@ -41,7 +41,7 @@ impl Engine {
                 .get(&dict_id)
                 .map_or("?", |dict| dict.meta.name.as_str())
         };
-        let glossaries = glossaries(&records);
+        let glossaries = glossaries(&entries);
         let fields = [
             ("Expression", term_part(term.headword())),
             ("ExpressionReading", term_part(term.reading())),
@@ -58,9 +58,9 @@ impl Engine {
             ("IsWordAndSentenceCard", String::new()),
             ("IsClickCard", String::new()),
             ("IsSentenceCard", "x".into()),
-            ("PitchPosition", pitch_positions(&records)),
-            ("Frequency", frequency_list(&records, dict_name)),
-            ("FreqSort", frequency_harmonic_mean(&records)),
+            ("PitchPosition", pitch_positions(&entries)),
+            ("Frequency", frequency_list(&entries, dict_name)),
+            ("FreqSort", frequency_harmonic_mean(&entries)),
         ];
 
         Ok(TermNote {

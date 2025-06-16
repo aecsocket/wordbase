@@ -3,8 +3,6 @@ use {
     anyhow::{Context, Result, bail},
     foldhash::{HashSet, HashSetExt},
     futures::{StreamExt, TryStreamExt, stream::FuturesOrdered},
-    itertools::Itertools,
-    std::borrow::Borrow,
     wordbase_api::{
         DictionaryId, FrequencyValue, NoHeadwordOrReading, ProfileId, Record, RecordEntry,
         RecordId, RecordKind, Span, Term, for_kinds,
@@ -16,20 +14,8 @@ impl Engine {
         &self,
         profile_id: ProfileId,
         lemma: impl AsRef<str> + Send + Sync,
-        record_kinds: &[impl Borrow<RecordKind> + Send + Sync],
     ) -> Result<Vec<RecordEntry>> {
         let lemma = lemma.as_ref();
-
-        // we do a hack where we turn `record_kinds` into a JSON array of ints
-        // because SQLite doesn't support placeholders of tuples or arrays
-        let record_kinds = format!(
-            "[{}]",
-            record_kinds
-                .iter()
-                .map(|kind| *kind.borrow() as u32)
-                .format(",")
-        );
-
         let query = sqlx::query!(
             "
             -- use a CTE to get results for all records matching the headword and reading,
@@ -90,8 +76,6 @@ impl Engine {
                 AND source_frequency.reading = base.reading
             )
 
-            WHERE record.kind IN (SELECT value FROM json_each($3))
-
             ORDER BY
                 CASE
                     -- prioritize results where both the headword and reading match the lemma
@@ -99,7 +83,8 @@ impl Engine {
                     -- - the first results would be for the kana あらゆる
                     -- - then the kanji like 汎ゆる
                     WHEN base.reading = $2 AND base.headword = $2 THEN 0
-                    -- then prioritize results where at least the reading or headword are an exact match
+                    -- then prioritize results where at least the reading or headword are an exact \
+             match
                     -- e.g. in 念じる, usually 念ずる comes up first
                     -- but this is obviously a different reading
                     -- so we want to prioritize 念じる
@@ -128,9 +113,8 @@ impl Engine {
                     WHEN source_frequency.mode = 1 THEN -source_frequency.value
                     ELSE 0
                 END",
-                profile_id.0,
-                lemma,
-                record_kinds
+            profile_id.0,
+            lemma,
         );
 
         let result = query
@@ -204,7 +188,6 @@ impl Engine {
         profile_id: ProfileId,
         sentence: &'a str,
         cursor: usize,
-        record_kinds: &[impl Borrow<RecordKind> + Send + Sync],
     ) -> Result<Vec<RecordEntry>> {
         let mut records = Vec::new();
         let mut seen_record_ids = HashSet::new();
@@ -212,7 +195,7 @@ impl Engine {
         let mut lookup_tasks = deinflections
             .iter()
             .map(|deinflection| async move {
-                self.lookup_lemma(profile_id, &deinflection.lemma, record_kinds)
+                self.lookup_lemma(profile_id, &deinflection.lemma)
                     .await
                     .map(|entries| (deinflection, entries))
             })
@@ -270,13 +253,9 @@ const _: () = {
             profile_id: ProfileId,
             sentence: &'a str,
             cursor: u64,
-            record_kinds: &[RecordKind],
         ) -> FfiResult<Vec<RecordEntry>> {
             let cursor = usize::try_from(cursor).context("cursor too large")?;
-            Ok(self
-                .0
-                .lookup(profile_id, sentence, cursor, record_kinds)
-                .await?)
+            Ok(self.0.lookup(profile_id, sentence, cursor).await?)
         }
     }
 };

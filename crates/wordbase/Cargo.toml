@@ -18,14 +18,17 @@ workspace = true
 all-features = true
 
 [features]
-desktop = ["dep:directories", "dep:tokio-tungstenite"]
 poem    = ["wordbase-api/poem"]
 uniffi  = ["wordbase-api/uniffi", "dep:uniffi"]
+
+desktop = ["dep:directories", "dep:tokio-tungstenite"]
+android = ["dep:android_logger", "tracing/log-always"]
 
 [dependencies]
 jmdict-furigana = { workspace = true }
 wordbase-api    = { workspace = true, features = ["render-html"] }
 
+android_logger       = { workspace = true, optional = true }
 anyhow               = { workspace = true }
 arc-swap             = { workspace = true }
 async-compression    = { workspace = true, features = ["xz"] }
@@ -58,6 +61,7 @@ tokio-util           = { workspace = true, features = ["rt"] }
 tracing              = { workspace = true }
 unicode-segmentation = { workspace = true }
 uniffi               = { workspace = true, optional = true, features = ["tokio"] }
+# tracing-log          = { workspace = true, optional = true }
 
 derive_more = { workspace = true, features = [
   "debug",

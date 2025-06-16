@@ -2,7 +2,7 @@ use {
     anyhow::{Context, Result},
     std::time::Instant,
     tracing::info,
-    wordbase::{Engine, Profile, RecordKind, render::RenderConfig},
+    wordbase::{Engine, Profile, render::RenderConfig},
 };
 
 pub fn deinflect(engine: &Engine, text: &str) {
@@ -13,10 +13,7 @@ pub fn deinflect(engine: &Engine, text: &str) {
 }
 
 pub async fn lookup_lemma(engine: &Engine, profile: &Profile, lemma: &str) -> Result<()> {
-    for result in engine
-        .lookup_lemma(profile.id, &lemma, RecordKind::ALL)
-        .await?
-    {
+    for result in engine.lookup_lemma(profile.id, &lemma).await? {
         println!("{result:#?}");
     }
     Ok(())
@@ -24,7 +21,7 @@ pub async fn lookup_lemma(engine: &Engine, profile: &Profile, lemma: &str) -> Re
 
 pub async fn render(engine: &Engine, profile: &Profile, text: &str) -> Result<()> {
     let start = Instant::now();
-    let records = engine.lookup(profile.id, text, 0, RecordKind::ALL).await?;
+    let records = engine.lookup(profile.id, text, 0).await?;
     let end = Instant::now();
     info!("Fetched records in {:?}", end.duration_since(start));
 

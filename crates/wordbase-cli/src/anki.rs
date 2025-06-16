@@ -12,11 +12,14 @@ pub async fn note(
     sentence: Option<&str>,
     reading: Option<&str>,
 ) -> Result<TermNote> {
-    let term = Term::from_parts(Some(headword), reading).context("invalid term")?;
     let sentence = sentence.unwrap_or(headword);
-    let term_note = engine
-        .build_term_note(profile.id, sentence, 0, &term)
-        .await?;
+    let term = Term::from_parts(Some(headword), reading).context("invalid term")?;
+
+    let entries = engine
+        .lookup(profile.id, sentence, 0)
+        .await
+        .context("failed to perform lookup")?;
+    let term_note = engine.build_term_note(sentence, &entries, &term)?;
 
     let mut table = AsciiTable::default();
     table.column(0).set_header("Field");

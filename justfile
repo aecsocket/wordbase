@@ -1,6 +1,6 @@
 bindings:
-    cargo build --package wordbase-sys
-    cargo run --release --bin wordbase-uniffi-bindgen generate \
+    cargo build --package wordbase-sys --all-features
+    cargo run --bin wordbase-uniffi-bindgen generate \
         --library target/debug/libwordbase.so \
         --language kotlin \
         --out-dir wordbase-android/app/build/generated/
@@ -10,6 +10,7 @@ android-lib rust_target android_target profile="debug":
         --target-dir "target/cross/{{ rust_target }}" \
         --target "{{ rust_target }}" \
         --package wordbase-sys \
+        --features android \
         {{ if profile == "release" { "--release" } else { "" } }}
     mkdir -p "wordbase-android/app/build/generated/lib/{{ android_target }}/"
     cp \

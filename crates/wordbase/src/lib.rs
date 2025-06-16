@@ -13,8 +13,6 @@ pub mod render;
 // #[cfg(feature = "desktop")]
 // pub mod texthook;
 
-use render::Renderer;
-use tokio::fs;
 pub use wordbase_api::*;
 use {
     anyhow::{Context, Result},
@@ -23,9 +21,10 @@ use {
     derive_more::{Display, Error},
     dictionary::Dictionaries,
     profile::Profiles,
+    render::Renderer,
     sqlx::{Pool, Sqlite},
     std::path::Path,
-    tokio::sync::broadcast,
+    tokio::{fs, sync::broadcast},
     tracing::info,
 };
 
@@ -113,6 +112,11 @@ pub type IndexSet<T> = indexmap::IndexSet<T, foldhash::fast::RandomState>;
 
 impl Engine {
     pub async fn new(data_dir: impl AsRef<Path>) -> Result<Self> {
+        #[cfg(feature = "android")]
+        android_logger::init_once(
+            android_logger::Config::default().with_max_level(tracing::log::LevelFilter::Trace),
+        );
+
         let data_dir = data_dir.as_ref();
         info!("Creating engine using {data_dir:?} as data directory");
 
