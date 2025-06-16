@@ -43,9 +43,10 @@ impl Engine {
         };
         let glossaries = glossaries(&entries);
 
+        let key = term_part(term.headword());
         Ok(TermNote {
             fields: [
-                ("Expression", term_part(term.headword())),
+                ("Expression", key.clone()),
                 ("ExpressionReading", term_part(term.reading())),
                 ("ExpressionFurigana", term_ruby_plain(term)),
                 (
@@ -74,6 +75,7 @@ impl Engine {
                     .map(|audio| ("ExpressionAudio".to_string(), NoteField::Audio(audio))),
             )
             .collect::<HashMap<_, _>>(),
+            key,
         })
     }
 
@@ -111,6 +113,7 @@ impl Engine {
 #[derive(Debug, Serialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct TermNote {
+    pub key: String,
     pub fields: HashMap<String, NoteField>,
 }
 

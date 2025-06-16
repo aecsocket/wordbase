@@ -16,6 +16,7 @@
     <string name="add_note_no_note_type">No Anki note type ‘%s’</string>
     <string name="add_note_err_get_fields">Failed to get fields for ‘%s’</string>
     <string name="add_note_err_build_note">Failed to build term note</string>
+    <string name="add_note_err_duplicate">Note already exists</string>
     <string name="add_note_err_add">Failed to add note</string>
     <string name="add_note_added">Added note %s</string>
 

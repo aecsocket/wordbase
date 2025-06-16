@@ -32,7 +32,7 @@ Also, I haven't decided on a license yet.
   - [x] Look up words in the app
   - [x] Look up words from other apps
     - Use the "Wordbase" action, or set it as your translator app
-  - [ ] Add cards to Anki
+  - [x] Add cards to Anki
   - [ ] Profiles
 - Desktop app (`wordbase-desktop`)
   - WIP

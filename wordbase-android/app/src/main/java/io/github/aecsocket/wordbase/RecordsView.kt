@@ -98,6 +98,7 @@ fun addNoteFn(
     val textNoNoteType = stringResource(R.string.add_note_no_note_type)
     val textErrGetFields = stringResource(R.string.add_note_err_get_fields)
     val textErrBuildNote = stringResource(R.string.add_note_err_build_note)
+    val textErrDuplicate = stringResource(R.string.add_note_err_duplicate)
     val textErrAdd = stringResource(R.string.add_note_err_add)
     val textAdded = stringResource(R.string.add_note_added)
 
@@ -145,6 +146,11 @@ fun addNoteFn(
         } catch (ex: WordbaseException) {
             toast(textErrBuildNote)
             ex.printStackTrace()
+            return@fn
+        }
+
+        if (anki.findDuplicateNotes(noteTypeId, termNote.key).isNotEmpty()) {
+            toast(textErrDuplicate)
             return@fn
         }
 
