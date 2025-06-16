@@ -61,7 +61,8 @@ tokio-util           = { workspace = true, features = ["rt"] }
 tracing              = { workspace = true }
 unicode-segmentation = { workspace = true }
 uniffi               = { workspace = true, optional = true, features = ["tokio"] }
-# tracing-log          = { workspace = true, optional = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
 
 derive_more = { workspace = true, features = [
   "debug",

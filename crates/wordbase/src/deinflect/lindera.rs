@@ -1,8 +1,16 @@
+// TODO: cases to handle:
+// - ㌀ -> アパート
+// - ２０日 -> 20日
+
 use {
     super::{Deinflection, Deinflector},
     anyhow::{Context as _, Result},
     itertools::Itertools,
     lindera::{
+        character_filter::{
+            BoxCharacterFilter,
+            unicode_normalize::{UnicodeNormalizeCharacterFilter, UnicodeNormalizeKind},
+        },
         dictionary::{DictionaryKind, load_dictionary_from_kind},
         mode::Mode,
         segmenter::Segmenter,
@@ -30,7 +38,12 @@ impl Lindera {
         let dictionary = load_dictionary_from_kind(DictionaryKind::UniDic)
             .context("failed to load dictionary")?;
         let segmenter = Segmenter::new(Mode::Normal, dictionary, None);
-        let tokenizer = Tokenizer::new(segmenter);
+
+        let mut tokenizer = Tokenizer::new(segmenter);
+        tokenizer.append_character_filter(BoxCharacterFilter::from(
+            UnicodeNormalizeCharacterFilter::new(UnicodeNormalizeKind::NFKC),
+        ));
+
         Ok(Self {
             tokenizer,
             lookahead,
@@ -461,6 +474,32 @@ mod tests {
             &deinflector,
             (text, start),
             [Deinflection::new(start, text, "有り難う")],
+        );
+
+        assert_deinflects(
+            &deinflector,
+            ("２０日", 0),
+            [
+                Deinflection::new(0, "２０日", "２０日"),
+                Deinflection::new(0, "２０日", "二零日"),
+                Deinflection::new(0, "２０", "２０"),
+                Deinflection::new(0, "２０", "二零"),
+                Deinflection::new(0, "２", "２"),
+                Deinflection::new(0, "２", "二"),
+            ],
+        );
+
+        assert_deinflects(
+            &deinflector,
+            ("20日", 0),
+            [
+                Deinflection::new(0, "２０日", "２０日"),
+                Deinflection::new(0, "２０日", "二零日"),
+                Deinflection::new(0, "２０", "２０"),
+                Deinflection::new(0, "２０", "二零"),
+                Deinflection::new(0, "２", "２"),
+                Deinflection::new(0, "２", "二"),
+            ],
         );
     }
 

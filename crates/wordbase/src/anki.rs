@@ -4,7 +4,7 @@ use {
     itertools::Itertools,
     maud::html,
     serde::Serialize,
-    std::{collections::HashMap, fmt::Write as _, ops::Range},
+    std::{collections::HashMap, ops::Range},
     wordbase_api::{
         DictionaryId, FrequencyValue, NormString, ProfileId, Record, RecordEntry, Term, dict,
     },
@@ -24,12 +24,12 @@ impl Engine {
 
         let span_min = entries
             .iter()
-            .map(|record| record.span_bytes.start)
+            .map(|entry| entry.span_bytes.start)
             .min()
             .context("no records")?;
         let span_max = entries
             .iter()
-            .map(|record| record.span_bytes.end)
+            .map(|entry| entry.span_bytes.end)
             .max()
             .context("no records")?;
         let term_span = (usize::try_from(span_min).unwrap_or(usize::MAX))
@@ -42,32 +42,38 @@ impl Engine {
                 .map_or("?", |dict| dict.meta.name.as_str())
         };
         let glossaries = glossaries(&entries);
-        let fields = [
-            ("Expression", term_part(term.headword())),
-            ("ExpressionReading", term_part(term.reading())),
-            ("ExpressionFurigana", term_ruby_plain(term)),
-            (
-                "Sentence",
-                sentence_cloze(sentence, term_span).unwrap_or_default(),
-            ),
-            (
-                "MainDefinition",
-                glossaries.first().cloned().unwrap_or_default(),
-            ),
-            ("Glossary", all_glossaries(&glossaries)),
-            ("IsWordAndSentenceCard", String::new()),
-            ("IsClickCard", String::new()),
-            ("IsSentenceCard", "x".into()),
-            ("PitchPosition", pitch_positions(&entries)),
-            ("Frequency", frequency_list(&entries, dict_name)),
-            ("FreqSort", frequency_harmonic_mean(&entries)),
-        ];
 
         Ok(TermNote {
-            fields: fields
-                .into_iter()
-                .map(|(k, v)| (k.to_string(), v))
-                .collect(),
+            fields: [
+                ("Expression", term_part(term.headword())),
+                ("ExpressionReading", term_part(term.reading())),
+                ("ExpressionFurigana", term_ruby_plain(term)),
+                (
+                    "Sentence",
+                    sentence_cloze(sentence, term_span).unwrap_or_default(),
+                ),
+                // TODO: generate sentence furigana, like AJT does
+                // this is kinda complicated though
+                // I can't use AJT's code for this since it uses an incredibly copyleft license
+                (
+                    "MainDefinition",
+                    glossaries.first().cloned().unwrap_or_default(),
+                ),
+                ("Glossary", all_glossaries(&glossaries)),
+                ("IsWordAndSentenceCard", String::new()),
+                ("IsClickCard", String::new()),
+                ("IsSentenceCard", "x".into()),
+                ("PitchPosition", pitch_positions(&entries)),
+                ("Frequency", frequency_list(&entries, dict_name)),
+                ("FreqSort", frequency_harmonic_mean(&entries)),
+            ]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), NoteField::String(v)))
+            .chain(
+                term_audio(&entries)
+                    .map(|audio| ("ExpressionAudio".to_string(), NoteField::Audio(audio))),
+            )
+            .collect::<HashMap<_, _>>(),
         })
     }
 
@@ -102,10 +108,16 @@ impl Engine {
     }
 }
 
-#[derive(Debug, Serialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct TermNote {
-    pub fields: HashMap<String, String>,
+    pub fields: HashMap<String, NoteField>,
+}
+
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+pub enum NoteField {
+    String(String),
+    Audio(Vec<u8>),
 }
 
 fn term_part(part: Option<&NormString>) -> String {
@@ -115,21 +127,37 @@ fn term_part(part: Option<&NormString>) -> String {
 fn term_ruby_plain(term: &Term) -> String {
     match term {
         Term::Full(headword, reading) => {
-            let mut result = String::new();
-            for (headword_part, reading_part) in lang::jpn::furigana_parts(headword, reading) {
-                _ = write!(&mut result, "{headword_part}");
-                if !reading_part.is_empty() {
-                    _ = write!(&mut result, "[{reading_part}]");
-                }
-                // Lapis uses a space to separate headword/reading part pairs
-                // todo do this properly use this as ref: 落とし穴
-                _ = write!(&mut result, " ");
-            }
-            result
+            // Lapis does something a bit screwy with furigana.
+            // "押し込む" -> "押[お]し 込[こ]む"
+            // Notice:
+            // - after kanji segments, there is "[{reading}]", and no space afterwards
+            // - after kana segments, there is a space
+            lang::jpn::furigana_parts(headword, reading)
+                .map(|(headword_part, reading_part)| {
+                    if reading_part.is_empty() {
+                        format!("{headword_part} ")
+                    } else {
+                        format!("{headword_part}[{reading_part}]")
+                    }
+                })
+                .join("")
         }
         Term::Headword(headword) => headword.to_string(),
         Term::Reading(reading) => reading.to_string(),
     }
+}
+
+fn term_audio(entries: &[&RecordEntry]) -> Option<Vec<u8>> {
+    entries
+        .iter()
+        .find_map(|entry| match &entry.record {
+            Record::YomichanAudioForvo(audio) => Some(&audio.audio),
+            Record::YomichanAudioJpod(audio) => Some(&audio.audio),
+            Record::YomichanAudioNhk16(audio) => Some(&audio.audio),
+            Record::YomichanAudioShinmeikai8(audio) => Some(&audio.audio),
+            _ => None,
+        })
+        .map(|audio| audio.data.to_vec())
 }
 
 fn sentence_cloze(sentence: &str, term_span: Range<usize>) -> Option<String> {
@@ -176,7 +204,7 @@ fn all_glossaries(glossaries: &[String]) -> String {
 fn pitch_positions(entries: &[&RecordEntry]) -> String {
     entries
         .iter()
-        .filter_map(|record| match &record.record {
+        .filter_map(|entry| match &entry.record {
             Record::YomitanPitch(dict::yomitan::Pitch { position, .. }) => Some(*position),
             _ => None,
         })
@@ -194,11 +222,11 @@ fn frequency_list<'a>(
 ) -> String {
     entries
         .iter()
-        .filter_map(|record| match &record.record {
+        .filter_map(|entry| match &entry.record {
             Record::YomitanFrequency(dict::yomitan::Frequency { value, display }) => {
                 match (value, display) {
-                    (_, Some(display)) => Some((record, display.clone())),
-                    (Some(FrequencyValue::Rank(rank)), None) => Some((record, format!("{rank}"))),
+                    (_, Some(display)) => Some((entry, display.clone())),
+                    (Some(FrequencyValue::Rank(rank)), None) => Some((entry, format!("{rank}"))),
                     _ => None,
                 }
             }
@@ -217,7 +245,7 @@ fn frequency_harmonic_mean(entries: &[&RecordEntry]) -> String {
     harmonic_mean(
         entries
             .iter()
-            .filter_map(|record| match &record.record {
+            .filter_map(|entry| match &entry.record {
                 Record::YomitanFrequency(dict::yomitan::Frequency {
                     // TODO: how do we handle occurrences?
                     value: Some(FrequencyValue::Rank(rank)),

@@ -48,6 +48,12 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+
+        <provider
+            android:name=".NoteProvider"
+            android:authorities="io.github.aecsocket.wordbase.note"
+            android:exported="true"
+            android:grantUriPermissions="true" />
     </application>
 
 </manifest>

@@ -1,8 +1,7 @@
 package io.github.aecsocket.wordbase
 
-import android.annotation.SuppressLint
+import android.content.Intent
 import android.util.Log
-import android.webkit.JavascriptInterface
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
@@ -31,6 +30,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import com.ichi2.anki.api.AddContentApi
 import com.multiplatform.webview.jsbridge.IJsMessageHandler
 import com.multiplatform.webview.jsbridge.JsMessage
@@ -42,15 +42,18 @@ import com.multiplatform.webview.web.rememberWebViewStateWithHTMLData
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toPersistentList
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import uniffi.wordbase.NoteField
 import uniffi.wordbase.RenderConfig
 import uniffi.wordbase.Wordbase
 import uniffi.wordbase.WordbaseException
 import uniffi.wordbase_api.RecordEntry
 import uniffi.wordbase_api.Term
 
-const val TAG = "RecordsView"
+private const val TAG = "RecordsView"
 
 @Composable
 fun rememberLookup(
@@ -83,6 +86,13 @@ fun addNoteFn(
     noteType: String,
 ): suspend (Term) -> Unit {
     val context = LocalContext.current
+
+    fun toast(text: String) {
+        CoroutineScope(Dispatchers.Main).launch {
+            Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     val textNoAnki = stringResource(R.string.add_note_no_anki)
     val textNoDeck = stringResource(R.string.add_note_no_deck)
     val textNoNoteType = stringResource(R.string.add_note_no_note_type)
@@ -101,8 +111,9 @@ fun addNoteFn(
             """.trimIndent()
         )
 
-        if (AddContentApi.getAnkiDroidPackageName(context) == null) {
-            Toast.makeText(context, textNoAnki, Toast.LENGTH_SHORT).show()
+        val ankiDroidPackage = AddContentApi.getAnkiDroidPackageName(context)
+        if (ankiDroidPackage == null) {
+            toast(textNoAnki)
             return@fn
         }
         val anki = AddContentApi(context)
@@ -110,19 +121,18 @@ fun addNoteFn(
         val deckId = anki.deckList
             .firstNotNullOfOrNull { (id, name) -> if (name == deck) id else null }
             ?: run {
-                Toast.makeText(context, textNoDeck.format(deck), Toast.LENGTH_SHORT).show()
+                toast(textNoDeck.format(deck))
                 return@fn
             }
         val noteTypeId = anki.modelList
             .firstNotNullOfOrNull { (id, name) -> if (name == noteType) id else null }
             ?: run {
-                Toast.makeText(context, textNoNoteType.format(noteType), Toast.LENGTH_SHORT).show()
+                toast(textNoNoteType.format(noteType))
                 return@fn
             }
 
         val fieldNames = anki.getFieldList(noteTypeId) ?: run {
-            Toast.makeText(context, textErrGetFields.format(noteType), Toast.LENGTH_SHORT)
-                .show()
+            toast(textErrGetFields.format(noteType))
             return@fn
         }
 
@@ -133,20 +143,37 @@ fun addNoteFn(
                 term = term,
             )
         } catch (ex: WordbaseException) {
-            Toast.makeText(context, textErrBuildNote, Toast.LENGTH_SHORT).show()
+            toast(textErrBuildNote)
             ex.printStackTrace()
             return@fn
         }
 
         val fields = fieldNames.map { fieldName ->
-            termNote.fields[fieldName] ?: ""
+            when (val field = termNote.fields[fieldName]) {
+                is NoteField.String -> field.v1
+                is NoteField.Audio -> {
+                    context.grantUriPermission(ankiDroidPackage, NoteProvider.uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    NoteProvider.data = field.v1
+
+                    val fieldContent = anki.addMediaFromUri(
+                        NoteProvider.uri,
+                        "wordbase",
+                        "audio"
+                    )
+
+                    context.revokeUriPermission(NoteProvider.uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    NoteProvider.data = null
+                    fieldContent ?: error("Failed to add media to AnkiDroid")
+                }
+                null -> ""
+            }
         }
 
         val noteId = anki.addNote(noteTypeId, deckId, fields.toTypedArray(), setOf("wordbase"))
         if (noteId == null) {
-            Toast.makeText(context, textErrAdd, Toast.LENGTH_SHORT).show()
+            toast(textErrAdd)
         } else {
-            Toast.makeText(context, textAdded.format(term.displayString()), Toast.LENGTH_SHORT).show()
+            toast(textAdded.format(term.displayString()))
         }
     }
 }
@@ -164,7 +191,6 @@ fun RecordsView(
 ) {
     val context = LocalContext.current
     val app = context.app()
-    val coroutineScope = rememberCoroutineScope()
 
     val deck by derivedStateOf { app.profile?.ankiDeck }
     val noteType by derivedStateOf { app.profile?.ankiNoteType }
@@ -182,7 +208,7 @@ fun RecordsView(
     }
     val onAddNote = addNote?.let { addNote ->
         { term: Term ->
-            coroutineScope.launch {
+            CoroutineScope(Dispatchers.IO).launch {
                 addNote(term)
             }
             Unit
