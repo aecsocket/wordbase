@@ -108,6 +108,7 @@ impl Engine {
     }
 }
 
+#[derive(Debug, Serialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct TermNote {
     pub fields: HashMap<String, NoteField>,

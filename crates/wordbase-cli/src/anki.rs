@@ -2,7 +2,10 @@ use {
     anyhow::{Context, Result},
     ascii_table::AsciiTable,
     tracing::info,
-    wordbase::{Engine, Profile, Term, anki::TermNote},
+    wordbase::{
+        Engine, Profile, Term,
+        anki::{NoteField, TermNote},
+    },
 };
 
 pub async fn note(
@@ -28,7 +31,15 @@ pub async fn note(
     let data = term_note
         .fields
         .iter()
-        .map(|(key, value)| vec![key, value])
+        .map(|(key, value)| {
+            vec![
+                key,
+                match value {
+                    NoteField::String(s) => s,
+                    NoteField::Audio(_) => "(binary data)",
+                },
+            ]
+        })
         .collect::<Vec<_>>();
     info!("\n{}", table.format(&data));
     Ok(term_note)

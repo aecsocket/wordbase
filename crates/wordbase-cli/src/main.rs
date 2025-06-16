@@ -200,7 +200,8 @@ async fn main() -> Result<()> {
             match (profiles.len(), profiles.first()) {
                 (1, Some((_, profile))) => Ok(profile.clone()),
                 (_, _) => bail!(
-                    "more than 1 profile exists - you must explicitly specify which profile to use using `--profile [id]`"
+                    "more than 1 profile exists - you must explicitly specify which profile to \
+                     use using `--profile [id]`"
                 ),
             }
         }
