@@ -304,7 +304,7 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
           -->
           <button
             class="suggested-action"
-            onclick="{{ config.fn_add_note | replace(from="{{ js_headword }}", to=js_headword) | replace(from="{{ js_reading }}", to=js_reading) }}"
+            onclick="{{ config.fn_add_note | replace(from="<js_headword>", to=js_headword) | replace(from="<js_reading>", to=js_reading) }}"
           >
             {{ config.s_add_note }}
           </button>

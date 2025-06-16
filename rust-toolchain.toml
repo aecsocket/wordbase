@@ -1,5 +1,5 @@
 [toolchain]
-channel = "nightly"
+channel = "stable"
 components = [
   "rustc",
   "cargo",
@@ -9,5 +9,4 @@ components = [
   "rust-src",
   "rust-analyzer",
   "clippy",
-  "rustc-codegen-cranelift-preview"
 ]

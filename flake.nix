@@ -19,7 +19,20 @@
       let
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs { inherit system overlays; };
-        rustToolchain = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+        # TODO: merge with `fromRustupToolchainFile ./rust-toolchain` somehow?
+        rustToolchain = pkgs.pkgsBuildHost.rust-bin.selectLatestNightlyWith (toolchain: toolchain.default.override {
+          extensions = [
+            "rustc"
+            "cargo"
+            "rustfmt"
+            "rust-std"
+            "rust-docs"
+            "rust-src"
+            "rust-analyzer"
+            "clippy"
+            "rustc-codegen-cranelift-preview"
+          ];
+        });
       in
       {
         devShells.default = pkgs.mkShell {
@@ -46,6 +59,9 @@
             # Binding generation
             ktlint
           ];
+          shellHook = ''
+            export RUSTFLAGS="-Zcodegen-backend=cranelift"
+          '';
         };
       }
     );

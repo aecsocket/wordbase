@@ -1,30 +1,24 @@
-use anyhow::{Context, Result};
-use itertools::Itertools;
-use maud::html;
-use serde::Serialize;
-use std::{collections::HashMap, fmt::Write as _, ops::Range};
-use wordbase_api::{
-    DictionaryId, FrequencyValue, NormString, ProfileId, Record, RecordEntry, RecordKind, Term,
-    dict,
+use {
+    crate::{Engine, IndexSet, lang},
+    anyhow::{Context, Result},
+    itertools::Itertools,
+    maud::html,
+    serde::Serialize,
+    std::{collections::HashMap, fmt::Write as _, ops::Range},
+    wordbase_api::{
+        DictionaryId, FrequencyValue, NormString, ProfileId, Record, RecordEntry, Term, dict,
+    },
 };
 
-use crate::{Engine, IndexSet, lang};
-
 impl Engine {
-    pub async fn build_term_note(
+    pub fn build_term_note(
         &self,
-        profile_id: ProfileId,
         sentence: &str,
-        cursor: usize,
+        records: &[RecordEntry],
         term: &Term,
     ) -> Result<TermNote> {
-        let records = self
-            .lookup(profile_id, sentence, cursor, NOTE_RECORD_KINDS)
-            .await
-            .context("failed to look up records")?;
-
         let records = records
-            .into_iter()
+            .iter()
             .filter(|record| record.term == *term)
             .collect::<Vec<_>>();
 
@@ -114,8 +108,6 @@ pub struct TermNote {
     pub fields: HashMap<String, String>,
 }
 
-const NOTE_RECORD_KINDS: &[RecordKind] = RecordKind::ALL;
-
 fn term_part(part: Option<&NormString>) -> String {
     part.map(ToString::to_string).unwrap_or_default()
 }
@@ -130,7 +122,7 @@ fn term_ruby_plain(term: &Term) -> String {
                     _ = write!(&mut result, "[{reading_part}]");
                 }
                 // Lapis uses a space to separate headword/reading part pairs
-                // todo tdo this properly use this as ref: 落とし穴
+                // todo do this properly use this as ref: 落とし穴
                 _ = write!(&mut result, " ");
             }
             result
@@ -147,7 +139,7 @@ fn sentence_cloze(sentence: &str, term_span: Range<usize>) -> Option<String> {
     Some(format!("{cloze_prefix}<b>{cloze_body}</b>{cloze_suffix}"))
 }
 
-fn glossaries(entries: &[RecordEntry]) -> Vec<String> {
+fn glossaries(entries: &[&RecordEntry]) -> Vec<String> {
     entries
         .iter()
         .filter_map(|record| match &record.record {
@@ -181,7 +173,7 @@ fn all_glossaries(glossaries: &[String]) -> String {
     .0
 }
 
-fn pitch_positions(entries: &[RecordEntry]) -> String {
+fn pitch_positions(entries: &[&RecordEntry]) -> String {
     entries
         .iter()
         .filter_map(|record| match &record.record {
@@ -197,7 +189,7 @@ fn pitch_positions(entries: &[RecordEntry]) -> String {
 }
 
 fn frequency_list<'a>(
-    entries: &[RecordEntry],
+    entries: &[&RecordEntry],
     dict_name: impl Fn(DictionaryId) -> &'a str,
 ) -> String {
     entries
@@ -221,7 +213,7 @@ fn frequency_list<'a>(
         .join("")
 }
 
-fn frequency_harmonic_mean(entries: &[RecordEntry]) -> String {
+fn frequency_harmonic_mean(entries: &[&RecordEntry]) -> String {
     harmonic_mean(
         entries
             .iter()
@@ -257,18 +249,13 @@ const _: () = {
 
     #[uniffi::export(async_runtime = "tokio")]
     impl Wordbase {
-        pub async fn build_term_note(
+        pub fn build_term_note(
             &self,
-            profile_id: ProfileId,
             sentence: &str,
-            cursor: u64,
+            entries: &[RecordEntry],
             term: &Term,
         ) -> FfiResult<TermNote> {
-            let cursor = usize::try_from(cursor).context("cursor too large")?;
-            Ok(self
-                .0
-                .build_term_note(profile_id, sentence, cursor, term)
-                .await?)
+            Ok(self.0.build_term_note(sentence, entries, term)?)
         }
 
         pub async fn set_anki_deck(

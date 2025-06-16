@@ -44,6 +44,7 @@ import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import uniffi.wordbase.RenderConfig
 import uniffi.wordbase.Wordbase
 import uniffi.wordbase.WordbaseException
@@ -170,8 +171,6 @@ fun RecordsView(
 
     val addNote = deck?.let { deck ->
         noteType?.let { noteType ->
-            println("create new addNoteFn, sentence = $sentence")
-
             addNoteFn(
                 wordbase = wordbase,
                 sentence = sentence,
@@ -211,14 +210,6 @@ fun RawRecordsView(
     onAddNote: ((Term) -> Unit)? = null,
     onExit: (() -> Unit)? = null,
 ) {
-    @Suppress("unused") // used by JS
-    class JsBridge(val onAddNote: (Term) -> Unit) {
-        @JavascriptInterface
-        fun addNote(headword: String?, reading: String?) {
-            onAddNote(Term(headword = headword, reading = reading))
-        }
-    }
-
     // amazingly, this scales perfectly
     val density = LocalDensity.current
     val layoutDir = LocalLayoutDirection.current
@@ -262,8 +253,8 @@ fun RawRecordsView(
                     window.wordbase.callNative(
                         'add_note',
                         JSON.stringify({
-                            headword: {{ js_headword }},
-                            reading: {{ js_reading }},
+                            headword: <js_headword>,
+                            reading: <js_reading>,
                         }),
                         null,
                     )
@@ -312,18 +303,29 @@ fun RawRecordsView(
         }
     )
 
-    LaunchedEffect(jsBridge) {
-        jsBridge.register(object : IJsMessageHandler {
-            override fun methodName() = "add_note"
+    var jsHandler by remember { mutableStateOf<IJsMessageHandler?>(null) }
+    LaunchedEffect(jsBridge, onAddNote) {
+        jsHandler?.let { jsBridge.unregister(it) }
+        onAddNote?.let { onAddNote ->
+            val handler = object : IJsMessageHandler {
+                override fun methodName() = "add_note"
 
-            override fun handle(
-                message: JsMessage,
-                navigator: WebViewNavigator?,
-                callback: (String) -> Unit
-            ) {
-                println("TODO: make note")
+                override fun handle(
+                    message: JsMessage,
+                    navigator: WebViewNavigator?,
+                    callback: (String) -> Unit
+                ) {
+                    val json = JSONObject(message.params)
+                    val term = Term(
+                        headword = json.getString("headword"),
+                        reading = json.getString("reading"),
+                    )
+                    onAddNote(term)
+                }
             }
-        })
+            jsBridge.register(handler)
+            jsHandler = handler
+        }
     }
 
     BackHandler {

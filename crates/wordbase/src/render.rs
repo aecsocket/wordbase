@@ -71,13 +71,13 @@ pub struct RenderConfig {
     /// # Examples
     ///
     /// ```text
-    /// Wordbase.add_note({{ js_headword }}, {{ js_reading }})
+    /// Wordbase.add_note(<js_headword>, <js_reading>)
     /// ```
     ///
     /// ```text
     /// window.wordbase.callNative(
     ///     'add_note',
-    ///     { headword: {{ js_headword }}, reading: {{ js_reading }} },
+    ///     { headword: <js_headword>, reading: <js_reading> },
     /// )
     /// ```
     pub fn_add_note: Option<String>,
