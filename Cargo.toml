@@ -39,6 +39,7 @@ wordbase        = { path = "crates/wordbase" }
 wordbase-api = { path = "crates/wordbase-api" }
 # wordbase-server = { path = "crates/wordbase-server" }
 
+android_logger       = { version = "0.15.0" }
 ankiconnect          = { version = "0.2" }
 anyhow               = { version = "1.0" }
 arc-swap             = { version = "1.7" }
@@ -64,6 +65,7 @@ genawaiter           = { version = "0.99" }
 gio                  = { version = "0.20.9" }
 glib                 = { version = "0.20" }
 gtk4                 = { version = "0.9" }
+hex                  = { version = "0.4" }
 html-escape          = { version = "0.2" }
 indexmap             = { version = "2.8" }
 itertools            = { version = "0.14" }
@@ -91,6 +93,7 @@ rustyline            = { version = "15.0" }
 serde                = { version = "1.0" }
 serde_json           = { version = "1.0" }
 serde_repr           = { version = "0.1" }
+sha2                 = { version = "0.10" }
 sqlx                 = { version = "0.8" }
 tempfile             = { version = "3.20" }
 tera                 = { version = "1.20" }
@@ -106,9 +109,6 @@ webkit6              = { version = "0.4" }
 xz2                  = { version = "0.1" }
 zbus                 = { version = "5.5", default-features = false }
 zip                  = { version = "4.0" }
-android_logger = { version = "0.15.0"}
-sha2 = { version = "0.10"}
-hex = { version = "0.4" }
 
 [workspace.metadata.cargo-shear]
 ignored = ["bzip2"]

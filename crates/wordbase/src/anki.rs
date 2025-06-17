@@ -228,10 +228,13 @@ fn frequency_list<'a>(
         .iter()
         .filter_map(|entry| match &entry.record {
             Record::YomitanFrequency(dict::yomitan::Frequency { value, display }) => {
-                match (value, display) {
-                    (_, Some(display)) => Some((entry, display.clone())),
-                    (Some(FrequencyValue::Rank(rank)), None) => Some((entry, format!("{rank}"))),
-                    _ => None,
+                match (display, value) {
+                    (Some(display), _) => Some((entry, display.clone())),
+                    (None, Some(FrequencyValue::Rank(rank))) => Some((entry, format!("{rank} ↓"))),
+                    (None, Some(FrequencyValue::Occurrence(occurrence))) => {
+                        Some((entry, format!("{occurrence} ↑")))
+                    }
+                    (None, None) => None,
                 }
             }
             _ => None,

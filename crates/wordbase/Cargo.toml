@@ -18,11 +18,11 @@ workspace = true
 all-features = true
 
 [features]
-poem    = ["wordbase-api/poem"]
-uniffi  = ["wordbase-api/uniffi", "dep:uniffi"]
+poem   = ["wordbase-api/poem"]
+uniffi = ["wordbase-api/uniffi", "dep:uniffi"]
 
-desktop = ["dep:directories", "dep:tokio-tungstenite"]
 android = ["dep:android_logger", "tracing/log-always"]
+desktop = ["dep:directories", "dep:tokio-tungstenite"]
 
 [dependencies]
 jmdict-furigana = { workspace = true }
@@ -41,6 +41,7 @@ directories          = { workspace = true, optional = true }
 distance             = { workspace = true }
 foldhash             = { workspace = true }
 futures              = { workspace = true }
+hex                  = { workspace = true }
 indexmap             = { workspace = true, features = ["serde"] }
 itertools            = { workspace = true }
 lindera              = { workspace = true, features = ["unidic", "compress"] }
@@ -52,6 +53,7 @@ rmp-serde            = { workspace = true }
 serde                = { workspace = true, features = ["derive"] }
 serde_json           = { workspace = true, features = ["preserve_order"] }
 serde_repr           = { workspace = true }
+sha2                 = { workspace = true }
 sqlx                 = { workspace = true, features = ["runtime-tokio", "sqlite"] }
 tera                 = { workspace = true, features = ["preserve_order"] }
 tokio                = { workspace = true, features = ["sync", "macros"] }
@@ -61,8 +63,6 @@ tokio-util           = { workspace = true, features = ["rt"] }
 tracing              = { workspace = true }
 unicode-segmentation = { workspace = true }
 uniffi               = { workspace = true, optional = true, features = ["tokio"] }
-sha2 = { workspace = true }
-hex = { workspace = true }
 
 derive_more = { workspace = true, features = [
   "debug",

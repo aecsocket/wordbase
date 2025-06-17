@@ -52,6 +52,8 @@
             taplo
             cargo-shear
             pkg-config
+
+            # Wordbase
             openssl
             sqlx-cli
             sqlite

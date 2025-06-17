@@ -419,8 +419,6 @@ fun Term.asString(): String {
 
 fun Term.displayString() = headword?.let { headword ->
     reading?.let { reading ->
-        "($headword, $reading)"
+        "$headword ($reading)"
     } ?: headword
-} ?: reading?.let { reading ->
-    "(-, $reading)"
-} ?: "-"
+} ?: reading ?: "?"
