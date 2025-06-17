@@ -30,8 +30,27 @@ pub async fn render(engine: &Engine, profile: &Profile, text: &str) -> Result<()
         .render_html_body(
             &records,
             &RenderConfig {
-                s_add_note: "Add Card".into(),
-                fn_add_note: Some("unimplemented({{ js_headword }}, {{ js_reading }})".into()),
+                s_add_note: "Add Note".into(),
+                s_view_note: "View note in Anki".into(),
+                s_add_duplicate_note: "Add duplicate note".into(),
+                fn_note_exists: "
+                <js_callback>(window.wordbase.note_exists({
+                    headword: <js_headword>,
+                    reading: <js_reading>,
+                }))"
+                .into(),
+                fn_add_note: "
+                window.wordbase.add_note({
+                    headword: <js_headword>,
+                    reading: <js_reading>,
+                })"
+                .into(),
+                fn_view_note: "
+                window.wordbase.view_note({
+                    headword: <js_headword>,
+                    reading: <js_reading>,
+                })"
+                .into(),
             },
         )
         .context("failed to render HTML")?;

@@ -19,6 +19,8 @@
     <string name="add_note_err_duplicate">Note already exists</string>
     <string name="add_note_err_add">Failed to add note</string>
     <string name="add_note_added">Added note %s</string>
+    <string name="view_note">View note in Anki</string>
+    <string name="add_duplicate_note">Add duplicate note</string>
 
     <string name="section_dictionaries">Dictionaries</string>
     <string name="dictionary_description">Description</string>

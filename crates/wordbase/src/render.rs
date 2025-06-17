@@ -66,7 +66,18 @@ impl Engine {
 pub struct RenderConfig {
     /// Translated text string "Add Note".
     pub s_add_note: String,
-    /// Template for calling a JS function to add a note for a given term.
+    pub s_view_note: String,
+    pub s_add_duplicate_note: String,
+    /// Template for calling a JS function to check if an Anki note exists for a
+    /// given term.
+    ///
+    /// # Examples
+    ///
+    /// ```text
+    /// Wordbase.note_exists(<js_headword>, <js_reading>)
+    /// ```
+    pub fn_note_exists: String,
+    /// Template for calling a JS function to add an Anki note for a given term.
     ///
     /// # Examples
     ///
@@ -80,7 +91,8 @@ pub struct RenderConfig {
     ///     { headword: <js_headword>, reading: <js_reading> },
     /// )
     /// ```
-    pub fn_add_note: Option<String>,
+    pub fn_add_note: String,
+    pub fn_view_note: String,
 }
 
 pub fn group_terms(entries: &[RecordEntry]) -> Vec<RecordTerm> {
