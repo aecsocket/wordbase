@@ -68,30 +68,34 @@ pub struct RenderConfig {
     pub s_add_note: String,
     pub s_view_note: String,
     pub s_add_duplicate_note: String,
-    /// Template for calling a JS function to check if an Anki note exists for a
-    /// given term.
+    /// Template for calling a JS function to get how many notes in Anki already
+    /// exist for a given term.
     ///
     /// # Examples
     ///
     /// ```text
-    /// Wordbase.note_exists(<js_headword>, <js_reading>)
+    /// const num_notes = Wordbase.num_existing_notes(<js_headword>, <js_reading>);
+    /// <js_callback>(num_notes);
     /// ```
-    pub fn_note_exists: String,
+    pub fn_num_existing_notes: String,
     /// Template for calling a JS function to add an Anki note for a given term.
     ///
     /// # Examples
     ///
     /// ```text
-    /// Wordbase.add_note(<js_headword>, <js_reading>)
+    /// Wordbase.add_note(<js_headword>, <js_reading>);
+    /// <js_callback>();
     /// ```
     ///
     /// ```text
     /// window.wordbase.callNative(
     ///     'add_note',
     ///     { headword: <js_headword>, reading: <js_reading> },
+    ///     result => <js_callback>(JSON.parse(result)),
     /// )
     /// ```
-    pub fn_add_note: String,
+    pub fn_add_new_note: String,
+    pub fn_add_duplicate_note: String,
     pub fn_view_note: String,
 }
 

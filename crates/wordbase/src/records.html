@@ -192,10 +192,33 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
     font-weight: var(--caption-font-weight);
   }
 
+  .dot-badge {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform: translate(-50%, -50%);
+
+    height: 1.5em;
+    padding: 0 0.3em;
+    min-width: calc(1.5em - 0.3em * 2);
+
+    color: var(--fg-color);
+    background: color-mix(in srgb, var(--bg-color), var(--fg-color) 10%);
+    border-radius: 9999px;
+    border: 3px solid var(--bg-color);
+
+    justify-content: center;
+    align-items: center;
+    white-space: nowrap;
+    line-height: 1;
+    user-select: none;
+  }
+
   .header {
     display: flex;
     flex-direction: row;
     align-items: center;
+
     position: sticky;
     z-index: 1000;
     top: 0;
@@ -249,16 +272,37 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
   }
 </style>
 {% endmacro style %}
-</html></title></head>
+
 <!-- {# content #} -->
 
 {{ self::style() }}
 
 <script>
+  function for_el_with_class(script, class_name, f) {
+    function do_internal(element, class_name) {
+      if (element.classList && element.classList.contains(class_name)) {
+        f(element);
+      }
+      Array.from(element.children).forEach((child) =>
+        do_internal(child, class_name),
+      );
+    }
+
+    Array.from(script.parentNode.children).forEach((el) =>
+      do_internal(el, class_name),
+    );
+  }
+
   function show_with_class(script, class_name) {
-    Array.from(script.parentNode.children)
-      .filter(el => el.classList && el.classList.contains(class_name))
-      .forEach(el => el.style.display = "flex");
+    for_el_with_class(script, class_name, (el) => (el.style.display = "flex"));
+  }
+
+  function hide_with_class(script, class_name) {
+    for_el_with_class(
+      script,
+      class_name,
+      (el) => (el.style.display = "hidden"),
+    );
   }
 </script>
 
@@ -279,8 +323,10 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 16 16"
   >
-    <path d="m 5.019531 0 c -1.332031 0 -2.273437 0.816406 -2.644531 1.554688 c -0.371094 0.738281 -0.355469 1.445312 -0.355469 1.445312 l 0.03125 12.472656 l 5.996094 -2.402344 l 6.003906 2.402344 l -0.03125 -12.476562 c 0 -0.003906 0.011719 -0.707032 -0.355469 -1.441406 c -0.371093 -0.738282 -1.3125 -1.554688 -2.644531 -1.554688 z m 0 2 h 6 c 0.695313 0.011719 1.003907 0.367188 1 1 l 0.023438 9.519531 l -3.996094 -1.601562 l -4.003906 1.601562 l -0.023438 -9.523437 c -0.007812 -0.648438 0.398438 -0.996094 1 -0.996094 z m 0 0"
-    fill="currentColor"/>
+    <path
+      d="m 5.019531 0 c -1.332031 0 -2.273437 0.816406 -2.644531 1.554688 c -0.371094 0.738281 -0.355469 1.445312 -0.355469 1.445312 l 0.03125 12.472656 l 5.996094 -2.402344 l 6.003906 2.402344 l -0.03125 -12.476562 c 0 -0.003906 0.011719 -0.707032 -0.355469 -1.441406 c -0.371093 -0.738282 -1.3125 -1.554688 -2.644531 -1.554688 z m 0 2 h 6 c 0.695313 0.011719 1.003907 0.367188 1 1 l 0.023438 9.519531 l -3.996094 -1.601562 l -4.003906 1.601562 l -0.023438 -9.523437 c -0.007812 -0.648438 0.398438 -0.996094 1 -0.996094 z m 0 0"
+      fill="currentColor"
+    />
   </svg>
 
   <svg
@@ -288,8 +334,10 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 16 16"
   >
-    <path d="m 5.019531 0 c -1.332031 0 -2.273437 0.816406 -2.644531 1.554688 c -0.371094 0.738281 -0.355469 1.445312 -0.355469 1.445312 l 0.03125 12.472656 l 5.996094 -2.402344 l 6.003906 2.402344 l -0.03125 -12.476562 c 0 -0.003906 0.011719 -0.707032 -0.355469 -1.441406 c -0.371093 -0.738282 -1.3125 -1.554688 -2.644531 -1.554688 z m 0 0"
-    fill="currentColor"/>
+    <path
+      d="m 5.019531 0 c -1.332031 0 -2.273437 0.816406 -2.644531 1.554688 c -0.371094 0.738281 -0.355469 1.445312 -0.355469 1.445312 l 0.03125 12.472656 l 5.996094 -2.402344 l 6.003906 2.402344 l -0.03125 -12.476562 c 0 -0.003906 0.011719 -0.707032 -0.355469 -1.441406 c -0.371093 -0.738282 -1.3125 -1.554688 -2.644531 -1.554688 z m 0 0"
+      fill="currentColor"
+    />
   </svg>
 
   <svg
@@ -297,8 +345,10 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 16 16"
   >
-    <path d="m 0 3 c 0 -1.644531 1.355469 -3 3 -3 h 5 c 1.644531 0 3 1.355469 3 3 c 0 0.550781 -0.449219 1 -1 1 s -1 -0.449219 -1 -1 c 0 -0.570312 -0.429688 -1 -1 -1 h -5 c -0.570312 0 -1 0.429688 -1 1 v 5 c 0 0.570312 0.429688 1 1 1 c 0.550781 0 1 0.449219 1 1 s -0.449219 1 -1 1 c -1.644531 0 -3 -1.355469 -3 -3 z m 5 5 c 0 -1.644531 1.355469 -3 3 -3 h 5 c 1.644531 0 3 1.355469 3 3 v 5 c 0 1.644531 -1.355469 3 -3 3 h -5 c -1.644531 0 -3 -1.355469 -3 -3 z m 2 0 v 5 c 0 0.570312 0.429688 1 1 1 h 5 c 0.570312 0 1 -0.429688 1 -1 v -5 c 0 -0.570312 -0.429688 -1 -1 -1 h -5 c -0.570312 0 -1 0.429688 -1 1 z m 0 0"
-    fill="currentColor"/>
+    <path
+      d="m 0 3 c 0 -1.644531 1.355469 -3 3 -3 h 5 c 1.644531 0 3 1.355469 3 3 c 0 0.550781 -0.449219 1 -1 1 s -1 -0.449219 -1 -1 c 0 -0.570312 -0.429688 -1 -1 -1 h -5 c -0.570312 0 -1 0.429688 -1 1 v 5 c 0 0.570312 0.429688 1 1 1 c 0.550781 0 1 0.449219 1 1 s -0.449219 1 -1 1 c -1.644531 0 -3 -1.355469 -3 -3 z m 5 5 c 0 -1.644531 1.355469 -3 3 -3 h 5 c 1.644531 0 3 1.355469 3 3 v 5 c 0 1.644531 -1.355469 3 -3 3 h -5 c -1.644531 0 -3 -1.355469 -3 -3 z m 2 0 v 5 c 0 0.570312 0.429688 1 1 1 h 5 c 0.570312 0 1 -0.429688 1 -1 v -5 c 0 -0.570312 -0.429688 -1 -1 -1 h -5 c -0.570312 0 -1 0.429688 -1 1 z m 0 0"
+      fill="currentColor"
+    />
   </svg>
 </div>
 
@@ -308,9 +358,15 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
     <div class="header">
       <div
         class="content"
-        style="width: 100%; display: flex; flex-direction: row; gap: 16px; align-items: center"
+        style="
+          width: 100%;
+          display: flex;
+          flex-direction: row;
+          gap: 16px;
+          align-items: center;
+        "
       >
-        <div style="padding: 16px 0; font-size: 2em; flex: 1">
+        <div style="padding: 8px 0; font-size: 2em; flex: 1">
           <ruby>
             {%- for part in group.furigana_parts -%}
             <span>{{- part[0] -}}</span><rt>{{- part[1] -}}</rt>
@@ -318,7 +374,14 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
           </ruby>
         </div>
 
-        <div style="display: flex; flex-direction: column; gap: 8px">
+        <div
+          style="
+            padding: 1.5em 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+          "
+        >
           <!--
           {% if group.term.headword %}
             {% set js_headword = group.term.headword | addslashes %}
@@ -334,15 +397,24 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
             {% set js_reading = "null" %}
           {% endif %}
 
-          {% set fn_note_exists = config.fn_note_exists | replace(from="<js_headword>", to=js_headword) | replace(from="<js_reading>", to=js_reading) %}
-          {% set fn_add_note = config.fn_add_note | replace(from="<js_headword>", to=js_headword) | replace(from="<js_reading>", to=js_reading) %}
+          {% set fn_num_existing_notes = config.fn_num_existing_notes | replace(from="<js_headword>", to=js_headword) | replace(from="<js_reading>", to=js_reading) %}
+          {% set fn_add_new_note = config.fn_add_new_note | replace(from="<js_headword>", to=js_headword) | replace(from="<js_reading>", to=js_reading) %}
+          {% set fn_add_duplicate_note = config.fn_add_duplicate_note | replace(from="<js_headword>", to=js_headword) | replace(from="<js_reading>", to=js_reading) %}
           {% set fn_view_note = config.fn_view_note | replace(from="<js_headword>", to=js_headword) | replace(from="<js_reading>", to=js_reading) %}
           -->
 
           <div hidden class="add-note">
             <button
               class="suggested-action"
-              onclick="{{ fn_add_note | safe }}"
+              onclick="
+              {
+                const on_add_note = () => {
+
+                };
+              }
+
+              {{ fn_add_new_note | safe }}
+              "
             >
               <svg class="icon">
                 <use href="#bookmark-outline-symbolic"></use>
@@ -353,6 +425,20 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
 
           <div hidden class="note-actions">
             <div style="display: flex; flex-direction: row; gap: 8px">
+              <div style="flex: 1; position: relative">
+                <button
+                  title="{{ config.s_add_duplicate_note }}"
+                  onclick="{{ fn_add_duplicate_note | safe }}"
+                  style="flex: 1; position: relative"
+                >
+                  <svg class="icon">
+                    <use href="#copy-symbolic"></use>
+                  </svg>
+                </button>
+
+                <div hidden class="multiple-notes dot-badge">?</div>
+              </div>
+
               <button
                 title="{{ config.s_view_note }}"
                 onclick="{{ fn_view_note | safe }}"
@@ -362,16 +448,6 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
                   <use href="#bookmark-filled-symbolic"></use>
                 </svg>
               </button>
-
-              <button
-                title="{{ config.s_add_duplicate_note }}"
-                onclick="{{ fn_add_note | safe }}"
-                style="flex: 1"
-              >
-                <svg class="icon">
-                  <use href="#copy-symbolic"></use>
-                </svg>
-              </button>
             </div>
           </div>
 
@@ -379,15 +455,26 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
             {
               const script = document.currentScript;
 
-              const note_exists_callback = exists => {
-                if (exists) {
-                  show_with_class(script, 'note-actions')
+              const on_num_existing_notes = (num) => {
+                hide_with_class(script, "add-note");
+                hide_with_class(script, "note-actions");
+                hide_with_class(script, "multiple-notes");
+
+                if (num > 0) {
+                  show_with_class(script, "note-actions");
+                  if (num > 1) {
+                    for_el_with_class(script, "multiple-notes", (el) => {
+                      el.style.display = "flex";
+                      el.innerHTML = `${num}`;
+                    });
+                  }
                 } else {
-                  show_with_class(script, 'add-note')
+                  show_with_class(script, "add-note");
                 }
               };
 
-              {{ fn_note_exists | replace(from="<js_callback>", to="note_exists_callback") | safe }};
+              // prettier-ignore
+              {{ fn_num_existing_notes | replace(from="<js_callback>", to="on_num_existing_notes") | safe }}
             }
           </script>
         </div>

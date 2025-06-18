@@ -76,22 +76,22 @@ fun rememberLookup(
 }
 
 @Composable
-fun noteExistsFn(deck: String, noteType: String): suspend (Term) -> Boolean {
+fun numExistingNotesFn(noteType: String): suspend (Term) -> Int {
     val context = LocalContext.current
 
-    return fn@{ term ->
+    return fn@ { term: Term ->
         val ankiDroidPackage = AddContentApi.getAnkiDroidPackageName(context)
         if (ankiDroidPackage == null) {
-            return@fn false
+            return@fn 0
         }
         val anki = AddContentApi(context)
 
         val noteTypeId = anki.modelList
             .firstNotNullOfOrNull { (id, name) -> if (name == noteType) id else null }
-            ?: return@fn false
+            ?: return@fn 0
 
         // TODO: note key is term.headword
-        anki.findDuplicateNotes(noteTypeId, term.headword).isNotEmpty()
+        anki.findDuplicateNotes(noteTypeId, term.headword).size
     }
 }
 
@@ -102,6 +102,7 @@ fun addNoteFn(
     entries: ImmutableList<RecordEntry>,
     deck: String,
     noteType: String,
+    allowDuplicate: Boolean
 ): suspend (Term) -> Unit {
     val context = LocalContext.current
 
@@ -167,17 +168,23 @@ fun addNoteFn(
             return@fn
         }
 
-        // TODO: note key is term.headword
-        if (anki.findDuplicateNotes(noteTypeId, term.headword).isNotEmpty()) {
-            toast(textErrDuplicate)
-            return@fn
+        if (!allowDuplicate) {
+            // TODO: note key is term.headword
+            if (anki.findDuplicateNotes(noteTypeId, term.headword).isNotEmpty()) {
+                toast(textErrDuplicate)
+                return@fn
+            }
         }
 
         val fields = fieldNames.map { fieldName ->
             when (val field = termNote.fields[fieldName]) {
                 is NoteField.String -> field.v1
                 is NoteField.Audio -> {
-                    context.grantUriPermission(ankiDroidPackage, NoteProvider.uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    context.grantUriPermission(
+                        ankiDroidPackage,
+                        NoteProvider.uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
                     NoteProvider.data = field.v1
 
                     val fieldContent = anki.addMediaFromUri(
@@ -186,10 +193,14 @@ fun addNoteFn(
                         "audio"
                     )
 
-                    context.revokeUriPermission(NoteProvider.uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    context.revokeUriPermission(
+                        NoteProvider.uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
                     NoteProvider.data = null
                     fieldContent ?: error("Failed to add media to AnkiDroid")
                 }
+
                 null -> ""
             }
         }
@@ -205,7 +216,9 @@ fun addNoteFn(
 
 @Composable
 fun viewNoteFn(): suspend (Term) -> Unit {
-    return fn@{ term -> }
+    return fn@{ term ->
+
+    }
 }
 
 @Composable
@@ -225,19 +238,29 @@ fun RecordsView(
     val deck by derivedStateOf { app.profile?.ankiDeck }
     val noteType by derivedStateOf { app.profile?.ankiNoteType }
 
-    var onNoteExists: (suspend (Term) -> Boolean)? = null
-    var onAddNote: (suspend (Term) -> Unit)? = null
+    var onNumExistingNotes: (suspend (Term) -> Int)? = null
+    var onAddNewNote: (suspend (Term) -> Unit)? = null
+    var onAddDuplicateNote: (suspend (Term) -> Unit)? = null
     var onViewNote: (suspend (Term) -> Unit)? = null
 
     deck?.let { deck ->
         noteType?.let { noteType ->
-            onNoteExists = noteExistsFn(deck = deck, noteType = noteType)
-            onAddNote = addNoteFn(
+            onNumExistingNotes = numExistingNotesFn(noteType = noteType)
+            onAddNewNote = addNoteFn(
                 wordbase = wordbase,
                 sentence = sentence,
                 entries = entries,
                 deck = deck,
                 noteType = noteType,
+                allowDuplicate = false,
+            )
+            onAddDuplicateNote = addNoteFn(
+                wordbase = wordbase,
+                sentence = sentence,
+                entries = entries,
+                deck = deck,
+                noteType = noteType,
+                allowDuplicate = true,
             )
             onViewNote = viewNoteFn()
         }
@@ -249,8 +272,9 @@ fun RecordsView(
         insets = insets,
         containerColor = containerColor,
         contentColor = contentColor,
-        onNoteExists = onNoteExists,
-        onAddNote = onAddNote,
+        onNumExistingNotes = onNumExistingNotes,
+        onAddNewNote = onAddNewNote,
+        onAddDuplicateNote = onAddDuplicateNote,
         onViewNote = onViewNote,
         onExit = onExit,
     )
@@ -263,8 +287,9 @@ fun RawRecordsView(
     insets: WindowInsets = WindowInsets(0.dp),
     containerColor: Color = MaterialTheme.colorScheme.surface,
     contentColor: Color = contentColorFor(containerColor),
-    onNoteExists: (suspend (Term) -> Boolean)? = null,
-    onAddNote: (suspend (Term) -> Unit)? = null,
+    onNumExistingNotes: (suspend (Term) -> Int)? = null,
+    onAddNewNote: (suspend (Term) -> Unit)? = null,
+    onAddDuplicateNote: (suspend (Term) -> Unit)? = null,
     onViewNote: (suspend (Term) -> Unit)? = null,
     onExit: (() -> Unit)? = null,
 ) {
@@ -305,6 +330,9 @@ fun RawRecordsView(
     val sViewNote = stringResource(R.string.view_note)
     val sAddDuplicateNote = stringResource(R.string.add_duplicate_note)
     val document by derivedStateOf {
+        // why do we need `wait_for_wordbase`?
+        // because the JS bridge is injected too late
+        // <https://github.com/KevinnZou/compose-webview-multiplatform/issues/238>
         fun jsCall(method: String, callback: Boolean = false) = """
             wait_for_wordbase(() => window.wordbase.callNative(
                 '$method',
@@ -322,13 +350,13 @@ fun RawRecordsView(
                 sAddNote = sAddNote,
                 sViewNote = sViewNote,
                 sAddDuplicateNote = sAddDuplicateNote,
-                fnNoteExists = jsCall("note_exists", callback = true),
-                fnAddNote = jsCall("add_note"),
+                fnNumExistingNotes = jsCall("num_existing_notes", callback = true),
+                fnAddNewNote = jsCall("add_new_note"),
+                fnAddDuplicateNote = jsCall("add_duplicate_note"),
                 fnViewNote = jsCall("view_note"),
             ),
         )
 
-        // https://github.com/KevinnZou/compose-webview-multiplatform/issues/238
         """
         <!doctype html>
         <html>
@@ -394,7 +422,8 @@ fun RawRecordsView(
                         val json = JSONObject(message.params)
                         // spent like 2 hours trying to figure out why `reading` was "null", not null
                         // a proper type system fixes this!!! fucking java legacy code!!!
-                        val headword = if (json.isNull(HEADWORD)) null else json.getString("headword")
+                        val headword =
+                            if (json.isNull(HEADWORD)) null else json.getString("headword")
                         val reading = if (json.isNull(READING)) null else json.getString("reading")
                         val term = Term(
                             headword = headword,
@@ -413,21 +442,10 @@ fun RawRecordsView(
         }
     }
 
-    registerJsFunction("note_exists", onNoteExists)
-    registerJsFunction("add_note", onAddNote)
+    registerJsFunction("num_existing_notes", onNumExistingNotes)
+    registerJsFunction("add_new_note", onAddNewNote)
+    registerJsFunction("add_duplicate_note", onAddDuplicateNote)
     registerJsFunction("view_note", onViewNote)
-
-//    jsBridge.register(object : IJsMessageHandler {
-//        override fun methodName() = "hello_world"
-//
-//        override fun handle(
-//            message: JsMessage,
-//            navigator: WebViewNavigator?,
-//            callback: (String) -> Unit
-//        ) {
-//
-//        }
-//    })
 
     WebView(
         state = webViewState,

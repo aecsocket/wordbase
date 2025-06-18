@@ -33,18 +33,15 @@ pub async fn render(engine: &Engine, profile: &Profile, text: &str) -> Result<()
                 s_add_note: "Add Note".into(),
                 s_view_note: "View note in Anki".into(),
                 s_add_duplicate_note: "Add duplicate note".into(),
-                fn_note_exists: "
-                <js_callback>(window.wordbase.note_exists({
+                fn_num_existing_notes: "
+                /* <js_callback>(window.wordbase.note_exists({
                     headword: <js_headword>,
                     reading: <js_reading>,
-                }))"
+                })) */ <js_callback>(4)
+                "
                 .into(),
-                fn_add_note: "
-                window.wordbase.add_note({
-                    headword: <js_headword>,
-                    reading: <js_reading>,
-                })"
-                .into(),
+                fn_add_new_note: "<js_callback>()".into(),
+                fn_add_duplicate_note: "<js_callback>()".into(),
                 fn_view_note: "
                 window.wordbase.view_note({
                     headword: <js_headword>,
