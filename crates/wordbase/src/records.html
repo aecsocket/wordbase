@@ -301,7 +301,7 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
     for_el_with_class(
       script,
       class_name,
-      (el) => (el.style.display = "hidden"),
+      (el) => (el.style.display = "none"),
     );
   }
 </script>
@@ -375,6 +375,7 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
         </div>
 
         <div
+          class="manage-notes"
           style="
             padding: 1.5em 0;
             display: flex;
@@ -408,12 +409,11 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
               class="suggested-action"
               onclick="
               {
-                const on_add_note = () => {
-
+                const on_add_new_note = () => {
+                  this.closest('.manage-notes').update_manage_notes();
                 };
+                {{ fn_add_new_note | replace(from="<js_callback>", to="on_add_new_note") | safe }}
               }
-
-              {{ fn_add_new_note | safe }}
               "
             >
               <svg class="icon">
@@ -428,7 +428,14 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
               <div style="flex: 1; position: relative">
                 <button
                   title="{{ config.s_add_duplicate_note }}"
-                  onclick="{{ fn_add_duplicate_note | safe }}"
+                  onclick="
+                  {
+                    const on_add_new_note = () => {
+                      this.closest('.manage-notes').update_manage_notes();
+                    };
+                    {{ fn_add_duplicate_note | replace(from="<js_callback>", to="on_add_new_note") | safe }}
+                  }
+                  "
                   style="flex: 1; position: relative"
                 >
                   <svg class="icon">
@@ -454,27 +461,30 @@ if the HTML leaks out somehow, then it *is* still a bug, but we can at least con
           <script>
             {
               const script = document.currentScript;
+              function update_manage_notes() {
+                const on_num_existing_notes = (num) => {
+                  hide_with_class(script, "add-note");
+                  hide_with_class(script, "note-actions");
+                  hide_with_class(script, "multiple-notes");
 
-              const on_num_existing_notes = (num) => {
-                hide_with_class(script, "add-note");
-                hide_with_class(script, "note-actions");
-                hide_with_class(script, "multiple-notes");
-
-                if (num > 0) {
-                  show_with_class(script, "note-actions");
-                  if (num > 1) {
-                    for_el_with_class(script, "multiple-notes", (el) => {
-                      el.style.display = "flex";
-                      el.innerHTML = `${num}`;
-                    });
+                  if (num > 0) {
+                    show_with_class(script, "note-actions");
+                    if (num > 1) {
+                      for_el_with_class(script, "multiple-notes", (el) => {
+                        el.style.display = "flex";
+                        el.innerHTML = `${num}`;
+                      });
+                    }
+                  } else {
+                    show_with_class(script, "add-note");
                   }
-                } else {
-                  show_with_class(script, "add-note");
-                }
-              };
+                };
 
-              // prettier-ignore
-              {{ fn_num_existing_notes | replace(from="<js_callback>", to="on_num_existing_notes") | safe }}
+                // prettier-ignore
+                {{ fn_num_existing_notes | replace(from="<js_callback>", to="on_num_existing_notes") | safe }}
+              }
+              script.parentElement.update_manage_notes = update_manage_notes;
+              update_manage_notes();
             }
           </script>
         </div>

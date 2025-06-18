@@ -351,8 +351,8 @@ fun RawRecordsView(
                 sViewNote = sViewNote,
                 sAddDuplicateNote = sAddDuplicateNote,
                 fnNumExistingNotes = jsCall("num_existing_notes", callback = true),
-                fnAddNewNote = jsCall("add_new_note"),
-                fnAddDuplicateNote = jsCall("add_duplicate_note"),
+                fnAddNewNote = jsCall("add_new_note", callback = true),
+                fnAddDuplicateNote = jsCall("add_duplicate_note", callback = true),
                 fnViewNote = jsCall("view_note"),
             ),
         )
@@ -404,7 +404,7 @@ fun RawRecordsView(
     }
 
     @Composable
-    fun <R> registerJsFunction(methodName: String, fn: (suspend (Term) -> R?)?) {
+    fun <R> registerJsFunction(methodName: String, fn: (suspend (Term) -> R)?) {
         var jsHandler by remember { mutableStateOf<IJsMessageHandler?>(null) }
         LaunchedEffect(jsBridge, fn) {
             println("UnRegistered $methodName")
@@ -431,7 +431,14 @@ fun RawRecordsView(
                         )
 
                         CoroutineScope(Dispatchers.IO).launch {
-                            fn(term)?.let { r -> callback(r.toString()) }
+                            fn(term)?.let { r ->
+                                // todo this is suck a hack 🙄
+                                if (r == Unit) {
+                                    callback("{}")
+                                } else {
+                                    callback(r.toString())
+                                }
+                            }
                         }
                     }
                 }
