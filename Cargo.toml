@@ -1,5 +1,12 @@
 [workspace]
-members  = ["crates/*"]
+members = [
+  "src/jmdict-furigana",
+  "src/wordbase",
+  "src/wordbase-api",
+  "src/wordbase-cli",
+  "src/wordbase-sys",
+  "src/wordbase-uniffi-bindgen",
+]
 resolver = "3"
 
 [workspace.package]
@@ -7,9 +14,9 @@ authors      = ["aecsocket <aecsocket@tutanota.com>"]
 categories   = []
 edition      = "2024"
 keywords     = []
-license      = "MIT OR Apache-2.0"
 repository   = "https://github.com/aecsocket/wordbase"
 rust-version = "1.85.0"
+license = "Proprietary" # TODO
 
 [workspace.lints.rust]
 missing_docs    = "warn"
@@ -32,12 +39,12 @@ too_many_lines          = "allow"
 type_complexity         = "allow"
 
 [workspace.dependencies]
-jmdict-furigana = { path = "crates/jmdict-furigana" }
-wordbase        = { path = "crates/wordbase" }
-# wordbase-ankiconnect = { path = "crates/wordbase-ankiconnect" }
-# wordbase-client-tokio = { path = "crates/wordbase-client-tokio" }
-wordbase-api = { path = "crates/wordbase-api" }
-# wordbase-server = { path = "crates/wordbase-server" }
+jmdict-furigana = { path = "src/jmdict-furigana" }
+wordbase        = { path = "src/wordbase" }
+# wordbase-ankiconnect = { path = "src/wordbase-ankiconnect" }
+# wordbase-client-tokio = { path = "src/wordbase-client-tokio" }
+wordbase-api = { path = "src/wordbase-api" }
+# wordbase-server = { path = "src/wordbase-server" }
 
 android_logger       = { version = "0.15.0" }
 ankiconnect          = { version = "0.2" }
@@ -56,6 +63,7 @@ cfg-if               = { version = "1.0" }
 clap                 = { version = "4.5" }
 data-encoding        = { version = "2.9" }
 derive_more          = { version = "2.0" }
+dioxus               = { version = "0.6" }
 directories          = { version = "6.0" }
 distance             = { version = "0.4" }
 foldhash             = { version = "0.1.4" }
@@ -84,7 +92,6 @@ quote                = { version = "1.0" }
 rand                 = { version = "0.9" }
 regex                = { version = "1.11" }
 relm4                = { version = "0.9.1" }
-relm4-components     = { version = "0.9.1" }
 relm4-icons          = { version = "0.10.0-beta.2" }
 relm4-icons-build    = { version = "0.10.0-beta.2" }
 reqwest              = { version = "0.12.15", default-features = false }
@@ -123,7 +130,17 @@ pre-build = [
 
 [profile.release]
 codegen-units = 1
-lto           = true
+# lto           = true # unsupported by cranelift
 opt-level     = "z"
 panic         = "abort"
 strip         = true
+
+[profile.wasm-dev]
+inherits  = "dev"
+opt-level = 1
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"

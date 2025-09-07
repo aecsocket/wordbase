@@ -1,5 +1,35 @@
 # notes - temp
 
+## 26 Jun
+
+I need a list of "user stories" or like "target scenarios", to focus on what I build next. Right now I can't decide on what to actually work on. Thoughts:
+- reading wikipedia in chrome/firefox/brave
+- reading a book in Moon Reader
+- watching yt/netflix/local video
+- playing a VN in an emulator (OCR)
+- playing a VN with a texthooker
+
+## 22 Jun
+
+I really like Kotlin Compose, but I think I need to switch to something more universal to make porting to iOS easier in the future. Dioxus + some native Android elements like a dictionary activity?
+
+Thoughts on architecture:
+- `wordbase`
+  - Core dictionary engine, platform-agnostic, uses SQLite
+- `wordbase-app`
+  - Uses Dioxus
+  - Designed for web and mobile, but can theoretically run on desktop
+  - IPC: platform-specific (Android intents, iOS share)
+  - Features:
+    - Dictionary lookup (main page)
+    - Dictionary management
+    - Conversation mode (see obsidian 2025-06-20)
+    - Audio player (see obsidian 2025-06-20 and 21)
+- `wordbase-gtk`
+  - Uses Relm4 + GTK + Adwaita
+  - Designed for desktop, and GNOME mobile I guess? lmao
+  - IPC: HTTP/WS server on your desktop
+
 ## 18 Apr
 
 Ok I've tried to get xdg desktop portals to work with this. I think it's fundamentally too limiting. Summary:

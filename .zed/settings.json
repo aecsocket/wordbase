@@ -1,9 +1,6 @@
 {
   "lsp": {
     "rust-analyzer": {
-      "binary": {
-        "path": "rust-analyzer"
-      },
       "initialization_options": {
         "cargo": {
           "features": "all"
@@ -11,16 +8,6 @@
         "check": {
           "command": "clippy"
         }
-      }
-    },
-    "nixd": {
-      "binary": {
-        "path": "nixd"
-      }
-    },
-    "nil": {
-      "binary": {
-        "path": "nil"
       }
     }
   }

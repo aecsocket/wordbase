@@ -16,23 +16,11 @@
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
+
       let
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs { inherit system overlays; };
-        # TODO: merge with `fromRustupToolchainFile ./rust-toolchain` somehow?
-        rustToolchain = pkgs.pkgsBuildHost.rust-bin.selectLatestNightlyWith (toolchain: toolchain.default.override {
-          extensions = [
-            "rustc"
-            "cargo"
-            "rustfmt"
-            "rust-std"
-            "rust-docs"
-            "rust-src"
-            "rust-analyzer"
-            "clippy"
-            "rustc-codegen-cranelift-preview"
-          ];
-        });
+        rustToolchain = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
       in
       {
         devShells.default = pkgs.mkShell {
@@ -45,7 +33,6 @@
             nixd
             nil
             nixfmt-rfc-style
-            nixfmt-tree
 
             # Rust
             rustToolchain
@@ -58,11 +45,22 @@
             sqlx-cli
             sqlite
 
+            # GNOME extension
+            vtsls
+            eslint
+            gnome-extensions-cli
+
+            # Dioxus
+            dioxus-cli
+            wasm-bindgen-cli_0_2_100
+
             # Binding generation
             ktlint
           ];
           shellHook = ''
             export RUSTFLAGS="-Zcodegen-backend=cranelift"
+            mkdir -p "$XDG_DATA_HOME/wordbase"
+            export DATABASE_URL="sqlite://$XDG_DATA_HOME/wordbase/wordbase.db"
           '';
         };
       }
