@@ -3,7 +3,7 @@ mod yomichan_audio;
 mod yomitan;
 
 use {
-    crate::{CHANNEL_BUF_CAP, DictionaryEvent, Engine, EngineEvent},
+    crate::{CHANNEL_BUF_CAP, Engine, dictionary::sync_dictionaries},
     anyhow::{Context, Result},
     derive_more::{Display, Error, From},
     futures::{Stream, TryStreamExt, future::BoxFuture, stream::FuturesUnordered},
@@ -89,6 +89,7 @@ pub enum ImportEvent {
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[cfg_attr(feature = "poem", derive(poem_openapi::Object))]
 pub struct ImportProgress {
     pub frac: f64,
 }
@@ -178,17 +179,19 @@ pub enum ImportError {
 }
 
 impl Engine {
-    pub fn import_dictionary(
+    pub fn import_dictionary<A: OpenArchive + 'static>(
         &self,
-        open_archive: impl OpenArchive + 'static,
-    ) -> impl Stream<Item = Result<ImportEvent, ImportError>> {
+        open_archive: A,
+    ) -> impl Stream<Item = Result<ImportEvent, ImportError>> + use<A> {
         self.import_dictionary_arc(Arc::new(open_archive))
     }
 
     pub fn import_dictionary_arc(
         &self,
         open_archive: Arc<dyn OpenArchive>,
-    ) -> impl Stream<Item = Result<ImportEvent, ImportError>> {
+    ) -> impl Stream<Item = Result<ImportEvent, ImportError>> + use<> {
+        let db = self.db.clone();
+        let dictionaries = self.dictionaries.clone();
         async_stream::try_stream! {
             debug!("Attempting to determine dictionary kind");
             let kind = kind_of(open_archive.clone())
@@ -201,7 +204,7 @@ impl Engine {
             let (progress_tx, mut progress_rx) = mpsc::channel(CHANNEL_BUF_CAP);
 
             let (meta, continue_task) = importer
-                .start_import(self.db.clone(), open_archive, progress_tx)
+                .start_import(db.clone(), open_archive, progress_tx)
                 .await
                 .map_err(|source| ImportError::ParseMeta { kind, source })?;
             debug!(
@@ -211,7 +214,7 @@ impl Engine {
             let name = meta.name.clone();
             yield ImportEvent::ParsedMeta(meta);
 
-            let already_exists = dictionary_exists_by_name(&self.db, &name)
+            let already_exists = dictionary_exists_by_name(&db, &name)
                 .await
                 .context("failed to fetch if this dictionary already exists")?;
             if already_exists {
@@ -233,10 +236,7 @@ impl Engine {
                 })?
                 .map_err(|source| ImportError::Import { kind, source })?;
 
-            self.sync_dictionaries().await?;
-            _ = self
-                .event_tx
-                .send(EngineEvent::Dictionary(DictionaryEvent::Added { id }));
+            sync_dictionaries(&db, &dictionaries).await?;
             yield ImportEvent::Done(id);
         }
     }

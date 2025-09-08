@@ -11,7 +11,7 @@ use {
             BoxCharacterFilter,
             unicode_normalize::{UnicodeNormalizeCharacterFilter, UnicodeNormalizeKind},
         },
-        dictionary::{DictionaryKind, load_dictionary_from_kind},
+        dictionary::{DictionaryKind, load_embedded_dictionary},
         mode::Mode,
         segmenter::Segmenter,
         token::Token,
@@ -35,7 +35,7 @@ impl Lindera {
     }
 
     pub fn with_lookahead(lookahead: usize) -> Result<Self> {
-        let dictionary = load_dictionary_from_kind(DictionaryKind::UniDic)
+        let dictionary = load_embedded_dictionary(DictionaryKind::UniDic)
             .context("failed to load dictionary")?;
         let segmenter = Segmenter::new(Mode::Normal, dictionary, None);
 
@@ -238,6 +238,7 @@ mod tests {
             sentence,
             tests::{assert_deinflects, deinf},
         },
+        lindera::dictionary::load_embedded_dictionary,
         std::sync::LazyLock,
     };
 
@@ -504,7 +505,7 @@ mod tests {
     }
 
     static TOKENIZER: LazyLock<Tokenizer> = LazyLock::new(|| {
-        let dictionary = load_dictionary_from_kind(DictionaryKind::UniDic).unwrap();
+        let dictionary = load_embedded_dictionary(DictionaryKind::UniDic).unwrap();
         let segmenter = Segmenter::new(Mode::Normal, dictionary, None);
         Tokenizer::new(segmenter)
     });

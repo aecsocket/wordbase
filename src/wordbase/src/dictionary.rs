@@ -1,6 +1,7 @@
 use {
-    crate::{DictionaryEvent, Engine, EngineEvent, IndexMap, NotFound},
+    crate::{Engine, IndexMap, NotFound, profile::sync_profiles},
     anyhow::{Context, Result, bail},
+    arc_swap::ArcSwap,
     derive_more::Deref,
     futures::TryStreamExt,
     serde::{Deserialize, Serialize},
@@ -26,18 +27,21 @@ impl Dictionaries {
     }
 }
 
+pub(crate) async fn sync_dictionaries(
+    db: &Pool<Sqlite>,
+    dictionaries: &ArcSwap<Dictionaries>,
+) -> Result<()> {
+    let fetched = Dictionaries::fetch(db)
+        .await
+        .context("failed to sync dictionaries")?;
+    dictionaries.store(Arc::new(fetched));
+    Ok(())
+}
+
 impl Engine {
     #[must_use]
     pub fn dictionaries(&self) -> Arc<Dictionaries> {
         self.dictionaries.load().clone()
-    }
-
-    pub(super) async fn sync_dictionaries(&self) -> Result<()> {
-        let dictionaries = Dictionaries::fetch(&self.db)
-            .await
-            .context("failed to sync dictionaries")?;
-        self.dictionaries.store(Arc::new(dictionaries));
-        Ok(())
     }
 
     pub async fn remove_dictionary(&self, id: DictionaryId) -> Result<()> {
@@ -94,10 +98,7 @@ impl Engine {
         let end = Instant::now();
         info!("Finished delete in {:?}", end.duration_since(start));
 
-        self.sync_dictionaries().await?;
-        _ = self
-            .event_tx
-            .send(EngineEvent::Dictionary(DictionaryEvent::Removed { id }));
+        sync_dictionaries(&self.db, &self.dictionaries).await?;
         Ok(())
     }
 
@@ -128,13 +129,7 @@ impl Engine {
             bail!(NotFound);
         }
 
-        self.sync_dictionaries().await?;
-        _ = self
-            .event_tx
-            .send(EngineEvent::Dictionary(DictionaryEvent::PositionsSwapped {
-                a_id,
-                b_id,
-            }));
+        sync_dictionaries(&self.db, &self.dictionaries).await?;
         Ok(())
     }
 
@@ -153,11 +148,7 @@ impl Engine {
         .execute(&self.db)
         .await?;
 
-        self.sync_profiles().await?;
-        _ = self.event_tx.send(EngineEvent::SortingDictionarySet {
-            profile_id,
-            dictionary_id,
-        });
+        sync_profiles(&self.db, &self.profiles).await?;
         Ok(())
     }
 
@@ -175,13 +166,7 @@ impl Engine {
         .execute(&self.db)
         .await?;
 
-        self.sync_profiles().await?;
-        _ = self
-            .event_tx
-            .send(EngineEvent::Dictionary(DictionaryEvent::Enabled {
-                profile_id,
-                dictionary_id,
-            }));
+        sync_profiles(&self.db, &self.profiles).await?;
         Ok(())
     }
 
@@ -199,13 +184,7 @@ impl Engine {
         .execute(&self.db)
         .await?;
 
-        self.sync_profiles().await?;
-        _ = self
-            .event_tx
-            .send(EngineEvent::Dictionary(DictionaryEvent::Disabled {
-                profile_id,
-                dictionary_id,
-            }));
+        sync_profiles(&self.db, &self.profiles).await?;
         Ok(())
     }
 }

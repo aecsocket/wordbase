@@ -35,19 +35,6 @@ CREATE TABLE profile_enabled_dictionary (
     UNIQUE      (profile, dictionary)
 );
 
-CREATE TABLE config (
-    id                      INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
-    ankiconnect_url         TEXT    NOT NULL DEFAULT 'http://127.0.0.1:8765',
-    ankiconnect_api_key     TEXT    NOT NULL DEFAULT '',
-    texthooker_url          TEXT    NOT NULL DEFAULT 'ws://127.0.0.1:9001'
-);
-INSERT INTO config DEFAULT VALUES;
-CREATE TRIGGER prevent_config_delete
-BEFORE DELETE ON config
-BEGIN
-    SELECT RAISE(ABORT, 'cannot delete config row');
-END;
-
 CREATE TABLE record (
     id          INTEGER NOT NULL PRIMARY KEY,
     source      INTEGER NOT NULL REFERENCES dictionary(id),

@@ -1,7 +1,8 @@
-use std::str::FromStr;
-
-use derive_more::{Debug, Deref, Display, Error};
-use serde::{Deserialize, Serialize};
+use {
+    derive_more::{Debug, Deref, Display, Error},
+    serde::{Deserialize, Serialize},
+    std::str::FromStr,
+};
 
 /// Normalized string buffer.
 ///
@@ -43,7 +44,8 @@ impl NormString {
     ///
     /// # Correctness
     ///
-    /// The trimmed string must not be empty.
+    /// The trimmed string must not be empty, or have trailing or leading
+    /// whitespace.
     #[must_use]
     pub const fn new_unchecked(string: String) -> Self {
         Self(string)

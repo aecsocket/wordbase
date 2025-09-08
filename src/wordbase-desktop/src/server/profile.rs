@@ -1,10 +1,8 @@
 use {
     poem::{Result, error::NotFoundError},
     poem_openapi::Object,
-    serde::{Deserialize, Serialize},
     std::sync::Arc,
-    wordbase::{NormString, Profile, ProfileId},
-    wordbase_engine::Engine,
+    wordbase::{Engine, NormString, Profile, ProfileId},
 };
 
 pub async fn index(engine: &Engine) -> Vec<Arc<Profile>> {
@@ -29,12 +27,12 @@ pub async fn add(engine: &Engine, req: Add) -> Result<AddResponse> {
     Ok(AddResponse { new_profile_id })
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Object)]
+#[derive(Debug, Clone, Object)]
 pub struct Add {
     pub name: Option<NormString>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Object)]
+#[derive(Debug, Clone, Object)]
 pub struct AddResponse {
     pub new_profile_id: ProfileId,
 }

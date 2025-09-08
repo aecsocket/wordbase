@@ -1,11 +1,9 @@
 use {
-    crate::Term,
+    crate::server::Term,
     anyhow::Context,
     poem::Result,
     poem_openapi::{Object, types::Example},
-    serde::{Deserialize, Serialize},
-    wordbase::{NormString, ProfileId},
-    wordbase_engine::Engine,
+    wordbase::{Engine, NormString, ProfileId},
 };
 
 pub async fn note_add(engine: &Engine, req: NoteAdd) -> Result<()> {
@@ -22,7 +20,7 @@ pub async fn note_add(engine: &Engine, req: NoteAdd) -> Result<()> {
     Ok(())
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Object)]
+#[derive(Debug, Clone, Object)]
 #[oai(example)]
 pub struct NoteAdd {
     pub profile_id: ProfileId,

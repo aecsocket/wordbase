@@ -22,7 +22,9 @@ doc        = false
 name       = "wordbase"
 
 [features]
-android = ["wordbase/android"]
+android = ["dep:android_logger", "tracing/log-always"]
 
 [dependencies]
-wordbase = { workspace = true, features = ["uniffi"] }
+android_logger = { workspace = true, optional = true }
+tracing        = { workspace = true }
+wordbase       = { workspace = true, features = ["uniffi"] }

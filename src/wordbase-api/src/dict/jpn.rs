@@ -1,9 +1,10 @@
 //! Shared types and logic for Japanese dictionaries.
 
-use std::iter;
-
-use itertools::Itertools as _;
-use serde::{Deserialize, Serialize};
+use {
+    itertools::Itertools as _,
+    serde::{Deserialize, Serialize},
+    std::iter,
+};
 
 /// [Mora][mora] position in a word.
 ///
@@ -37,8 +38,8 @@ pub enum PitchCategory {
     /// 授業　じゅぎょう　じゅぎょうが
     /// ```
     Atamadaka,
-    /// 中高型: first mora is low; morae are high until the downstep; downstep is
-    /// before the last mora; the particle is low.
+    /// 中高型: first mora is low; morae are high until the downstep; downstep
+    /// is before the last mora; the particle is low.
     ///
     /// ```text
     /// 　　　　／￣＼　／￣＼＿
@@ -195,8 +196,8 @@ pub const fn pitch_category_of(n_morae: usize, downstep: usize) -> PitchCategory
 /// Note that this function may not generate the most accurate furigana reading
 /// possible, which is a fundamental limitation of using heuristics instead of
 /// a hardcoded mapping between terms and furigana pairs. It is recommended to
-/// use a hardcoded furigana map first from e.g. [`jmdict-furigana`], and use this
-/// function as a fallback.
+/// use a hardcoded furigana map first from e.g. [`jmdict-furigana`], and use
+/// this function as a fallback.
 ///
 /// # Examples
 ///
@@ -343,8 +344,8 @@ pub fn furigana_parts<'a>(headword: &'a str, mut reading: &'a str) -> Vec<(&'a s
 
         // this is so genuinely stupid but I can't think of a better way to do this
         removed = removed.checked_sub(1).expect(
-            "we should have been able to strip at least one `peek.text` from `post`, \
-                     since we found `peek.text` in `reading`",
+            "we should have been able to strip at least one `peek.text` from `post`, since we \
+             found `peek.text` in `reading`",
         );
 
         //

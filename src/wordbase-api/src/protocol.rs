@@ -80,6 +80,7 @@ pub struct RecordEntry {
 /// We use this wrapper because [`Range`] is not supported by `poem-openapi`
 /// or `uniffi`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "poem", derive(poem_openapi::Object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Span {
     /// The lower bound of the range (inclusive).

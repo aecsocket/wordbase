@@ -18,11 +18,8 @@ workspace = true
 all-features = true
 
 [features]
-poem   = ["wordbase-api/poem"]
+poem   = ["wordbase-api/poem", "dep:poem-openapi"]
 uniffi = ["wordbase-api/uniffi", "dep:uniffi"]
-
-android = ["dep:android_logger", "tracing/log-always"]
-desktop = ["dep:directories", "dep:tokio-tungstenite"]
 
 [dependencies]
 jmdict-furigana = { workspace = true }
@@ -37,18 +34,18 @@ async-tar            = { workspace = true }
 async_zip            = { workspace = true, features = ["deflate", "tokio"] }
 bytes                = { workspace = true }
 data-encoding        = { workspace = true }
-directories          = { workspace = true, optional = true }
 distance             = { workspace = true }
 foldhash             = { workspace = true }
 futures              = { workspace = true }
 hex                  = { workspace = true }
 indexmap             = { workspace = true, features = ["serde"] }
 itertools            = { workspace = true }
-lindera              = { workspace = true, features = ["unidic", "compress"] }
+lindera              = { workspace = true, features = ["embedded-unidic"] }
 maud                 = { workspace = true }
 paste                = { workspace = true }
 pin-project          = { workspace = true }
 regex                = { workspace = true }
+poem-openapi  = { workspace = true, optional = true }
 rmp-serde            = { workspace = true }
 serde                = { workspace = true, features = ["derive"] }
 serde_json           = { workspace = true, features = ["preserve_order"] }
@@ -58,7 +55,6 @@ sqlx                 = { workspace = true, features = ["runtime-tokio", "sqlite"
 tera                 = { workspace = true, features = ["preserve_order"] }
 tokio                = { workspace = true, features = ["sync", "macros"] }
 tokio-stream         = { workspace = true }
-tokio-tungstenite    = { workspace = true, optional = true }
 tokio-util           = { workspace = true, features = ["rt"] }
 tracing              = { workspace = true }
 unicode-segmentation = { workspace = true }

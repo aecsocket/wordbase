@@ -1,6 +1,7 @@
 use {
-    crate::{Engine, EngineEvent, IndexMap, NotFound, ProfileEvent},
+    crate::{Engine, IndexMap, NotFound},
     anyhow::{Context, Result, bail},
+    arc_swap::ArcSwap,
     derive_more::Deref,
     futures::StreamExt,
     sqlx::{Pool, Sqlite},
@@ -23,18 +24,18 @@ impl Profiles {
     }
 }
 
+pub(crate) async fn sync_profiles(db: &Pool<Sqlite>, profiles: &ArcSwap<Profiles>) -> Result<()> {
+    let fetched = Profiles::fetch(db)
+        .await
+        .context("failed to sync profiles")?;
+    profiles.store(Arc::new(fetched));
+    Ok(())
+}
+
 impl Engine {
     #[must_use]
     pub fn profiles(&self) -> Arc<Profiles> {
         self.profiles.load().clone()
-    }
-
-    pub(super) async fn sync_profiles(&self) -> Result<()> {
-        let profiles = Profiles::fetch(&self.db)
-            .await
-            .context("failed to sync profiles")?;
-        self.profiles.store(Arc::new(profiles));
-        Ok(())
     }
 
     pub async fn add_profile(&self, name: Option<NormString>) -> Result<ProfileId> {
@@ -46,10 +47,7 @@ impl Engine {
             .last_insert_rowid();
         let id = ProfileId(id);
 
-        self.sync_profiles().await?;
-        _ = self
-            .event_tx
-            .send(EngineEvent::Profile(ProfileEvent::Added { id }));
+        sync_profiles(&self.db, &self.profiles).await?;
         Ok(id)
     }
 
@@ -92,13 +90,7 @@ impl Engine {
         .context("failed to copy enabled dictionaries")?;
         tx.commit().await.context("failed to commit transaction")?;
 
-        self.sync_profiles().await?;
-        _ = self
-            .event_tx
-            .send(EngineEvent::Profile(ProfileEvent::Copied {
-                src_id,
-                new_id,
-            }));
+        sync_profiles(&self.db, &self.profiles).await?;
         Ok(new_id)
     }
 
@@ -110,10 +102,7 @@ impl Engine {
             bail!(NotFound);
         }
 
-        self.sync_profiles().await?;
-        _ = self
-            .event_tx
-            .send(EngineEvent::Profile(ProfileEvent::Removed { id }));
+        sync_profiles(&self.db, &self.profiles).await?;
         Ok(())
     }
 
@@ -131,12 +120,7 @@ impl Engine {
         .execute(&self.db)
         .await?;
 
-        self.sync_profiles().await?;
-        _ = self
-            .event_tx
-            .send(EngineEvent::Profile(ProfileEvent::NameSet {
-                id: profile_id,
-            }));
+        sync_profiles(&self.db, &self.profiles).await?;
         Ok(())
     }
 
@@ -153,10 +137,7 @@ impl Engine {
         .execute(&self.db)
         .await?;
 
-        self.sync_profiles().await?;
-        _ = self
-            .event_tx
-            .send(EngineEvent::FontFamilySet { profile_id });
+        sync_profiles(&self.db, &self.profiles).await?;
         Ok(())
     }
 }

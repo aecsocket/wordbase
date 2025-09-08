@@ -9,8 +9,13 @@ mod query;
 use {
     anyhow::{Context, Result, bail},
     serde::Serialize,
-    std::{io, path::PathBuf},
-    tracing::level_filters::LevelFilter,
+    std::{
+        io,
+        net::{IpAddr, Ipv4Addr, SocketAddr},
+        path::PathBuf,
+        time::Instant,
+    },
+    tracing::{info, level_filters::LevelFilter, trace},
     tracing_subscriber::EnvFilter,
     wordbase::{DictionaryId, Engine, ProfileId},
 };
@@ -45,6 +50,12 @@ enum OutputFormat {
 
 #[derive(Debug, clap::Parser)]
 enum Command {
+    /// Run the REST API server.
+    Serve {
+        /// Socket address to serve on.
+        #[arg(short, long, default_value_t = SERVE_DEFAULT_BIND_ADDR)]
+        bind_addr: SocketAddr,
+    },
     /// Deinflect some text and fetch records for its lemmas
     Lookup {
         /// Text to look up
@@ -190,6 +201,11 @@ enum AnkiCommand {
     },
 }
 
+const SERVE_DEFAULT_BIND_ADDR: SocketAddr = SocketAddr::new(
+    IpAddr::V4(Ipv4Addr::LOCALHOST),
+    wordbase_desktop::SERVER_DEFAULT_PORT,
+);
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
@@ -206,12 +222,15 @@ async fn main() -> Result<()> {
     let data_dir = if let Some(data_dir) = args.data_dir {
         data_dir
     } else {
-        wordbase::desktop::data_dir()?
+        wordbase_desktop::data_dir()?
     };
 
+    let start = Instant::now();
     let engine = Engine::new(data_dir)
         .await
         .context("failed to create engine")?;
+    trace!("Created engine in {:?}", start.elapsed());
+
     let require_profile = || {
         if let Some(profile_id) = args.profile {
             engine
@@ -232,6 +251,17 @@ async fn main() -> Result<()> {
     };
 
     match args.command {
+        Command::Serve { bind_addr } => {
+            info!("");
+            info!(
+                "    {} v{}",
+                env!("CARGO_PKG_NAME"),
+                env!("CARGO_PKG_VERSION")
+            );
+            info!("    http://{bind_addr}/api/docs");
+            info!("");
+            wordbase_desktop::serve(engine, bind_addr).await?;
+        }
         // lookup
         Command::Lookup {
             pre_cursor,

@@ -1,5 +1,5 @@
 use {
-    crate::{Engine, IndexSet, lang},
+    crate::{Engine, IndexSet, lang, profile::sync_profiles},
     anyhow::{Context, Result},
     itertools::Itertools,
     maud::html,
@@ -86,7 +86,7 @@ impl Engine {
         .execute(&self.db)
         .await?;
 
-        self.sync_profiles().await?;
+        sync_profiles(&self.db, &self.profiles).await?;
         Ok(())
     }
 
@@ -103,7 +103,7 @@ impl Engine {
         .execute(&self.db)
         .await?;
 
-        self.sync_profiles().await?;
+        sync_profiles(&self.db, &self.profiles).await?;
         Ok(())
     }
 }

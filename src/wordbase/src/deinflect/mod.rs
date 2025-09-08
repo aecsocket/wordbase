@@ -148,7 +148,6 @@ macro_rules! sentence {
         let text = concat!($a, $b);
         (text, $a.len())
     }};
-    //
     (/ $a:literal / $b:literal) => {{
         let text = concat!($a, $b);
         (text, 0usize, $a.len())

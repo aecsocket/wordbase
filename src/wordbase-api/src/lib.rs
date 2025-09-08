@@ -125,7 +125,99 @@ macro_rules! for_kinds { ($macro:ident) => { $macro!(
     },
 ); } }
 
+/// Imported collection of [`Record`]s in the engine.
+///
+/// This represents a dictionary which has already been imported into the
+/// engine, whereas [`DictionaryMeta`] may not.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "poem", derive(poem_openapi::Object), oai(example))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[serde(deny_unknown_fields)]
+pub struct Dictionary {
+    /// Unique identifier for this dictionary in the database.
+    pub id: DictionaryId,
+    /// Meta information about this dictionary.
+    pub meta: DictionaryMeta,
+    /// What position [`Record`]s from this dictionary will be returned during
+    /// lookups, relative to other dictionaries.
+    ///
+    /// A higher position means records from this dictionary will be returned
+    /// later, and should be displayed to the user with a lower priority.
+    pub position: i64,
+}
+
+#[cfg(feature = "poem")]
+impl poem_openapi::types::Example for Dictionary {
+    fn example() -> Self {
+        let mut meta = DictionaryMeta::new(DictionaryKind::Yomitan, "Jitendex");
+        meta.version = Some("2025.02.11.0".into());
+        meta.url = Some("https://jitendex.org".into());
+        Self {
+            id: DictionaryId(4),
+            meta,
+            position: 3,
+        }
+    }
+}
+
+/// Metadata for a [`Dictionary`].
+///
+/// This is `#[non_exhaustive]`: to create a new value, you must use
+/// [`DictionaryMeta::new`] to create an initial value, then set fields
+/// explicitly.
+///
+/// # Examples
+///
+/// ```
+/// # use wordbase_api::{DictionaryMeta, DictionaryKind};
+/// let mut meta = DictionaryMeta::new(DictionaryKind::Yomitan, "My Dictionary");
+/// meta.version = Some("1.0.0".into());
+/// meta.url = Some("https://example.com".into());
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "poem", derive(poem_openapi::Object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[non_exhaustive]
+pub struct DictionaryMeta {
+    /// What kind of dictionary this was imported from.
+    pub kind: DictionaryKind,
+    /// Human-readable display name.
+    ///
+    /// This value is **not guaranteed to be unique** across all dictionaries,
+    /// however you may treat this as a stable identifier for a dictionary in
+    /// its unimported form (i.e. the archive itself), and use this to detect if
+    /// you attempt to import an already-imported dictionary.
+    pub name: String,
+    /// Arbitrary version string.
+    ///
+    /// This does not guarantee to conform to any format, e.g. semantic
+    /// versioning.
+    pub version: Option<String>,
+    /// Describes the content of this dictionary.
+    pub description: Option<String>,
+    /// Homepage URL where users can learn more about this dictionary.
+    pub url: Option<String>,
+    /// Attribution information for the content of this dictionary.
+    pub attribution: Option<String>,
+}
+
+impl DictionaryMeta {
+    /// Creates a new value with only the required fields.
+    #[must_use]
+    pub fn new(kind: DictionaryKind, name: impl Into<String>) -> Self {
+        Self {
+            kind,
+            name: name.into(),
+            version: None,
+            description: None,
+            url: None,
+            attribution: None,
+        }
+    }
+}
+
 macro_rules! define_types { ($($dict_kind:ident($dict_path:ident) { $($record_kind:ident),* $(,)? }),* $(,)?) => { paste::paste! {
+
 /// Kind of [`Dictionary`] that can be imported into the engine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem", derive(poem_openapi::Enum))]
@@ -185,6 +277,7 @@ impl RecordType for dict::$dict_path::$record_kind {
     const KIND: RecordKind = RecordKind::[< $dict_kind $record_kind >];
 }
 )*)*
+
 }}}
 for_kinds!(define_types);
 
@@ -219,83 +312,6 @@ pub struct RecordId(pub i64);
 #[cfg(feature = "uniffi")]
 uniffi::custom_newtype!(RecordId, i64);
 
-/// Imported collection of [`Record`]s in the engine.
-///
-/// This represents a dictionary which has already been imported into the
-/// engine, whereas [`DictionaryMeta`] may not.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "poem", derive(poem_openapi::Object))]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[serde(deny_unknown_fields)]
-pub struct Dictionary {
-    /// Unique identifier for this dictionary in the database.
-    pub id: DictionaryId,
-    /// Meta information about this dictionary.
-    pub meta: DictionaryMeta,
-    /// What position [`Record`]s from this dictionary will be returned during
-    /// lookups, relative to other dictionaries.
-    ///
-    /// A higher position means records from this dictionary will be returned
-    /// later, and should be displayed to the user with a lower priority.
-    pub position: i64,
-}
-
-/// Metadata for a [`Dictionary`].
-///
-/// This is `#[non_exhaustive]`: to create a new value, you must use
-/// [`DictionaryMeta::new`] to create an initial value, then set fields
-/// explicitly.
-///
-/// # Examples
-///
-/// ```
-/// # use wordbase_api::{DictionaryMeta, DictionaryKind};
-/// let mut meta = DictionaryMeta::new(DictionaryKind::Yomitan, "My Dictionary");
-/// meta.version = Some("1.0.0".into());
-/// meta.url = Some("https://example.com".into());
-/// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "poem", derive(poem_openapi::Object))]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[non_exhaustive]
-pub struct DictionaryMeta {
-    /// What kind of dictionary this was imported from.
-    pub kind: DictionaryKind,
-    /// Human-readable display name.
-    ///
-    /// This value is **not guaranteed to be unique** across all dictionaries,
-    /// however you may treat this as a stable identifier for a dictionary in
-    /// its unimported form (i.e. the archive itself), and use this to detect if
-    /// you attempt to import an already-imported dictionary.
-    pub name: String,
-    /// Arbitrary version string.
-    ///
-    /// This does not guarantee to conform to any format, e.g. semantic
-    /// versioning.
-    pub version: Option<String>,
-    /// Describes the content of this dictionary.
-    pub description: Option<String>,
-    /// Homepage URL where users can learn more about this dictionary.
-    pub url: Option<String>,
-    /// Attribution information for the content of this dictionary.
-    pub attribution: Option<String>,
-}
-
-impl DictionaryMeta {
-    /// Creates a new value with only the required fields.
-    #[must_use]
-    pub fn new(kind: DictionaryKind, name: impl Into<String>) -> Self {
-        Self {
-            kind,
-            name: name.into(),
-            version: None,
-            description: None,
-            url: None,
-            attribution: None,
-        }
-    }
-}
-
 /// Opaque and unique identifier for a [`Dictionary`] in the engine.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
@@ -326,11 +342,11 @@ pub enum FrequencyValue {
 
 /// Collection of user-defined settings which can be freely switched between.
 ///
-/// The engine does not have a concept of a current profile - instead, it is the
+/// The engine does not have a concept of a current profile. Instead, it is the
 /// app's responsibility to manage a current profile, and pass that profile ID
 /// into operations which require it (e.g. lookups).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "poem", derive(poem_openapi::Object))]
+#[cfg_attr(feature = "poem", derive(poem_openapi::Object), oai(example))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[non_exhaustive]
 pub struct Profile {
@@ -363,6 +379,21 @@ pub struct Profile {
     /// If a dictionary is enabled, it will be used to provide results for
     /// lookups when using this profile.
     pub enabled_dictionaries: Vec<DictionaryId>,
+}
+
+#[cfg(feature = "poem")]
+impl poem_openapi::types::Example for Profile {
+    fn example() -> Self {
+        Self {
+            id: ProfileId(3),
+            name: Some(NormString::new("Japanese").expect("valid `NormString`")),
+            sorting_dictionary: Some(DictionaryId(4)),
+            font_family: None,
+            anki_deck: Some("Japanese Cards".into()),
+            anki_note_type: Some("Lapis".into()),
+            enabled_dictionaries: vec![DictionaryId(1), DictionaryId(2), DictionaryId(4)],
+        }
+    }
 }
 
 impl Profile {

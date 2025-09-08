@@ -1,59 +1,55 @@
 use {
-    crate::Term,
+    crate::server::Term,
     poem::Result,
     poem_openapi::{
         Object, Union,
         types::{Any, Example},
     },
-    serde::{Deserialize, Serialize},
-    wordbase::{DictionaryId, ProfileId, Record, RecordId, RecordKind},
-    wordbase_engine::Engine,
+    std::ops::Range,
+    wordbase::{DictionaryId, Engine, ProfileId, Record, RecordId, Span},
 };
 
-pub async fn expr(engine: &Engine, req: ExprRequest) -> Result<Vec<RecordLookup>> {
+pub async fn sentence(engine: &Engine, req: Sentence) -> Result<Vec<RecordEntry>> {
     Ok(engine
-        .lookup(req.profile_id, &req.sentence, req.cursor, &req.record_kinds)
+        .lookup(req.profile_id, &req.sentence, req.cursor)
         .await?
         .into_iter()
-        .map(RecordLookup::from)
+        .map(RecordEntry::from)
         .collect())
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Object)]
+#[derive(Debug, Clone, Object)]
 #[oai(example)]
-pub struct ExprRequest {
+pub struct Sentence {
     profile_id: ProfileId,
     sentence: String,
     cursor: usize,
-    record_kinds: Vec<RecordKind>,
 }
 
-impl Example for ExprRequest {
+impl Example for Sentence {
     fn example() -> Self {
         Self {
             profile_id: ProfileId(1),
             sentence: "本を読んだ".into(),
             cursor: "本を".len(),
-            record_kinds: vec![RecordKind::YomitanGlossary],
         }
     }
 }
 
-pub async fn lemma(engine: &Engine, req: Lemma) -> Result<Vec<RecordLookup>> {
+pub async fn lemma(engine: &Engine, req: Lemma) -> Result<Vec<RecordEntry>> {
     Ok(engine
-        .lookup_lemma(req.profile_id, &req.lemma, &req.record_kinds)
+        .lookup_lemma(req.profile_id, &req.lemma)
         .await?
         .into_iter()
-        .map(RecordLookup::from)
+        .map(RecordEntry::from)
         .collect())
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Object)]
+#[derive(Debug, Clone, Object)]
 #[oai(example)]
 pub struct Lemma {
     profile_id: ProfileId,
     lemma: String,
-    record_kinds: Vec<RecordKind>,
 }
 
 impl Example for Lemma {
@@ -61,14 +57,13 @@ impl Example for Lemma {
         Self {
             profile_id: ProfileId(1),
             lemma: "読む".into(),
-            record_kinds: vec![RecordKind::YomitanGlossary],
         }
     }
 }
 
 pub async fn deinflect(engine: &Engine, req: Deinflect) -> Vec<Deinflection> {
     engine
-        .deinflect(&req.text)
+        .deinflect(&req.text, req.cursor)
         .into_iter()
         .map(Deinflection::from)
         .collect()
@@ -78,34 +73,54 @@ pub async fn deinflect(engine: &Engine, req: Deinflect) -> Vec<Deinflection> {
 #[oai(example)]
 pub struct Deinflect {
     text: String,
+    cursor: usize,
 }
 
 impl Example for Deinflect {
     fn example() -> Self {
         Self {
             text: "読まなかった".into(),
+            cursor: 0,
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Object)]
+#[derive(Debug, Clone, Object)]
 pub struct Deinflection {
+    span: SpanUsize,
     lemma: String,
-    scan_len: usize,
 }
 
-impl From<wordbase_engine::deinflect::Deinflection<'_>> for Deinflection {
-    fn from(value: wordbase_engine::deinflect::Deinflection) -> Self {
+// TODO: unify this type?
+
+#[derive(Debug, Clone, Object)]
+pub struct SpanUsize {
+    pub start: usize,
+    pub end: usize,
+}
+
+impl From<Range<usize>> for SpanUsize {
+    fn from(value: Range<usize>) -> Self {
         Self {
-            lemma: value.lemma.into_owned(),
-            scan_len: value.scan_len,
+            start: value.start,
+            end: value.end,
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Object)]
-pub struct RecordLookup {
-    pub bytes_scanned: usize,
+impl From<wordbase::deinflect::Deinflection<'_>> for Deinflection {
+    fn from(value: wordbase::deinflect::Deinflection<'_>) -> Self {
+        Self {
+            span: value.span.into(),
+            lemma: value.lemma.into_owned(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Object)]
+pub struct RecordEntry {
+    pub span_bytes: Span,
+    pub span_chars: Span,
     pub source: DictionaryId,
     pub term: Term,
     pub record_id: RecordId,
@@ -114,10 +129,11 @@ pub struct RecordLookup {
     pub source_sorting_frequency: Option<FrequencyValue>,
 }
 
-impl From<wordbase::RecordLookup> for RecordLookup {
-    fn from(value: wordbase::RecordLookup) -> Self {
+impl From<wordbase::RecordEntry> for RecordEntry {
+    fn from(value: wordbase::RecordEntry) -> Self {
         Self {
-            bytes_scanned: value.bytes_scanned,
+            span_bytes: value.span_bytes,
+            span_chars: value.span_chars,
             source: value.source,
             term: value.term.into(),
             record_id: value.record_id,
@@ -128,19 +144,19 @@ impl From<wordbase::RecordLookup> for RecordLookup {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Union)]
+#[derive(Debug, Clone, Union)]
 #[oai(discriminator_name = "kind")]
 pub enum FrequencyValue {
     Rank(FrequencyRank),
     Occurrence(FrequencyOccurrence),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Object)]
+#[derive(Debug, Clone, Object)]
 pub struct FrequencyRank {
     pub rank: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Object)]
+#[derive(Debug, Clone, Object)]
 pub struct FrequencyOccurrence {
     pub occurrence: i64,
 }
