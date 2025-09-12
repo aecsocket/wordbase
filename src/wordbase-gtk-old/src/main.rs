@@ -48,11 +48,9 @@ use {
     tracing::{error, level_filters::LevelFilter, warn},
     tracing_subscriber::EnvFilter,
     wordbase::{Profile, ProfileId},
-    wordbase_engine::{Engine, EngineEvent},
-    wordbase_server::HTTP_PORT,
 };
 
-const APP_ID: &str = "io.github.aecsocket.Wordbase";
+const APP_ID: &str = "app.wordbase.Wordbase";
 
 fn main() {
     tracing_subscriber::fmt()
@@ -336,13 +334,24 @@ async fn init(sender: AsyncComponentSender<App>) -> Result<()> {
 
 fn parse_profile_id(settings: &gio::Settings) -> ProfileId {
     let profile_str = settings.string(PROFILE);
-    profile_str.parse::<i64>().map(ProfileId).unwrap_or_else(|_| {
-        let default_id = *engine().profiles().keys().next().expect("at least one profile should exist");
-        settings.set(PROFILE, default_id.0.to_string())
-            .expect("failed to reset profile ID");
-        warn!("Profile ID was {profile_str:?} which is not a valid integer, reset to {default_id:?}");
-        default_id
-    })
+    profile_str
+        .parse::<i64>()
+        .map(ProfileId)
+        .unwrap_or_else(|_| {
+            let default_id = *engine()
+                .profiles()
+                .keys()
+                .next()
+                .expect("at least one profile should exist");
+            settings
+                .set(PROFILE, default_id.0.to_string())
+                .expect("failed to reset profile ID");
+            warn!(
+                "Profile ID was {profile_str:?} which is not a valid integer, reset to \
+                 {default_id:?}"
+            );
+            default_id
+        })
 }
 
 fn setup_profile() {

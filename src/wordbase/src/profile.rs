@@ -1,5 +1,5 @@
 use {
-    crate::{Engine, IndexMap, NotFound},
+    crate::{IndexMap, NotFound, Wordbase},
     anyhow::{Context, Result, bail},
     arc_swap::ArcSwap,
     derive_more::Deref,
@@ -22,17 +22,17 @@ impl Profiles {
             .collect::<IndexMap<_, _>>();
         Ok(Self(profiles))
     }
+
+    pub(super) async fn sync(db: &Pool<Sqlite>, profiles: &ArcSwap<Profiles>) -> Result<()> {
+        let fetched = Profiles::fetch(db)
+            .await
+            .context("failed to sync profiles")?;
+        profiles.store(Arc::new(fetched));
+        Ok(())
+    }
 }
 
-pub(crate) async fn sync_profiles(db: &Pool<Sqlite>, profiles: &ArcSwap<Profiles>) -> Result<()> {
-    let fetched = Profiles::fetch(db)
-        .await
-        .context("failed to sync profiles")?;
-    profiles.store(Arc::new(fetched));
-    Ok(())
-}
-
-impl Engine {
+impl Wordbase {
     #[must_use]
     pub fn profiles(&self) -> Arc<Profiles> {
         self.profiles.load().clone()
@@ -47,7 +47,7 @@ impl Engine {
             .last_insert_rowid();
         let id = ProfileId(id);
 
-        sync_profiles(&self.db, &self.profiles).await?;
+        Profiles::sync(&self.db, &self.profiles).await?;
         Ok(id)
     }
 
@@ -90,7 +90,7 @@ impl Engine {
         .context("failed to copy enabled dictionaries")?;
         tx.commit().await.context("failed to commit transaction")?;
 
-        sync_profiles(&self.db, &self.profiles).await?;
+        Profiles::sync(&self.db, &self.profiles).await?;
         Ok(new_id)
     }
 
@@ -102,7 +102,7 @@ impl Engine {
             bail!(NotFound);
         }
 
-        sync_profiles(&self.db, &self.profiles).await?;
+        Profiles::sync(&self.db, &self.profiles).await?;
         Ok(())
     }
 
@@ -120,7 +120,7 @@ impl Engine {
         .execute(&self.db)
         .await?;
 
-        sync_profiles(&self.db, &self.profiles).await?;
+        Profiles::sync(&self.db, &self.profiles).await?;
         Ok(())
     }
 
@@ -137,7 +137,7 @@ impl Engine {
         .execute(&self.db)
         .await?;
 
-        sync_profiles(&self.db, &self.profiles).await?;
+        Profiles::sync(&self.db, &self.profiles).await?;
         Ok(())
     }
 }
@@ -196,48 +196,51 @@ const _: () = {
 
     #[uniffi::export(async_runtime = "tokio")]
     impl Wordbase {
-        pub fn profiles(&self) -> HashMap<ProfileId, Profile> {
-            self.0
-                .profiles()
+        #[uniffi::method(name = "profiles")]
+        pub fn ffi_profiles(&self) -> HashMap<ProfileId, Profile> {
+            self.profiles()
                 .iter()
                 .map(|(id, profile)| (*id, (**profile).clone()))
                 .collect()
         }
 
-        pub async fn add_profile(&self, name: Option<NormString>) -> FfiResult<ProfileId> {
-            Ok(self.0.add_profile(name).await?)
+        #[uniffi::method(name = "add_profile")]
+        pub async fn ffi_add_profile(&self, name: Option<NormString>) -> FfiResult<ProfileId> {
+            Ok(self.add_profile(name).await?)
         }
 
-        pub async fn copy_profile(
+        #[uniffi::method(name = "copy_profile")]
+        pub async fn ffi_copy_profile(
             &self,
             src_id: ProfileId,
             new_name: Option<NormString>,
         ) -> FfiResult<ProfileId> {
-            self.0
-                .copy_profile(src_id, new_name)
+            self.copy_profile(src_id, new_name)
                 .await
                 .map_err(WordbaseError::Ffi)
         }
 
-        pub async fn remove_profile(&self, id: ProfileId) -> FfiResult<()> {
-            Ok(self.0.remove_profile(id).await?)
+        #[uniffi::method(name = "remove_profile")]
+        pub async fn ffi_remove_profile(&self, id: ProfileId) -> FfiResult<()> {
+            Ok(self.remove_profile(id).await?)
         }
 
-        pub async fn set_profile_name(
+        #[uniffi::method(name = "set_profile_name")]
+        pub async fn ffi_set_profile_name(
             &self,
             profile_id: ProfileId,
             name: Option<NormString>,
         ) -> FfiResult<()> {
-            Ok(self.0.set_profile_name(profile_id, name).await?)
+            Ok(self.set_profile_name(profile_id, name).await?)
         }
 
-        pub async fn set_font_family(
+        #[uniffi::method(name = "set_font_family")]
+        pub async fn ffi_set_font_family(
             &self,
             profile_id: ProfileId,
             font_family: Option<String>,
         ) -> FfiResult<()> {
             Ok(self
-                .0
                 .set_font_family(profile_id, font_family.as_deref())
                 .await?)
         }

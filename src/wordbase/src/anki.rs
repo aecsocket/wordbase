@@ -1,5 +1,8 @@
 use {
-    crate::{Engine, IndexSet, lang, profile::sync_profiles},
+    crate::{
+        IndexSet, Wordbase, lang,
+        profile::{Profiles, sync_profiles},
+    },
     anyhow::{Context, Result},
     itertools::Itertools,
     maud::html,
@@ -10,7 +13,7 @@ use {
     },
 };
 
-impl Engine {
+impl Wordbase {
     pub fn build_term_note(
         &self,
         sentence: &str,
@@ -103,7 +106,7 @@ impl Engine {
         .execute(&self.db)
         .await?;
 
-        sync_profiles(&self.db, &self.profiles).await?;
+        Profiles::sync(&self.db, &self.profiles).await?;
         Ok(())
     }
 }
@@ -281,7 +284,7 @@ const _: () = {
 
     #[uniffi::export(async_runtime = "tokio")]
     impl Wordbase {
-        pub fn build_term_note(
+        pub fn ffi_build_term_note(
             &self,
             sentence: &str,
             entries: &[RecordEntry],
@@ -290,7 +293,7 @@ const _: () = {
             Ok(self.0.build_term_note(sentence, entries, term)?)
         }
 
-        pub async fn set_anki_deck(
+        pub async fn ffi_set_anki_deck(
             &self,
             profile_id: ProfileId,
             deck: Option<String>,
@@ -298,7 +301,7 @@ const _: () = {
             Ok(self.0.set_anki_deck(profile_id, deck.as_deref()).await?)
         }
 
-        pub async fn set_anki_note_type(
+        pub async fn ffi_set_anki_note_type(
             &self,
             profile_id: ProfileId,
             note_type: Option<String>,

@@ -3,7 +3,7 @@ mod yomichan_audio;
 mod yomitan;
 
 use {
-    crate::{CHANNEL_BUF_CAP, Engine, dictionary::sync_dictionaries},
+    crate::{CHANNEL_BUF_CAP, Wordbase, dictionary::Dictionaries},
     anyhow::{Context, Result},
     derive_more::{Display, Error, From},
     futures::{Stream, TryStreamExt, future::BoxFuture, stream::FuturesUnordered},
@@ -178,7 +178,7 @@ pub enum ImportError {
     Other(anyhow::Error),
 }
 
-impl Engine {
+impl Wordbase {
     pub fn import_dictionary<A: OpenArchive + 'static>(
         &self,
         open_archive: A,
@@ -236,7 +236,7 @@ impl Engine {
                 })?
                 .map_err(|source| ImportError::Import { kind, source })?;
 
-            sync_dictionaries(&db, &dictionaries).await?;
+            Dictionaries::sync(&db, &dictionaries).await?;
             yield ImportEvent::Done(id);
         }
     }
@@ -285,11 +285,12 @@ const _: () = {
 
     #[uniffi::export(async_runtime = "tokio")]
     impl Wordbase {
-        pub async fn import_dictionary(
+        #[uniffi::method(name = "import_dictionary")]
+        pub async fn ffi_import_dictionary(
             &self,
             callback: Arc<dyn ImportDictionaryCallback>,
         ) -> FfiResult<DictionaryId> {
-            let events = self.0.import_dictionary({
+            let events = self.import_dictionary({
                 let callback = callback.clone();
                 move || {
                     let callback = callback.clone();

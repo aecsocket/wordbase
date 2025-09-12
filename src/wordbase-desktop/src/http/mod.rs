@@ -1,3 +1,4 @@
+//! Exposes [`Engine`] over an HTTP REST API server.
 #![allow(clippy::unused_async, reason = "API endpoints are inherently async")]
 
 use {
@@ -12,7 +13,7 @@ use {
     },
     std::{fmt::Display, sync::Arc},
     tokio::net::ToSocketAddrs,
-    wordbase::{Dictionary, DictionaryId, Engine, NotFound, Profile, ProfileId},
+    wordbase::{Dictionary, DictionaryId, NotFound, Profile, ProfileId, Wordbase, lookup::Lookups},
 };
 
 // mod anki; // TODO
@@ -21,22 +22,21 @@ mod lookup;
 mod profile;
 
 /// Default port for serving the HTTP server on.
-pub const SERVER_DEFAULT_PORT: u16 = 9518;
+pub const DEFAULT_PORT: u16 = 9518;
 
 /// Runs the HTTP REST API server at the given address.
-///
-/// See [`server`](self).
 ///
 /// # Errors
 ///
 /// Errors if there is an unrecoverable server error.
 pub async fn serve(
-    engine: Engine,
+    engine: Wordbase,
+    lookups: Lookups,
     addr: impl ToSocketAddrs + Send + Display,
 ) -> anyhow::Result<()> {
     let addr_str = addr.to_string();
     let v1 = OpenApiService::new(
-        V1 { engine },
+        App { engine, lookups },
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION"),
     )
@@ -61,18 +61,19 @@ pub async fn serve(
         .with_context(|| format!("failed to run server on {addr_str}"))
 }
 
-struct V1 {
-    engine: Engine,
+struct App {
+    engine: Wordbase,
+    lookups: Lookups,
 }
 
 #[OpenApi]
-impl V1 {
+impl App {
     #[oai(path = "/lookup/sentence", method = "post")]
     async fn lookup_sentence(
         &self,
         req: Json<lookup::Sentence>,
     ) -> Result<Json<Vec<lookup::RecordEntry>>> {
-        lookup::sentence(&self.engine, req.0).await.map(Json)
+        lookup::sentence(self, req.0).await.map(Json)
     }
 
     #[oai(path = "/lookup/lemma", method = "post")]
@@ -80,7 +81,7 @@ impl V1 {
         &self,
         req: Json<lookup::Lemma>,
     ) -> Result<Json<Vec<lookup::RecordEntry>>> {
-        lookup::lemma(&self.engine, req.0).await.map(Json)
+        lookup::lemma(self, req.0).await.map(Json)
     }
 
     #[oai(path = "/lookup/deinflect", method = "post")]
@@ -88,27 +89,27 @@ impl V1 {
         &self,
         req: Json<lookup::Deinflect>,
     ) -> Json<Vec<lookup::Deinflection>> {
-        Json(lookup::deinflect(&self.engine, req.0).await)
+        Json(lookup::deinflect(self, req.0).await)
     }
 
     #[oai(path = "/profile", method = "get")]
     async fn profile_index(&self) -> Json<Vec<Arc<Profile>>> {
-        Json(profile::index(&self.engine).await)
+        Json(profile::index(self).await)
     }
 
     #[oai(path = "/profile/:profile_id", method = "get")]
     async fn profile_find(&self, profile_id: Path<ProfileId>) -> Result<Json<Arc<Profile>>> {
-        profile::find(&self.engine, profile_id.0).await.map(Json)
+        profile::find(self, profile_id.0).await.map(Json)
     }
 
     #[oai(path = "/profile/:profile_id", method = "delete")]
     async fn profile_delete(&self, profile_id: Path<ProfileId>) -> Result<()> {
-        profile::delete(&self.engine, profile_id.0).await
+        profile::delete(self, profile_id.0).await
     }
 
     #[oai(path = "/profile", method = "put")]
     async fn profile_add(&self, req: Json<profile::Add>) -> Result<Json<profile::AddResponse>> {
-        profile::add(&self.engine, req.0).await.map(Json)
+        profile::add(self, req.0).await.map(Json)
     }
 
     #[oai(path = "/profile/:profile_id/copy", method = "post")]
@@ -117,14 +118,12 @@ impl V1 {
         profile_id: Path<ProfileId>,
         req: Json<profile::Add>,
     ) -> Result<Json<profile::AddResponse>> {
-        profile::copy(&self.engine, profile_id.0, req.0)
-            .await
-            .map(Json)
+        profile::copy(self, profile_id.0, req.0).await.map(Json)
     }
 
     #[oai(path = "/dictionary", method = "get")]
     async fn dictionary_index(&self) -> Json<Vec<Arc<Dictionary>>> {
-        Json(dictionary::index(&self.engine).await)
+        Json(dictionary::index(self).await)
     }
 
     #[oai(path = "/dictionary/:dictionary_id", method = "get")]
@@ -132,14 +131,12 @@ impl V1 {
         &self,
         dictionary_id: Path<DictionaryId>,
     ) -> Result<Json<Arc<Dictionary>>> {
-        dictionary::find(&self.engine, dictionary_id.0)
-            .await
-            .map(Json)
+        dictionary::find(self, dictionary_id.0).await.map(Json)
     }
 
     #[oai(path = "/dictionary/:dictionary_id", method = "delete")]
     async fn dictionary_delete(&self, dictionary_id: Path<DictionaryId>) -> Result<()> {
-        dictionary::delete(&self.engine, dictionary_id.0).await
+        dictionary::delete(self, dictionary_id.0).await
     }
 
     #[oai(path = "/dictionary/import", method = "post")]
@@ -147,22 +144,22 @@ impl V1 {
         &self,
         req: dictionary::Import,
     ) -> EventStream<BoxStream<'static, dictionary::ImportEvent>> {
-        dictionary::import(&self.engine, req).await
+        dictionary::import(self, req).await
     }
 
     #[oai(path = "/dictionary/position/swap", method = "post")]
     async fn dictionary_position_swap(&self, req: Json<dictionary::PositionSwap>) -> Result<()> {
-        dictionary::position_swap(&self.engine, req.0).await
+        dictionary::position_swap(self, req.0).await
     }
 
     #[oai(path = "/dictionary/enable", method = "post")]
     async fn dictionary_enable(&self, req: Json<dictionary::ToggleEnable>) -> Result<()> {
-        dictionary::enable(&self.engine, req.0).await
+        dictionary::enable(self, req.0).await
     }
 
     #[oai(path = "/dictionary/disable", method = "post")]
     async fn dictionary_disable(&self, req: Json<dictionary::ToggleEnable>) -> Result<()> {
-        dictionary::disable(&self.engine, req.0).await
+        dictionary::disable(self, req.0).await
     }
 }
 

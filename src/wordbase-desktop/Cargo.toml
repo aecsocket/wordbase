@@ -18,12 +18,13 @@ workspace = true
 all-features = true
 
 [features]
-server = ["wordbase/poem", "dep:async-stream", "dep:poem", "dep:poem-openapi"]
+http = ["wordbase/poem", "dep:async-stream", "dep:poem", "dep:poem-openapi"]
 
 [dependencies]
 anyhow            = { workspace = true }
 async-channel     = { workspace = true }
 async-stream      = { workspace = true, optional = true }
+bytes             = { workspace = true }
 directories       = { workspace = true }
 futures           = { workspace = true }
 poem              = { workspace = true, optional = true, features = ["anyhow"] }
@@ -34,4 +35,3 @@ tokio-tungstenite = { workspace = true }
 tokio-util        = { workspace = true }
 tracing           = { workspace = true }
 wordbase          = { workspace = true }
-bytes         = { workspace = true }

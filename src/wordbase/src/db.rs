@@ -18,7 +18,7 @@ pub async fn setup(path: &Path) -> Result<Pool<Sqlite>> {
     sqlx::migrate!()
         .run(&db)
         .await
-        .context("failed to setup database")?;
+        .context("failed to run migrations")?;
     Ok(db)
 }
 

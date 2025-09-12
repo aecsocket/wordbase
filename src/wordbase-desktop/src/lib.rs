@@ -1,11 +1,9 @@
 #![doc = include_str!("../README.md")]
 
-#[cfg(feature = "server")]
-mod server;
+#[cfg(feature = "http")]
+pub mod http;
 mod texthooker;
 
-#[cfg(feature = "server")]
-pub use server::*;
 pub use texthooker::*;
 use {
     anyhow::{Context, Result},
@@ -21,7 +19,7 @@ use {
 ///
 /// Errors if [`directories::ProjectDirs::from`] returns [`None`].
 pub fn data_dir() -> Result<PathBuf> {
-    let dirs = directories::ProjectDirs::from("dance.aruarian", "aecsocket", "Wordbase")
+    let dirs = directories::ProjectDirs::from("app.wordbase", "aecsocket", "Wordbase")
         .context("failed to get default app directories")?;
     Ok(dirs.data_dir().to_path_buf())
 }

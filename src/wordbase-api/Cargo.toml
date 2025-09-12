@@ -21,6 +21,8 @@ all-features = true
 poem        = ["dep:poem", "dep:poem-openapi"]
 render-html = ["dep:maud"]
 uniffi      = ["dep:uniffi", "dep:data-encoding"]
+serde       = ["dep:serde"]
+rkyv        = ["dep:rkyv"]
 
 [dependencies]
 bytes         = { workspace = true, features = ["serde"] }
@@ -30,9 +32,10 @@ maud          = { workspace = true, optional = true }
 paste         = { workspace = true }
 poem          = { workspace = true, optional = true }
 poem-openapi  = { workspace = true, optional = true }
-serde         = { workspace = true, features = ["derive"] }
+serde         = { workspace = true, optional = true, features = ["derive"] }
 serde_json    = { workspace = true }
 uniffi        = { workspace = true, optional = true }
+rkyv          = { workspace = true, optional = true, features = ["bytes-1"] }
 
 derive_more = { workspace = true, features = [
   "debug",

@@ -1,17 +1,18 @@
 use {
-    crate::server::Term,
+    crate::http::{App, Term},
     poem::Result,
     poem_openapi::{
         Object, Union,
         types::{Any, Example},
     },
     std::ops::Range,
-    wordbase::{DictionaryId, Engine, ProfileId, Record, RecordId, Span},
+    wordbase::{DictionaryId, ProfileId, Record, RecordId, Span},
 };
 
-pub async fn sentence(engine: &Engine, req: Sentence) -> Result<Vec<RecordEntry>> {
-    Ok(engine
-        .lookup(req.profile_id, &req.sentence, req.cursor)
+pub async fn sentence(app: &App, req: Sentence) -> Result<Vec<RecordEntry>> {
+    Ok(app
+        .lookups
+        .lookup(&app.engine, req.profile_id, &req.sentence, req.cursor)
         .await?
         .into_iter()
         .map(RecordEntry::from)
@@ -36,9 +37,10 @@ impl Example for Sentence {
     }
 }
 
-pub async fn lemma(engine: &Engine, req: Lemma) -> Result<Vec<RecordEntry>> {
-    Ok(engine
-        .lookup_lemma(req.profile_id, &req.lemma)
+pub async fn lemma(app: &App, req: Lemma) -> Result<Vec<RecordEntry>> {
+    Ok(app
+        .lookups
+        .lookup_lemma(&app.engine, req.profile_id, &req.lemma)
         .await?
         .into_iter()
         .map(RecordEntry::from)
@@ -61,8 +63,8 @@ impl Example for Lemma {
     }
 }
 
-pub async fn deinflect(engine: &Engine, req: Deinflect) -> Vec<Deinflection> {
-    engine
+pub async fn deinflect(app: &App, req: Deinflect) -> Vec<Deinflection> {
+    app.lookups
         .deinflect(&req.text, req.cursor)
         .into_iter()
         .map(Deinflection::from)

@@ -1,4 +1,5 @@
 use {
+    crate::http::App,
     anyhow::Context,
     bytes::Bytes,
     futures::{StreamExt, stream::BoxStream},
@@ -6,36 +7,37 @@ use {
     poem_openapi::{Multipart, Object, Union, payload::EventStream, types::multipart::Upload},
     std::{io::Cursor, sync::Arc},
     wordbase::{
-        Dictionary, DictionaryId, DictionaryKind, DictionaryMeta, Engine, ProfileId,
+        Dictionary, DictionaryId, DictionaryKind, DictionaryMeta, ProfileId,
         import::{self, Archive, ImportProgress},
     },
 };
 
-pub async fn index(engine: &Engine) -> Vec<Arc<Dictionary>> {
-    engine.dictionaries().values().cloned().collect()
+pub async fn index(app: &App) -> Vec<Arc<Dictionary>> {
+    app.engine.dictionaries().values().cloned().collect()
 }
 
-pub async fn find(engine: &Engine, dictionary_id: DictionaryId) -> Result<Arc<Dictionary>> {
-    Ok(engine
+pub async fn find(app: &App, dictionary_id: DictionaryId) -> Result<Arc<Dictionary>> {
+    Ok(app
+        .engine
         .dictionaries()
         .get(&dictionary_id)
         .ok_or(NotFoundError)?
         .clone())
 }
 
-pub async fn delete(engine: &Engine, dictionary_id: DictionaryId) -> Result<()> {
-    engine.remove_dictionary(dictionary_id).await?;
+pub async fn delete(app: &App, dictionary_id: DictionaryId) -> Result<()> {
+    app.engine.remove_dictionary(dictionary_id).await?;
     Ok(())
 }
 
-pub async fn import(engine: &Engine, req: Import) -> EventStream<BoxStream<'static, ImportEvent>> {
+pub async fn import(app: &App, req: Import) -> EventStream<BoxStream<'static, ImportEvent>> {
     let import = req
         .archive
         .into_vec()
         .await
         .map(|archive| {
             let archive = Bytes::from(archive);
-            engine.import_dictionary(move || {
+            app.engine.import_dictionary(move || {
                 let archive = Cursor::new(archive.clone());
                 async move { anyhow::Ok(Box::new(archive) as Box<dyn Archive>) }
             })
@@ -109,8 +111,10 @@ pub struct ImportErr {
     pub error: String,
 }
 
-pub async fn position_swap(engine: &Engine, req: PositionSwap) -> Result<()> {
-    engine.swap_dictionary_positions(req.a_id, req.b_id).await?;
+pub async fn position_swap(app: &App, req: PositionSwap) -> Result<()> {
+    app.engine
+        .swap_dictionary_positions(req.a_id, req.b_id)
+        .await?;
     Ok(())
 }
 
@@ -120,15 +124,15 @@ pub struct PositionSwap {
     pub b_id: DictionaryId,
 }
 
-pub async fn enable(engine: &Engine, req: ToggleEnable) -> Result<()> {
-    engine
+pub async fn enable(app: &App, req: ToggleEnable) -> Result<()> {
+    app.engine
         .enable_dictionary(req.profile_id, req.dictionary_id)
         .await?;
     Ok(())
 }
 
-pub async fn disable(engine: &Engine, req: ToggleEnable) -> Result<()> {
-    engine
+pub async fn disable(app: &App, req: ToggleEnable) -> Result<()> {
+    app.engine
         .disable_dictionary(req.profile_id, req.dictionary_id)
         .await?;
     Ok(())

@@ -1,6 +1,6 @@
 [package]
-description = "Dictionary and word lookup service - desktop application"
-name        = "wordbase-desktop-new"
+description = "Dictionary and word lookup service - GTK application"
+name        = "wordbase-gtk"
 
 authors.workspace      = true
 categories.workspace   = true
@@ -17,31 +17,29 @@ workspace = true
 all-features = true
 
 [dependencies]
-wordbase        = { workspace = true }
-wordbase-engine = { workspace = true }
-wordbase-server = { workspace = true }
+wordbase         = { workspace = true }
+wordbase-desktop = { workspace = true }
 
-anyhow      = { workspace = true }
-bytes       = { workspace = true }
-directories = { workspace = true }
-indexmap    = { workspace = true }
-maud        = { workspace = true }
-notify      = { workspace = true }
-
+anyhow             = { workspace = true }
 arc-swap           = { workspace = true }
 ashpd              = { workspace = true, features = ["gtk4"] }
 bimap              = { workspace = true }
+bytes              = { workspace = true }
 bzip2              = { workspace = true, features = ["static"] }
 data-encoding      = { workspace = true }
 derive_more        = { workspace = true, features = ["display"] }
+directories        = { workspace = true }
 foldhash           = { workspace = true }
 form_urlencoded    = { workspace = true }
 futures            = { workspace = true }
 gio                = { workspace = true }
 glib               = { workspace = true, features = ["log"] }
 gtk4               = { workspace = true, features = ["gnome_47", "blueprint"] }
+indexmap           = { workspace = true }
 libadwaita         = { workspace = true, features = ["v1_7"] }
 libspa             = { workspace = true }
+maud               = { workspace = true }
+notify             = { workspace = true }
 pipewire           = { workspace = true }
 rand               = { workspace = true }
 relm4              = { workspace = true, features = ["libadwaita", "gnome_47"] }

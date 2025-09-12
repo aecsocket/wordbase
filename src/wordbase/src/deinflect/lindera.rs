@@ -30,11 +30,19 @@ pub struct Lindera {
 const TOKEN_LOOKAHEAD: usize = 8;
 
 impl Lindera {
-    pub fn new() -> Result<Self> {
-        Self::with_lookahead(TOKEN_LOOKAHEAD)
+    pub async fn new() -> Result<Self> {
+        Self::with_lookahead(TOKEN_LOOKAHEAD).await
     }
 
-    pub fn with_lookahead(lookahead: usize) -> Result<Self> {
+    pub async fn with_lookahead(lookahead: usize) -> Result<Self> {
+        let (this, ()) = tokio::join!(
+            tokio::task::spawn_blocking(move || Self::load_blocking(lookahead)),
+            jmdict_furigana::init(),
+        );
+        this?
+    }
+
+    fn load_blocking(lookahead: usize) -> Result<Self> {
         let dictionary = load_embedded_dictionary(DictionaryKind::UniDic)
             .context("failed to load dictionary")?;
         let segmenter = Segmenter::new(Mode::Normal, dictionary, None);

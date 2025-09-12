@@ -13,17 +13,527 @@
 
 use {
     derive_more::{Deref, DerefMut, Display},
-    serde::{Deserialize, Serialize},
-    std::collections::HashMap,
-    std::fmt,
+    std::{collections::HashMap, fmt},
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(untagged)
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(
+        serialize_bounds(
+            __S: rkyv::ser::Writer + rkyv::ser::Allocator,
+            __S::Error: rkyv::rancor::Source
+        ),
+        deserialize_bounds(__D::Error: rkyv::rancor::Source),
+        bytecheck(
+            bounds(
+                __C: rkyv::validation::ArchiveContext
+            )
+        )
+    )
+)]
 pub enum Content {
     String(String),
-    Element(Box<Element>),
-    Content(Vec<Content>),
+    Element(#[rkyv(omit_bounds)] Box<Element>),
+    Content(#[rkyv(omit_bounds)] Vec<Content>),
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(tag = "tag", rename_all = "kebab-case", deny_unknown_fields)
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+pub enum Element {
+    Br(LineBreakElement),
+    Ruby(UnstyledElement),
+    Rt(UnstyledElement),
+    Rp(UnstyledElement),
+    Table(UnstyledElement),
+    Thead(UnstyledElement),
+    Tbody(UnstyledElement),
+    Tfoot(UnstyledElement),
+    Tr(UnstyledElement),
+    Td(TableElement),
+    Th(TableElement),
+    Span(StyledElement),
+    Div(StyledElement),
+    Ol(StyledElement),
+    Ul(StyledElement),
+    Li(StyledElement),
+    Details(StyledElement),
+    Summary(StyledElement),
+    Img(ImageElement),
+    A(LinkElement),
+}
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "camelCase", deny_unknown_fields)
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct LineBreakElement {
+    pub data: Option<Data>,
+}
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "camelCase", deny_unknown_fields)
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct UnstyledElement {
+    pub content: Option<Content>,
+    pub data: Option<Data>,
+    pub lang: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "camelCase", deny_unknown_fields)
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct TableElement {
+    pub content: Option<Content>,
+    pub data: Option<Data>,
+    pub col_span: Option<i64>,
+    pub row_span: Option<i64>,
+    pub style: Option<ContentStyle>,
+    pub lang: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "camelCase", deny_unknown_fields)
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct StyledElement {
+    pub content: Option<Content>,
+    pub data: Option<Data>,
+    pub style: Option<ContentStyle>,
+    pub title: Option<String>,
+    pub open: Option<bool>,
+    pub lang: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "camelCase")
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct ImageElement {
+    #[cfg_attr(feature = "serde", serde(flatten))]
+    pub base: ImageElementBase,
+    pub vertical_align: Option<VerticalAlign>,
+    pub border: Option<String>,
+    pub border_radius: Option<String>,
+    pub size_units: Option<SizeUnits>,
+}
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "camelCase")
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct ImageElementBase {
+    pub data: Option<Data>,
+    pub path: String,
+    pub width: Option<f64>,
+    pub height: Option<f64>,
+    pub preferred_width: Option<f64>,
+    pub preferred_height: Option<f64>,
+    pub title: Option<String>,
+    pub alt: Option<String>,
+    pub description: Option<String>,
+    pub pixelated: Option<bool>,
+    pub image_rendering: Option<ImageRendering>,
+    pub image_appearance: Option<ImageAppearance>,
+    pub background: Option<bool>,
+    pub collapsed: Option<bool>,
+    pub collapsible: Option<bool>,
+}
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "camelCase", deny_unknown_fields)
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct LinkElement {
+    pub content: Option<Content>,
+    pub href: String,
+    pub lang: Option<String>,
+}
+
+// styling
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "camelCase", deny_unknown_fields)
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct ContentStyle {
+    pub font_style: Option<FontStyle>,
+    pub font_weight: Option<FontWeight>,
+    pub font_size: Option<String>,
+    pub color: Option<String>,
+    pub background: Option<String>,
+    pub background_color: Option<String>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub text_decoration_line: Vec<TextDecorationLine>,
+    pub text_decoration_style: Option<TextDecorationStyle>,
+    pub text_decoration_color: Option<String>,
+    pub border_color: Option<String>,
+    pub border_style: Option<String>,
+    pub border_radius: Option<String>,
+    pub border_width: Option<String>,
+    pub clip_path: Option<String>,
+    pub vertical_align: Option<VerticalAlign>,
+    pub text_align: Option<TextAlign>,
+    pub text_emphasis: Option<String>,
+    pub text_shadow: Option<String>,
+    pub margin: Option<String>,
+    pub margin_top: Option<NumberOrString>,
+    pub margin_left: Option<NumberOrString>,
+    pub margin_right: Option<NumberOrString>,
+    pub margin_bottom: Option<NumberOrString>,
+    pub padding: Option<String>,
+    pub padding_top: Option<String>,
+    pub padding_left: Option<String>,
+    pub padding_right: Option<String>,
+    pub padding_bottom: Option<String>,
+    pub word_break: Option<WordBreak>,
+    pub white_space: Option<String>,
+    pub cursor: Option<String>,
+    pub list_style_type: Option<String>,
+}
+
+#[cfg(feature = "serde")]
+macro_rules! display_as_serialize {
+    ($T:ty) => {
+        impl std::fmt::Display for $T {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                let serializer = FormatterSerializer { f };
+                serde::Serialize::serialize(self, serializer)
+            }
+        }
+    };
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "kebab-case")
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+pub enum VerticalAlign {
+    Baseline,
+    Sub,
+    Super,
+    TextTop,
+    TextBottom,
+    Middle,
+    Top,
+    Bottom,
+}
+
+#[cfg(feature = "serde")]
+display_as_serialize!(VerticalAlign);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "kebab-case")
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+pub enum TextDecorationLine {
+    Underline,
+    Overline,
+    LineThrough,
+}
+
+#[cfg(feature = "serde")]
+display_as_serialize!(TextDecorationLine);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "kebab-case")
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+pub enum TextDecorationStyle {
+    Solid,
+    Double,
+    Dotted,
+    Dashed,
+    Wavy,
+}
+
+#[cfg(feature = "serde")]
+display_as_serialize!(TextDecorationStyle);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "kebab-case")
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+pub enum FontStyle {
+    Normal,
+    Italic,
+}
+
+#[cfg(feature = "serde")]
+display_as_serialize!(FontStyle);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "kebab-case")
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+pub enum FontWeight {
+    Normal,
+    Bold,
+}
+
+#[cfg(feature = "serde")]
+display_as_serialize!(FontWeight);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "kebab-case")
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+pub enum WordBreak {
+    Normal,
+    BreakAll,
+    KeepAll,
+}
+
+#[cfg(feature = "serde")]
+display_as_serialize!(WordBreak);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "kebab-case")
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+pub enum TextAlign {
+    Start,
+    End,
+    Left,
+    Right,
+    Center,
+    Justify,
+}
+
+#[cfg(feature = "serde")]
+display_as_serialize!(TextAlign);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "kebab-case")
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+pub enum SizeUnits {
+    Px,
+    Em,
+}
+
+#[cfg(feature = "serde")]
+display_as_serialize!(SizeUnits);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "kebab-case")
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+pub enum ImageRendering {
+    Auto,
+    Pixelated,
+    CrispEdges,
+}
+
+#[cfg(feature = "serde")]
+display_as_serialize!(ImageRendering);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "kebab-case")
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+pub enum ImageAppearance {
+    Auto,
+    Monochrome,
+}
+
+#[cfg(feature = "serde")]
+display_as_serialize!(ImageAppearance);
+
+#[derive(Debug, Display, Clone)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(untagged)
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+pub enum NumberOrString {
+    Number(f64),
+    String(String),
+}
+
+#[derive(Debug, Clone, Default, Deref, DerefMut)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+pub struct Data(pub HashMap<String, String>);
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_newtype!(Data, HashMap<String, String>);
+
+// utils
+
+struct FormatterSerializer<'a, 'b> {
+    pub f: &'a mut fmt::Formatter<'b>,
+}
+
+impl serde::Serializer for FormatterSerializer<'_, '_> {
+    type Ok = ();
+    type Error = fmt::Error;
+
+    fn serialize_unit_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        variant: &'static str,
+    ) -> Result<Self::Ok, Self::Error> {
+        write!(self.f, "{variant}")
+    }
+
+    serde::__serialize_unimplemented! {
+        bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str bytes none some
+        unit unit_struct newtype_struct newtype_variant
+        seq tuple tuple_struct tuple_variant map struct struct_variant
+    }
 }
 
 #[cfg(feature = "uniffi")]
@@ -74,323 +584,3 @@ const _: () = {
 
     uniffi::custom_type!(Content, ContentFfi);
 };
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
-#[serde(tag = "tag", rename_all = "kebab-case", deny_unknown_fields)]
-pub enum Element {
-    Br(LineBreakElement),
-    Ruby(UnstyledElement),
-    Rt(UnstyledElement),
-    Rp(UnstyledElement),
-    Table(UnstyledElement),
-    Thead(UnstyledElement),
-    Tbody(UnstyledElement),
-    Tfoot(UnstyledElement),
-    Tr(UnstyledElement),
-    Td(TableElement),
-    Th(TableElement),
-    Span(StyledElement),
-    Div(StyledElement),
-    Ol(StyledElement),
-    Ul(StyledElement),
-    Li(StyledElement),
-    Details(StyledElement),
-    Summary(StyledElement),
-    Img(ImageElement),
-    A(LinkElement),
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct LineBreakElement {
-    pub data: Option<Data>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct UnstyledElement {
-    pub content: Option<Content>,
-    pub data: Option<Data>,
-    pub lang: Option<String>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct TableElement {
-    pub content: Option<Content>,
-    pub data: Option<Data>,
-    pub col_span: Option<i64>,
-    pub row_span: Option<i64>,
-    pub style: Option<ContentStyle>,
-    pub lang: Option<String>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct StyledElement {
-    pub content: Option<Content>,
-    pub data: Option<Data>,
-    pub style: Option<ContentStyle>,
-    pub title: Option<String>,
-    pub open: Option<bool>,
-    pub lang: Option<String>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[serde(rename_all = "camelCase")]
-pub struct ImageElement {
-    #[serde(flatten)]
-    pub base: ImageElementBase,
-    pub vertical_align: Option<VerticalAlign>,
-    pub border: Option<String>,
-    pub border_radius: Option<String>,
-    pub size_units: Option<SizeUnits>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[serde(rename_all = "camelCase")]
-pub struct ImageElementBase {
-    pub data: Option<Data>,
-    pub path: String,
-    pub width: Option<f64>,
-    pub height: Option<f64>,
-    pub preferred_width: Option<f64>,
-    pub preferred_height: Option<f64>,
-    pub title: Option<String>,
-    pub alt: Option<String>,
-    pub description: Option<String>,
-    pub pixelated: Option<bool>,
-    pub image_rendering: Option<ImageRendering>,
-    pub image_appearance: Option<ImageAppearance>,
-    pub background: Option<bool>,
-    pub collapsed: Option<bool>,
-    pub collapsible: Option<bool>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct LinkElement {
-    pub content: Option<Content>,
-    pub href: String,
-    pub lang: Option<String>,
-}
-
-// styling
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ContentStyle {
-    pub font_style: Option<FontStyle>,
-    pub font_weight: Option<FontWeight>,
-    pub font_size: Option<String>,
-    pub color: Option<String>,
-    pub background: Option<String>,
-    pub background_color: Option<String>,
-    #[serde(default)]
-    pub text_decoration_line: Vec<TextDecorationLine>,
-    pub text_decoration_style: Option<TextDecorationStyle>,
-    pub text_decoration_color: Option<String>,
-    pub border_color: Option<String>,
-    pub border_style: Option<String>,
-    pub border_radius: Option<String>,
-    pub border_width: Option<String>,
-    pub clip_path: Option<String>,
-    pub vertical_align: Option<VerticalAlign>,
-    pub text_align: Option<TextAlign>,
-    pub text_emphasis: Option<String>,
-    pub text_shadow: Option<String>,
-    pub margin: Option<String>,
-    pub margin_top: Option<NumberOrString>,
-    pub margin_left: Option<NumberOrString>,
-    pub margin_right: Option<NumberOrString>,
-    pub margin_bottom: Option<NumberOrString>,
-    pub padding: Option<String>,
-    pub padding_top: Option<String>,
-    pub padding_left: Option<String>,
-    pub padding_right: Option<String>,
-    pub padding_bottom: Option<String>,
-    pub word_break: Option<WordBreak>,
-    pub white_space: Option<String>,
-    pub cursor: Option<String>,
-    pub list_style_type: Option<String>,
-}
-
-macro_rules! display_as_serialize {
-    ($T:ty) => {
-        const _: () = {
-            use std::fmt;
-
-            impl fmt::Display for $T {
-                fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                    let serializer = FormatterSerializer { f };
-                    self.serialize(serializer)
-                }
-            }
-        };
-    };
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
-#[serde(rename_all = "kebab-case")]
-pub enum VerticalAlign {
-    Baseline,
-    Sub,
-    Super,
-    TextTop,
-    TextBottom,
-    Middle,
-    Top,
-    Bottom,
-}
-
-display_as_serialize!(VerticalAlign);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
-#[serde(rename_all = "kebab-case")]
-pub enum TextDecorationLine {
-    Underline,
-    Overline,
-    LineThrough,
-}
-
-display_as_serialize!(TextDecorationLine);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
-#[serde(rename_all = "kebab-case")]
-pub enum TextDecorationStyle {
-    Solid,
-    Double,
-    Dotted,
-    Dashed,
-    Wavy,
-}
-
-display_as_serialize!(TextDecorationStyle);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
-#[serde(rename_all = "kebab-case")]
-pub enum FontStyle {
-    Normal,
-    Italic,
-}
-
-display_as_serialize!(FontStyle);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
-#[serde(rename_all = "kebab-case")]
-pub enum FontWeight {
-    Normal,
-    Bold,
-}
-
-display_as_serialize!(FontWeight);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
-#[serde(rename_all = "kebab-case")]
-pub enum WordBreak {
-    Normal,
-    BreakAll,
-    KeepAll,
-}
-
-display_as_serialize!(WordBreak);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
-#[serde(rename_all = "kebab-case")]
-pub enum TextAlign {
-    Start,
-    End,
-    Left,
-    Right,
-    Center,
-    Justify,
-}
-
-display_as_serialize!(TextAlign);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
-#[serde(rename_all = "kebab-case")]
-pub enum SizeUnits {
-    Px,
-    Em,
-}
-
-display_as_serialize!(SizeUnits);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
-#[serde(rename_all = "kebab-case")]
-pub enum ImageRendering {
-    Auto,
-    Pixelated,
-    CrispEdges,
-}
-
-display_as_serialize!(ImageRendering);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
-#[serde(rename_all = "kebab-case")]
-pub enum ImageAppearance {
-    Auto,
-    Monochrome,
-}
-
-display_as_serialize!(ImageAppearance);
-
-#[derive(Debug, Display, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
-#[serde(untagged)]
-pub enum NumberOrString {
-    Number(f64),
-    String(String),
-}
-
-#[derive(Debug, Clone, Default, Deref, DerefMut, Serialize, Deserialize)]
-pub struct Data(pub HashMap<String, String>);
-
-#[cfg(feature = "uniffi")]
-uniffi::custom_newtype!(Data, HashMap<String, String>);
-
-// utils
-
-struct FormatterSerializer<'a, 'b> {
-    pub f: &'a mut fmt::Formatter<'b>,
-}
-
-impl serde::Serializer for FormatterSerializer<'_, '_> {
-    type Ok = ();
-    type Error = fmt::Error;
-
-    fn serialize_unit_variant(
-        self,
-        _name: &'static str,
-        _variant_index: u32,
-        variant: &'static str,
-    ) -> Result<Self::Ok, Self::Error> {
-        write!(self.f, "{variant}")
-    }
-
-    serde::__serialize_unimplemented! {
-        bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str bytes none some
-        unit unit_struct newtype_struct newtype_variant
-        seq tuple tuple_struct tuple_variant map struct struct_variant
-    }
-}

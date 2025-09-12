@@ -133,19 +133,19 @@ pub enum Audio<'a> {
 #[must_use]
 pub fn render_term(term: &Term) -> Markup {
     match term {
-        Term::Headword { headword } => html! {
+        Term::Headword(headword) => html! {
             ruby {
                 (headword)
             }
         },
-        Term::Reading { reading } => html! {
+        Term::Reading(reading) => html! {
             ruby {
                 rt {
                     (reading)
                 }
             }
         },
-        Term::Full { headword, reading } => {
+        Term::Full(headword, reading) => {
             let parts = lang::jpn::furigana_parts(headword, reading);
             html! {
                 ruby {
@@ -165,12 +165,8 @@ pub fn render_term(term: &Term) -> Markup {
 #[must_use]
 pub fn render_pitch(term: &Term, pitch: &dict::yomitan::Pitch) -> Markup {
     let reading = match term {
-        Term::Full {
-            headword: _,
-            reading,
-        }
-        | Term::Reading { reading } => reading,
-        Term::Headword { headword } => headword,
+        Term::Full(_, reading) | Term::Reading(reading) => reading,
+        Term::Headword(headword) => headword,
     };
 
     let downstep = usize::try_from(pitch.position).unwrap_or(usize::MAX);

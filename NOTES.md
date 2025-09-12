@@ -1,5 +1,67 @@
 # notes - temp
 
+## 11 Sep
+
+Been doing more research on database stuff. LMDB doesn't let me do multiple writes at once to the same Env but different DBs. (I mean LMDB supports it but not `heed`). So:
+- `sled` - last update was 4 years ago, there's a rewrite `1.0.0-alpha` branch but that's alpha..
+- `redb` - beta but fills a similar niche?
+
+## 10 Sep
+
+I want to redesign the data storage to support local-first and cross-device syncing. This will be important later when I add syncing to/from a remote, and keeping your multiple devices in sync.
+- <https://automerge.org/docs/hello/>
+- <https://www.inkandswitch.com/essay/local-first/>
+
+Someone in the Rust discord mentioned making each dictionary its own SQLite DB and attaching them. Hmm..?
+
+Probably not viable since querying many dictionaries would be O(n) and cross-database indices wouldn't work
+
+LMDB?
+
+I want to optimize for 🚀 blazing 🔥 fast 🚀 queries on a headword/reading, so maybe dictionaries are individual LMDB files and we do client-side sorting.
+
+Our current lookup query is:
+```sql
+ORDER BY
+    CASE
+        -- prioritize results where both the headword and reading match the lemma
+        -- e.g. if you typed あらゆる:
+        -- - the first results would be for the kana あらゆる
+        -- - then the kanji like 汎ゆる
+        WHEN base.reading = $2 AND base.headword = $2 THEN 0
+        -- then prioritize results where at least the reading or headword are an exact match
+        -- e.g. in 念じる, usually 念ずる comes up first
+        -- but this is obviously a different reading
+        -- so we want to prioritize 念じる
+        WHEN base.reading = $2 OR base.headword = $2 THEN 1
+        -- all other results at the end
+        ELSE 2
+    END,
+    -- user-specified dictionary sorting position always takes priority
+    dictionary.position,
+    -- put entries without an explicit frequency value last
+    CASE
+        WHEN profile_frequency.mode IS NULL THEN 1
+        ELSE 0
+    END,
+    -- sort by profile-global frequency info
+    CASE
+        -- frequency rank
+        WHEN profile_frequency.mode = 0 THEN  profile_frequency.value
+        -- frequency occurrence
+        WHEN profile_frequency.mode = 1 THEN -profile_frequency.value
+        ELSE 0
+    END,
+    -- sort by source-specific frequency info
+    CASE
+        WHEN source_frequency.mode = 0 THEN  source_frequency.value
+        WHEN source_frequency.mode = 1 THEN -source_frequency.value
+        ELSE 0
+    END
+```
+
+Could we replicate this with LMDB and client-side sorting?
+
 ## 26 Jun
 
 I need a list of "user stories" or like "target scenarios", to focus on what I build next. Right now I can't decide on what to actually work on. Thoughts:

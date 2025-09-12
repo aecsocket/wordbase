@@ -1,15 +1,16 @@
 //! Shared types and logic for Japanese dictionaries.
 
-use {
-    itertools::Itertools as _,
-    serde::{Deserialize, Serialize},
-    std::iter,
-};
+use {itertools::Itertools as _, std::iter};
 
 /// [Mora][mora] position in a word.
 ///
 /// [mora]: https://en.wikipedia.org/wiki/Mora_(linguistics)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct PitchPosition(pub u64);
 
 #[cfg(feature = "uniffi")]
@@ -18,7 +19,12 @@ uniffi::custom_newtype!(PitchPosition, u64);
 /// Category of a word's [pitch][jpa] position.
 ///
 /// [jpa]: https://en.wikipedia.org/wiki/Japanese_pitch_accent
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub enum PitchCategory {
     /// 平板式: first mora is low; all later morae are high.
     ///

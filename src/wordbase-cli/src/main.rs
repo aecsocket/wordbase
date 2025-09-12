@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 
-mod anki;
+// mod anki;
 mod dict;
 mod lookup;
 mod profile;
@@ -17,7 +17,7 @@ use {
     },
     tracing::{info, level_filters::LevelFilter, trace},
     tracing_subscriber::EnvFilter,
-    wordbase::{DictionaryId, Engine, ProfileId},
+    wordbase::{DictionaryId, ProfileId, Wordbase, lookup::Lookups, render::Renderer},
 };
 
 #[derive(Debug, clap::Parser)]
@@ -203,7 +203,7 @@ enum AnkiCommand {
 
 const SERVE_DEFAULT_BIND_ADDR: SocketAddr = SocketAddr::new(
     IpAddr::V4(Ipv4Addr::LOCALHOST),
-    wordbase_desktop::SERVER_DEFAULT_PORT,
+    wordbase_desktop::http::DEFAULT_PORT,
 );
 
 #[tokio::main(flavor = "multi_thread")]
@@ -226,7 +226,7 @@ async fn main() -> Result<()> {
     };
 
     let start = Instant::now();
-    let engine = Engine::new(data_dir)
+    let engine = Wordbase::new(data_dir)
         .await
         .context("failed to create engine")?;
     trace!("Created engine in {:?}", start.elapsed());
@@ -250,6 +250,10 @@ async fn main() -> Result<()> {
         }
     };
 
+    let make_lookups = async { Lookups::new().await.context("failed to setup lookups") };
+
+    let make_renderer = || Renderer::new().context("failed to create renderer");
+
     match args.command {
         Command::Serve { bind_addr } => {
             info!("");
@@ -260,7 +264,7 @@ async fn main() -> Result<()> {
             );
             info!("    http://{bind_addr}/api/docs");
             info!("");
-            wordbase_desktop::serve(engine, bind_addr).await?;
+            wordbase_desktop::http::serve(engine, make_lookups.await?, bind_addr).await?;
         }
         // lookup
         Command::Lookup {
@@ -270,6 +274,7 @@ async fn main() -> Result<()> {
             args.output,
             lookup::lookup(
                 &engine,
+                &make_lookups.await?,
                 &*require_profile()?,
                 &pre_cursor,
                 post_cursor.as_deref(),
@@ -279,7 +284,8 @@ async fn main() -> Result<()> {
         // query
         Command::LookupLemma { lemma } => output(
             args.output,
-            query::lookup_lemma(&engine, &*require_profile()?, &lemma).await?,
+            query::lookup_lemma(&engine, &make_lookups.await?, &*require_profile()?, &lemma)
+                .await?,
         ),
         Command::Render {
             pre_cursor,
@@ -287,6 +293,8 @@ async fn main() -> Result<()> {
         } => {
             query::render(
                 &engine,
+                &make_lookups.await?,
+                &make_renderer()?,
                 &*require_profile()?,
                 &pre_cursor,
                 post_cursor.as_deref(),
@@ -297,7 +305,7 @@ async fn main() -> Result<()> {
             pre_cursor,
             post_cursor,
         } => {
-            query::deinflect(&engine, &pre_cursor, post_cursor.as_deref());
+            query::deinflect(&make_lookups.await?, &pre_cursor, post_cursor.as_deref());
         }
         // profile
         Command::Profile {
@@ -355,17 +363,20 @@ async fn main() -> Result<()> {
                     headword,
                     reading,
                 },
-        } => output(
-            args.output,
-            anki::note(
-                &engine,
-                &*require_profile()?,
-                &headword,
-                sentence.as_deref(),
-                reading.as_deref(),
-            )
-            .await?,
-        ),
+        } => {
+            todo!();
+        }
+            // output(
+            //     args.output,
+            //     anki::note(
+            //         &engine,
+            //         &*require_profile()?,
+            //         &headword,
+            //         sentence.as_deref(),
+            //         reading.as_deref(),
+            //     )
+            //     .await?,
+            // ),
     }
 
     Ok(())

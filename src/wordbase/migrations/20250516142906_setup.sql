@@ -1,11 +1,13 @@
 CREATE TABLE dictionary (
     id          INTEGER NOT NULL PRIMARY KEY,
+    created_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
     meta        TEXT    NOT NULL CHECK (json_valid(meta)),
     position    INTEGER NOT NULL
 );
 
 CREATE TABLE profile (
     id                  INTEGER NOT NULL PRIMARY KEY,
+    created_at          INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
     name                TEXT,
     sorting_dictionary  INTEGER REFERENCES dictionary(id),
     font_family         TEXT,
@@ -30,8 +32,8 @@ BEGIN
 END;
 
 CREATE TABLE profile_enabled_dictionary (
-    profile     INTEGER NOT NULL REFERENCES profile(id)     ON DELETE CASCADE,
-    dictionary  INTEGER NOT NULL REFERENCES dictionary(id)  ON DELETE CASCADE,
+    profile     INTEGER NOT NULL REFERENCES profile(id)    ON DELETE CASCADE,
+    dictionary  INTEGER NOT NULL REFERENCES dictionary(id) ON DELETE CASCADE,
     UNIQUE      (profile, dictionary)
 );
 
@@ -85,3 +87,10 @@ CREATE INDEX term_record_query_reading ON term_record(reading, source);
 -- we only search `frequency` by headword AND reading, never either,
 -- so we include 1 (headword, reading) index instead of 2 separate ones
 CREATE INDEX frequency_query ON frequency(source, headword, reading);
+
+CREATE TABLE flashcard (
+    headword   TEXT,
+    reading    TEXT,
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    PRIMARY KEY (headword, reading)
+);

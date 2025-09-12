@@ -1,5 +1,5 @@
 use {
-    crate::{Engine, IndexMap, NotFound, profile::sync_profiles},
+    crate::{IndexMap, NotFound, Profiles, Wordbase},
     anyhow::{Context, Result, bail},
     arc_swap::ArcSwap,
     derive_more::Deref,
@@ -25,20 +25,20 @@ impl Dictionaries {
             .collect::<IndexMap<_, _>>();
         Ok(Self(dictionaries))
     }
+
+    pub(super) async fn sync(
+        db: &Pool<Sqlite>,
+        dictionaries: &ArcSwap<Dictionaries>,
+    ) -> Result<()> {
+        let fetched = Dictionaries::fetch(db)
+            .await
+            .context("failed to sync dictionaries")?;
+        dictionaries.store(Arc::new(fetched));
+        Ok(())
+    }
 }
 
-pub(crate) async fn sync_dictionaries(
-    db: &Pool<Sqlite>,
-    dictionaries: &ArcSwap<Dictionaries>,
-) -> Result<()> {
-    let fetched = Dictionaries::fetch(db)
-        .await
-        .context("failed to sync dictionaries")?;
-    dictionaries.store(Arc::new(fetched));
-    Ok(())
-}
-
-impl Engine {
+impl Wordbase {
     #[must_use]
     pub fn dictionaries(&self) -> Arc<Dictionaries> {
         self.dictionaries.load().clone()
@@ -98,7 +98,7 @@ impl Engine {
         let end = Instant::now();
         info!("Finished delete in {:?}", end.duration_since(start));
 
-        sync_dictionaries(&self.db, &self.dictionaries).await?;
+        Dictionaries::sync(&self.db, &self.dictionaries).await?;
         Ok(())
     }
 
@@ -129,7 +129,7 @@ impl Engine {
             bail!(NotFound);
         }
 
-        sync_dictionaries(&self.db, &self.dictionaries).await?;
+        Dictionaries::sync(&self.db, &self.dictionaries).await?;
         Ok(())
     }
 
@@ -148,7 +148,7 @@ impl Engine {
         .execute(&self.db)
         .await?;
 
-        sync_profiles(&self.db, &self.profiles).await?;
+        Profiles::sync(&self.db, &self.profiles).await?;
         Ok(())
     }
 
@@ -166,7 +166,7 @@ impl Engine {
         .execute(&self.db)
         .await?;
 
-        sync_profiles(&self.db, &self.profiles).await?;
+        Profiles::sync(&self.db, &self.profiles).await?;
         Ok(())
     }
 
@@ -184,7 +184,7 @@ impl Engine {
         .execute(&self.db)
         .await?;
 
-        sync_profiles(&self.db, &self.profiles).await?;
+        Profiles::sync(&self.db, &self.profiles).await?;
         Ok(())
     }
 }
@@ -219,51 +219,55 @@ const _: () = {
 
     #[uniffi::export(async_runtime = "tokio")]
     impl Wordbase {
-        pub fn dictionaries(&self) -> HashMap<DictionaryId, Dictionary> {
-            self.0
-                .dictionaries()
+        #[uniffi::method(name = "dictionaries")]
+        pub fn ffi_dictionaries(&self) -> HashMap<DictionaryId, Dictionary> {
+            self.dictionaries()
                 .iter()
                 .map(|(id, dict)| (*id, (**dict).clone()))
                 .collect()
         }
 
-        pub async fn remove_dictionary(&self, id: DictionaryId) -> FfiResult<()> {
-            Ok(self.0.remove_dictionary(id).await?)
+        #[uniffi::method(name = "remove_dictionary")]
+        pub async fn ffi_remove_dictionary(&self, id: DictionaryId) -> FfiResult<()> {
+            Ok(self.remove_dictionary(id).await?)
         }
 
-        pub async fn swap_dictionary_positions(
+        #[uniffi::method(name = "swap_dictionary_positions")]
+        pub async fn ffi_swap_dictionary_positions(
             &self,
             a_id: DictionaryId,
             b_id: DictionaryId,
         ) -> FfiResult<()> {
-            Ok(self.0.swap_dictionary_positions(a_id, b_id).await?)
+            Ok(self.swap_dictionary_positions(a_id, b_id).await?)
         }
 
-        pub async fn set_sorting_dictionary(
+        #[uniffi::method(name = "set_sorting_dictionary")]
+        pub async fn ffi_set_sorting_dictionary(
             &self,
             profile_id: ProfileId,
             dictionary_id: Option<DictionaryId>,
         ) -> FfiResult<()> {
             Ok(self
-                .0
                 .set_sorting_dictionary(profile_id, dictionary_id)
                 .await?)
         }
 
-        pub async fn enable_dictionary(
+        #[uniffi::method(name = "enable_dictionary")]
+        pub async fn ffi_enable_dictionary(
             &self,
             profile_id: ProfileId,
             dictionary_id: DictionaryId,
         ) -> FfiResult<()> {
-            Ok(self.0.enable_dictionary(profile_id, dictionary_id).await?)
+            Ok(self.enable_dictionary(profile_id, dictionary_id).await?)
         }
 
-        pub async fn disable_dictionary(
+        #[uniffi::method(name = "disable_dictionary")]
+        pub async fn ffi_disable_dictionary(
             &self,
             profile_id: ProfileId,
             dictionary_id: DictionaryId,
         ) -> FfiResult<()> {
-            Ok(self.0.disable_dictionary(profile_id, dictionary_id).await?)
+            Ok(self.disable_dictionary(profile_id, dictionary_id).await?)
         }
     }
 };

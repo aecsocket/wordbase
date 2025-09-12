@@ -1,6 +1,5 @@
 use {
     derive_more::{Debug, Deref, Display, Error},
-    serde::{Deserialize, Serialize},
     std::str::FromStr,
 };
 
@@ -8,7 +7,9 @@ use {
 ///
 /// This type is guaranteed to be a non-empty string with no trailing or leading
 /// whitespace.
-#[derive(Debug, Display, Clone, PartialEq, Eq, Hash, Deref, Serialize)]
+#[derive(Debug, Display, Clone, PartialEq, Eq, Hash, Deref)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize))]
 #[cfg_attr(
     feature = "poem",
     derive(poem_openapi::NewType),
@@ -99,7 +100,8 @@ impl FromStr for NormString {
     }
 }
 
-impl<'de> Deserialize<'de> for NormString {
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for NormString {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,

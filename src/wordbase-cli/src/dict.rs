@@ -4,10 +4,10 @@ use {
     futures::TryStreamExt,
     std::{path::PathBuf, sync::Arc, time::Instant},
     tracing::info,
-    wordbase::{Dictionary, DictionaryId, Engine, Profile, import::ImportEvent},
+    wordbase::{Dictionary, DictionaryId, Profile, Wordbase, import::ImportEvent},
 };
 
-pub fn ls(engine: &Engine, profile: &Profile) -> Vec<Arc<Dictionary>> {
+pub fn ls(engine: &Wordbase, profile: &Profile) -> Vec<Arc<Dictionary>> {
     let mut table = AsciiTable::default();
     table.column(0).set_header("Sort");
     table.column(1).set_header("On");
@@ -44,7 +44,7 @@ pub fn ls(engine: &Engine, profile: &Profile) -> Vec<Arc<Dictionary>> {
     dictionaries.iter().map(|(_, dict)| dict.clone()).collect()
 }
 
-pub fn info(engine: &Engine, dict_id: DictionaryId) -> Result<()> {
+pub fn info(engine: &Wordbase, dict_id: DictionaryId) -> Result<()> {
     let dict = engine
         .dictionaries()
         .get(&dict_id)
@@ -79,7 +79,7 @@ pub fn info(engine: &Engine, dict_id: DictionaryId) -> Result<()> {
     Ok(())
 }
 
-pub async fn import(engine: &Engine, profile: &Profile, path: PathBuf) -> Result<()> {
+pub async fn import(engine: &Wordbase, profile: &Profile, path: PathBuf) -> Result<()> {
     let start = Instant::now();
 
     let path = Arc::new(path);
@@ -115,22 +115,26 @@ pub async fn import(engine: &Engine, profile: &Profile, path: PathBuf) -> Result
     Ok(())
 }
 
-pub async fn swap_positions(engine: &Engine, a_id: DictionaryId, b_id: DictionaryId) -> Result<()> {
+pub async fn swap_positions(
+    engine: &Wordbase,
+    a_id: DictionaryId,
+    b_id: DictionaryId,
+) -> Result<()> {
     engine.swap_dictionary_positions(a_id, b_id).await?;
     Ok(())
 }
 
-pub async fn enable(engine: &Engine, profile: &Profile, dict_id: DictionaryId) -> Result<()> {
+pub async fn enable(engine: &Wordbase, profile: &Profile, dict_id: DictionaryId) -> Result<()> {
     engine.enable_dictionary(profile.id, dict_id).await?;
     Ok(())
 }
 
-pub async fn disable(engine: &Engine, profile: &Profile, dict_id: DictionaryId) -> Result<()> {
+pub async fn disable(engine: &Wordbase, profile: &Profile, dict_id: DictionaryId) -> Result<()> {
     engine.disable_dictionary(profile.id, dict_id).await?;
     Ok(())
 }
 
-pub async fn rm(engine: &Engine, dict_id: DictionaryId) -> Result<()> {
+pub async fn rm(engine: &Wordbase, dict_id: DictionaryId) -> Result<()> {
     let start = Instant::now();
     engine.remove_dictionary(dict_id).await?;
     let end = Instant::now();

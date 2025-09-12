@@ -12,16 +12,16 @@ pub use html::render_html;
 
 pub mod structured;
 
-use {
-    super::jpn::PitchPosition,
-    crate::FrequencyValue,
-    serde::{Deserialize, Serialize},
-};
+use {super::jpn::PitchPosition, crate::FrequencyValue};
 
 /// What this term means, written in the dictionary's source language.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[serde(deny_unknown_fields)]
 pub struct Glossary {
     /// How frequently this word appears, as a ranking relative to other terms
     /// in this dictionary.
@@ -36,9 +36,13 @@ pub struct Glossary {
 }
 
 /// How often this term appears in this dictionary's corpus.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[serde(deny_unknown_fields)]
 pub struct Frequency {
     /// Raw integer ranking value.
     ///
@@ -54,9 +58,13 @@ pub struct Frequency {
 }
 
 /// Japanese pitch accent information.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[serde(deny_unknown_fields)]
 pub struct Pitch {
     /// What [mora] position the [downstep] is located on.
     ///
@@ -85,7 +93,12 @@ pub struct Pitch {
 /// Categorises a [`Glossary`] entry for a given [`Term`].
 ///
 /// [`Term`]: crate::Term
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[serde(deny_unknown_fields)]
 pub struct GlossaryTag {

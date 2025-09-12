@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <schemalist>
-  <enum id="io.github.aecsocket.Wordbase.scan-trigger">
+  <enum id="app.wordbase.Wordbase.scan-trigger">
     <value nick="hover" value="0"/>
     <value nick="click" value="1"/>
     <value nick="shift" value="2"/>
     <value nick="ctrl" value="3"/>
     <value nick="alt" value="4"/>
   </enum>
-  <schema id="io.github.aecsocket.Wordbase" path="/io/github/aecsocket/Wordbase/">
+  <schema id="app.wordbase.Wordbase" path="/app/wordbase/Wordbase/">
     <key name="profile" type="s">
       <default>"1"</default>
       <summary>ID of the currently selected profile</summary>

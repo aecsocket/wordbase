@@ -1,6 +1,5 @@
 use {
     crate::{DictionaryId, FrequencyValue, Record, RecordId, Term},
-    serde::{Deserialize, Serialize},
     std::ops::Range,
 };
 
@@ -44,7 +43,8 @@ use {
 // }
 
 /// Single [`Record`] and its metadata returned in response to a lookup.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct RecordEntry {
     /// Span in the lookup input sentence which corresponds to this entry's
@@ -79,7 +79,8 @@ pub struct RecordEntry {
 ///
 /// We use this wrapper because [`Range`] is not supported by `poem-openapi`
 /// or `uniffi`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "poem", derive(poem_openapi::Object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Span {
@@ -109,7 +110,8 @@ impl<T: TryInto<u64>> TryFrom<Range<T>> for Span {
 // }
 
 /// Specifies a specific window on the user's window manager.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct WindowFilter {
     /// Internal ID of the window.
     ///
@@ -138,7 +140,8 @@ pub struct WindowFilter {
 ///
 /// [TextractorSender]: https://github.com/KamWithK/TextractorSender
 /// [exSTATic]: https://github.com/KamWithK/exSTATic/
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct TexthookerSentence {
     /// Path of the process from which this texthooker sentence was extracted.

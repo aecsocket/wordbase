@@ -1,17 +1,54 @@
 use {
-    crate::{Engine, db},
+    crate::{
+        IndexSet, Wordbase, db,
+        deinflect::{self, Deinflection, Deinflector},
+    },
     anyhow::{Context, Result, bail},
     foldhash::{HashSet, HashSetExt},
     futures::{StreamExt, TryStreamExt, stream::FuturesOrdered},
+    itertools::Itertools as _,
+    std::iter,
     wordbase_api::{
         DictionaryId, FrequencyValue, NoHeadwordOrReading, ProfileId, Record, RecordEntry,
         RecordId, RecordKind, Span, Term, for_kinds,
     },
 };
 
-impl Engine {
+#[derive(Debug)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+pub struct Lookups {
+    lindera: deinflect::Lindera,
+}
+
+impl Lookups {
+    pub async fn new() -> Result<Self> {
+        Ok(Self {
+            lindera: deinflect::Lindera::new()
+                .await
+                .context("failed to create deinflector `Lindera`")?,
+        })
+    }
+
+    pub fn deinflect<'a>(&'a self, sentence: &'a str, cursor: usize) -> IndexSet<Deinflection<'a>> {
+        iter::empty()
+            // TODO: disable deinflectors based on language
+            .chain(deinflect::Identity.deinflect(sentence, cursor))
+            .chain(self.lindera.deinflect(sentence, cursor))
+            .chain(deinflect::Latin.deinflect(sentence, cursor))
+            .inspect(|deinflect| {
+                debug_assert!(
+                    sentence.get(deinflect.span.clone()).is_some(),
+                    "text = {sentence:?}, cursor = {cursor}, span = {:?}",
+                    deinflect.span
+                );
+            })
+            .sorted_by_key(|deinflect| deinflect.span.start)
+            .collect::<IndexSet<_>>()
+    }
+
     pub async fn lookup_lemma(
         &self,
+        engine: &Wordbase,
         profile_id: ProfileId,
         lemma: impl AsRef<str> + Send + Sync,
     ) -> Result<Vec<RecordEntry>> {
@@ -118,7 +155,7 @@ impl Engine {
         );
 
         let result = query
-            .fetch(&self.db)
+            .fetch(&engine.db)
             .map(|record| {
                 let record = record.context("failed to fetch record")?;
 
@@ -157,7 +194,7 @@ impl Engine {
                     .with_context(|| {
                         format!(
                             "failed to deserialize record {term:?} from dictionary {:?} ({source:?})",
-                            self.dictionaries().get(&source).map_or("?", |dict| dict.meta.name.as_str())
+                            engine.dictionaries().get(&source).map_or("?", |dict| dict.meta.name.as_str())
                         )
                     })?;
 
@@ -185,6 +222,7 @@ impl Engine {
 
     pub async fn lookup<'a>(
         &'a self,
+        engine: &Wordbase,
         profile_id: ProfileId,
         sentence: &'a str,
         cursor: usize,
@@ -195,7 +233,7 @@ impl Engine {
         let mut lookup_tasks = deinflections
             .iter()
             .map(|deinflection| async move {
-                self.lookup_lemma(profile_id, &deinflection.lemma)
+                self.lookup_lemma(engine, profile_id, &deinflection.lemma)
                     .await
                     .map(|entries| (deinflection, entries))
             })
@@ -246,16 +284,68 @@ fn to_frequency_value(mode: Option<i64>, value: Option<i64>) -> Option<Frequency
 const _: () = {
     use crate::{FfiResult, Wordbase};
 
+    #[derive(uniffi::Record)]
+    pub struct Deinflection {
+        pub lemma: String,
+        pub span: Span,
+    }
+
     #[uniffi::export(async_runtime = "tokio")]
-    impl Wordbase {
-        pub async fn lookup<'a>(
+    impl Lookups {
+        #[uniffi::method(name = "deinflect")]
+        pub fn ffi_deinflect(&self, sentence: &str, cursor: u64) -> FfiResult<Vec<Deinflection>> {
+            let cursor = usize::try_from(cursor).context("cursor too large")?;
+            Ok(self
+                .deinflect(sentence, cursor)
+                .into_iter()
+                .map(|deinflect| {
+                    anyhow::Ok(Deinflection {
+                        lemma: deinflect.lemma.into_owned(),
+                        span: deinflect.span.try_into().context("span too large")?,
+                    })
+                })
+                .collect::<Result<Vec<Deinflection>, _>>()?)
+        }
+
+        #[uniffi::method(name = "lookup")]
+        pub async fn ffi_lookup<'a>(
             &'a self,
+            engine: &Wordbase,
             profile_id: ProfileId,
             sentence: &'a str,
             cursor: u64,
         ) -> FfiResult<Vec<RecordEntry>> {
             let cursor = usize::try_from(cursor).context("cursor too large")?;
-            Ok(self.0.lookup(profile_id, sentence, cursor).await?)
+            Ok(self.lookup(engine, profile_id, sentence, cursor).await?)
         }
     }
 };
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        crate::deinflect::{Deinflection, sentence},
+    };
+
+    #[tokio::test]
+    async fn deinflections_starting_earlier_first() {
+        // when a user clicks in the middle of a word, some later deinflectors
+        // may end up producing lemmas which start *earlier* than the earlier
+        // deinflectors. for example, in "アルコール", if you click in between
+        // "アル" and "コール", we will try deinflecting "コール" first, and
+        // then "アルコール". in this case, the text highlighted to the user
+        // will be e.g. "アルコール", but the first results will be for "コール".
+        //
+        // to avoid this, we sort the deinflections by whichever ones have spans
+        // that start the earliest. this test ensures that.
+        let lookups = Lookups::new().await.unwrap();
+        let (text, cursor1, cursor2) = sentence!("手を" / "アル" / "コールで消毒");
+        let mut lemmas = lookups.deinflect(text, cursor2).into_iter();
+        assert_eq!(
+            lemmas.next().unwrap(),
+            Deinflection::new(cursor1, "アルコール", "アルコール")
+        );
+        assert!(lemmas.next().is_some());
+    }
+}

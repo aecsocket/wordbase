@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<schemalist>
+  <schema id="app.wordbase.Wordbase" path="/app/wordbase/Wordbase/">
+    <key name="profile" type="s">
+      <default>"1"</default>
+      <summary>ID of the currently selected profile</summary>
+    </key>
+    <key name="window-width" type="i">
+      <default>480</default>
+      <summary>Manager window width</summary>
+    </key>
+    <key name="window-height" type="i">
+      <default>600</default>
+      <summary>Manager window height</summary>
+    </key>
+  </schema>
+</schemalist>

@@ -25,7 +25,6 @@
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             just
-            fish
             typos
 
             # Nix
@@ -38,11 +37,18 @@
             taplo
             cargo-shear
             pkg-config
+            rust-bindgen
 
             # Wordbase
             openssl
             sqlx-cli
             sqlite
+
+            # GTK app
+            gtk4
+            libadwaita
+            webkitgtk_6_0
+            pipewire
 
             # GNOME extension
             vtsls
@@ -56,9 +62,12 @@
             # Binding generation
             ktlint
           ];
+          nativeBuildInputs = with pkgs; [ clang ];
+          LIBCLANG_PATH = with pkgs; lib.makeLibraryPath [ libclang ];
+          # RUSTFLAGS = "-Zcodegen-backend=cranelift";
           shellHook = ''
-            export RUSTFLAGS="-Zcodegen-backend=cranelift"
             mkdir -p "$XDG_DATA_HOME/wordbase"
+            export LINDERA_CACHE="$XDG_DATA_HOME/lindera"
             export DATABASE_URL="sqlite://$XDG_DATA_HOME/wordbase/wordbase.db"
           '';
         };

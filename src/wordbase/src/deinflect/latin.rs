@@ -34,12 +34,13 @@ impl Deinflector for Latin {
 
 #[cfg(test)]
 mod tests {
-    use crate::deinflect::{
-        sentence,
-        tests::{assert_deinflects, deinf},
+    use {
+        super::Latin,
+        crate::deinflect::{
+            Deinflection, sentence,
+            tests::{assert_deinflects, deinf},
+        },
     };
-
-    use super::*;
 
     #[test]
     fn transformations() {

@@ -1,5 +1,5 @@
 use {
-    crate::{Engine, IndexMap, lang},
+    crate::{IndexMap, Wordbase, lang},
     anyhow::{Context, Result},
     arc_swap::ArcSwap,
     data_encoding::BASE64,
@@ -10,6 +10,7 @@ use {
 };
 
 #[derive(Debug)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct Renderer {
     tera: ArcSwap<Tera>,
 }
@@ -25,7 +26,7 @@ impl Renderer {
     }
 }
 
-impl Engine {
+impl Renderer {
     /// Renders the results of [`Engine::lookup`] to the `<body>` contents of
     /// an HTML document, so you can display it to the user in a web view or
     /// similar.
@@ -46,16 +47,17 @@ impl Engine {
     /// `expect` this to be [`Ok`].
     pub fn render_html_body(
         &self,
+        engine: &Wordbase,
         entries: &[RecordEntry],
         config: &RenderConfig,
     ) -> Result<String> {
         let terms = group_terms(entries);
 
         let mut context = tera::Context::new();
-        context.insert("dictionaries", &self.dictionaries().0);
+        context.insert("dictionaries", &engine.dictionaries().0);
         context.insert("terms", &terms);
         context.insert("config", config);
-        let body = self.renderer.tera.load().render("records.html", &context)?;
+        let body = self.tera.load().render("records.html", &context)?;
 
         Ok(body)
     }
@@ -279,13 +281,15 @@ const _: () = {
     use crate::{FfiResult, Wordbase};
 
     #[uniffi::export]
-    impl Wordbase {
-        pub fn render_html_body(
+    impl Renderer {
+        #[uniffi::method(name = "render_html_body")]
+        pub fn ffi_render_html_body(
             &self,
+            engine: &Wordbase,
             entries: &[RecordEntry],
             config: &RenderConfig,
         ) -> FfiResult<String> {
-            Ok(self.0.render_html_body(entries, config)?)
+            Ok(self.render_html_body(engine, entries, config)?)
         }
     }
 };

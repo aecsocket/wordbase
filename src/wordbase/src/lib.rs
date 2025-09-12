@@ -1,7 +1,7 @@
 #![doc = include_str!("../README.md")]
 #![allow(missing_docs, clippy::missing_errors_doc)]
 
-pub mod anki;
+// pub mod anki;
 mod db;
 pub mod deinflect;
 pub mod dictionary;
@@ -15,92 +15,59 @@ pub use wordbase_api::*;
 use {
     anyhow::{Context, Result},
     arc_swap::ArcSwap,
-    deinflect::Deinflectors,
     derive_more::{Display, Error},
     dictionary::Dictionaries,
     profile::Profiles,
-    render::Renderer,
     sqlx::{Pool, Sqlite},
-    std::{path::Path, sync::Arc, time::Instant},
+    std::{path::Path, sync::Arc},
     tokio::fs,
-    tracing::{info, trace},
+    tracing::info,
 };
 
 #[cfg(feature = "uniffi")]
 uniffi::setup_scaffolding!();
 
 #[derive(Debug)]
-pub struct Engine {
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+pub struct Wordbase {
+    db: Pool<Sqlite>,
     profiles: ArcSwap<Profiles>,
     dictionaries: Arc<ArcSwap<Dictionaries>>,
-    renderer: Renderer,
-    deinflectors: Deinflectors,
-    db: Pool<Sqlite>,
 }
 
 pub type IndexMap<K, V> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
 pub type IndexSet<T> = indexmap::IndexSet<T, foldhash::fast::RandomState>;
 
-impl Engine {
+impl Wordbase {
     pub async fn new(data_dir: impl AsRef<Path>) -> Result<Self> {
         let data_dir = data_dir.as_ref();
         info!("Creating engine using {data_dir:?} as data directory");
 
-        let start = Instant::now();
-        let (db, ()) = tokio::join!(
-            async {
-                fs::create_dir_all(data_dir)
-                    .await
-                    .context("failed to create data directory")?;
-                let db_path = data_dir.join("wordbase.db");
-                let db = db::setup(&db_path).await;
-                trace!("[{:?}] Setup database", start.elapsed());
-                db
-            },
-            async {
-                jmdict_furigana::init().await;
-                trace!("[{:?}] Initialized `jmdict_furigana`", start.elapsed());
-            }
-        );
-        let db = db?;
+        fs::create_dir_all(data_dir)
+            .await
+            .context("failed to create data directory")?;
+        let db_path = data_dir.join("wordbase.db");
+        let db = db::setup(&db_path)
+            .await
+            .context("failed to setup database")?;
 
-        let (profiles, dictionaries, renderer, deinflectors) = tokio::try_join!(
+        let (profiles, dictionaries) = tokio::try_join!(
             async {
-                let profiles = Profiles::fetch(&db)
+                Profiles::fetch(&db)
                     .await
-                    .context("failed to fetch initial profiles")?;
-                trace!("[{:?}] Fetched profiles", start.elapsed());
-                anyhow::Ok(profiles)
+                    .context("failed to fetch initial profiles")
             },
             async {
-                let dictionaries = Dictionaries::fetch(&db)
+                Dictionaries::fetch(&db)
                     .await
-                    .context("failed to fetch initial dictionaries")?;
-                trace!("[{:?}] Fetched dictionaries", start.elapsed());
-                anyhow::Ok(dictionaries)
-            },
-            async {
-                let renderer = tokio::task::spawn_blocking(Renderer::new)
-                    .await
-                    .context("failed to create renderer")??;
-                trace!("[{:?}] Created renderer", start.elapsed());
-                anyhow::Ok(renderer)
-            },
-            async {
-                let deinflectors = tokio::task::spawn_blocking(Deinflectors::new)
-                    .await
-                    .context("failed to create deinflectors")??;
-                trace!("[{:?}] Created deinflectors", start.elapsed());
-                anyhow::Ok(deinflectors)
+                    .context("failed to fetch initial dictionaries")
             },
         )?;
 
         Ok(Self {
+            db,
             profiles: ArcSwap::from_pointee(profiles),
             dictionaries: Arc::new(ArcSwap::from_pointee(dictionaries)),
-            renderer,
-            deinflectors,
-            db,
         })
     }
 }
@@ -114,12 +81,9 @@ pub const CHANNEL_BUF_CAP: usize = 4;
 #[cfg(feature = "uniffi")]
 mod ffi {
     use {
-        crate::Engine,
+        crate::Wordbase,
         derive_more::{Display, Error, From},
     };
-
-    #[derive(Debug, uniffi::Object)]
-    pub struct Wordbase(pub Engine);
 
     #[derive(Debug, Display, Error, From, uniffi::Error)]
     #[uniffi(flat_error)]
@@ -132,7 +96,7 @@ mod ffi {
 
     #[uniffi::export(async_runtime = "tokio")]
     pub async fn wordbase(data_dir: &str) -> FfiResult<Wordbase> {
-        Ok(Engine::new(data_dir).await.map(Wordbase)?)
+        Ok(Wordbase::new(data_dir).await?)
     }
 }
 
@@ -148,6 +112,6 @@ mod tests {
         let data_dir = tempfile::tempdir().unwrap();
         let data_path = data_dir.path().to_path_buf();
         data_dir.close().unwrap();
-        Engine::new(&data_path).await.unwrap();
+        Wordbase::new(&data_path).await.unwrap();
     }
 }

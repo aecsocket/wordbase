@@ -3,10 +3,10 @@ use {
     ascii_table::AsciiTable,
     std::sync::Arc,
     tracing::info,
-    wordbase::{DictionaryId, Engine, NormString, Profile},
+    wordbase::{DictionaryId, Wordbase, NormString, Profile},
 };
 
-pub fn ls(engine: &Engine) -> Vec<Arc<Profile>> {
+pub fn ls(engine: &Wordbase) -> Vec<Arc<Profile>> {
     let mut table = AsciiTable::default();
     table.column(1).set_header("ID");
     table.column(2).set_header("Name");
@@ -58,18 +58,18 @@ pub fn ls(engine: &Engine) -> Vec<Arc<Profile>> {
         .collect()
 }
 
-pub async fn copy(engine: &Engine, profile: &Profile, name: String) -> Result<()> {
+pub async fn copy(engine: &Wordbase, profile: &Profile, name: String) -> Result<()> {
     let name = NormString::new(name).context("invalid new name")?;
     let new_id = engine.copy_profile(profile.id, Some(name)).await?;
     println!("{}", new_id.0);
     Ok(())
 }
 
-pub fn info(_engine: &Engine, profile: &Profile) {
+pub fn info(_engine: &Wordbase, profile: &Profile) {
     println!("{profile:#?}");
 }
 
-pub async fn set_name(engine: &Engine, profile: &Profile, name: Option<String>) -> Result<()> {
+pub async fn set_name(engine: &Wordbase, profile: &Profile, name: Option<String>) -> Result<()> {
     let name = name
         .map(|name| NormString::new(name).context("invalid new name"))
         .transpose()?;
@@ -77,7 +77,7 @@ pub async fn set_name(engine: &Engine, profile: &Profile, name: Option<String>) 
     Ok(())
 }
 
-pub async fn rm(engine: &Engine, profile: &Profile) -> Result<()> {
+pub async fn rm(engine: &Wordbase, profile: &Profile) -> Result<()> {
     engine.remove_profile(profile.id).await?;
     Ok(())
 }

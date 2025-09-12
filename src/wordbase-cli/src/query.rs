@@ -2,7 +2,11 @@ use {
     anyhow::{Context, Result},
     std::time::Instant,
     tracing::info,
-    wordbase::{Engine, Profile, render::RenderConfig},
+    wordbase::{
+        Profile, Wordbase,
+        lookup::Lookups,
+        render::{RenderConfig, Renderer},
+    },
 };
 
 pub fn make_query(pre_cursor: &str, post_cursor: Option<&str>) -> (String, usize) {
@@ -12,36 +16,44 @@ pub fn make_query(pre_cursor: &str, post_cursor: Option<&str>) -> (String, usize
     )
 }
 
-pub fn deinflect(engine: &Engine, pre_cursor: &str, post_cursor: Option<&str>) {
+pub fn deinflect(lookups: &Lookups, pre_cursor: &str, post_cursor: Option<&str>) {
     let (text, cursor) = make_query(pre_cursor, post_cursor);
-    for deinflect in engine.deinflect(&text, cursor) {
+    for deinflect in lookups.deinflect(&text, cursor) {
         let text_part = text.get(deinflect.span).unwrap_or("(?)");
         info!("{text_part} -> {:?}", deinflect.lemma);
     }
 }
 
-pub async fn lookup_lemma(engine: &Engine, profile: &Profile, lemma: &str) -> Result<()> {
-    for result in engine.lookup_lemma(profile.id, &lemma).await? {
+pub async fn lookup_lemma(
+    engine: &Wordbase,
+    lookups: &Lookups,
+    profile: &Profile,
+    lemma: &str,
+) -> Result<()> {
+    for result in lookups.lookup_lemma(engine, profile.id, &lemma).await? {
         println!("{result:#?}");
     }
     Ok(())
 }
 
 pub async fn render(
-    engine: &Engine,
+    engine: &Wordbase,
+    lookups: &Lookups,
+    renderer: &Renderer,
     profile: &Profile,
     pre_cursor: &str,
     post_cursor: Option<&str>,
 ) -> Result<()> {
     let (text, cursor) = make_query(pre_cursor, post_cursor);
     let start = Instant::now();
-    let records = engine.lookup(profile.id, &text, cursor).await?;
+    let records = lookups.lookup(engine, profile.id, &text, cursor).await?;
     let end = Instant::now();
     info!("Fetched records in {:?}", end.duration_since(start));
 
     let start = Instant::now();
-    let body = engine
+    let body = renderer
         .render_html_body(
+            engine,
             &records,
             &RenderConfig {
                 s_add_note: "Add Note".into(),

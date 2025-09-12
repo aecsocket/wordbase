@@ -5,22 +5,24 @@ use {
     std::{fmt::Write, iter, time::Instant},
     tracing::info,
     wordbase::{
-        DictionaryId, Engine, FrequencyValue, Profile, RecordEntry,
+        DictionaryId, FrequencyValue, Profile, RecordEntry, Wordbase,
         dict::{self, jpn::PitchPosition},
         dictionary::Dictionaries,
+        lookup::Lookups,
         render,
     },
 };
 
 pub async fn lookup(
-    engine: &Engine,
+    engine: &Wordbase,
+    lookups: &Lookups,
     profile: &Profile,
     pre_cursor: &str,
     post_cursor: Option<&str>,
 ) -> Result<Vec<RecordEntry>> {
     let (text, cursor) = make_query(pre_cursor, post_cursor);
     let start = Instant::now();
-    let entries = engine.lookup(profile.id, &text, cursor).await?;
+    let entries = lookups.lookup(engine, profile.id, &text, cursor).await?;
     let end = Instant::now();
 
     let dictionaries = engine.dictionaries();

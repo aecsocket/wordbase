@@ -3,13 +3,13 @@ use {
     ascii_table::AsciiTable,
     tracing::info,
     wordbase::{
-        Engine, Profile, Term,
+        Wordbase, Profile, Term,
         anki::{NoteField, TermNote},
     },
 };
 
 pub async fn note(
-    engine: &Engine,
+    engine: &Wordbase,
     profile: &Profile,
     headword: &str,
     sentence: Option<&str>,

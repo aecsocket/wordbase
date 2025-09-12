@@ -5,10 +5,7 @@ mod norm_string;
 mod protocol;
 mod term;
 
-use {
-    derive_more::From,
-    serde::{Deserialize, Serialize, de::DeserializeOwned},
-};
+use derive_more::From;
 pub use {norm_string::*, protocol::*, term::*};
 
 #[cfg(feature = "uniffi")]
@@ -129,10 +126,14 @@ macro_rules! for_kinds { ($macro:ident) => { $macro!(
 ///
 /// This represents a dictionary which has already been imported into the
 /// engine, whereas [`DictionaryMeta`] may not.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[cfg_attr(feature = "poem", derive(poem_openapi::Object), oai(example))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[serde(deny_unknown_fields)]
 pub struct Dictionary {
     /// Unique identifier for this dictionary in the database.
     pub id: DictionaryId,
@@ -174,7 +175,12 @@ impl poem_openapi::types::Example for Dictionary {
 /// meta.version = Some("1.0.0".into());
 /// meta.url = Some("https://example.com".into());
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[cfg_attr(feature = "poem", derive(poem_openapi::Object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[non_exhaustive]
@@ -219,7 +225,12 @@ impl DictionaryMeta {
 macro_rules! define_types { ($($dict_kind:ident($dict_path:ident) { $($record_kind:ident),* $(,)? }),* $(,)?) => { paste::paste! {
 
 /// Kind of [`Dictionary`] that can be imported into the engine.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[cfg_attr(feature = "poem", derive(poem_openapi::Enum))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[repr(u32)]
@@ -236,7 +247,12 @@ impl DictionaryKind {
 
 /// Kind of [`RecordKind`] that a dictionary can contain, and that a client can
 /// query.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[cfg_attr(feature = "poem", derive(poem_openapi::Enum))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[repr(u32)]
@@ -252,7 +268,12 @@ impl RecordKind {
 }
 
 /// Data that a [`Dictionary`] may store for a specific [`Term`].
-#[derive(Debug, Clone, Serialize, Deserialize, From)]
+#[derive(Debug, Clone, From)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[non_exhaustive]
 #[expect(missing_docs, reason = "self-explanatory")]
@@ -287,16 +308,7 @@ mod sealed {
 
 /// Provides bounds on the type of data that can be stored in a [`Record`].
 pub trait RecordType:
-    sealed::RecordType
-    + Sized
-    + Send
-    + Sync
-    + std::fmt::Debug
-    + Clone
-    + Serialize
-    + DeserializeOwned
-    + Into<Record>
-    + 'static
+    sealed::RecordType + Sized + Send + Sync + std::fmt::Debug + Clone + Into<Record> + 'static
 {
     /// [`RecordKind`] variant of this record type.
     const KIND: RecordKind;
@@ -305,7 +317,12 @@ pub trait RecordType:
 /// Opaque and unique identifier for a [`Record`] in the engine.
 ///
 /// Multiple [`Term`]s may link to a single [`Record`].
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
 pub struct RecordId(pub i64);
 
@@ -313,7 +330,12 @@ pub struct RecordId(pub i64);
 uniffi::custom_newtype!(RecordId, i64);
 
 /// Opaque and unique identifier for a [`Dictionary`] in the engine.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
 pub struct DictionaryId(pub i64);
 
@@ -331,7 +353,12 @@ uniffi::custom_newtype!(DictionaryId, i64);
 /// There is explicitly no way to get the [`i64`] from this value while ignoring
 /// the variant, as the value does not make sense without knowing if it's a rank
 /// or an occurrence.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum FrequencyValue {
     /// Lower value represents a [`Term`] which appears more frequently.
@@ -345,7 +372,12 @@ pub enum FrequencyValue {
 /// The engine does not have a concept of a current profile. Instead, it is the
 /// app's responsibility to manage a current profile, and pass that profile ID
 /// into operations which require it (e.g. lookups).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[cfg_attr(feature = "poem", derive(poem_openapi::Object), oai(example))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[non_exhaustive]
@@ -413,7 +445,12 @@ impl Profile {
 }
 
 /// Opaque and unique identifier for a [`Profile`] in the engine.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
 pub struct ProfileId(pub i64);
 
