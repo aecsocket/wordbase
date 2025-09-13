@@ -193,7 +193,7 @@ Currently, this app uses Relm4 on top of GTK/Adwaita, but we might switch this t
 ### ⚙️ `wordbase-android`
 
 <p align="center">
-  <img src="./static/wordbase-android.png" height="480px" alt="Screenshot of the Wordbase app, displaying lookup results and the dictionary management page" />
+  <img src=".github/assets/wordbase-android.png" height="480px" alt="Screenshot of the Wordbase app, displaying lookup results and the dictionary management page" />
 </p>
 
 Android app which bundles the Wordbase engine: this allows users to manage dictionaries, perform lookups, and exposes intents for other apps to display lookups to users.

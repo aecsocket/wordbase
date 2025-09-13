@@ -2,16 +2,14 @@
 #![expect(dead_code, reason = "we include all fields for completeness")]
 
 use {
-    super::structured,
     derive_more::{Deref, DerefMut, From},
     foldhash::HashMap,
     regex::Regex,
     serde::Deserialize,
     serde_repr::Deserialize_repr,
     std::sync::LazyLock,
+    wordbase_api::dict::yomitan::structured,
 };
-
-pub const INDEX_PATH: &str = "index.json";
 
 macro_rules! re {
     ($re:expr) => {
@@ -19,6 +17,7 @@ macro_rules! re {
     };
 }
 
+pub const INDEX_PATH: &str = "index.json";
 pub static TAG_BANK_PATTERN: LazyLock<Regex> = re!("tag_bank_([0-9]+?)\\.json");
 pub static TERM_BANK_PATTERN: LazyLock<Regex> = re!("term_bank_([0-9]+?)\\.json");
 pub static TERM_META_BANK_PATTERN: LazyLock<Regex> = re!("term_meta_bank_([0-9]+?)\\.json");
@@ -224,14 +223,24 @@ pub struct PhoneticTranscription {
     pub tags: Vec<String>,
 }
 
+/// <https://github.com/yomidevs/yomitan/blob/master/ext/data/schemas/dictionary-kanji-bank-v3-schema.json>
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Kanji {
+    /// Kanji character.
     pub character: String,
+    /// String of space-separated onyomi readings for the kanji character. An
+    /// empty string is treated as no readings.
     pub onyomi: String,
+    /// String of space-separated kunyomi readings for the kanji character. An
+    /// empty string is treated as no readings.
     pub kunyomi: String,
+    /// String of space-separated tags for the kanji character. An empty string
+    /// is treated as no tags.
     pub tags: String,
+    /// Array of meanings for the kanji character.
     pub meanings: Vec<String>,
+    /// Various stats for the kanji character.
     pub stats: HashMap<String, String>,
 }
 

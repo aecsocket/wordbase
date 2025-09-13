@@ -1,5 +1,6 @@
 [package]
-name        = "wordbase-next"
+description = "Dictionary and word lookup service"
+name        = "wordbase"
 version     = "0.1.0"
 
 authors.workspace      = true
@@ -16,16 +17,15 @@ workspace = true
 [package.metadata.docs.rs]
 all-features = true
 
-[dependencies]
-heed = { version = "0.22.0" }
-rkyv = { version = "0.8.11" }
-wordbase-api = { workspace = true, features = ["serde", "rkyv"] }
-eyre = { workspace = true }
-zip = { version = "5.1.1" }
-rayon = { version = "1.11.0" }
-redb = { version = "3.0.1" }
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
+[features]
+poem   = ["wordbase-api/poem", "dep:poem-openapi"]
+uniffi = ["wordbase-api/uniffi", "dep:uniffi"]
 
+[dependencies]
+jmdict-furigana = { workspace = true }
+wordbase-api    = { workspace = true, features = ["render-html"] }
+
+anyhow               = { workspace = true }
 arc-swap             = { workspace = true }
 async-compression    = { workspace = true, features = ["xz"] }
 async-stream         = { workspace = true }

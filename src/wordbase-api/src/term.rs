@@ -1,7 +1,6 @@
 use {
     crate::NormString,
     derive_more::{Display, Error},
-    serde::{Deserialize, Serialize},
     std::mem,
 };
 
@@ -33,6 +32,12 @@ pub enum Term {
     Full(NormString, NormString),
 }
 
+/// Attempted to create a [`Term`] from a headword/reading pair, but both were
+/// not present or empty.
+#[derive(Debug, Display, Clone, Default, Error)]
+#[display("no headword or reading")]
+pub struct NoHeadwordOrReading;
+
 impl Term {
     /// Creates a value from a headword/reading pair.
     ///
@@ -41,15 +46,15 @@ impl Term {
     pub fn from_parts(
         headword: Option<impl TryInto<NormString>>,
         reading: Option<impl TryInto<NormString>>,
-    ) -> Option<Self> {
+    ) -> Result<Self, NoHeadwordOrReading> {
         match (
             headword.and_then(|s| s.try_into().ok()),
             reading.and_then(|s| s.try_into().ok()),
         ) {
-            (Some(headword), Some(reading)) => Some(Self::Full(headword, reading)),
-            (Some(headword), None) => Some(Self::Headword(headword)),
-            (None, Some(reading)) => Some(Self::Reading(reading)),
-            (None, None) => None,
+            (Some(headword), Some(reading)) => Ok(Self::Full(headword, reading)),
+            (Some(headword), None) => Ok(Self::Headword(headword)),
+            (None, Some(reading)) => Ok(Self::Reading(reading)),
+            (None, None) => Err(NoHeadwordOrReading),
         }
     }
 
@@ -57,17 +62,17 @@ impl Term {
     pub fn from_full(
         headword: impl TryInto<NormString>,
         reading: impl TryInto<NormString>,
-    ) -> Option<Self> {
+    ) -> Result<Self, NoHeadwordOrReading> {
         Self::from_parts(Some(headword), Some(reading))
     }
 
     /// Creates a value from only a headword.
-    pub fn from_headword(headword: impl TryInto<NormString>) -> Option<Self> {
+    pub fn from_headword(headword: impl TryInto<NormString>) -> Result<Self, NoHeadwordOrReading> {
         Self::from_parts(Some(headword), None::<NormString>)
     }
 
     /// Creates a value from only a headword.
-    pub fn from_reading(reading: impl TryInto<NormString>) -> Option<Self> {
+    pub fn from_reading(reading: impl TryInto<NormString>) -> Result<Self, NoHeadwordOrReading> {
         Self::from_parts(None::<NormString>, Some(reading))
     }
 
@@ -146,7 +151,7 @@ impl<H: TryInto<NormString>, R: TryInto<NormString>> TryFrom<(Option<H>, Option<
     type Error = NoHeadwordOrReading;
 
     fn try_from((headword, reading): (Option<H>, Option<R>)) -> Result<Self, Self::Error> {
-        Self::from_parts(headword, reading).ok_or(NoHeadwordOrReading)
+        Self::from_parts(headword, reading)
     }
 }
 
@@ -154,30 +159,25 @@ impl<H: TryInto<NormString>, R: TryInto<NormString>> TryFrom<(H, R)> for Term {
     type Error = NoHeadwordOrReading;
 
     fn try_from((headword, reading): (H, R)) -> Result<Self, Self::Error> {
-        Self::from_parts(Some(headword), Some(reading)).ok_or(NoHeadwordOrReading)
+        Self::from_parts(Some(headword), Some(reading))
     }
 }
 
-/// Attempted to create a [`Term`] from a headword/reading pair, but both were
-/// not present or empty.
-#[derive(Debug, Display, Clone, Default, Error)]
-#[display("no headword or reading")]
-pub struct NoHeadwordOrReading;
-
+#[cfg(feature = "serde")]
 const _: () = {
-    #[derive(Serialize)]
+    #[derive(serde::Serialize)]
     pub struct TermSerial<'a> {
         headword: Option<&'a NormString>,
         reading: Option<&'a NormString>,
     }
 
-    #[derive(Deserialize)]
+    #[derive(serde::Deserialize)]
     pub struct TermDeserial {
         headword: Option<NormString>,
         reading: Option<NormString>,
     }
 
-    impl Serialize for Term {
+    impl serde::Serialize for Term {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: serde::Serializer,
@@ -190,7 +190,7 @@ const _: () = {
         }
     }
 
-    impl<'de> Deserialize<'de> for Term {
+    impl<'de> serde::Deserialize<'de> for Term {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where
             D: serde::Deserializer<'de>,
@@ -228,10 +228,10 @@ mod tests {
 
     #[test]
     fn term_api() {
-        assert!(Term::from_parts(None::<NormString>, None::<NormString>).is_none());
-        assert!(Term::from_full("", "").is_none());
-        assert!(Term::from_headword("").is_none());
-        assert!(Term::from_reading("").is_none());
+        assert!(Term::from_parts(None::<NormString>, None::<NormString>).is_err());
+        assert!(Term::from_full("", "").is_err());
+        assert!(Term::from_headword("").is_err());
+        assert!(Term::from_reading("").is_err());
 
         assert_eq!(
             Term::from_full("hello", "world").unwrap(),

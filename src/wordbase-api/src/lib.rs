@@ -113,6 +113,8 @@ macro_rules! for_kinds { ($macro:ident) => { $macro!(
         Glossary,
         Frequency,
         Pitch,
+        Phonetics,
+        Kanji,
     },
     YomichanAudio(yomichan_audio) {
         Forvo,
@@ -272,7 +274,8 @@ impl RecordKind {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[non_exhaustive]
@@ -357,7 +360,8 @@ uniffi::custom_newtype!(DictionaryId, i64);
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum FrequencyValue {

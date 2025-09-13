@@ -13,7 +13,7 @@
 
 use {
     derive_more::{Deref, DerefMut, Display},
-    std::{collections::HashMap, fmt},
+    std::collections::HashMap,
 };
 
 #[derive(Debug, Clone)]
@@ -26,6 +26,7 @@ use {
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(
+        derive(Debug),
         serialize_bounds(
             __S: rkyv::ser::Writer + rkyv::ser::Allocator,
             __S::Error: rkyv::rancor::Source
@@ -40,8 +41,8 @@ use {
 )]
 pub enum Content {
     String(String),
-    Element(#[rkyv(omit_bounds)] Box<Element>),
-    Content(#[rkyv(omit_bounds)] Vec<Content>),
+    Element(#[cfg_attr(feature = "rkyv", rkyv(omit_bounds))] Box<Element>),
+    Content(#[cfg_attr(feature = "rkyv", rkyv(omit_bounds))] Vec<Content>),
 }
 
 #[derive(Debug, Clone)]
@@ -52,7 +53,8 @@ pub enum Content {
 )]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum Element {
@@ -86,7 +88,8 @@ pub enum Element {
 )]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct LineBreakElement {
@@ -101,7 +104,8 @@ pub struct LineBreakElement {
 )]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct UnstyledElement {
@@ -118,7 +122,8 @@ pub struct UnstyledElement {
 )]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct TableElement {
@@ -138,7 +143,8 @@ pub struct TableElement {
 )]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct StyledElement {
@@ -158,7 +164,8 @@ pub struct StyledElement {
 )]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ImageElement {
@@ -178,7 +185,8 @@ pub struct ImageElement {
 )]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ImageElementBase {
@@ -207,7 +215,8 @@ pub struct ImageElementBase {
 )]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct LinkElement {
@@ -226,7 +235,8 @@ pub struct LinkElement {
 )]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ContentStyle {
@@ -285,7 +295,8 @@ macro_rules! display_as_serialize {
 )]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum VerticalAlign {
@@ -310,7 +321,8 @@ display_as_serialize!(VerticalAlign);
 )]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum TextDecorationLine {
@@ -330,7 +342,8 @@ display_as_serialize!(TextDecorationLine);
 )]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum TextDecorationStyle {
@@ -352,7 +365,8 @@ display_as_serialize!(TextDecorationStyle);
 )]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum FontStyle {
@@ -371,7 +385,8 @@ display_as_serialize!(FontStyle);
 )]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum FontWeight {
@@ -390,7 +405,8 @@ display_as_serialize!(FontWeight);
 )]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum WordBreak {
@@ -410,7 +426,8 @@ display_as_serialize!(WordBreak);
 )]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum TextAlign {
@@ -433,7 +450,8 @@ display_as_serialize!(TextAlign);
 )]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum SizeUnits {
@@ -452,7 +470,8 @@ display_as_serialize!(SizeUnits);
 )]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum ImageRendering {
@@ -472,7 +491,8 @@ display_as_serialize!(ImageRendering);
 )]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum ImageAppearance {
@@ -491,7 +511,8 @@ display_as_serialize!(ImageAppearance);
 )]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum NumberOrString {
@@ -503,7 +524,8 @@ pub enum NumberOrString {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug, Deref, DerefMut))
 )]
 pub struct Data(pub HashMap<String, String>);
 
@@ -512,13 +534,15 @@ uniffi::custom_newtype!(Data, HashMap<String, String>);
 
 // utils
 
+#[cfg(feature = "serde")]
 struct FormatterSerializer<'a, 'b> {
-    pub f: &'a mut fmt::Formatter<'b>,
+    pub f: &'a mut core::fmt::Formatter<'b>,
 }
 
+#[cfg(feature = "serde")]
 impl serde::Serializer for FormatterSerializer<'_, '_> {
     type Ok = ();
-    type Error = fmt::Error;
+    type Error = core::fmt::Error;
 
     fn serialize_unit_variant(
         self,

@@ -1,5 +1,83 @@
 # notes - temp
 
+## 12 Sep
+
+Got redb + rkyv working. Some simple benchmarks:
+
+- Import jitendex in 2 ways
+- Make a `wordbase_rkyv.redb` with rkyv-encoded
+- Make a `wordbase_rmp.redb` with messagepack-encoded
+- Benchmark querying
+  - `rkyv access`: reading from ReDB and accessing the `ArchivedRecord`
+  - `rkyv deserialize`: reading the `ArchivedRecord`, deserializing to `Record`
+  - `rmp deserialize`: reading from `rmp.redb` and deserializing via MessagePack to `Record`
+
+Query perf:
+```
+INFO wordbase_cli: rkyv access: 776.637938ms
+INFO wordbase_cli: rkyv deserialize: 2.338171616s
+INFO wordbase_cli: rmp deserialize: 14.482389631s
+```
+
+Storage size:
+```
+⬢ [dev] ❯ la ~/.local/share/wordbase/
+total 4.7G
+-rw-r--r-- 1 boris boris 6.1G Sep 13 01:01 dictionary_rkyv.redb
+-rw-r--r-- 1 boris boris 1.1G Sep 13 01:28 dictionary_rmp.redb
+```
+
+Ouch!
+
+Record size:
+- rkyv
+```
+INFO bank{path="term_bank_142.json"}: wordbase::import: record size = 12368
+INFO bank{path="term_bank_142.json"}: wordbase::import: record size = 12368
+INFO bank{path="term_bank_142.json"}: wordbase::import: record size = 4264
+INFO bank{path="term_bank_142.json"}: wordbase::import: record size = 4776
+INFO bank{path="term_bank_142.json"}: wordbase::import: record size = 3776
+INFO bank{path="term_bank_142.json"}: wordbase::import: record size = 4888
+INFO bank{path="term_bank_142.json"}: wordbase::import: record size = 3760
+INFO bank{path="term_bank_142.json"}: wordbase::import: record size = 13688
+INFO bank{path="term_bank_142.json"}: wordbase::import: record size = 4752
+INFO bank{path="term_bank_142.json"}: wordbase::import: record size = 4752
+INFO bank{path="term_bank_142.json"}: wordbase::import: record size = 4784
+INFO bank{path="term_bank_142.json"}: wordbase::import: record size = 4280
+INFO bank{path="term_bank_142.json"}: wordbase::import: record size = 3752
+INFO bank{path="term_bank_142.json"}: wordbase::import: record size = 13688
+INFO bank{path="term_bank_142.json"}: wordbase::import: record size = 9088
+```
+- rmp_serde
+```
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 646
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 461
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 429
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 440
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 445
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 1764
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 432
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 433
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 438
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 428
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 447
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 414
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 459
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 435
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 464
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 452
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 455
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 610
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 243
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 1720
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 1720
+INFO bank{path="term_bank_68.json"}: wordbase::import: record size = 419
+```
+
+Summary:
+- `rkyv` is ~10x faster to deserialize, and ~20x faster to access
+- `rmp` is ~6x smaller on disk
+
 ## 11 Sep
 
 Been doing more research on database stuff. LMDB doesn't let me do multiple writes at once to the same Env but different DBs. (I mean LMDB supports it but not `heed`). So:

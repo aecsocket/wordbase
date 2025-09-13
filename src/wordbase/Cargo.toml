@@ -1,5 +1,4 @@
 [package]
-description = "Dictionary and word lookup service"
 name        = "wordbase"
 version     = "0.1.0"
 
@@ -17,15 +16,14 @@ workspace = true
 [package.metadata.docs.rs]
 all-features = true
 
-[features]
-poem   = ["wordbase-api/poem", "dep:poem-openapi"]
-uniffi = ["wordbase-api/uniffi", "dep:uniffi"]
-
 [dependencies]
-jmdict-furigana = { workspace = true }
-wordbase-api    = { workspace = true, features = ["render-html"] }
+rkyv = { workspace = true, features = ["pointer_width_32"] }
+wordbase-api = { workspace = true, features = ["serde", "rkyv"] }
+eyre = { workspace = true }
+zip = { workspace = true }
+rayon = { workspace = true }
+redb = { workspace = true }
 
-anyhow               = { workspace = true }
 arc-swap             = { workspace = true }
 async-compression    = { workspace = true, features = ["xz"] }
 async-stream         = { workspace = true }

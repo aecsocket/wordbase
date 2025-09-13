@@ -2,14 +2,16 @@
 #![expect(dead_code, reason = "we include all fields for completeness")]
 
 use {
+    super::structured,
     derive_more::{Deref, DerefMut, From},
     foldhash::HashMap,
     regex::Regex,
     serde::Deserialize,
     serde_repr::Deserialize_repr,
     std::sync::LazyLock,
-    wordbase_api::dict::yomitan::structured,
 };
+
+pub const INDEX_PATH: &str = "index.json";
 
 macro_rules! re {
     ($re:expr) => {
@@ -17,7 +19,6 @@ macro_rules! re {
     };
 }
 
-pub const INDEX_PATH: &str = "index.json";
 pub static TAG_BANK_PATTERN: LazyLock<Regex> = re!("tag_bank_([0-9]+?)\\.json");
 pub static TERM_BANK_PATTERN: LazyLock<Regex> = re!("term_bank_([0-9]+?)\\.json");
 pub static TERM_META_BANK_PATTERN: LazyLock<Regex> = re!("term_meta_bank_([0-9]+?)\\.json");

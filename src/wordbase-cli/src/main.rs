@@ -1,213 +1,30 @@
 #![doc = include_str!("../README.md")]
 
-// mod anki;
-mod dict;
-mod lookup;
-mod profile;
-mod query;
-
 use {
-    anyhow::{Context, Result, bail},
-    serde::Serialize,
-    std::{
-        io,
-        net::{IpAddr, Ipv4Addr, SocketAddr},
-        path::PathBuf,
-        time::Instant,
-    },
-    tracing::{info, level_filters::LevelFilter, trace},
+    eyre::{OptionExt, Result},
+    std::{io, path::PathBuf, time::Instant},
+    tracing::{info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
-    wordbase::{DictionaryId, ProfileId, Wordbase, lookup::Lookups, render::Renderer},
+    wordbase::{
+        ArchivedRecord, Record,
+        import::{Archive, Storage},
+        lookup::Lookups,
+    },
 };
 
-#[derive(Debug, clap::Parser)]
+#[derive(clap::Parser)]
 struct Args {
-    /// Wordbase engine data directory.
-    ///
-    /// Defaults to the desktop data directory.
-    #[arg(long)]
-    data_dir: Option<PathBuf>,
-    /// ID of the profile to use for commands.
-    ///
-    /// If there is only 1 profile present, this may be omitted.
-    #[arg(long, short)]
-    profile: Option<i64>,
-    /// Output format printed to stdout.
-    ///
-    /// If not specified, nothing will be output to stdout. Log messages will be
-    /// output to stderr regardless of this option.
-    #[arg(long, short)]
-    output: Option<OutputFormat>,
-    #[command(subcommand)]
+    #[clap(subcommand)]
     command: Command,
 }
 
-#[derive(Debug, Clone, Copy, clap::ValueEnum)]
-enum OutputFormat {
-    /// JSON format.
-    Json,
-}
-
-#[derive(Debug, clap::Parser)]
+#[derive(clap::Subcommand)]
 enum Command {
-    /// Run the REST API server.
-    Serve {
-        /// Socket address to serve on.
-        #[arg(short, long, default_value_t = SERVE_DEFAULT_BIND_ADDR)]
-        bind_addr: SocketAddr,
-    },
-    /// Deinflect some text and fetch records for its lemmas
-    Lookup {
-        /// Text to look up
-        ///
-        /// If `post_cursor` is not provided, the cursor is at the start of this
-        /// string.
-        ///
-        /// If `post_cursor` is provided, the cursor will be in between
-        /// `pre_cursor` and `post_cursor`.
-        pre_cursor: String,
-        /// Text after the cursor
-        post_cursor: Option<String>,
-    },
-    /// Fetch records for a lemma directly
-    LookupLemma {
-        /// Lemma to look up
-        lemma: String,
-    },
-    /// Deinflect some text and return its lemmas
-    Deinflect {
-        /// Text to deinflect
-        ///
-        /// If `post_cursor` is not provided, the cursor is at the start of this
-        /// string.
-        ///
-        /// If `post_cursor` is provided, the cursor will be in between
-        /// `pre_cursor` and `post_cursor`.
-        pre_cursor: String,
-        /// Text after the cursor
-        post_cursor: Option<String>,
-    },
-    /// Fetch records for some text and render the results as HTML
-    Render {
-        /// Text to look up
-        ///
-        /// If `post_cursor` is not provided, the cursor is at the start of this
-        /// string.
-        ///
-        /// If `post_cursor` is provided, the cursor will be in between
-        /// `pre_cursor` and `post_cursor`.
-        pre_cursor: String,
-        /// Text after the cursor
-        post_cursor: Option<String>,
-    },
-    /// Manage profiles
-    Profile {
-        #[command(subcommand)]
-        command: ProfileCommand,
-    },
-    /// Manage dictionaries
-    Dict {
-        #[command(subcommand)]
-        command: DictCommand,
-    },
-    /// Manage AnkiConnect functions
-    Anki {
-        #[command(subcommand)]
-        command: AnkiCommand,
-    },
+    Import { path: PathBuf },
+    Lookup { lemma: String },
 }
 
-#[derive(Debug, clap::Parser)]
-enum ProfileCommand {
-    /// List all profiles
-    Ls,
-    /// Create a new profile copied from the selected profile
-    Copy {
-        /// New profile name
-        name: String,
-    },
-    /// Get info for the selected profile
-    Info,
-    /// Set a property of the selected profile
-    Set {
-        #[command(subcommand)]
-        command: ProfileSetCommand,
-    },
-    /// Delete the selected profile
-    Rm,
-}
-
-#[derive(Debug, clap::Parser)]
-enum ProfileSetCommand {
-    /// Set the human-readable profile display name
-    Name {
-        /// New profile name, or none to unset (default name)
-        name: Option<String>,
-    },
-}
-
-#[derive(Debug, clap::Parser)]
-enum DictCommand {
-    /// List all dictionaries
-    Ls,
-    /// Get info on a specific dictionary
-    Info {
-        /// Dictionary ID
-        dict_id: i64,
-    },
-    /// Import a dictionary file from the filesystem
-    Import {
-        /// Path to the dictionary file
-        path: PathBuf,
-    },
-    /// Modify the state of a dictionary
-    Set {
-        /// Dictionary ID
-        dict_id: i64,
-        #[command(subcommand)]
-        command: DictSetCommand,
-    },
-    /// Swap positions of two dictionaries
-    Swap {
-        /// First dictionary ID
-        a_id: i64,
-        /// Second dictionary ID
-        b_id: i64,
-    },
-    /// Delete a dictionary with the given ID
-    Rm {
-        /// Dictionary ID
-        dict_id: i64,
-    },
-}
-
-#[derive(Debug, clap::Parser)]
-enum DictSetCommand {
-    /// Enable the dictionary for the selected profile
-    Enabled,
-    /// Disable the dictionary for the selected profile
-    Disabled,
-}
-
-#[derive(Debug, clap::Parser)]
-enum AnkiCommand {
-    /// Build and output an Anki note for the given term
-    Note {
-        headword: String,
-        #[arg(long, short)]
-        sentence: Option<String>,
-        #[arg(long, short)]
-        reading: Option<String>,
-    },
-}
-
-const SERVE_DEFAULT_BIND_ADDR: SocketAddr = SocketAddr::new(
-    IpAddr::V4(Ipv4Addr::LOCALHOST),
-    wordbase_desktop::http::DEFAULT_PORT,
-);
-
-#[tokio::main(flavor = "multi_thread")]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_writer(io::stderr)
         .with_env_filter(
@@ -219,174 +36,67 @@ async fn main() -> Result<()> {
         .init();
     let args = <Args as clap::Parser>::parse();
 
-    let data_dir = if let Some(data_dir) = args.data_dir {
-        data_dir
-    } else {
-        wordbase_desktop::data_dir()?
-    };
-
-    let start = Instant::now();
-    let engine = Wordbase::new(data_dir)
-        .await
-        .context("failed to create engine")?;
-    trace!("Created engine in {:?}", start.elapsed());
-
-    let require_profile = || {
-        if let Some(profile_id) = args.profile {
-            engine
-                .profiles()
-                .get(&ProfileId(profile_id))
-                .cloned()
-                .with_context(|| format!("no profile with ID {profile_id}"))
-        } else {
-            let profiles = engine.profiles();
-            match (profiles.len(), profiles.first()) {
-                (1, Some((_, profile))) => Ok(profile.clone()),
-                (_, _) => bail!(
-                    "more than 1 profile exists - you must explicitly specify which profile to \
-                     use using `--profile [id]`"
-                ),
-            }
-        }
-    };
-
-    let make_lookups = async { Lookups::new().await.context("failed to setup lookups") };
-
-    let make_renderer = || Renderer::new().context("failed to create renderer");
+    let data_dir =
+        wordbase_desktop::data_dir().ok_or_eyre("failed to get default data directory")?;
 
     match args.command {
-        Command::Serve { bind_addr } => {
-            info!("");
-            info!(
-                "    {} v{}",
-                env!("CARGO_PKG_NAME"),
-                env!("CARGO_PKG_VERSION")
-            );
-            info!("    http://{bind_addr}/api/docs");
-            info!("");
-            wordbase_desktop::http::serve(engine, make_lookups.await?, bind_addr).await?;
-        }
-        // lookup
-        Command::Lookup {
-            pre_cursor,
-            post_cursor,
-        } => output(
-            args.output,
-            lookup::lookup(
-                &engine,
-                &make_lookups.await?,
-                &*require_profile()?,
-                &pre_cursor,
-                post_cursor.as_deref(),
-            )
-            .await?,
-        ),
-        // query
-        Command::LookupLemma { lemma } => output(
-            args.output,
-            query::lookup_lemma(&engine, &make_lookups.await?, &*require_profile()?, &lemma)
-                .await?,
-        ),
-        Command::Render {
-            pre_cursor,
-            post_cursor,
-        } => {
-            query::render(
-                &engine,
-                &make_lookups.await?,
-                &make_renderer()?,
-                &*require_profile()?,
-                &pre_cursor,
-                post_cursor.as_deref(),
-            )
-            .await?;
-        }
-        Command::Deinflect {
-            pre_cursor,
-            post_cursor,
-        } => {
-            query::deinflect(&make_lookups.await?, &pre_cursor, post_cursor.as_deref());
-        }
-        // profile
-        Command::Profile {
-            command: ProfileCommand::Ls,
-        } => output(args.output, profile::ls(&engine)),
-        Command::Profile {
-            command: ProfileCommand::Copy { name },
-        } => profile::copy(&engine, &*require_profile()?, name).await?,
-        Command::Profile {
-            command: ProfileCommand::Info,
-        } => profile::info(&engine, &*require_profile()?),
-        Command::Profile {
-            command:
-                ProfileCommand::Set {
-                    command: ProfileSetCommand::Name { name },
-                },
-        } => profile::set_name(&engine, &*require_profile()?, name).await?,
-        Command::Profile {
-            command: ProfileCommand::Rm,
-        } => profile::rm(&engine, &*require_profile()?).await?,
-        // dictionary
-        Command::Dict {
-            command: DictCommand::Ls,
-        } => output(args.output, dict::ls(&engine, &*require_profile()?)),
-        Command::Dict {
-            command: DictCommand::Info { dict_id },
-        } => dict::info(&engine, DictionaryId(dict_id))?,
-        Command::Dict {
-            command: DictCommand::Import { path },
-        } => dict::import(&engine, &*require_profile()?, path).await?,
-        Command::Dict {
-            command:
-                DictCommand::Set {
-                    dict_id,
-                    command: DictSetCommand::Enabled,
-                },
-        } => dict::enable(&engine, &*require_profile()?, DictionaryId(dict_id)).await?,
-        Command::Dict {
-            command:
-                DictCommand::Set {
-                    dict_id,
-                    command: DictSetCommand::Disabled,
-                },
-        } => dict::disable(&engine, &*require_profile()?, DictionaryId(dict_id)).await?,
-        Command::Dict {
-            command: DictCommand::Swap { a_id, b_id },
-        } => dict::swap_positions(&engine, DictionaryId(a_id), DictionaryId(b_id)).await?,
-        Command::Dict {
-            command: DictCommand::Rm { dict_id },
-        } => dict::rm(&engine, DictionaryId(dict_id)).await?,
-        Command::Anki {
-            command:
-                AnkiCommand::Note {
-                    sentence,
-                    headword,
-                    reading,
-                },
-        } => {
-            todo!();
-        }
-            // output(
-            //     args.output,
-            //     anki::note(
-            //         &engine,
-            //         &*require_profile()?,
-            //         &headword,
-            //         sentence.as_deref(),
-            //         reading.as_deref(),
-            //     )
-            //     .await?,
-            // ),
-    }
+        Command::Import { path } => {
+            let storage = Storage { data_dir };
+            let open_archive = move || {
+                let file = std::fs::File::open(&path)?;
+                Ok(Box::new(file) as Box<dyn Archive>)
+            };
 
+            let start = Instant::now();
+            info!("Importing");
+            wordbase::import::yomitan::start_import(open_archive)?.finish(storage)?;
+            info!("Finished in {:?}", start.elapsed());
+        }
+        Command::Lookup { lemma } => {
+            const ITERS: u32 = 10_000;
+
+            {
+                let lookups = Lookups::new(&data_dir.join("dictionary_rkyv.redb"))?;
+
+                let start = Instant::now();
+                for i in 0..ITERS {
+                    for record in lookups.lookup_lemma_rkyv(&lemma)?.unsorted() {
+                        std::hint::black_box(record);
+                    }
+                    if i % 1000 == 0 {
+                        tracing::info!("{i}");
+                    }
+                }
+                tracing::info!("rkyv access: {:?}", start.elapsed());
+
+                let start = Instant::now();
+                for i in 0..ITERS {
+                    for record in lookups.lookup_lemma_rkyv(&lemma)?.unsorted() {
+                        std::hint::black_box(record.deserialize());
+                    }
+                    if i % 1000 == 0 {
+                        tracing::info!("{i}");
+                    }
+                }
+                tracing::info!("rkyv deserialize: {:?}", start.elapsed());
+            }
+
+            {
+                let lookups = Lookups::new(&data_dir.join("dictionary_rmp.redb"))?;
+
+                let start = Instant::now();
+                for i in 0..ITERS {
+                    for record in lookups.lookup_lemma_rmp(&lemma)? {
+                        let record = record?;
+                        std::hint::black_box(record);
+                    }
+                    if i % 1000 == 0 {
+                        tracing::info!("{i}");
+                    }
+                }
+                tracing::info!("rmp deserialize: {:?}", start.elapsed());
+            }
+        }
+    }
     Ok(())
-}
-
-fn output<T: Serialize + 'static>(output: Option<OutputFormat>, t: T) {
-    match output {
-        Some(OutputFormat::Json) => {
-            _ = serde_json::to_writer(io::stdout(), &t);
-        }
-        None => {}
-    }
 }

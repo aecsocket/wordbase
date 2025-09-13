@@ -11,7 +11,8 @@ use {super::jpn::PitchPosition, bytes::Bytes, derive_more::Display};
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum AudioFormat {
@@ -28,7 +29,8 @@ pub enum AudioFormat {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
 )]
 pub struct Audio {
     /// File type of [`Audio::data`].
@@ -44,7 +46,8 @@ pub struct Audio {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Forvo {
@@ -61,7 +64,8 @@ pub struct Forvo {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Jpod {
@@ -76,7 +80,8 @@ pub struct Jpod {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Nhk16 {
@@ -97,7 +102,8 @@ pub struct Nhk16 {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Shinmeikai8 {

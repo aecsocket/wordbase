@@ -1,5 +1,5 @@
 use {
-    anyhow::{Context, Result},
+    eyre::{Context, OptionExt, Result},
     futures::{StreamExt, never::Never},
     std::{future, time::Duration},
     tokio::{net::TcpStream, time},
@@ -123,11 +123,11 @@ async fn handle_stream(
         let message = stream
             .next()
             .await
-            .context("channel closed")?
+            .ok_or_eyre("channel closed")?
             .context("connection error")?
             .into_data();
         let sentence = serde_json::from_slice::<TexthookerSentence>(&message)
-            .context("failed to deserialize message as hook sentence")?;
+            .wrap_err("failed to deserialize message as hook sentence")?;
         _ = tx_event.send(TexthookerEvent::Sentence(sentence)).await;
     }
 }

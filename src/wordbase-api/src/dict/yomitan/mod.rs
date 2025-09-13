@@ -9,6 +9,7 @@
 mod html;
 #[cfg(feature = "render-html")]
 pub use html::render_html;
+use std::collections::HashMap;
 
 pub mod structured;
 
@@ -19,7 +20,8 @@ use {super::jpn::PitchPosition, crate::FrequencyValue};
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Glossary {
@@ -40,7 +42,8 @@ pub struct Glossary {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Frequency {
@@ -62,7 +65,8 @@ pub struct Frequency {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Pitch {
@@ -90,17 +94,88 @@ pub struct Pitch {
     pub devoice: Vec<PitchPosition>,
 }
 
-/// Categorises a [`Glossary`] entry for a given [`Term`].
+/// Phonetic information for a term.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct Phonetics {
+    /// Phonetic transcriptions.
+    pub transcriptions: Vec<PhoneticTranscription>,
+}
+
+/// One of the ways a term may be pronounced.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct PhoneticTranscription {
+    /// [International Phonetic Alphabet][ipa] representation of the term.
+    ///
+    /// [ipa]: https://en.wikipedia.org/wiki/International_Phonetic_Alphabet
+    pub ipa: String,
+    /// Dictionary-specific tags for this transcription.
+    pub tags: Vec<String>,
+}
+
+/// Information on a kanji character.
 ///
-/// [`Term`]: crate::Term
+/// Terms associated with this record will always be [`Term::Headword`]s.
+///
+/// [`Term::Headword`]: crate::Term::Headword
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
 )]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[serde(deny_unknown_fields)]
+pub struct Kanji {
+    /// [On'yomi] readings of this kanji.
+    ///
+    /// [On'yomi]: https://en.wikipedia.org/wiki/On%27yomi
+    pub onyomi: Vec<String>,
+    /// [Kun'yomi] readings of this kanji.
+    ///
+    /// [Kun'yomi]: https://en.wikipedia.org/wiki/Kun%27yomi
+    pub kunyomi: Vec<String>,
+    /// Meanings of this kanji.
+    ///
+    /// The language that meanings are written in is left undefined.
+    pub meanings: Vec<String>,
+    /// Extra dictionary-specific information about this kanji.
+    ///
+    /// Yomitan refers to this as "stats", but that's not quite accurate to the
+    /// purpose of this field. It can also store extra data like the Unicode
+    /// codepoint (key `Unicode`), composition (key `漢字構成`), or indexing
+    /// radical (key `部首`).
+    pub extra: HashMap<String, String>,
+}
+
+/// Categorises a [`Glossary`] entry for a given [`Term`].
+///
+/// [`Term`]: crate::Term
+#[derive(Debug, Clone)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(deny_unknown_fields)
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct GlossaryTag {
     /// Human-readable name for this tag.
     pub name: String,
