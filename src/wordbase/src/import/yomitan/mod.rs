@@ -1,5 +1,8 @@
 use {
-    crate::import::{Archive, FinishImport, OpenArchive, Storage, Tables},
+    crate::{
+        db::{ImportStorage, ImportTables, ImportTransaction},
+        import::{Archive, FinishImport, OpenArchive},
+    },
     eyre::{Context as _, Result, eyre},
     foldhash::{HashMap, HashMapExt},
     rayon::prelude::*,
@@ -22,20 +25,33 @@ use {
 
 mod schema;
 
-fn archive_reader(open_archive: &impl OpenArchive) -> Result<ZipArchive<Box<dyn Archive>>> {
+fn archive_reader(open_archive: &impl OpenArchive) -> Result<ZipArchive<impl Archive>> {
     let archive = open_archive
         .open_archive()
         .wrap_err("failed to open archive")?;
     ZipArchive::new(archive).wrap_err("failed to read zip archive")
 }
 
-pub fn start_import(open_archive: impl OpenArchive) -> Result<Box<dyn FinishImport>> {
-    let mut archive = archive_reader(&open_archive)?;
+pub fn start(open_archive: &impl OpenArchive) -> Result<impl FinishImport> {
+    struct Finish<'o, O> {
+        open_archive: &'o O,
+        index: schema::Index,
+    }
+
+    impl<O: OpenArchive> FinishImport for Finish<'_, O> {
+        fn finish(self, storage: impl ImportStorage) -> Result<()> {
+            finish_import(self.open_archive, storage, self.index)
+        }
+    }
+
+    let mut archive = archive_reader(open_archive)?;
 
     let index = {
         let file = archive
             .by_name(schema::INDEX_PATH)
             .wrap_err_with(|| eyre!("missing `{}`", schema::INDEX_PATH))?;
+
+        debug!("Reading index");
         serde_json::from_reader::<_, schema::Index>(file).wrap_err("failed to parse index")?
     };
 
@@ -44,18 +60,20 @@ pub fn start_import(open_archive: impl OpenArchive) -> Result<Box<dyn FinishImpo
     meta.description = index.description.clone();
     meta.url = index.url.clone();
     meta.attribution = index.attribution.clone();
+    debug!("{meta:?}");
 
-    Ok(Box::new(move |storage| {
-        finish_import(open_archive, storage, index)
-    }))
+    Ok(Finish {
+        open_archive,
+        index,
+    })
 }
 
 fn finish_import(
-    open_archive: impl OpenArchive,
-    storage: Storage,
+    open_archive: &impl OpenArchive,
+    mut storage: impl ImportStorage,
     index: schema::Index,
 ) -> Result<()> {
-    let archive = archive_reader(&open_archive)?;
+    let archive = archive_reader(open_archive)?;
 
     let (mut tag_banks, mut term_banks, mut term_meta_banks, mut kanji_banks, mut kanji_meta_banks) =
         (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
@@ -85,7 +103,7 @@ fn finish_import(
     );
 
     debug!("Beginning write");
-    let txn = storage.begin_write().wrap_err("failed to begin writing")?;
+    let mut txn = storage.begin_write().wrap_err("failed to begin writing")?;
 
     debug!("Opening tables");
     let tables = Mutex::new(txn.open_tables()?);
@@ -93,7 +111,7 @@ fn finish_import(
     debug!("Processing banks");
     let banks_done = AtomicUsize::new(0);
     let bank_cx = BankContext {
-        open_archive: &open_archive,
+        open_archive,
         tables: &tables,
         num_banks,
         banks_done: &banks_done,
@@ -154,15 +172,18 @@ fn finish_import(
     Ok(())
 }
 
-struct BankContext<'txn, 'cx, O> {
+struct BankContext<'cx, O, W> {
     open_archive: &'cx O,
-    tables: &'cx Mutex<Tables<'txn>>,
+    tables: &'cx Mutex<W>,
     num_banks: usize,
     banks_done: &'cx AtomicUsize,
     index: &'cx schema::Index,
 }
 
-fn parse_bank<T, O: OpenArchive>(cx: &BankContext<O>, path: &str) -> Result<Vec<T>>
+fn parse_bank<T, O: OpenArchive, W: ImportTables>(
+    cx: &BankContext<O, W>,
+    path: &str,
+) -> Result<Vec<T>>
 where
     Vec<T>: DeserializeOwned,
 {
@@ -171,10 +192,10 @@ where
     serde_json::from_reader::<_, Vec<T>>(file).wrap_err("failed to parse file")
 }
 
-fn import_bank<T, O: OpenArchive>(
-    cx: &BankContext<O>,
+fn import_bank<T, O: OpenArchive, W: ImportTables>(
+    cx: &BankContext<O, W>,
     path: &str,
-    mut import_item: impl FnMut(&mut Tables, T, &schema::Index) -> Result<()>,
+    mut import_item: impl FnMut(&mut W, T, &schema::Index) -> Result<()>,
 ) -> Result<()>
 where
     Vec<T>: DeserializeOwned,
@@ -190,12 +211,12 @@ where
     }
 
     let banks_done = cx.banks_done.fetch_add(1, atomic::Ordering::SeqCst) + 1;
-    trace!("{banks_done}/{} banks imported", cx.num_banks);
+    debug!("{banks_done}/{} banks imported", cx.num_banks);
     Ok(())
 }
 
 fn import_term(
-    tables: &mut Tables,
+    tables: &mut impl ImportTables,
     data: schema::Term,
     all_tags: &HashMap<&str, GlossaryTag>,
 ) -> Result<()> {
@@ -245,7 +266,7 @@ fn import_term(
 }
 
 fn import_term_meta(
-    tables: &mut Tables,
+    tables: &mut impl ImportTables,
     data: schema::TermMeta,
     index: &schema::Index,
 ) -> Result<()> {
@@ -346,7 +367,11 @@ fn import_term_meta(
     Ok(())
 }
 
-fn import_kanji(tables: &mut Tables, data: schema::Kanji, _index: &schema::Index) -> Result<()> {
+fn import_kanji(
+    tables: &mut impl ImportTables,
+    data: schema::Kanji,
+    _index: &schema::Index,
+) -> Result<()> {
     let term = Term::from_headword(data.character)?;
 
     let record = Kanji {
@@ -373,7 +398,7 @@ fn import_kanji(tables: &mut Tables, data: schema::Kanji, _index: &schema::Index
 }
 
 fn import_kanji_meta(
-    _tables: &mut Tables,
+    _tables: &mut impl ImportTables,
     _data: schema::KanjiMeta,
     _index: &schema::Index,
 ) -> Result<()> {

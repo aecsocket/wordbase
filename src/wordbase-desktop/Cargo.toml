@@ -26,6 +26,7 @@ async-channel     = { workspace = true }
 async-stream      = { workspace = true, optional = true }
 bytes             = { workspace = true }
 directories       = { workspace = true }
+eyre              = { workspace = true }
 futures           = { workspace = true }
 poem              = { workspace = true, optional = true, features = ["anyhow"] }
 poem-openapi      = { workspace = true, optional = true, features = ["swagger-ui"] }
@@ -35,4 +36,3 @@ tokio-tungstenite = { workspace = true }
 tokio-util        = { workspace = true }
 tracing           = { workspace = true }
 wordbase          = { workspace = true }
-eyre = { workspace = true }

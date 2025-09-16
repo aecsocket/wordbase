@@ -5,8 +5,8 @@ mod norm_string;
 mod protocol;
 mod term;
 
-use derive_more::From;
-pub use {norm_string::*, protocol::*, term::*};
+use {derive_more::From, uuid::Uuid};
+pub use {norm_string::*, protocol::*, term::*, uuid};
 
 #[cfg(feature = "uniffi")]
 uniffi::setup_scaffolding!();
@@ -156,7 +156,7 @@ impl poem_openapi::types::Example for Dictionary {
         meta.version = Some("2025.02.11.0".into());
         meta.url = Some("https://jitendex.org".into());
         Self {
-            id: DictionaryId(4),
+            id: DictionaryId(uuid::uuid!("6c0be404-fb5f-4f25-a9cc-6bf78667bb2b")),
             meta,
             position: 3,
         }
@@ -327,23 +327,28 @@ pub trait RecordType:
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
 )]
 #[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
-pub struct RecordId(pub i64);
+pub struct RecordId(pub u64);
 
 #[cfg(feature = "uniffi")]
-uniffi::custom_newtype!(RecordId, i64);
+uniffi::custom_newtype!(RecordId, u64);
 
 /// Opaque and unique identifier for a [`Dictionary`] in the engine.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
 )]
 #[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
-pub struct DictionaryId(pub i64);
+pub struct DictionaryId(pub Uuid);
 
-#[cfg(feature = "uniffi")]
-uniffi::custom_newtype!(DictionaryId, i64);
+impl DictionaryId {
+    /// Creates a new random ID.
+    #[must_use]
+    pub fn random() -> Self {
+        Self(Uuid::now_v7())
+    }
+}
 
 /// How often a [`Term`] appears in a single [`Dictionary`].
 ///
@@ -421,13 +426,18 @@ pub struct Profile {
 impl poem_openapi::types::Example for Profile {
     fn example() -> Self {
         Self {
-            id: ProfileId(3),
+            id: ProfileId(uuid::uuid!("f619b6a1-28cb-4e32-8294-85b7f51f76c5")),
             name: Some(NormString::new("Japanese").expect("valid `NormString`")),
-            sorting_dictionary: Some(DictionaryId(4)),
+            sorting_dictionary: Some(DictionaryId(uuid::uuid!(
+                "6c0be404-fb5f-4f25-a9cc-6bf78667bb2b"
+            ))),
             font_family: None,
             anki_deck: Some("Japanese Cards".into()),
             anki_note_type: Some("Lapis".into()),
-            enabled_dictionaries: vec![DictionaryId(1), DictionaryId(2), DictionaryId(4)],
+            enabled_dictionaries: vec![
+                DictionaryId(uuid::uuid!("6c0be404-fb5f-4f25-a9cc-6bf78667bb2b")),
+                DictionaryId(uuid::uuid!("cb5b772c-6cd7-47dd-aca8-651de6f376ae")),
+            ],
         }
     }
 }
@@ -449,14 +459,35 @@ impl Profile {
 }
 
 /// Opaque and unique identifier for a [`Profile`] in the engine.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
 )]
 #[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
-pub struct ProfileId(pub i64);
+pub struct ProfileId(pub Uuid);
 
 #[cfg(feature = "uniffi")]
-uniffi::custom_newtype!(ProfileId, i64);
+const _: () = {
+    #[derive(uniffi::Record)]
+    pub struct UuidFfi {
+        hi: u64,
+        lo: u64,
+    }
+
+    macro_rules! uuid_wrapper {
+        ($ty:ident) => {
+            uniffi::custom_type!($ty, UuidFfi, {
+                lower: |id| {
+                    let (hi, lo) = id.0.as_u64_pair();
+                    UuidFfi { hi, lo }
+                },
+                try_lift: |ffi| Ok($ty(Uuid::from_u64_pair(ffi.hi, ffi.lo))),
+            });
+        };
+    }
+
+    uuid_wrapper!(DictionaryId);
+    uuid_wrapper!(ProfileId);
+};

@@ -49,7 +49,7 @@ wordbase-desktop = { path = "src/wordbase-desktop" }
 wordbase-api = { path = "src/wordbase-api" }
 # wordbase-server = { path = "src/wordbase-server" }
 
-eyre = { version = "0.6.12" }
+adw                  = { package = "libadwaita", version = "0.7.2" }
 android_logger       = { version = "0.15.0" }
 ankiconnect          = { version = "0.2" }
 anyhow               = { version = "1.0" }
@@ -65,13 +65,15 @@ bimap                = { version = "0.6" }
 bytes                = { version = "1.10" }
 bzip2                = { version = "0.5" }
 cfg-if               = { version = "1.0" }
-rkyv = { version = "0.8.11" }
 clap                 = { version = "4.5" }
+criterion            = { version = "0.7" }
 data-encoding        = { version = "2.9" }
 derive_more          = { version = "2.0" }
 dioxus               = { version = "0.6" }
 directories          = { version = "6.0" }
 distance             = { version = "0.4" }
+either               = { version = "1.15" }
+eyre                 = { version = "0.6.12" }
 foldhash             = { version = "0.1.4" }
 form_urlencoded      = { version = "1.2" }
 futures              = { version = "0.3" }
@@ -79,11 +81,12 @@ genawaiter           = { version = "0.99" }
 gio                  = { version = "0.20.9" }
 glib                 = { version = "0.20" }
 gtk                  = { package = "gtk4", version = "0.9" }
+heed                 = { version = "0.22" }
 hex                  = { version = "0.4" }
 html-escape          = { version = "0.2" }
+humansize            = { version = "2.1" }
 indexmap             = { version = "2.8" }
 itertools            = { version = "0.14" }
-adw                  = { package = "libadwaita", version = "0.7.2" }
 libspa               = { version = "0.8" }
 lindera              = { version = "1.1.2" }
 maud                 = { version = "0.27" }
@@ -96,19 +99,23 @@ poem                 = { version = "3.1.9" }
 poem-openapi         = { version = "5.1" }
 quote                = { version = "1.0" }
 rand                 = { version = "0.9" }
+rayon                = { version = "1.11" }
+redb                 = { version = "3.0" }
 regex                = { version = "1.11" }
 relm4                = { version = "0.9.1" }
 relm4-icons          = { version = "0.10.0-beta.2" }
 relm4-icons-build    = { version = "0.10.0-beta.2" }
 reqwest              = { version = "0.12.15", default-features = false }
+rkyv                 = { version = "0.8.11" }
 rmp-serde            = { version = "1.3" }
+rocksdb              = { version = "0.24" }
 rustyline            = { version = "15.0" }
 serde                = { version = "1.0" }
 serde_json           = { version = "1.0" }
 serde_repr           = { version = "0.1" }
 sha2                 = { version = "0.10" }
 sqlx                 = { version = "0.8" }
-tempfile             = { version = "3.20" }
+tempfile             = { version = "3.22" }
 tera                 = { version = "1.20" }
 tokio                = { version = "1.44.2" }
 tokio-stream         = { version = "0.1" }
@@ -118,12 +125,11 @@ tracing              = { version = "0.1" }
 tracing-subscriber   = { version = "0.3" }
 unicode-segmentation = { version = "1.12" }
 uniffi               = { version = "0.29.2" }
+uuid                 = { version = "1.18" }
 webkit               = { package = "webkit6", version = "0.4" }
 xz2                  = { version = "0.1" }
 zbus                 = { version = "5.5", default-features = false }
 zip                  = { version = "5.1" }
-rayon = { version = "1.11" }
-redb = { version = "3.0" }
 
 [workspace.metadata.cargo-shear]
 ignored = ["bzip2"]

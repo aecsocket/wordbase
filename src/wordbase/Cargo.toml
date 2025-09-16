@@ -1,6 +1,6 @@
 [package]
-name        = "wordbase"
-version     = "0.1.0"
+name    = "wordbase"
+version = "0.1.0"
 
 authors.workspace      = true
 categories.workspace   = true
@@ -16,14 +16,12 @@ workspace = true
 [package.metadata.docs.rs]
 all-features = true
 
-[dependencies]
-rkyv = { workspace = true, features = ["pointer_width_32"] }
-wordbase-api = { workspace = true, features = ["serde", "rkyv"] }
-eyre = { workspace = true }
-zip = { workspace = true }
-rayon = { workspace = true }
-redb = { workspace = true }
+[features]
+heed    = ["dep:heed"]
+redb    = ["dep:redb"]
+rocksdb = ["dep:rocksdb"]
 
+[dependencies]
 arc-swap             = { workspace = true }
 async-compression    = { workspace = true, features = ["xz"] }
 async-stream         = { workspace = true }
@@ -32,8 +30,11 @@ async_zip            = { workspace = true, features = ["deflate", "tokio"] }
 bytes                = { workspace = true }
 data-encoding        = { workspace = true }
 distance             = { workspace = true }
+either               = { workspace = true }
+eyre                 = { workspace = true }
 foldhash             = { workspace = true }
 futures              = { workspace = true }
+heed                 = { workspace = true, optional = true }
 indexmap             = { workspace = true, features = ["serde"] }
 itertools            = { workspace = true }
 lindera              = { workspace = true, features = ["embedded-unidic"] }
@@ -41,8 +42,12 @@ maud                 = { workspace = true }
 paste                = { workspace = true }
 pin-project          = { workspace = true }
 poem-openapi         = { workspace = true, optional = true }
+rayon                = { workspace = true }
+redb                 = { workspace = true, optional = true }
 regex                = { workspace = true }
+rkyv                 = { workspace = true }
 rmp-serde            = { workspace = true }
+rocksdb              = { workspace = true, optional = true }
 serde                = { workspace = true, features = ["derive"] }
 serde_json           = { workspace = true, features = ["preserve_order"] }
 serde_repr           = { workspace = true }
@@ -54,6 +59,8 @@ tokio-util           = { workspace = true, features = ["rt"] }
 tracing              = { workspace = true }
 unicode-segmentation = { workspace = true }
 uniffi               = { workspace = true, optional = true, features = ["tokio"] }
+wordbase-api         = { workspace = true, features = ["serde", "rkyv"] }
+zip                  = { workspace = true }
 
 derive_more = { workspace = true, features = [
   "debug",
@@ -65,5 +72,9 @@ derive_more = { workspace = true, features = [
 ] }
 
 [dev-dependencies]
-tempfile = { workspace = true }
-tokio    = { workspace = true, features = ["full"] }
+ascii_table        = { workspace = true, features = ["wide_characters"] }
+clap               = { workspace = true, features = ["derive"] }
+humansize          = { workspace = true }
+tempfile           = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+wordbase           = { path = ".", features = ["heed", "redb", "rocksdb"] }

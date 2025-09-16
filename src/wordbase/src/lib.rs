@@ -5,4 +5,4 @@ pub use wordbase_api::*;
 
 pub mod db;
 pub mod import;
-pub mod lookup;
+// pub mod lookup;

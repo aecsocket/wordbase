@@ -20,6 +20,7 @@ all-features = true
 wordbase         = { workspace = true }
 wordbase-desktop = { workspace = true }
 
+adw                = { workspace = true, features = ["v1_7"] }
 anyhow             = { workspace = true }
 arc-swap           = { workspace = true }
 ashpd              = { workspace = true, features = ["gtk4"] }
@@ -36,7 +37,6 @@ gio                = { workspace = true }
 glib               = { workspace = true, features = ["log"] }
 gtk                = { workspace = true, features = ["gnome_47", "blueprint"] }
 indexmap           = { workspace = true }
-adw                = { workspace = true, features = ["v1_7"] }
 libspa             = { workspace = true }
 maud               = { workspace = true }
 notify             = { workspace = true }
