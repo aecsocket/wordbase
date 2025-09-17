@@ -3,9 +3,10 @@
 use {
     ascii_table::AsciiTable,
     eyre::{Context, Result, eyre},
+    futures::StreamExt,
     humansize::{DECIMAL, format_size},
     std::{
-        io,
+        fs, io,
         path::{Path, PathBuf},
         time::Instant,
     },
@@ -13,10 +14,9 @@ use {
     tracing::{debug, info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
     wordbase::{
-        DictionaryId, codec,
-        import::{self, FinishImport, OpenArchive},
+        codec,
+        import::{self, FinishImport, ImportEvent},
         storage::{self, ImportStorage, LookupStorage, Lookups},
-        uuid::Uuid,
     },
 };
 
@@ -46,29 +46,29 @@ fn main() -> Result<()> {
     let mut cx = BenchContext {
         temp_dir: &temp_dir,
         lemma: &args.lemma,
-        open_archive: &args.archive,
+        archive: &args.archive,
         results: &mut results,
     };
 
-    bench_db(&mut cx, "redb+rmp", |path| {
-        Ok(storage::Redb::<codec::Rmp>::new(path))
+    bench_db(&mut cx, "redb+rmp", || {
+        Ok(storage::Redb::<codec::Rmp>::new())
     })?;
-    bench_db(&mut cx, "redb+rkyv", |path| {
-        Ok(storage::Redb::<codec::Rkyv>::new(path))
-    })?;
-
-    bench_db(&mut cx, "heed+rmp", |path| {
-        Ok(storage::Heed::<codec::Rmp>::new(path))
-    })?;
-    bench_db(&mut cx, "heed+rkyv", |path| {
-        Ok(storage::Heed::<codec::Rkyv>::new(path))
+    bench_db(&mut cx, "redb+rkyv", || {
+        Ok(storage::Redb::<codec::Rkyv>::new())
     })?;
 
-    bench_db(&mut cx, "rocksdb+rmp", |path| {
-        storage::RocksDb::<codec::Rmp>::new(path)
+    bench_db(&mut cx, "heed+rmp", || {
+        Ok(storage::Heed::<codec::Rmp>::new())
     })?;
-    bench_db(&mut cx, "rocksdb+rkyv", |path| {
-        storage::RocksDb::<codec::Rkyv>::new(path)
+    bench_db(&mut cx, "heed+rkyv", || {
+        Ok(storage::Heed::<codec::Rkyv>::new())
+    })?;
+
+    bench_db(&mut cx, "rocksdb+rmp", || {
+        storage::RocksDb::<codec::Rmp>::new()
+    })?;
+    bench_db(&mut cx, "rocksdb+rkyv", || {
+        storage::RocksDb::<codec::Rkyv>::new()
     })?;
 
     let mut table = AsciiTable::default();
@@ -81,36 +81,37 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-struct BenchContext<'a, O> {
+struct BenchContext<'a> {
     temp_dir: &'a TempDir,
     lemma: &'a str,
-    open_archive: &'a O,
+    archive: &'a Path,
     results: &'a mut Vec<Vec<String>>,
 }
 
-fn bench_db<O: OpenArchive, S: storage::Storage>(
-    cx: &mut BenchContext<O>,
+fn bench_db<S: storage::Storage>(
+    cx: &mut BenchContext,
     name: &str,
-    make_storage: impl FnOnce(&Path) -> Result<S>,
+    make_storage: impl FnOnce() -> Result<S>,
 ) -> Result<()> {
-    info!("Importing into `{name}`");
+    const LOOKUP_ITERS: usize = 10_000;
+
+    let dictionary_dir = cx.temp_dir.path().join(name);
+    fs::create_dir_all(&dictionary_dir)
+        .wrap_err_with(|| eyre!("failed to create directory {dictionary_dir:?}"))?;
+    info!("Benchmarking `{name}` at {dictionary_dir:?}");
 
     (|| {
-        const DICTIONARY_ID: DictionaryId = DictionaryId(Uuid::nil());
-        const LOOKUP_ITERS: usize = 10_000;
-
         let start = Instant::now();
-
-        let path = cx.temp_dir.path().join(name);
-        let storage = make_storage(&path).wrap_err("failed to make storage")?;
+        let storage = make_storage().wrap_err("failed to make storage")?;
         let mut import_storage = storage
-            .begin_import(DICTIONARY_ID)
+            .begin_import(&dictionary_dir)
             .wrap_err("failed to begin import")?;
 
-        import::yomitan::start(cx.open_archive)
-            .wrap_err("failed to start import")?
-            .finish(&mut import_storage)
-            .wrap_err("failed to finish import")?;
+        let (tx_progress, _) = async_channel::bounded(1);
+        let (meta, import) = import::yomitan::start(cx.archive)?;
+        info!("{meta:?}");
+        import.finish(&mut import_storage, tx_progress)?;
+
         let lookup_storage = import_storage
             .open_lookups()
             .wrap_err("failed to open storage for lookups")?;
@@ -118,7 +119,7 @@ fn bench_db<O: OpenArchive, S: storage::Storage>(
         let import_time = start.elapsed();
         let import_time = format!("{import_time:.2?}");
 
-        let storage_size = get_size(&path).wrap_err("failed to get storage size")?;
+        let storage_size = get_size(&dictionary_dir).wrap_err("failed to get storage size")?;
         let storage_size = format_size(storage_size, DECIMAL);
         info!(
             "Import stats:

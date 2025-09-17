@@ -27,11 +27,9 @@ codec-rkyv = ["dep:rkyv"]
 codec-rmp  = ["dep:rmp-serde"]
 
 [dependencies]
-arc-swap             = { workspace = true }
-async-compression    = { workspace = true, features = ["xz"] }
+async-channel = { workspace = true }
 async-stream         = { workspace = true }
-async-tar            = { workspace = true }
-async_zip            = { workspace = true, features = ["deflate", "tokio"] }
+arc-swap             = { workspace = true }
 bytes                = { workspace = true }
 data-encoding        = { workspace = true }
 distance             = { workspace = true }
@@ -65,6 +63,7 @@ unicode-segmentation = { workspace = true }
 uniffi               = { workspace = true, optional = true, features = ["tokio"] }
 wordbase-api         = { workspace = true, features = ["serde", "rkyv"] }
 zip                  = { workspace = true }
+uuid                 = { workspace = true }
 
 derive_more = { workspace = true, features = [
   "debug",

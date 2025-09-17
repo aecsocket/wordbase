@@ -1,10 +1,14 @@
-use {eyre::Result, wordbase_api::Record};
+use {crate::codec::CodecKind, eyre::Result, wordbase_api::Record};
 
 pub struct Codec;
 
 impl super::Codec for Codec {
     type Encoder = Encoder;
     type Decoder = Decoder;
+
+    fn kind() -> CodecKind {
+        CodecKind::Rmp
+    }
 
     fn encoder() -> Self::Encoder {
         Encoder {

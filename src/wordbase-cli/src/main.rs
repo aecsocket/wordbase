@@ -5,23 +5,33 @@ use {
     std::{io, path::PathBuf, time::Instant},
     tracing::{info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
-    wordbase::{
-        DictionaryId,
-        db::{self, Storage},
-        import::FinishImport,
-    },
+    wordbase::{DictionaryId, import::FinishImport},
 };
 
-#[derive(clap::Parser)]
+#[derive(Debug, Clone, clap::Parser)]
 struct Args {
+    #[arg(long)]
+    data_dir: Option<PathBuf>,
     #[clap(subcommand)]
     command: Command,
 }
 
-#[derive(clap::Subcommand)]
+#[derive(Debug, Clone, clap::Subcommand)]
 enum Command {
+    Dict {
+        #[command(subcommand)]
+        command: DictCommand,
+    },
+    Lookup {
+        lemma: String,
+    },
+}
+
+#[derive(Debug, Clone, clap::Subcommand)]
+enum DictCommand {
+    Ls,
     Import { path: PathBuf },
-    Lookup { lemma: String },
+    Rm { id: String },
 }
 
 fn main() -> Result<()> {
@@ -36,11 +46,16 @@ fn main() -> Result<()> {
         .init();
     let args = <Args as clap::Parser>::parse();
 
-    let data_dir =
-        wordbase_desktop::data_dir().ok_or_eyre("failed to get default data directory")?;
+    let data_dir = if let Some(data_dir) = args.data_dir {
+        data_dir
+    } else {
+        wordbase_desktop::data_dir().ok_or_eyre("failed to get default data directory")?
+    };
 
     match args.command {
-        Command::Import { path } => {
+        Command::Dict {
+            command: DictCommand::Import { path },
+        } => {
             let dictionaries_dir = data_dir.join("dictionaries");
             std::fs::create_dir_all(&dictionaries_dir)
                 .wrap_err("failed to create dictionaries directory")?;
@@ -51,55 +66,7 @@ fn main() -> Result<()> {
             wordbase::import::yomitan::start(&path)?.finish(storage)?;
             info!("Finished in {:?}", start.elapsed());
         }
-        Command::Lookup { lemma } => {
-            const ITERS: u32 = 10_000;
-
-            // {
-            //     let lookups =
-            // Lookups::new(&data_dir.join("dictionary_rkyv.redb"))?;
-
-            //     let start = Instant::now();
-            //     for i in 0..ITERS {
-            //         for record in
-            // lookups.lookup_lemma_rkyv(&lemma)?.unsorted() {
-            //             std::hint::black_box(record);
-            //         }
-            //         if i % 1000 == 0 {
-            //             tracing::info!("{i}");
-            //         }
-            //     }
-            //     tracing::info!("rkyv access: {:?}", start.elapsed());
-
-            //     let start = Instant::now();
-            //     for i in 0..ITERS {
-            //         for record in
-            // lookups.lookup_lemma_rkyv(&lemma)?.unsorted() {
-            //             std::hint::black_box(record.deserialize());
-            //         }
-            //         if i % 1000 == 0 {
-            //             tracing::info!("{i}");
-            //         }
-            //     }
-            //     tracing::info!("rkyv deserialize: {:?}", start.elapsed());
-            // }
-
-            // {
-            //     let lookups =
-            // Lookups::new(&data_dir.join("dictionary_rmp.redb"))?;
-
-            //     let start = Instant::now();
-            //     for i in 0..ITERS {
-            //         for record in lookups.lookup_lemma_rmp(&lemma)? {
-            //             let record = record?;
-            //             std::hint::black_box(record);
-            //         }
-            //         if i % 1000 == 0 {
-            //             tracing::info!("{i}");
-            //         }
-            //     }
-            //     tracing::info!("rmp deserialize: {:?}", start.elapsed());
-            // }
-        }
+        Command::Lookup { lemma } => {}
     }
     Ok(())
 }

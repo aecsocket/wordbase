@@ -10,9 +10,18 @@ pub mod rmp;
 #[cfg(feature = "codec-rmp")]
 pub type Rmp = rmp::Codec;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
+pub enum CodecKind {
+    Rkyv,
+    Rmp,
+}
+
 pub trait Codec: Send + Sync + 'static {
     type Encoder: Encoder;
     type Decoder: Decoder;
+
+    fn kind() -> CodecKind;
 
     fn encoder() -> Self::Encoder;
 

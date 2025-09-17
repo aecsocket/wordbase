@@ -1,4 +1,5 @@
 use {
+    crate::codec::CodecKind,
     eyre::{Context, Result},
     rkyv::rancor,
     wordbase_api::{ArchivedRecord, Record},
@@ -9,6 +10,10 @@ pub struct Codec;
 impl super::Codec for Codec {
     type Encoder = Encoder;
     type Decoder = Decoder;
+
+    fn kind() -> CodecKind {
+        CodecKind::Rkyv
+    }
 
     fn encoder() -> Self::Encoder {
         Encoder {}

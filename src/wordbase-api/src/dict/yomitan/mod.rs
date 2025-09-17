@@ -37,6 +37,44 @@ pub struct Glossary {
     pub content: Vec<structured::Content>,
 }
 
+/// Categorises a [`Glossary`] entry for a given [`Term`].
+///
+/// [`Term`]: crate::Term
+#[derive(Debug, Clone)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(deny_unknown_fields)
+)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+    rkyv(derive(Debug))
+)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct GlossaryTag {
+    /// Human-readable name for this tag.
+    pub name: String,
+    /// What category this tag is defined as.
+    ///
+    /// This is an arbitrary (or empty) string, but Yomitan has several built-in
+    /// tag categories [listed here][tags]. In addition, for kanji term records,
+    /// certain tags have a special meaning.
+    // TODO what special meanings?
+    ///
+    /// [tags]: https://github.com/yomidevs/yomitan/blob/09c55aeecd1d0912e3a664496a7a87640a41aa05/docs/making-yomitan-dictionaries.md#tag-categories
+    pub category: String,
+    /// Human-readable description of what this tag means for this term.
+    // TODO: what?
+    // In kanji banks, if `category` is [`GlossaryTag::INDEX`], this is used as
+    // the name of a dictionary.
+    pub description: String,
+    /// Order of this tag relative to other tags in the same dictionary.
+    ///
+    /// A higher value means the tag will be displayed later.
+    pub order: i64,
+}
+
 /// How often this term appears in this dictionary's corpus.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -159,42 +197,4 @@ pub struct Kanji {
     /// codepoint (key `Unicode`), composition (key `漢字構成`), or indexing
     /// radical (key `部首`).
     pub extra: HashMap<String, String>,
-}
-
-/// Categorises a [`Glossary`] entry for a given [`Term`].
-///
-/// [`Term`]: crate::Term
-#[derive(Debug, Clone)]
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(deny_unknown_fields)
-)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
-    rkyv(derive(Debug))
-)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-pub struct GlossaryTag {
-    /// Human-readable name for this tag.
-    pub name: String,
-    /// What category this tag is defined as.
-    ///
-    /// This is an arbitrary (or empty) string, but Yomitan has several built-in
-    /// tag categories [listed here][tags]. In addition, for kanji term records,
-    /// certain tags have a special meaning.
-    // TODO what special meanings?
-    ///
-    /// [tags]: https://github.com/yomidevs/yomitan/blob/09c55aeecd1d0912e3a664496a7a87640a41aa05/docs/making-yomitan-dictionaries.md#tag-categories
-    pub category: String,
-    /// Human-readable description of what this tag means for this term.
-    // TODO: what?
-    // In kanji banks, if `category` is [`GlossaryTag::INDEX`], this is used as
-    // the name of a dictionary.
-    pub description: String,
-    /// Order of this tag relative to other tags in the same dictionary.
-    ///
-    /// A higher value means the tag will be displayed later.
-    pub order: i64,
 }

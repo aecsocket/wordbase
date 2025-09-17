@@ -1,5 +1,9 @@
 use {
-    crate::codec::{Codec, Decoder, Encoder},
+    crate::{
+        codec::{Codec, Decoder, Encoder},
+        storage::StorageKind,
+    },
+    derive_more::Debug,
     either::Either,
     eyre::{Context, Result, eyre},
     redb::{
@@ -7,46 +11,61 @@ use {
         ReadOnlyTable, ReadTransaction, ReadableDatabase, Table, TableDefinition, WriteTransaction,
     },
     std::{
-        fs, iter,
+        iter,
         marker::PhantomData,
-        path::PathBuf,
+        path::{Path, PathBuf},
         sync::atomic::{self, AtomicU64},
     },
     tracing::debug,
-    wordbase_api::{DictionaryId, Record, RecordId, Term},
+    wordbase_api::{Record, RecordId, Term},
 };
 
 const RECORDS: TableDefinition<u64, &[u8]> = TableDefinition::new("records");
 const HEADWORDS: MultimapTableDefinition<&str, u64> = MultimapTableDefinition::new("headwords");
 const READINGS: MultimapTableDefinition<&str, u64> = MultimapTableDefinition::new("readings");
 
+#[derive(Debug)]
 pub struct Storage<C> {
-    dictionaries_dir: PathBuf,
+    #[debug(ignore)]
     _phantom: PhantomData<C>,
 }
 
 impl<C: Codec> Storage<C> {
-    pub fn new(dictionaries_dir: impl Into<PathBuf>) -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
-            dictionaries_dir: dictionaries_dir.into(),
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<C: Codec> Default for Storage<C> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<C: Codec> Clone for Storage<C> {
+    fn clone(&self) -> Self {
+        Self {
             _phantom: PhantomData,
         }
     }
 }
 
 impl<C: Codec> super::Storage for Storage<C> {
-    #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn begin_import(&self, dictionary_id: DictionaryId) -> Result<ImportStorage<C>> {
-        let dictionary_dir = self
-            .dictionaries_dir
-            .join(dictionary_id.0.as_hyphenated().to_string());
-        fs::create_dir_all(&dictionary_dir)
-            .wrap_err_with(|| eyre!("failed to create directory {dictionary_dir:?}"))?;
-        let db_path = dictionary_dir.join("database.redb");
+    type Codec = C;
 
+    fn kind() -> StorageKind {
+        StorageKind::Redb
+    }
+
+    #[expect(refining_impl_trait, reason = "explicit refinement")]
+    fn begin_import(&self, data_dir: &Path) -> Result<ImportStorage<C>> {
+        let db_path = data_dir.join("database.redb");
         Ok(ImportStorage {
             db: Database::create(&db_path)
-                .wrap_err_with(|| eyre!("failed to create database at {dictionary_dir:?}"))?,
+                .wrap_err_with(|| eyre!("failed to create database at {data_dir:?}"))?,
             db_path,
             next_record_id: AtomicU64::new(0),
             _phantom: PhantomData,

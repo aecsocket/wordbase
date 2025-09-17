@@ -27,5 +27,5 @@ serde_json         = { workspace = true, features = ["preserve_order"] }
 tokio              = { workspace = true, features = ["full"] }
 tracing            = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-wordbase           = { workspace = true }
+wordbase           = { workspace = true, features = ["storage-rocksdb", "codec-rkyv"] }
 wordbase-desktop   = { workspace = true, features = ["http"] }

@@ -1,5 +1,9 @@
 use {
-    crate::codec::{Codec, Decoder, Encoder},
+    crate::{
+        codec::{Codec, Decoder, Encoder},
+        storage::StorageKind,
+    },
+    derive_more::Debug,
     either::Either,
     eyre::{Context, Result, eyre},
     heed::{
@@ -7,12 +11,12 @@ use {
         WithTls, byteorder, types::Str,
     },
     std::{
-        fs, iter,
+        iter,
         marker::PhantomData,
-        path::PathBuf,
+        path::{Path, PathBuf},
         sync::atomic::{self, AtomicU64},
     },
-    wordbase_api::{DictionaryId, Record, RecordId, Term},
+    wordbase_api::{Record, RecordId, Term},
 };
 
 type RecordIdTy = heed::types::U64<byteorder::LE>;
@@ -23,34 +27,49 @@ const HEADWORDS: &str = "headwords";
 const READINGS: &str = "readings";
 const NUM_DBS: u32 = 3;
 
+#[derive(Debug)]
 pub struct Storage<C> {
-    dictionaries_dir: PathBuf,
+    #[debug(ignore)]
     _phantom: PhantomData<C>,
 }
 
 impl<C: Codec> Storage<C> {
-    pub fn new(dictionaries_dir: impl Into<PathBuf>) -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
-            dictionaries_dir: dictionaries_dir.into(),
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<C: Codec> Default for Storage<C> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<C: Codec> Clone for Storage<C> {
+    fn clone(&self) -> Self {
+        Self {
             _phantom: PhantomData,
         }
     }
 }
 
 impl<C: Codec> super::Storage for Storage<C> {
-    #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn begin_import(&self, dictionary_id: DictionaryId) -> Result<ImportStorage<C>> {
-        let db_path = self
-            .dictionaries_dir
-            .join(dictionary_id.0.as_hyphenated().to_string());
-        fs::create_dir_all(&db_path)
-            .wrap_err_with(|| eyre!("failed to create directory {db_path:?}"))?;
+    type Codec = C;
 
+    fn kind() -> StorageKind {
+        StorageKind::Heed
+    }
+
+    #[expect(refining_impl_trait, reason = "explicit refinement")]
+    fn begin_import(&self, data_dir: &Path) -> Result<ImportStorage<C>> {
         Ok(ImportStorage {
             // TODO safety comment
-            env: unsafe { env_open_options().open(&db_path) }
-                .wrap_err_with(|| eyre!("failed to open database env at {db_path:?}"))?,
-            db_path,
+            env: unsafe { env_open_options().open(data_dir) }
+                .wrap_err_with(|| eyre!("failed to open database env at {data_dir:?}"))?,
+            data_dir: data_dir.to_path_buf(),
             next_record_id: AtomicU64::new(0),
             _phantom: PhantomData,
         })
@@ -66,7 +85,7 @@ fn env_open_options() -> EnvOpenOptions {
 
 pub struct ImportStorage<C> {
     env: Env,
-    db_path: PathBuf,
+    data_dir: PathBuf,
     next_record_id: AtomicU64,
     _phantom: PhantomData<C>,
 }
@@ -93,7 +112,7 @@ impl<C: Codec> super::ImportStorage for ImportStorage<C> {
         let env = unsafe {
             env_open_options()
                 .flags(EnvFlags::READ_ONLY)
-                .open(&self.db_path)
+                .open(&self.data_dir)
         }
         .wrap_err("failed to re-open database env for reading")?;
 
@@ -204,10 +223,10 @@ pub struct LookupStorage<C> {
 
 impl<C: Codec> super::LookupStorage for LookupStorage<C> {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn lookups(&self) -> Result<Lookups<'_, C>> {
+    fn lookups(&self) -> Result<Lookups<C>> {
         let txn = self
             .env
-            .read_txn()
+            .static_read_txn()
             .wrap_err("failed to begin read transaction")?;
 
         Ok(Lookups {
@@ -229,11 +248,11 @@ impl<C: Codec> super::LookupStorage for LookupStorage<C> {
     }
 }
 
-pub struct Lookups<'e, C> {
+pub struct Lookups<C> {
     records: Database<RecordIdTy, RecordTy>,
     headwords: Database<Str, RecordIdTy>,
     readings: Database<Str, RecordIdTy>,
-    txn: RoTxn<'e, WithTls>,
+    txn: RoTxn<'static, WithTls>,
     _phantom: PhantomData<C>,
 }
 

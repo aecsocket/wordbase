@@ -1,10 +1,9 @@
 use {
     crate::{
-        import::{Archive, FinishImport, OpenArchive},
+        import::{Archive, FinishImport, ImportProgress, OpenArchive},
         storage::{ImportStorage, ImportTables, ImportTransaction as _},
     },
     eyre::{Context as _, Result, eyre},
-    foldhash::{HashMap, HashMapExt},
     rayon::prelude::*,
     serde::de::DeserializeOwned,
     std::sync::atomic::{self, AtomicUsize},
@@ -25,26 +24,32 @@ use {
 
 mod schema;
 
-fn archive_reader(open_archive: &impl OpenArchive) -> Result<ZipArchive<impl Archive>> {
+fn archive_reader(open_archive: &impl OpenArchive) -> Result<ZipArchive<impl Archive + 'static>> {
     let archive = open_archive
         .open_archive()
         .wrap_err("failed to open archive")?;
     ZipArchive::new(archive).wrap_err("failed to read zip archive")
 }
 
-pub fn start(open_archive: &impl OpenArchive) -> Result<impl FinishImport> {
-    struct Finish<'o, O> {
-        open_archive: &'o O,
+pub fn start<O: OpenArchive>(
+    open_archive: O,
+) -> Result<(DictionaryMeta, impl FinishImport + use<O>)> {
+    struct Finish<O> {
+        open_archive: O,
         index: schema::Index,
     }
 
-    impl<O: OpenArchive> FinishImport for Finish<'_, O> {
-        fn finish(self, storage: &mut impl ImportStorage) -> Result<()> {
-            finish_import(self.open_archive, storage, &self.index)
+    impl<O: OpenArchive> FinishImport for Finish<O> {
+        fn finish(
+            self,
+            storage: &mut impl ImportStorage,
+            tx_progress: async_channel::Sender<ImportProgress>,
+        ) -> Result<()> {
+            finish_import(&self.open_archive, &self.index, storage, &tx_progress)
         }
     }
 
-    let mut archive = archive_reader(open_archive)?;
+    let mut archive = archive_reader(&open_archive)?;
 
     let index = {
         let file = archive
@@ -60,18 +65,21 @@ pub fn start(open_archive: &impl OpenArchive) -> Result<impl FinishImport> {
     meta.description = index.description.clone();
     meta.url = index.url.clone();
     meta.attribution = index.attribution.clone();
-    debug!("{meta:?}");
 
-    Ok(Finish {
-        open_archive,
-        index,
-    })
+    Ok((
+        meta,
+        Finish {
+            open_archive,
+            index,
+        },
+    ))
 }
 
 fn finish_import(
     open_archive: &impl OpenArchive,
-    storage: &mut impl ImportStorage,
     index: &schema::Index,
+    storage: &mut impl ImportStorage,
+    tx_progress: &async_channel::Sender<ImportProgress>,
 ) -> Result<()> {
     let archive = archive_reader(open_archive)?;
 
@@ -116,22 +124,25 @@ fn finish_import(
         num_banks,
         banks_done: &banks_done,
         index,
+        tx_progress,
     };
 
     let do_term_banks = || {
-        // let tags = tag_banks
-        //     .into_par_iter()
-        //     .try_fold(
-        //         || Vec::new(),
-        //         |mut acc, path| {
-        //             let bank = parse_bank::<schema::Tag, _>(&bank_cx, &path)
-        //                 .wrap_err_with(|| eyre!("failed to import term bank
-        // `{path}`"))?;             acc.push(bank);
-        //             eyre::Ok(acc)
-        //         },
-        //     )
-        //     .try_reduce(|| Vec::new(), op)?;
-        let tags = HashMap::new(); // TODO
+        let mut tags = tag_banks
+            .into_iter()
+            .try_fold(Vec::new(), |mut acc, path| {
+                let bank = parse_bank::<schema::Tag, _, _>(&bank_cx, &path)
+                    .wrap_err_with(|| eyre!("failed to parse term bank `{path}`"))?;
+                let tags = bank.into_iter().map(|tag| GlossaryTag {
+                    name: tag.name,
+                    category: tag.category,
+                    description: tag.notes,
+                    order: tag.order,
+                });
+                acc.extend(tags);
+                eyre::Ok(acc)
+            })?;
+        tags.sort_unstable_by_key(|tag| tag.order);
 
         term_banks.into_par_iter().try_for_each(|path| {
             import_bank(&bank_cx, &path, |tables, data, _| {
@@ -178,6 +189,7 @@ struct BankContext<'cx, O, W> {
     num_banks: usize,
     banks_done: &'cx AtomicUsize,
     index: &'cx schema::Index,
+    tx_progress: &'cx async_channel::Sender<ImportProgress>,
 }
 
 fn parse_bank<T, O: OpenArchive, W: ImportTables>(
@@ -214,13 +226,17 @@ where
 
     let banks_done = cx.banks_done.fetch_add(1, atomic::Ordering::SeqCst) + 1;
     debug!("{banks_done}/{} banks imported", cx.num_banks);
+
+    let progress = banks_done as f64 / cx.num_banks as f64;
+    let _ = cx.tx_progress.try_send(ImportProgress { progress });
+
     Ok(())
 }
 
 fn import_term(
     tables: &mut impl ImportTables,
     data: schema::Term,
-    all_tags: &HashMap<&str, GlossaryTag>,
+    all_tags: &[GlossaryTag],
 ) -> Result<()> {
     let to_content = |raw: schema::Glossary| match raw {
         schema::Glossary::Deinflection(_) => None,
@@ -242,7 +258,6 @@ fn import_term(
     };
 
     let term = Term::from_full(data.expression, data.reading)?;
-
     let record = Glossary {
         popularity: data.score,
         tags: data
@@ -253,7 +268,7 @@ fn import_term(
             // `rarely\u{a0}used\u{a0}form`
             // so we split on ` `, not `\u{a0}`
             .split(' ')
-            .filter_map(|name| all_tags.get(name))
+            .filter_map(|name| all_tags.iter().find(|tag| tag.name == name))
             .cloned()
             .collect(),
         content: data.glossary.into_iter().filter_map(to_content).collect(),
@@ -274,41 +289,14 @@ fn import_term_meta(
 ) -> Result<()> {
     match data.data {
         schema::TermMetaData::Frequency(frequency) => {
-            // dictionaries like VN Freq v2 seem to default to rank-based
-            let mode = index
-                .frequency_mode
-                .unwrap_or(schema::FrequencyMode::RankBased);
-
-            let map_value = |n: i64| match mode {
-                schema::FrequencyMode::OccurrenceBased => FrequencyValue::Occurrence(n),
-                schema::FrequencyMode::RankBased => FrequencyValue::Rank(n),
-            };
-
-            let map_record = |data: schema::GenericFrequencyData| match data {
-                schema::GenericFrequencyData::String(s) => Frequency {
-                    value: s.parse().map(map_value).ok(),
-                    display: Some(s),
-                },
-                schema::GenericFrequencyData::Number(n) => Frequency {
-                    value: Some(map_value(n)),
-                    display: None,
-                },
-                schema::GenericFrequencyData::Complex {
-                    value,
-                    display_value,
-                } => Frequency {
-                    value: Some(map_value(value)),
-                    display: display_value,
-                },
-            };
-
             let (term, record) = match frequency {
-                schema::TermMetaFrequency::Generic(frequency) => {
-                    (Term::from_headword(data.expression)?, map_record(frequency))
-                }
+                schema::TermMetaFrequency::Generic(frequency) => (
+                    Term::from_headword(data.expression)?,
+                    map_generic_frequency_data(index, frequency),
+                ),
                 schema::TermMetaFrequency::WithReading { reading, frequency } => (
                     Term::from_full(data.expression, reading)?,
-                    map_record(frequency),
+                    map_generic_frequency_data(index, frequency),
                 ),
             };
 
@@ -375,7 +363,6 @@ fn import_kanji(
     _index: &schema::Index,
 ) -> Result<()> {
     let term = Term::from_headword(data.character)?;
-
     let record = Kanji {
         onyomi: data
             .onyomi
@@ -400,11 +387,50 @@ fn import_kanji(
 }
 
 fn import_kanji_meta(
-    _tables: &mut impl ImportTables,
-    _data: schema::KanjiMeta,
-    _index: &schema::Index,
+    tables: &mut impl ImportTables,
+    data: schema::KanjiMeta,
+    index: &schema::Index,
 ) -> Result<()> {
-    // TODO
-    // tracing::info!("{data:?}");
-    Ok(())
+    let term = Term::from_headword(data.character)?;
+    let record = map_generic_frequency_data(index, data.data);
+
+    (|| {
+        let record_id = tables.insert_record(record)?;
+        tables.insert_term(&term, record_id)?;
+        eyre::Ok(())
+    })()
+    .wrap_err_with(|| eyre!("failed to insert kanji frequency for {term}"))
+}
+
+fn map_generic_frequency_data(
+    index: &schema::Index,
+    data: schema::GenericFrequencyData,
+) -> Frequency {
+    // dictionaries like VN Freq v2 seem to default to rank-based
+    let mode = index
+        .frequency_mode
+        .unwrap_or(schema::FrequencyMode::RankBased);
+
+    let map_value = |n: i64| match mode {
+        schema::FrequencyMode::OccurrenceBased => FrequencyValue::Occurrence(n),
+        schema::FrequencyMode::RankBased => FrequencyValue::Rank(n),
+    };
+
+    match data {
+        schema::GenericFrequencyData::String(s) => Frequency {
+            value: s.parse().map(map_value).ok(),
+            display: Some(s),
+        },
+        schema::GenericFrequencyData::Number(n) => Frequency {
+            value: Some(map_value(n)),
+            display: None,
+        },
+        schema::GenericFrequencyData::Complex {
+            value,
+            display_value,
+        } => Frequency {
+            value: Some(map_value(value)),
+            display: display_value,
+        },
+    }
 }

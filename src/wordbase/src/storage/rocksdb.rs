@@ -1,20 +1,24 @@
 use {
-    crate::codec::{Codec, Decoder, Encoder},
+    crate::{
+        codec::{Codec, Decoder, Encoder},
+        storage::StorageKind,
+    },
+    derive_more::Debug,
     either::Either,
     eyre::{Context, Result, eyre},
     rocksdb::{
         ColumnFamily, DB, DBPinnableSlice, Env, Options, WaitForCompactOptions, WriteOptions,
     },
     std::{
-        fs, iter,
+        iter,
         marker::PhantomData,
-        path::PathBuf,
+        path::{Path, PathBuf},
         sync::{
             LazyLock,
             atomic::{self, AtomicU64},
         },
     },
-    wordbase_api::{DictionaryId, Record, RecordId, Term},
+    wordbase_api::{Record, RecordId, Term},
 };
 
 const RECORDS: &str = "records";
@@ -22,34 +26,44 @@ const HEADWORDS: &str = "headwords";
 const READINGS: &str = "readings";
 const COLUMN_FAMILIES: &[&str] = &[RECORDS, HEADWORDS, READINGS];
 
+#[derive(Debug)]
 pub struct Storage<C> {
+    #[debug(ignore)]
     env: Env,
-    dictionaries_dir: PathBuf,
+    #[debug(ignore)]
     _phantom: PhantomData<C>,
 }
 
 impl<C: Codec> Storage<C> {
-    pub fn new(dictionaries_dir: impl Into<PathBuf>) -> Result<Self> {
+    pub fn new() -> Result<Self> {
         Ok(Self {
             env: Env::new().wrap_err("failed to create env")?,
-            dictionaries_dir: dictionaries_dir.into(),
             _phantom: PhantomData,
         })
     }
 }
 
-impl<C: Codec> super::Storage for Storage<C> {
-    #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn begin_import(&self, dictionary_id: DictionaryId) -> Result<ImportStorage<C>> {
-        let db_path = self
-            .dictionaries_dir
-            .join(dictionary_id.0.as_hyphenated().to_string());
-        fs::create_dir_all(&db_path)
-            .wrap_err_with(|| eyre!("failed to create directory {db_path:?}"))?;
+impl<C: Codec> Clone for Storage<C> {
+    fn clone(&self) -> Self {
+        Self {
+            env: self.env.clone(),
+            _phantom: PhantomData,
+        }
+    }
+}
 
+impl<C: Codec> super::Storage for Storage<C> {
+    type Codec = C;
+
+    fn kind() -> StorageKind {
+        StorageKind::RocksDb
+    }
+
+    #[expect(refining_impl_trait, reason = "explicit refinement")]
+    fn begin_import(&self, data_dir: &Path) -> Result<ImportStorage<C>> {
         let options = db_open_options(&self.env);
-        let mut db = DB::open(&options, &db_path)
-            .wrap_err_with(|| eyre!("failed to create database at {db_path:?}"))?;
+        let mut db = DB::open(&options, data_dir)
+            .wrap_err_with(|| eyre!("failed to create database at {data_dir:?}"))?;
         db.create_cf(RECORDS, &options)
             .wrap_err_with(|| eyre!("failed to create column family `{RECORDS}`"))?;
 
@@ -62,7 +76,7 @@ impl<C: Codec> super::Storage for Storage<C> {
         Ok(ImportStorage {
             env: self.env.clone(),
             db,
-            db_path,
+            data_dir: data_dir.to_path_buf(),
             next_record_id: AtomicU64::new(0),
             _phantom: PhantomData,
         })
@@ -97,7 +111,7 @@ fn record_id_cf_open_options(env: &Env) -> Options {
 pub struct ImportStorage<C> {
     env: Env,
     db: DB,
-    db_path: PathBuf,
+    data_dir: PathBuf,
     next_record_id: AtomicU64,
     _phantom: PhantomData<C>,
 }
@@ -127,7 +141,7 @@ impl<C: Codec> super::ImportStorage for ImportStorage<C> {
 
         let db = DB::open_cf_for_read_only(
             &db_open_options(&self.env),
-            &self.db_path,
+            &self.data_dir,
             COLUMN_FAMILIES,
             false, // error_if_log_file_exist
         )
