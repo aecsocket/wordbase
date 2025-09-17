@@ -1,5 +1,5 @@
 use {
-    crate::db::ImportStorage,
+    crate::storage::ImportStorage,
     bytes::Bytes,
     eyre::Result,
     std::{
@@ -55,5 +55,5 @@ pub trait Archive: Send + Sync + Unpin + std::io::Read + std::io::Seek {}
 impl<T: Send + Sync + Unpin + std::io::Read + std::io::Seek> Archive for T {}
 
 pub trait FinishImport {
-    fn finish(self, storage: impl ImportStorage) -> Result<()>;
+    fn finish(self, storage: &mut impl ImportStorage) -> Result<()>;
 }

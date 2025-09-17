@@ -1,7 +1,7 @@
 use {
     crate::{
-        db::{ImportStorage, ImportTables, ImportTransaction},
         import::{Archive, FinishImport, OpenArchive},
+        storage::{ImportStorage, ImportTables, ImportTransaction as _},
     },
     eyre::{Context as _, Result, eyre},
     foldhash::{HashMap, HashMapExt},
@@ -39,8 +39,8 @@ pub fn start(open_archive: &impl OpenArchive) -> Result<impl FinishImport> {
     }
 
     impl<O: OpenArchive> FinishImport for Finish<'_, O> {
-        fn finish(self, storage: impl ImportStorage) -> Result<()> {
-            finish_import(self.open_archive, storage, self.index)
+        fn finish(self, storage: &mut impl ImportStorage) -> Result<()> {
+            finish_import(self.open_archive, storage, &self.index)
         }
     }
 
@@ -70,8 +70,8 @@ pub fn start(open_archive: &impl OpenArchive) -> Result<impl FinishImport> {
 
 fn finish_import(
     open_archive: &impl OpenArchive,
-    mut storage: impl ImportStorage,
-    index: schema::Index,
+    storage: &mut impl ImportStorage,
+    index: &schema::Index,
 ) -> Result<()> {
     let archive = archive_reader(open_archive)?;
 
@@ -115,7 +115,7 @@ fn finish_import(
         tables: &tables,
         num_banks,
         banks_done: &banks_done,
-        index: &index,
+        index,
     };
 
     let do_term_banks = || {
@@ -203,11 +203,13 @@ where
     let _span = trace_span!("bank", ?path).entered();
     let bank = parse_bank(cx, path)?;
 
-    trace!("Parsed bank, waiting for tables lock");
-    let mut tables = cx.tables.blocking_lock();
+    {
+        trace!("Parsed bank, waiting for tables lock");
+        let mut tables = cx.tables.blocking_lock();
 
-    for data in bank {
-        import_item(&mut *tables, data, cx.index)?;
+        for data in bank {
+            import_item(&mut *tables, data, cx.index)?;
+        }
     }
 
     let banks_done = cx.banks_done.fetch_add(1, atomic::Ordering::SeqCst) + 1;

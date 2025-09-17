@@ -17,9 +17,14 @@ workspace = true
 all-features = true
 
 [features]
-heed    = ["dep:heed"]
-redb    = ["dep:redb"]
-rocksdb = ["dep:rocksdb"]
+all-storages    = ["storage-heed", "storage-redb", "storage-rocksdb"]
+storage-heed    = ["dep:heed"]
+storage-redb    = ["dep:redb"]
+storage-rocksdb = ["dep:rocksdb"]
+
+all-codecs = ["codec-rkyv", "codec-rmp"]
+codec-rkyv = ["dep:rkyv"]
+codec-rmp  = ["dep:rmp-serde"]
 
 [dependencies]
 arc-swap             = { workspace = true }
@@ -45,8 +50,7 @@ poem-openapi         = { workspace = true, optional = true }
 rayon                = { workspace = true }
 redb                 = { workspace = true, optional = true }
 regex                = { workspace = true }
-rkyv                 = { workspace = true }
-rmp-serde            = { workspace = true }
+rmp-serde            = { workspace = true, optional = true }
 rocksdb              = { workspace = true, optional = true }
 serde                = { workspace = true, features = ["derive"] }
 serde_json           = { workspace = true, features = ["preserve_order"] }
@@ -70,6 +74,12 @@ derive_more = { workspace = true, features = [
   "deref",
   "deref_mut",
 ] }
+rkyv = { workspace = true, optional = true, features = [
+  # this isn't ideal, but rocksdb doesn't let us enforce alignment guarantees
+  # and without `unaligned` rkyv requires 8-byte alignment for records
+  # fortunately, enabling this doesn't seem to decrease performace too bad on x86?
+  "unaligned",
+] }
 
 [dev-dependencies]
 ascii_table        = { workspace = true, features = ["wide_characters"] }
@@ -77,4 +87,4 @@ clap               = { workspace = true, features = ["derive"] }
 humansize          = { workspace = true }
 tempfile           = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-wordbase           = { path = ".", features = ["heed", "redb", "rocksdb"] }
+wordbase           = { path = ".", features = ["all-storages", "all-codecs"] }

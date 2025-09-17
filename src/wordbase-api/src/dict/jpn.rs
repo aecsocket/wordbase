@@ -142,12 +142,12 @@ pub fn morae(reading: &str) -> impl Iterator<Item = &str> {
     let mut chars = reading.char_indices().peekable();
     iter::from_fn(move || {
         let (byte_index, char) = chars.next()?;
-        if let Some((next_byte_index, next_char)) = chars.peek().copied() {
-            if is_small_kana(next_char) {
-                _ = chars.next();
-                let end = next_byte_index + next_char.len_utf8();
-                return Some(&reading[byte_index..end]);
-            }
+        if let Some((next_byte_index, next_char)) = chars.peek().copied()
+            && is_small_kana(next_char)
+        {
+            _ = chars.next();
+            let end = next_byte_index + next_char.len_utf8();
+            return Some(&reading[byte_index..end]);
         }
 
         let end = byte_index + char.len_utf8();

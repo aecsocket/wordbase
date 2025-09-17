@@ -41,8 +41,9 @@ pub struct NoHeadwordOrReading;
 impl Term {
     /// Creates a value from a headword/reading pair.
     ///
-    /// If both are not present or empty, returns [`None`].
-    #[must_use]
+    /// # Errors
+    ///
+    /// If both are not present or empty, returns [`NoHeadwordOrReading`].
     pub fn from_parts(
         headword: Option<impl TryInto<NormString>>,
         reading: Option<impl TryInto<NormString>>,
@@ -59,6 +60,10 @@ impl Term {
     }
 
     /// Creates a value from a headword and reading.
+    ///
+    /// # Errors
+    ///
+    /// If both are not present or empty, returns [`NoHeadwordOrReading`].
     pub fn from_full(
         headword: impl TryInto<NormString>,
         reading: impl TryInto<NormString>,
@@ -67,11 +72,19 @@ impl Term {
     }
 
     /// Creates a value from only a headword.
+    ///
+    /// # Errors
+    ///
+    /// If the headword is empty, returns [`NoHeadwordOrReading`].
     pub fn from_headword(headword: impl TryInto<NormString>) -> Result<Self, NoHeadwordOrReading> {
         Self::from_parts(Some(headword), None::<NormString>)
     }
 
-    /// Creates a value from only a headword.
+    /// Creates a value from only a reading.
+    ///
+    /// # Errors
+    ///
+    /// If the reading is empty, returns [`NoHeadwordOrReading`].
     pub fn from_reading(reading: impl TryInto<NormString>) -> Result<Self, NoHeadwordOrReading> {
         Self::from_parts(None::<NormString>, Some(reading))
     }
