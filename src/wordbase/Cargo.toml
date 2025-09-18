@@ -17,11 +17,10 @@ workspace = true
 all-features = true
 
 [features]
-all-storages     = ["storage-heed", "storage-redb", "storage-rocksdb"]
-storage-heed     = ["dep:heed"]
-storage-redb     = ["dep:redb"]
-storage-rocksdb  = ["dep:rocksdb"]
-storage-rusqlite = ["dep:rusqlite"]
+all-storages = ["storage-heed", "storage-redb", "storage-rocksdb"]
+storage-heed    = ["dep:heed"]
+storage-redb    = ["dep:redb"]
+storage-rocksdb = ["dep:rocksdb"]
 
 all-codecs = ["codec-rkyv", "codec-rmp"]
 codec-rkyv = ["dep:rkyv"]
@@ -33,19 +32,15 @@ async-channel        = { workspace = true }
 async-stream         = { workspace = true }
 bytes                = { workspace = true }
 color-eyre           = { workspace = true }
-data-encoding        = { workspace = true }
-distance             = { workspace = true }
 either               = { workspace = true }
 eyre                 = { workspace = true }
 foldhash             = { workspace = true }
 futures              = { workspace = true }
 heed                 = { workspace = true, optional = true }
 indexmap             = { workspace = true, features = ["serde"] }
-itertools            = { workspace = true }
 lindera              = { workspace = true, features = ["embedded-unidic"] }
 maud                 = { workspace = true }
 paste                = { workspace = true }
-pin-project          = { workspace = true }
 poem-openapi         = { workspace = true, optional = true }
 rayon                = { workspace = true }
 redb                 = { workspace = true, optional = true }
@@ -56,11 +51,8 @@ rusqlite             = { workspace = true, optional = true, features = ["bundled
 serde                = { workspace = true, features = ["derive"] }
 serde_json           = { workspace = true, features = ["preserve_order"] }
 serde_repr           = { workspace = true }
-# sqlx                 = { workspace = true, features = ["runtime-tokio", "sqlite"] }
 tera                 = { workspace = true, features = ["preserve_order"] }
 tokio                = { workspace = true, features = ["sync", "macros"] }
-tokio-stream         = { workspace = true }
-tokio-util           = { workspace = true, features = ["rt"] }
 tracing              = { workspace = true }
 unicode-segmentation = { workspace = true }
 uniffi               = { workspace = true, optional = true, features = ["tokio"] }
@@ -84,10 +76,10 @@ rkyv = { workspace = true, optional = true, features = [
 ] }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["full"]}
 ascii_table        = { workspace = true, features = ["wide_characters"] }
 clap               = { workspace = true, features = ["derive"] }
 humansize          = { workspace = true }
 tempfile           = { workspace = true }
+tokio              = { workspace = true, features = ["full"] }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 wordbase           = { path = ".", features = ["all-storages", "all-codecs"] }

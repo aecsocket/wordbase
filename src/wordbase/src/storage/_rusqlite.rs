@@ -4,7 +4,10 @@ use {
     rusqlite::{Connection, Transaction},
     std::{
         path::Path,
-        sync::atomic::{self, AtomicU64},
+        sync::{
+            Mutex, RwLock,
+            atomic::{self, AtomicU64},
+        },
     },
     wordbase_api::{Record, RecordId, Term},
 };
@@ -91,7 +94,7 @@ impl<C: Codec> super::ImportStorage for ImportStorage<C> {
 }
 
 pub struct ImportTransaction<'s, C> {
-    txn: Transaction<'s>,
+    txn: Mutex<Transaction<'s>>,
     next_record_id: &'s AtomicU64,
     codec: C,
 }
@@ -99,7 +102,7 @@ pub struct ImportTransaction<'s, C> {
 impl<'s, C: Codec> super::ImportTransaction for ImportTransaction<'s, C> {
     fn open_tables(&mut self) -> Result<ImportTables<'s, '_, C::Encoder>> {
         Ok(ImportTables {
-            txn: &self.txn,
+            txn: Mutex::new(self.txn),
             next_record_id: &self.next_record_id,
             encoder: self.codec.encoder(),
         })
@@ -112,7 +115,7 @@ impl<'s, C: Codec> super::ImportTransaction for ImportTransaction<'s, C> {
 }
 
 pub struct ImportTables<'s, 't, E> {
-    txn: &'t Transaction<'s>,
+    txn: &'t Mutex<Transaction<'s>>,
     next_record_id: &'s AtomicU64,
     encoder: E,
 }
@@ -123,14 +126,14 @@ impl<E: Encoder> super::ImportTables for ImportTables<'_, '_, E> {
     }
 
     fn insert_term(&mut self, term: &Term, record_id: RecordId) -> Result<()> {
+        let mut txn = self.txn.lock().expect("mutex poisoned");
         if let Some(headword) = term.headword() {
-            self.txn
-                .execute(
-                    "INSERT INTO headwords (key, id)
-                    VALUES (?, ?)",
-                    (headword.as_str(), record_id.0),
-                )
-                .wrap_err("failed to insert headword")?;
+            txn.execute(
+                "INSERT INTO headwords (key, id)
+                VALUES (?, ?)",
+                (headword.as_str(), record_id.0),
+            )
+            .wrap_err("failed to insert headword")?;
         }
         if let Some(reading) = term.reading() {
             self.txn

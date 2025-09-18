@@ -10,6 +10,11 @@ pub mod heed;
 #[cfg(feature = "storage-heed")]
 pub type Heed<C> = heed::Storage<C>;
 
+// #[cfg(feature = "storage-libsql")]
+// pub mod libsql;
+// #[cfg(feature = "storage-libsql")]
+// pub type LibSql<C> = libsql::Storage<C>;
+
 #[cfg(feature = "storage-redb")]
 pub mod redb;
 #[cfg(feature = "storage-redb")]
@@ -24,6 +29,11 @@ pub type RocksDb<C> = rocksdb::Storage<C>;
 // pub mod rusqlite;
 // #[cfg(feature = "storage-rusqlite")]
 // pub type Rusqlite<C> = rusqlite::Storage<C>;
+
+// #[cfg(feature = "storage-turso")]
+// pub mod turso;
+// #[cfg(feature = "storage-turso")]
+// pub type Turso<C> = turso::Storage<C>;
 
 pub trait Storage: Send + Sync + Clone + 'static {
     type Codec: Codec;

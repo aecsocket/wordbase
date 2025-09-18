@@ -17,7 +17,7 @@ use {
     wordbase::{
         codec::{Rkyv, Rmp},
         dictionary::{self, ImportEvent, InbuiltStorage},
-        storage::{Heed, Lookups, Redb, RocksDb},
+        storage::{Heed, Lookups, Redb, RocksDb, Turso},
     },
 };
 
@@ -52,6 +52,7 @@ async fn main() -> Result<()> {
         results: &mut results,
     };
 
+
     bench_db::<Redb<Rmp>>(&mut cx, "redb+rmp").await?;
     bench_db::<Redb<Rkyv>>(&mut cx, "redb+rkyv").await?;
 
@@ -60,6 +61,9 @@ async fn main() -> Result<()> {
 
     bench_db::<RocksDb<Rmp>>(&mut cx, "rocksdb+rmp").await?;
     bench_db::<RocksDb<Rkyv>>(&mut cx, "rocksdb+rkyv").await?;
+
+    // bench_db::<Turso<Rmp>>(&mut cx, "turso+rmp").await?;
+    // bench_db::<Turso<Rkyv>>(&mut cx, "turso+rkyv").await?;
 
     let mut table = AsciiTable::default();
     table.column(0).set_header("DB type");

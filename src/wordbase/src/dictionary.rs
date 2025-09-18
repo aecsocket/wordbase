@@ -21,7 +21,7 @@ pub trait InbuiltStorage: Storage {
 }
 
 macro_rules! storage_strategies {
-    ( $($storage_mod:ident + $codec_mod:ident => $name:ident),* ) => {
+    ( $($storage_mod:ident + $codec_mod:ident => $name:ident),* $(,)? ) => {
         $(impl InbuiltStorage for crate::storage::$storage_mod::Storage<crate::codec::$codec_mod::Codec> {
             fn strategy() -> StorageStrategy {
                 StorageStrategy::$name
@@ -68,7 +68,9 @@ storage_strategies!(
     heed + rmp => HeedRmp,
     heed + rkyv => HeedRkyv,
     rocksdb + rmp => RocksDbRmp,
-    rocksdb + rkyv => RocksDbRkyv
+    rocksdb + rkyv => RocksDbRkyv,
+    // turso + rmp => TursoRmp,
+    // turso + rkyv => TursoRkyv,
 );
 
 const MANIFEST_PATH: &str = "dictionary.json";
