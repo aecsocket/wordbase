@@ -65,6 +65,7 @@
           nativeBuildInputs = with pkgs; [ clang ];
           LIBCLANG_PATH = with pkgs; lib.makeLibraryPath [ libclang ];
           RUSTFLAGS = "-Zcodegen-backend=cranelift";
+          RUST_BACKTRACE = "full";
           shellHook = ''
             mkdir -p "$XDG_DATA_HOME/wordbase"
             export LINDERA_CACHE="$XDG_DATA_HOME/lindera"

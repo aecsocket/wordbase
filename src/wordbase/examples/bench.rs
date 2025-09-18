@@ -26,8 +26,7 @@ struct Args {
 }
 
 fn main() -> Result<()> {
-    let args = <Args as clap::Parser>::parse();
-
+    color_eyre::install().wrap_err("failed to install `color_eyre`")?;
     tracing_subscriber::fmt()
         .with_writer(io::stderr)
         .with_env_filter(
@@ -37,6 +36,7 @@ fn main() -> Result<()> {
         )
         .without_time()
         .init();
+    let args = <Args as clap::Parser>::parse();
 
     let temp_dir = tempfile::tempdir().wrap_err("failed to create temp dir")?;
     info!("Using {:?} as temporary dir", temp_dir.path());

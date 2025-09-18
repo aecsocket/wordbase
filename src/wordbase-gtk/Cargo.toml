@@ -47,7 +47,6 @@ relm4-icons        = { workspace = true }
 rmp-serde          = { workspace = true }
 serde              = { workspace = true, features = ["derive"] }
 serde_json         = { workspace = true }
-sqlx               = { workspace = true, features = ["runtime-tokio", "sqlite"] }
 tokio              = { workspace = true, features = ["full"] }
 tokio-util         = { workspace = true, features = ["rt"] }
 tracing            = { workspace = true }

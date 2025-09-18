@@ -5,6 +5,26 @@ use {
     wordbase_api::{Record, RecordId, Term},
 };
 
+#[cfg(feature = "storage-heed")]
+pub mod heed;
+#[cfg(feature = "storage-heed")]
+pub type Heed<C> = heed::Storage<C>;
+
+#[cfg(feature = "storage-redb")]
+pub mod redb;
+#[cfg(feature = "storage-redb")]
+pub type Redb<C> = redb::Storage<C>;
+
+#[cfg(feature = "storage-rocksdb")]
+pub mod rocksdb;
+#[cfg(feature = "storage-rocksdb")]
+pub type RocksDb<C> = rocksdb::Storage<C>;
+
+// #[cfg(feature = "storage-rusqlite")]
+// pub mod rusqlite;
+// #[cfg(feature = "storage-rusqlite")]
+// pub type Rusqlite<C> = rusqlite::Storage<C>;
+
 pub trait Storage: Send + Sync + Clone + 'static {
     type Codec: Codec;
 
@@ -41,18 +61,3 @@ pub trait ImportTables: Send {
 pub trait Lookups {
     fn lookup_lemma(&self, lemma: &str) -> Result<Vec<Record>>;
 }
-
-#[cfg(feature = "storage-heed")]
-pub mod heed;
-#[cfg(feature = "storage-heed")]
-pub type Heed<C> = heed::Storage<C>;
-
-#[cfg(feature = "storage-redb")]
-pub mod redb;
-#[cfg(feature = "storage-redb")]
-pub type Redb<C> = redb::Storage<C>;
-
-#[cfg(feature = "storage-rocksdb")]
-pub mod rocksdb;
-#[cfg(feature = "storage-rocksdb")]
-pub type RocksDb<C> = rocksdb::Storage<C>;
