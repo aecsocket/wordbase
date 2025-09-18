@@ -1,5 +1,8 @@
 use {
-    crate::codec::{Codec, Decoder, Encoder},
+    crate::{
+        codec::{Codec, Decoder, Encoder},
+        storage::TermPart,
+    },
     derive_more::Debug,
     either::Either,
     eyre::{Context, Result, eyre},
@@ -16,6 +19,7 @@ use {
     wordbase_api::{Record, RecordId, Term},
 };
 
+const DATABASE_PATH: &str = "database.redb";
 const RECORDS: TableDefinition<u64, &[u8]> = TableDefinition::new("records");
 const HEADWORDS: MultimapTableDefinition<&str, u64> = MultimapTableDefinition::new("headwords");
 const READINGS: MultimapTableDefinition<&str, u64> = MultimapTableDefinition::new("readings");
@@ -25,8 +29,6 @@ pub struct Storage<C> {
     codec: C,
 }
 
-const DATABASE_NAME: &str = "database.redb";
-
 impl<C: Codec> super::Storage for Storage<C> {
     type Codec = C;
 
@@ -35,10 +37,11 @@ impl<C: Codec> super::Storage for Storage<C> {
     }
 
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn begin_import(&self, data_dir: &Path) -> Result<ImportStorage<C>> {
-        let db_path = data_dir.join(DATABASE_NAME);
+    fn create_import_storage(&self, data_dir: &Path) -> Result<ImportStorage<C>> {
+        let db_path = data_dir.join(DATABASE_PATH);
         Ok(ImportStorage {
-            db: Database::create(&db_path).wrap_err("failed to create database")?,
+            db: Database::create(&db_path)
+                .wrap_err_with(|| eyre!("failed to create database at {db_path:?}"))?,
             next_record_id: AtomicU64::new(0),
             codec: self.codec.clone(),
         })
@@ -46,7 +49,7 @@ impl<C: Codec> super::Storage for Storage<C> {
 
     #[expect(refining_impl_trait, reason = "explicit refinement")]
     fn open(&self, data_dir: &Path) -> Result<Lookups<C>> {
-        let db_path = data_dir.join(DATABASE_NAME);
+        let db_path = data_dir.join(DATABASE_PATH);
         let db = ReadOnlyDatabase::open(&db_path).wrap_err("failed to open database")?;
         let txn = db
             .begin_read()
@@ -155,15 +158,15 @@ impl<E: Encoder> super::ImportTables for ImportTables<'_, E> {
 
 impl<E: Encoder> ImportTables<'_, E> {
     fn insert_record_(&mut self, record: &Record) -> Result<RecordId> {
-        let record_id = self.next_record_id.fetch_add(1, atomic::Ordering::SeqCst);
-        let record_blob = self
+        let id = self.next_record_id.fetch_add(1, atomic::Ordering::SeqCst);
+        let blob = self
             .encoder
             .encode(record)
             .wrap_err("failed to encode record")?;
         self.records
-            .insert(record_id, record_blob.as_ref())
+            .insert(id, blob.as_ref())
             .wrap_err("failed to insert record")?;
-        Ok(RecordId(record_id))
+        Ok(RecordId(id))
     }
 }
 
@@ -182,20 +185,20 @@ pub struct Lookups<C> {
 }
 
 impl<C: Codec> super::Lookups for Lookups<C> {
-    fn lookup_lemma(&self, lemma: &str) -> Result<Vec<Record>> {
+    fn lookup_lemma(&self, lemma: &str) -> Result<Vec<(TermPart, Record)>> {
         self.lookup_lemma_(lemma).collect()
     }
 }
 
 impl<C: Codec> Lookups<C> {
-    fn lookup_lemma_(&self, lemma: &str) -> impl Iterator<Item = Result<Record>> {
+    fn lookup_lemma_(&self, lemma: &str) -> impl Iterator<Item = Result<(TermPart, Record)>> {
         let mut decoder = self.codec.decoder();
 
-        let get_ids = |table: &ReadOnlyMultimapTable<_, _>| {
+        let get_ids = |part: TermPart, table: &ReadOnlyMultimapTable<_, _>| {
             match table.get(lemma) {
-                Ok(values) => Either::Left(values.map(|id| {
+                Ok(values) => Either::Left(values.map(move |id| {
                     let id = id.wrap_err("failed to get single record ID")?;
-                    eyre::Ok(RecordId(id.value()))
+                    eyre::Ok((part, RecordId(id.value())))
                 })),
                 Err(err) => {
                     Either::Right(Err(err).wrap_err("failed to get all record IDs for key"))
@@ -217,13 +220,15 @@ impl<C: Codec> Lookups<C> {
         };
 
         let ids = iter::empty()
-            .chain(get_ids(&self.headwords).map(|r| r.wrap_err("failed to query headwords")))
-            .chain(get_ids(&self.readings).map(|r| r.wrap_err("failed to query readings")));
+            .chain(
+                get_ids(TermPart::Headword, &self.headwords)
+                    .map(|r| r.wrap_err("failed to query headwords")),
+            )
+            .chain(
+                get_ids(TermPart::Reading, &self.readings)
+                    .map(|r| r.wrap_err("failed to query readings")),
+            );
 
-        #[expect(
-            clippy::redundant_closure,
-            reason = "without the closure, `get_record` becomes a `FnOnce`"
-        )]
-        ids.map(move |id| id.and_then(|id| get_record(id)))
+        ids.map(move |id| id.and_then(|(part, id)| get_record(id).map(|record| (part, record))))
     }
 }

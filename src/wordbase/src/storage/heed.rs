@@ -1,5 +1,8 @@
 use {
-    crate::codec::{Codec, Decoder, Encoder},
+    crate::{
+        codec::{Codec, Decoder, Encoder},
+        storage::TermPart,
+    },
     derive_more::Debug,
     either::Either,
     eyre::{Context, Result, eyre},
@@ -36,7 +39,7 @@ impl<C: Codec> super::Storage for Storage<C> {
     }
 
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn begin_import(&self, data_dir: &Path) -> Result<ImportStorage<C>> {
+    fn create_import_storage(&self, data_dir: &Path) -> Result<ImportStorage<C>> {
         Ok(ImportStorage {
             // TODO safety comment
             env: unsafe { env_open_options().open(data_dir) }
@@ -184,15 +187,15 @@ impl<E: Encoder> super::ImportTables for ImportTables<'_, '_, E> {
 
 impl<E: Encoder> ImportTables<'_, '_, E> {
     fn insert_record_(&mut self, record: &Record) -> Result<RecordId> {
-        let record_id = self.next_record_id.fetch_add(1, atomic::Ordering::SeqCst);
+        let id = self.next_record_id.fetch_add(1, atomic::Ordering::SeqCst);
         let blob = self
             .encoder
             .encode(record)
             .wrap_err("failed to encode record")?;
         self.records
-            .put(self.txn, &record_id, blob.as_ref())
+            .put(self.txn, &id, blob.as_ref())
             .wrap_err("failed to insert record")?;
-        Ok(RecordId(record_id))
+        Ok(RecordId(id))
     }
 }
 
@@ -207,21 +210,21 @@ pub struct Lookups<C> {
 }
 
 impl<C: Codec> super::Lookups for Lookups<C> {
-    fn lookup_lemma(&self, lemma: &str) -> Result<Vec<Record>> {
+    fn lookup_lemma(&self, lemma: &str) -> Result<Vec<(TermPart, Record)>> {
         self.lookup_lemma_(lemma).collect()
     }
 }
 
 impl<C: Codec> Lookups<C> {
-    fn lookup_lemma_(&self, lemma: &str) -> impl Iterator<Item = Result<Record>> {
+    fn lookup_lemma_(&self, lemma: &str) -> impl Iterator<Item = Result<(TermPart, Record)>> {
         let mut decoder = self.codec.decoder();
 
-        let get_ids = |db: &Database<Str, RecordIdTy>| {
+        let get_ids = |part: TermPart, db: &Database<Str, RecordIdTy>| {
             match db.get_duplicates(&self.txn, lemma) {
                 Ok(Some(id_results)) => Either::Left(id_results.map(move |result| {
                     let (_, record_id) =
                         result.wrap_err_with(|| eyre!("failed to get single record ID"))?;
-                    eyre::Ok(RecordId(record_id))
+                    eyre::Ok((part, RecordId(record_id)))
                 })),
                 Ok(None) => Either::Right(None),
                 Err(err) => Either::Right(Some(
@@ -244,13 +247,15 @@ impl<C: Codec> Lookups<C> {
         };
 
         let ids = iter::empty()
-            .chain(get_ids(&self.headwords).map(|r| r.wrap_err("failed to query headwords")))
-            .chain(get_ids(&self.readings).map(|r| r.wrap_err("failed to query readings")));
+            .chain(
+                get_ids(TermPart::Headword, &self.headwords)
+                    .map(|r| r.wrap_err("failed to query headwords")),
+            )
+            .chain(
+                get_ids(TermPart::Reading, &self.readings)
+                    .map(|r| r.wrap_err("failed to query readings")),
+            );
 
-        #[expect(
-            clippy::redundant_closure,
-            reason = "without the closure, `get_record` becomes a `FnOnce`"
-        )]
-        ids.map(move |id| id.and_then(|id| get_record(id)))
+        ids.map(move |id| id.and_then(|(part, id)| get_record(id).map(|record| (part, record))))
     }
 }

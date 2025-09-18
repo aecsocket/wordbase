@@ -1,7 +1,7 @@
 use {
     crate::{
         import::{Archive, FinishImport, ImportProgress, OpenArchive},
-        storage::{ImportStorage, ImportTables, ImportTransaction as _},
+        storage::{ImportTables, ImportTransaction},
     },
     eyre::{Context as _, Result, eyre},
     rayon::prelude::*,
@@ -42,10 +42,10 @@ pub fn start<O: OpenArchive>(
     impl<O: OpenArchive> FinishImport for Finish<O> {
         fn finish(
             self,
-            mut storage: impl ImportStorage,
+            txn: &mut impl ImportTransaction,
             tx_progress: async_channel::Sender<ImportProgress>,
         ) -> Result<()> {
-            finish_import(&self.open_archive, &self.index, &mut storage, &tx_progress)
+            finish_import(&self.open_archive, &self.index, txn, &tx_progress)
         }
     }
 
@@ -78,7 +78,7 @@ pub fn start<O: OpenArchive>(
 fn finish_import(
     open_archive: &impl OpenArchive,
     index: &schema::Index,
-    storage: &mut impl ImportStorage,
+    txn: &mut impl ImportTransaction,
     tx_progress: &async_channel::Sender<ImportProgress>,
 ) -> Result<()> {
     let archive = archive_reader(open_archive)?;
@@ -109,9 +109,6 @@ fn finish_import(
         kanji_banks.len(),
         kanji_meta_banks.len()
     );
-
-    debug!("Beginning write");
-    let mut txn = storage.begin_write().wrap_err("failed to begin writing")?;
 
     debug!("Opening tables");
     let tables = Mutex::new(txn.open_tables()?);
@@ -175,11 +172,6 @@ fn finish_import(
         || rayon::join(do_kanji_banks, do_kanji_meta_banks),
     );
     _ = (r1?, r2?, r3?, r4?);
-    drop(tables);
-
-    debug!("Committing");
-    txn.commit().wrap_err("failed to commit transaction")?;
-
     Ok(())
 }
 

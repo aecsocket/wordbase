@@ -1,5 +1,5 @@
 use {
-    crate::storage::ImportStorage,
+    crate::storage::ImportTransaction,
     bytes::Bytes,
     eyre::Result,
     std::{
@@ -57,7 +57,7 @@ impl<T: Send + Sync + Unpin + std::io::Read + std::io::Seek> Archive for T {}
 pub trait FinishImport: Send {
     fn finish(
         self,
-        storage: impl ImportStorage,
+        txn: &mut impl ImportTransaction,
         tx_progress: async_channel::Sender<ImportProgress>,
     ) -> Result<()>;
 }

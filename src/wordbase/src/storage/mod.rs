@@ -37,7 +37,7 @@ pub trait Storage: Send + Sync + Clone + 'static {
         Self::with_codec(Self::Codec::default())
     }
 
-    fn begin_import(&self, data_dir: &Path) -> Result<impl ImportStorage + use<Self>>;
+    fn create_import_storage(&self, data_dir: &Path) -> Result<impl ImportStorage + use<Self>>;
 
     fn open(&self, data_dir: &Path) -> Result<impl Lookups>;
 }
@@ -46,7 +46,7 @@ pub trait ImportStorage: Send {
     fn begin_write(&mut self) -> Result<impl ImportTransaction>;
 }
 
-pub trait ImportTransaction {
+pub trait ImportTransaction: Send {
     fn open_tables(&mut self) -> Result<impl ImportTables + '_>;
 
     fn commit(self) -> Result<()>;
@@ -59,5 +59,11 @@ pub trait ImportTables: Send {
 }
 
 pub trait Lookups {
-    fn lookup_lemma(&self, lemma: &str) -> Result<Vec<Record>>;
+    fn lookup_lemma(&self, lemma: &str) -> Result<Vec<(TermPart, Record)>>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TermPart {
+    Headword,
+    Reading,
 }

@@ -1,5 +1,8 @@
 use {
-    crate::codec::{Codec, Decoder, Encoder},
+    crate::{
+        codec::{Codec, Decoder, Encoder},
+        storage::TermPart,
+    },
     derive_more::Debug,
     either::Either,
     eyre::{Context, Result, eyre},
@@ -40,7 +43,7 @@ impl<C: Codec> super::Storage for Storage<C> {
     }
 
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn begin_import(&self, data_dir: &Path) -> Result<ImportStorage<C>> {
+    fn create_import_storage(&self, data_dir: &Path) -> Result<ImportStorage<C>> {
         let options = db_open_options(&self.env);
         let mut db = DB::open(&options, data_dir)
             .wrap_err_with(|| eyre!("failed to create database at {data_dir:?}"))?;
@@ -200,19 +203,14 @@ impl<E: Encoder> super::ImportTables for ImportTables<'_, E> {
 
 impl<E: Encoder> ImportTables<'_, E> {
     fn insert_record_(&mut self, record: &Record) -> Result<RecordId> {
-        let record_id = RecordId(self.next_record_id.fetch_add(1, atomic::Ordering::SeqCst));
+        let id = RecordId(self.next_record_id.fetch_add(1, atomic::Ordering::SeqCst));
         let blob = self
             .encoder
             .encode(record)
             .wrap_err("failed to encode record")?;
-        put(
-            self.db,
-            self.records,
-            &id_to_bytes(record_id),
-            blob.as_ref(),
-        )
-        .wrap_err("failed to insert record")?;
-        Ok(record_id)
+        put(self.db, self.records, &id_to_bytes(id), blob.as_ref())
+            .wrap_err("failed to insert record")?;
+        Ok(id)
     }
 }
 
@@ -234,7 +232,7 @@ pub struct Lookups<C> {
 }
 
 impl<C: Codec> super::Lookups for Lookups<C> {
-    fn lookup_lemma(&self, lemma: &str) -> Result<Vec<Record>> {
+    fn lookup_lemma(&self, lemma: &str) -> Result<Vec<(TermPart, Record)>> {
         let records = get_cf(&self.db, RECORDS)?;
         let headwords = get_cf(&self.db, HEADWORDS)?;
         let readings = get_cf(&self.db, READINGS)?;
@@ -253,13 +251,19 @@ impl<C: Codec> super::Lookups for Lookups<C> {
                 headword_ids_blob
                     .iter()
                     .flat_map(|ids_blob| self.get_by_ids(records, ids_blob))
-                    .map(|r| r.wrap_err("failed to query headwords")),
+                    .map(|r| {
+                        r.map(|record| (TermPart::Headword, record))
+                            .wrap_err("failed to query headwords")
+                    }),
             )
             .chain(
                 reading_ids_blob
                     .iter()
                     .flat_map(|ids_blob| self.get_by_ids(records, ids_blob))
-                    .map(|r| r.wrap_err("failed to query readings")),
+                    .map(|r| {
+                        r.map(|record| (TermPart::Reading, record))
+                            .wrap_err("failed to query readings")
+                    }),
             );
 
         records.collect::<Result<Vec<_>, _>>()

@@ -84,6 +84,7 @@ rkyv = { workspace = true, optional = true, features = [
 ] }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["full"]}
 ascii_table        = { workspace = true, features = ["wide_characters"] }
 clap               = { workspace = true, features = ["derive"] }
 humansize          = { workspace = true }

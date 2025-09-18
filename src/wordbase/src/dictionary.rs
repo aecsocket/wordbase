@@ -1,13 +1,13 @@
 use {
     crate::{
         import::{self, FinishImport, ImportProgress, OpenArchive},
-        storage::Storage,
+        storage::{ImportStorage, ImportTransaction, Lookups, Storage, TermPart},
     },
     eyre::{Context, Result, eyre},
     futures::Stream,
     std::path::{Path, PathBuf},
     tokio::{fs, io::AsyncWriteExt, task::spawn_blocking},
-    wordbase_api::DictionaryMeta,
+    wordbase_api::{DictionaryMeta, Record},
 };
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -51,6 +51,14 @@ macro_rules! storage_strategies {
         pub enum InbuiltLookups {
             $($name(crate::storage::$storage_mod::Lookups<crate::codec::$codec_mod::Codec>),)*
         }
+
+        impl Lookups for InbuiltLookups {
+            fn lookup_lemma(&self, lemma: &str) -> Result<Vec<(TermPart, Record)>> {
+                match self {
+                    $(Self::$name(this) => this.lookup_lemma(lemma),)*
+                }
+            }
+        }
     };
 }
 
@@ -68,30 +76,27 @@ const MANIFEST_PATH: &str = "dictionary.json";
 #[derive(Debug)]
 pub enum ImportEvent {
     CreatedDir,
-    CreatedStorage,
     ReadMeta(DictionaryMeta),
     WroteManifest,
+    CreatedStorage,
     Progress(ImportProgress),
     Done,
 }
 
 pub fn import<S: InbuiltStorage>(
     storage: S,
-    dictionary_path: PathBuf,
+    dict_dir: PathBuf,
     open_archive: impl OpenArchive + 'static,
 ) -> impl Stream<Item = Result<ImportEvent>> {
     async_stream::try_stream! {
-        fs::create_dir_all(&dictionary_path)
+        fs::create_dir_all(&dict_dir)
             .await
-            .wrap_err_with(|| eyre!("failed to create {dictionary_path:?}"))?;
-        let manifest_path = dictionary_path.join(MANIFEST_PATH);
+            .wrap_err_with(|| eyre!("failed to create {dict_dir:?}"))?;
+        let manifest_path = dict_dir.join(MANIFEST_PATH);
         let mut manifest_file = fs::File::create(&manifest_path)
             .await
             .wrap_err_with(|| eyre!("failed to open manifest file at `{manifest_path:?}`"))?;
         yield ImportEvent::CreatedDir;
-
-        let import_storage = spawn_blocking(move || storage.begin_import(&dictionary_path)).await??;
-        yield ImportEvent::CreatedStorage;
 
         let (meta, import) = spawn_blocking(move || import::yomitan::start(open_archive)).await??;
         let manifest = DictionaryManifest {
@@ -108,8 +113,20 @@ pub fn import<S: InbuiltStorage>(
             .wrap_err("failed to write manifest")?;
         yield ImportEvent::WroteManifest;
 
+        let mut import_storage = spawn_blocking(move || {
+            storage.create_import_storage(&dict_dir)
+        })
+        .await?
+        .wrap_err("failed to create import storage")?;
+        yield ImportEvent::CreatedStorage;
+
         let (tx_progress, rx_progress) = async_channel::bounded::<ImportProgress>(4);
-        let import = spawn_blocking(move || import.finish(import_storage, tx_progress));
+        let import = spawn_blocking(move || {
+            let mut txn = import_storage.begin_write().wrap_err("failed to begin write")?;
+            import.finish(&mut txn, tx_progress)?;
+            txn.commit().wrap_err("failed to commit transaction")?;
+            eyre::Ok(())
+        });
         while let Ok(progress) = rx_progress.recv().await {
             yield ImportEvent::Progress(progress);
         }
