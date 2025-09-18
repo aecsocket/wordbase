@@ -13,7 +13,7 @@ use {
     std::path::Path,
     tokio::fs,
     tracing::trace,
-    wordbase_api::uuid::Uuid,
+    uuid::Uuid,
 };
 
 pub struct Wordbase {}
@@ -47,8 +47,10 @@ impl Wordbase {
                 trace!("Skipping {file_name:?} because it is not a valid UUID");
                 continue;
             };
+
+            // dictionary::open(&entry.path())
         }
 
-        Self {}
+        todo!();
     }
 }

@@ -1,8 +1,5 @@
 use {
-    crate::{
-        codec::{Codec, Decoder, Encoder},
-        storage::StorageKind,
-    },
+    crate::codec::{Codec, Decoder, Encoder},
     derive_more::Debug,
     either::Either,
     eyre::{Context, Result, eyre},
@@ -12,8 +9,7 @@ use {
     },
     std::{
         iter,
-        marker::PhantomData,
-        path::{Path, PathBuf},
+        path::Path,
         sync::atomic::{self, AtomicU64},
     },
     wordbase_api::{Record, RecordId, Term},
@@ -27,40 +23,16 @@ const HEADWORDS: &str = "headwords";
 const READINGS: &str = "readings";
 const NUM_DBS: u32 = 3;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Storage<C> {
-    #[debug(ignore)]
-    _phantom: PhantomData<C>,
-}
-
-impl<C: Codec> Storage<C> {
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            _phantom: PhantomData,
-        }
-    }
-}
-
-impl<C: Codec> Default for Storage<C> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<C: Codec> Clone for Storage<C> {
-    fn clone(&self) -> Self {
-        Self {
-            _phantom: PhantomData,
-        }
-    }
+    codec: C,
 }
 
 impl<C: Codec> super::Storage for Storage<C> {
     type Codec = C;
 
-    fn kind() -> StorageKind {
-        StorageKind::Heed
+    fn with_codec(codec: Self::Codec) -> Result<Self> {
+        Ok(Self { codec })
     }
 
     #[expect(refining_impl_trait, reason = "explicit refinement")]
@@ -68,10 +40,37 @@ impl<C: Codec> super::Storage for Storage<C> {
         Ok(ImportStorage {
             // TODO safety comment
             env: unsafe { env_open_options().open(data_dir) }
-                .wrap_err_with(|| eyre!("failed to open database env at {data_dir:?}"))?,
-            data_dir: data_dir.to_path_buf(),
+                .wrap_err("failed to open database env")?,
             next_record_id: AtomicU64::new(0),
-            _phantom: PhantomData,
+            codec: self.codec.clone(),
+        })
+    }
+
+    #[expect(refining_impl_trait, reason = "explicit refinement")]
+    fn open(&self, data_dir: &Path) -> Result<Lookups<C>> {
+        // TODO safety comment
+        let env = unsafe { env_open_options().flags(EnvFlags::READ_ONLY).open(data_dir) }
+            .wrap_err("failed to open database env")?;
+        let txn = env
+            .clone()
+            .static_read_txn()
+            .wrap_err("failed to begin read transaction")?;
+
+        Ok(Lookups {
+            records: records_db_options(&env)
+                .open(&txn)
+                .wrap_err_with(|| eyre!("failed to open database `{RECORDS}`"))?
+                .ok_or_else(|| eyre!("no database `{RECORDS}`"))?,
+            headwords: term_db_options(&env, HEADWORDS)
+                .open(&txn)
+                .wrap_err_with(|| eyre!("failed to open database `{HEADWORDS}`"))?
+                .ok_or_else(|| eyre!("no database `{HEADWORDS}`"))?,
+            readings: term_db_options(&env, READINGS)
+                .open(&txn)
+                .wrap_err_with(|| eyre!("failed to open database `{READINGS}`"))?
+                .ok_or_else(|| eyre!("no database `{READINGS}`"))?,
+            txn,
+            codec: self.codec.clone(),
         })
     }
 }
@@ -85,9 +84,8 @@ fn env_open_options() -> EnvOpenOptions {
 
 pub struct ImportStorage<C> {
     env: Env,
-    data_dir: PathBuf,
     next_record_id: AtomicU64,
-    _phantom: PhantomData<C>,
+    codec: C,
 }
 
 impl<C: Codec> super::ImportStorage for ImportStorage<C> {
@@ -100,34 +98,16 @@ impl<C: Codec> super::ImportStorage for ImportStorage<C> {
                 .wrap_err("failed to begin write transaction")?,
             next_record_id: &self.next_record_id,
             env: &self.env,
-            _phantom: PhantomData,
-        })
-    }
-
-    #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn open_lookups(self) -> Result<LookupStorage<C>> {
-        drop(self.env);
-
-        // TODO safety comment
-        let env = unsafe {
-            env_open_options()
-                .flags(EnvFlags::READ_ONLY)
-                .open(&self.data_dir)
-        }
-        .wrap_err("failed to re-open database env for reading")?;
-
-        Ok(LookupStorage {
-            env,
-            _phantom: PhantomData,
+            codec: self.codec.clone(),
         })
     }
 }
 
-pub struct ImportTransaction<'s, C: Codec> {
+pub struct ImportTransaction<'s, C> {
     txn: RwTxn<'s>,
     next_record_id: &'s AtomicU64,
     env: &'s Env,
-    _phantom: PhantomData<C>,
+    codec: C,
 }
 
 impl<'s, C: Codec> super::ImportTransaction for ImportTransaction<'s, C> {
@@ -145,7 +125,7 @@ impl<'s, C: Codec> super::ImportTransaction for ImportTransaction<'s, C> {
                 .wrap_err_with(|| eyre!("failed to create database `{READINGS}`"))?,
             txn: &mut self.txn,
             next_record_id: self.next_record_id,
-            encoder: C::encoder(),
+            encoder: self.codec.encoder(),
         })
     }
 
@@ -216,55 +196,25 @@ impl<E: Encoder> ImportTables<'_, '_, E> {
     }
 }
 
-pub struct LookupStorage<C> {
-    env: Env,
-    _phantom: PhantomData<C>,
-}
-
-impl<C: Codec> super::LookupStorage for LookupStorage<C> {
-    #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn lookups(&self) -> Result<Lookups<C>> {
-        let txn = self
-            .env
-            .static_read_txn()
-            .wrap_err("failed to begin read transaction")?;
-
-        Ok(Lookups {
-            records: records_db_options(&self.env)
-                .open(&txn)
-                .wrap_err_with(|| eyre!("failed to create database `{RECORDS}`"))?
-                .ok_or_else(|| eyre!("no database `{RECORDS}`"))?,
-            headwords: term_db_options(&self.env, HEADWORDS)
-                .open(&txn)
-                .wrap_err_with(|| eyre!("failed to create database `{HEADWORDS}`"))?
-                .ok_or_else(|| eyre!("no database `{HEADWORDS}`"))?,
-            readings: term_db_options(&self.env, READINGS)
-                .open(&txn)
-                .wrap_err_with(|| eyre!("failed to create database `{READINGS}`"))?
-                .ok_or_else(|| eyre!("no database `{READINGS}`"))?,
-            txn,
-            _phantom: PhantomData,
-        })
-    }
-}
-
+#[derive(Debug)]
 pub struct Lookups<C> {
     records: Database<RecordIdTy, RecordTy>,
     headwords: Database<Str, RecordIdTy>,
     readings: Database<Str, RecordIdTy>,
+    #[debug(skip)]
     txn: RoTxn<'static, WithTls>,
-    _phantom: PhantomData<C>,
+    codec: C,
 }
 
-impl<C: Codec> super::Lookups for Lookups<'_, C> {
+impl<C: Codec> super::Lookups for Lookups<C> {
     fn lookup_lemma(&self, lemma: &str) -> Result<Vec<Record>> {
         self.lookup_lemma_(lemma).collect()
     }
 }
 
-impl<C: Codec> Lookups<'_, C> {
+impl<C: Codec> Lookups<C> {
     fn lookup_lemma_(&self, lemma: &str) -> impl Iterator<Item = Result<Record>> {
-        let mut decoder = C::decoder();
+        let mut decoder = self.codec.decoder();
 
         let get_ids = |db: &Database<Str, RecordIdTy>| {
             match db.get_duplicates(&self.txn, lemma) {

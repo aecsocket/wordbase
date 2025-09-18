@@ -3,7 +3,6 @@
 use {
     ascii_table::AsciiTable,
     eyre::{Context, Result, eyre},
-    futures::StreamExt,
     humansize::{DECIMAL, format_size},
     std::{
         fs, io,
@@ -14,9 +13,9 @@ use {
     tracing::{debug, info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
     wordbase::{
-        codec,
-        import::{self, FinishImport, ImportEvent},
-        storage::{self, ImportStorage, LookupStorage, Lookups},
+        codec::{Rkyv, Rmp},
+        import::{self, FinishImport},
+        storage::{Heed, Lookups, Redb, RocksDb, Storage},
     },
 };
 
@@ -50,26 +49,14 @@ fn main() -> Result<()> {
         results: &mut results,
     };
 
-    bench_db(&mut cx, "redb+rmp", || {
-        Ok(storage::Redb::<codec::Rmp>::new())
-    })?;
-    bench_db(&mut cx, "redb+rkyv", || {
-        Ok(storage::Redb::<codec::Rkyv>::new())
-    })?;
+    bench_db::<Redb<Rmp>>(&mut cx, "redb+rmp")?;
+    bench_db::<Redb<Rkyv>>(&mut cx, "redb+rkyv")?;
 
-    bench_db(&mut cx, "heed+rmp", || {
-        Ok(storage::Heed::<codec::Rmp>::new())
-    })?;
-    bench_db(&mut cx, "heed+rkyv", || {
-        Ok(storage::Heed::<codec::Rkyv>::new())
-    })?;
+    bench_db::<Heed<Rmp>>(&mut cx, "heed+rmp")?;
+    bench_db::<Heed<Rkyv>>(&mut cx, "heed+rkyv")?;
 
-    bench_db(&mut cx, "rocksdb+rmp", || {
-        storage::RocksDb::<codec::Rmp>::new()
-    })?;
-    bench_db(&mut cx, "rocksdb+rkyv", || {
-        storage::RocksDb::<codec::Rkyv>::new()
-    })?;
+    bench_db::<RocksDb<Rmp>>(&mut cx, "rocksdb+rmp")?;
+    bench_db::<RocksDb<Rkyv>>(&mut cx, "rocksdb+rkyv")?;
 
     let mut table = AsciiTable::default();
     table.column(0).set_header("DB type");
@@ -88,38 +75,34 @@ struct BenchContext<'a> {
     results: &'a mut Vec<Vec<String>>,
 }
 
-fn bench_db<S: storage::Storage>(
-    cx: &mut BenchContext,
-    name: &str,
-    make_storage: impl FnOnce() -> Result<S>,
-) -> Result<()> {
+fn bench_db<S>(cx: &mut BenchContext, name: &str) -> Result<()>
+where
+    S: Storage,
+    S::Codec: Default,
+{
     const LOOKUP_ITERS: usize = 10_000;
 
-    let dictionary_dir = cx.temp_dir.path().join(name);
-    fs::create_dir_all(&dictionary_dir)
-        .wrap_err_with(|| eyre!("failed to create directory {dictionary_dir:?}"))?;
-    info!("Benchmarking `{name}` at {dictionary_dir:?}");
+    let dict_dir = cx.temp_dir.path().join(name);
+    fs::create_dir_all(&dict_dir)
+        .wrap_err_with(|| eyre!("failed to create directory {dict_dir:?}"))?;
+    info!("Benchmarking `{name}` at {dict_dir:?}");
 
     (|| {
         let start = Instant::now();
-        let storage = make_storage().wrap_err("failed to make storage")?;
-        let mut import_storage = storage
-            .begin_import(&dictionary_dir)
+        let storage = S::new().wrap_err("failed to make storage")?;
+        let import_storage = storage
+            .begin_import(&dict_dir)
             .wrap_err("failed to begin import")?;
 
         let (tx_progress, _) = async_channel::bounded(1);
         let (meta, import) = import::yomitan::start(cx.archive)?;
         info!("{meta:?}");
-        import.finish(&mut import_storage, tx_progress)?;
-
-        let lookup_storage = import_storage
-            .open_lookups()
-            .wrap_err("failed to open storage for lookups")?;
+        import.finish(import_storage, tx_progress)?;
 
         let import_time = start.elapsed();
         let import_time = format!("{import_time:.2?}");
 
-        let storage_size = get_size(&dictionary_dir).wrap_err("failed to get storage size")?;
+        let storage_size = get_size(&dict_dir).wrap_err("failed to get storage size")?;
         let storage_size = format_size(storage_size, DECIMAL);
         info!(
             "Import stats:
@@ -127,9 +110,9 @@ fn bench_db<S: storage::Storage>(
     - storage size: {storage_size}",
         );
 
-        let lookups = lookup_storage
-            .lookups()
-            .wrap_err("failed to open lookups")?;
+        let lookups = storage
+            .open(&dict_dir)
+            .wrap_err("failed to open storage for lookups")?;
 
         let start = Instant::now();
         for i in 0..LOOKUP_ITERS {

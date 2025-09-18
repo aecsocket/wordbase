@@ -1,4 +1,21 @@
-use {eyre::Result, wordbase_api::Record};
+use {eyre::Result, std::fmt::Debug, wordbase_api::Record};
+
+pub trait Codec: Send + Sync + Debug + Clone + 'static {
+    type Encoder: Encoder;
+    type Decoder: Decoder;
+
+    fn encoder(&self) -> Self::Encoder;
+
+    fn decoder(&self) -> Self::Decoder;
+}
+
+pub trait Encoder: Send + Sync + 'static {
+    fn encode(&mut self, record: &Record) -> Result<impl AsRef<[u8]>>;
+}
+
+pub trait Decoder: Send + Sync + 'static {
+    fn decode(&mut self, bytes: &[u8]) -> Result<Record>;
+}
 
 #[cfg(feature = "codec-rkyv")]
 pub mod rkyv;
@@ -9,29 +26,3 @@ pub type Rkyv = rkyv::Codec;
 pub mod rmp;
 #[cfg(feature = "codec-rmp")]
 pub type Rmp = rmp::Codec;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-#[non_exhaustive]
-pub enum CodecKind {
-    Rkyv,
-    Rmp,
-}
-
-pub trait Codec: Send + Sync + 'static {
-    type Encoder: Encoder;
-    type Decoder: Decoder;
-
-    fn kind() -> CodecKind;
-
-    fn encoder() -> Self::Encoder;
-
-    fn decoder() -> Self::Decoder;
-}
-
-pub trait Encoder: Send + Sync + 'static {
-    fn encode(&mut self, record: &Record) -> Result<impl AsRef<[u8]>>;
-}
-
-pub trait Decoder: Send + Sync + 'static {
-    fn decode(&mut self, bytes: &[u8]) -> Result<Record>;
-}

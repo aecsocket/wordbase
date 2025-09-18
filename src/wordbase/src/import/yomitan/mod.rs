@@ -42,10 +42,10 @@ pub fn start<O: OpenArchive>(
     impl<O: OpenArchive> FinishImport for Finish<O> {
         fn finish(
             self,
-            storage: &mut impl ImportStorage,
+            mut storage: impl ImportStorage,
             tx_progress: async_channel::Sender<ImportProgress>,
         ) -> Result<()> {
-            finish_import(&self.open_archive, &self.index, storage, &tx_progress)
+            finish_import(&self.open_archive, &self.index, &mut storage, &tx_progress)
         }
     }
 

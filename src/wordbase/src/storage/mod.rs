@@ -8,15 +8,22 @@ use {
 pub trait Storage: Send + Sync + Clone + 'static {
     type Codec: Codec;
 
-    fn kind() -> StorageKind;
+    fn with_codec(codec: Self::Codec) -> Result<Self>;
+
+    fn new() -> Result<Self>
+    where
+        Self::Codec: Default,
+    {
+        Self::with_codec(Self::Codec::default())
+    }
 
     fn begin_import(&self, data_dir: &Path) -> Result<impl ImportStorage + use<Self>>;
+
+    fn open(&self, data_dir: &Path) -> Result<impl Lookups>;
 }
 
 pub trait ImportStorage: Send {
     fn begin_write(&mut self) -> Result<impl ImportTransaction>;
-
-    fn open_lookups(self) -> Result<impl LookupStorage>;
 }
 
 pub trait ImportTransaction {
@@ -29,10 +36,6 @@ pub trait ImportTables: Send {
     fn insert_record(&mut self, record: impl Into<Record>) -> Result<RecordId>;
 
     fn insert_term(&mut self, term: &Term, record_id: RecordId) -> Result<()>;
-}
-
-pub trait LookupStorage {
-    fn lookups(&self) -> Result<impl Lookups>;
 }
 
 pub trait Lookups {
@@ -53,37 +56,3 @@ pub type Redb<C> = redb::Storage<C>;
 pub mod rocksdb;
 #[cfg(feature = "storage-rocksdb")]
 pub type RocksDb<C> = rocksdb::Storage<C>;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-#[non_exhaustive]
-pub enum StorageKind {
-    Heed,
-    Redb,
-    RocksDb,
-}
-
-pub enum InbuiltLookupStorage<C> {
-    Heed(heed::Storage<C>),
-    Redb(redb::Storage<C>),
-    RocksDb(rocksdb::Storage<C>),
-}
-
-impl<C: Codec> LookupStorage for InbuiltLookupStorage<C> {
-    fn lookups(&self) -> Result<InbuiltLookups<'_, C>> {}
-}
-
-pub enum InbuiltLookups<'e, C> {
-    Heed(heed::Lookups<'e, C>),
-    Redb(redb::Lookups<C>),
-    RocksDb(rocksdb::Lookups<'e, C>),
-}
-
-impl<C: Codec> Lookups for InbuiltLookups<'_, C> {
-    fn lookup_lemma(&self, lemma: &str) -> Result<Vec<Record>> {
-        match self {
-            Self::Heed(this) => this.lookup_lemma(lemma),
-            Self::Redb(this) => this.lookup_lemma(lemma),
-            Self::RocksDb(this) => this.lookup_lemma(lemma),
-        }
-    }
-}

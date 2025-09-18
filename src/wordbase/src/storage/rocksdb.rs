@@ -1,8 +1,5 @@
 use {
-    crate::{
-        codec::{Codec, Decoder, Encoder},
-        storage::StorageKind,
-    },
+    crate::codec::{Codec, Decoder, Encoder},
     derive_more::Debug,
     either::Either,
     eyre::{Context, Result, eyre},
@@ -11,8 +8,7 @@ use {
     },
     std::{
         iter,
-        marker::PhantomData,
-        path::{Path, PathBuf},
+        path::Path,
         sync::{
             LazyLock,
             atomic::{self, AtomicU64},
@@ -26,37 +22,21 @@ const HEADWORDS: &str = "headwords";
 const READINGS: &str = "readings";
 const COLUMN_FAMILIES: &[&str] = &[RECORDS, HEADWORDS, READINGS];
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Storage<C> {
+    codec: C,
     #[debug(ignore)]
     env: Env,
-    #[debug(ignore)]
-    _phantom: PhantomData<C>,
-}
-
-impl<C: Codec> Storage<C> {
-    pub fn new() -> Result<Self> {
-        Ok(Self {
-            env: Env::new().wrap_err("failed to create env")?,
-            _phantom: PhantomData,
-        })
-    }
-}
-
-impl<C: Codec> Clone for Storage<C> {
-    fn clone(&self) -> Self {
-        Self {
-            env: self.env.clone(),
-            _phantom: PhantomData,
-        }
-    }
 }
 
 impl<C: Codec> super::Storage for Storage<C> {
     type Codec = C;
 
-    fn kind() -> StorageKind {
-        StorageKind::RocksDb
+    fn with_codec(codec: Self::Codec) -> Result<Self> {
+        Ok(Self {
+            codec,
+            env: Env::new().wrap_err("failed to open env")?,
+        })
     }
 
     #[expect(refining_impl_trait, reason = "explicit refinement")]
@@ -74,11 +54,25 @@ impl<C: Codec> super::Storage for Storage<C> {
             .wrap_err_with(|| eyre!("failed to create column family `{RECORDS}`"))?;
 
         Ok(ImportStorage {
-            env: self.env.clone(),
             db,
-            data_dir: data_dir.to_path_buf(),
             next_record_id: AtomicU64::new(0),
-            _phantom: PhantomData,
+            codec: self.codec.clone(),
+        })
+    }
+
+    #[expect(refining_impl_trait, reason = "explicit refinement")]
+    fn open(&self, data_dir: &Path) -> Result<Lookups<C>> {
+        let db = DB::open_cf_for_read_only(
+            &db_open_options(&self.env),
+            data_dir,
+            COLUMN_FAMILIES,
+            false, // error_if_log_file_exist
+        )
+        .wrap_err("failed to open database")?;
+
+        Ok(Lookups {
+            db,
+            codec: self.codec.clone(),
         })
     }
 }
@@ -109,11 +103,9 @@ fn record_id_cf_open_options(env: &Env) -> Options {
 }
 
 pub struct ImportStorage<C> {
-    env: Env,
     db: DB,
-    data_dir: PathBuf,
     next_record_id: AtomicU64,
-    _phantom: PhantomData<C>,
+    codec: C,
 }
 
 impl<C: Codec> super::ImportStorage for ImportStorage<C> {
@@ -122,34 +114,7 @@ impl<C: Codec> super::ImportStorage for ImportStorage<C> {
         Ok(ImportTransaction {
             db: &self.db,
             next_record_id: &self.next_record_id,
-            _phantom: PhantomData,
-        })
-    }
-
-    #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn open_lookups(self) -> Result<LookupStorage<C>> {
-        self.db
-            .flush()
-            .wrap_err("failed to flush memtables to SST files")?;
-        // <https://github.com/facebook/rocksdb/wiki/RocksDB-FAQ>
-        // "What's the fastest way to load data into RocksDB?"
-        self.db.compact_range(None::<&[u8]>, None::<&[u8]>);
-        self.db
-            .wait_for_compact(&WaitForCompactOptions::default())
-            .wrap_err("failed to wait for compaction jobs")?;
-        drop(self.db);
-
-        let db = DB::open_cf_for_read_only(
-            &db_open_options(&self.env),
-            &self.data_dir,
-            COLUMN_FAMILIES,
-            false, // error_if_log_file_exist
-        )
-        .wrap_err_with(|| eyre!("failed to re-open database for reading"))?;
-
-        Ok(LookupStorage {
-            db,
-            _phantom: PhantomData,
+            codec: self.codec.clone(),
         })
     }
 }
@@ -157,7 +122,7 @@ impl<C: Codec> super::ImportStorage for ImportStorage<C> {
 pub struct ImportTransaction<'s, C> {
     db: &'s DB,
     next_record_id: &'s AtomicU64,
-    _phantom: PhantomData<C>,
+    codec: C,
 }
 
 impl<C: Codec> super::ImportTransaction for ImportTransaction<'_, C> {
@@ -178,11 +143,20 @@ impl<C: Codec> super::ImportTransaction for ImportTransaction<'_, C> {
                 .ok_or_else(|| eyre!("no column family `{READINGS}`"))?,
             db: self.db,
             next_record_id: self.next_record_id,
-            encoder: C::encoder(),
+            encoder: self.codec.encoder(),
         })
     }
 
     fn commit(self) -> Result<()> {
+        self.db
+            .flush()
+            .wrap_err("failed to flush memtables to SST files")?;
+        // <https://github.com/facebook/rocksdb/wiki/RocksDB-FAQ>
+        // "What's the fastest way to load data into RocksDB?"
+        self.db.compact_range(None::<&[u8]>, None::<&[u8]>);
+        self.db
+            .wait_for_compact(&WaitForCompactOptions::default())
+            .wrap_err("failed to wait for compaction jobs")?;
         Ok(())
     }
 }
@@ -253,63 +227,38 @@ fn put(db: &DB, cf: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
     Ok(())
 }
 
-pub struct LookupStorage<C> {
+#[derive(Debug)]
+pub struct Lookups<C> {
     db: DB,
-    _phantom: PhantomData<C>,
+    codec: C,
 }
 
-impl<C: Codec> super::LookupStorage for LookupStorage<C> {
-    #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn lookups(&self) -> Result<Lookups<'_, C>> {
-        Ok(Lookups {
-            records: self
-                .db
-                .cf_handle(RECORDS)
-                .ok_or_else(|| eyre!("no column family `{RECORDS}`"))?,
-            headwords: self
-                .db
-                .cf_handle(HEADWORDS)
-                .ok_or_else(|| eyre!("no column family `{HEADWORDS}`"))?,
-            readings: self
-                .db
-                .cf_handle(READINGS)
-                .ok_or_else(|| eyre!("no column family `{READINGS}`"))?,
-            db: &self.db,
-            _phantom: PhantomData,
-        })
-    }
-}
-
-pub struct Lookups<'s, C> {
-    records: &'s ColumnFamily,
-    headwords: &'s ColumnFamily,
-    readings: &'s ColumnFamily,
-    db: &'s DB,
-    _phantom: PhantomData<C>,
-}
-
-impl<C: Codec> super::Lookups for Lookups<'_, C> {
+impl<C: Codec> super::Lookups for Lookups<C> {
     fn lookup_lemma(&self, lemma: &str) -> Result<Vec<Record>> {
+        let records = get_cf(&self.db, RECORDS)?;
+        let headwords = get_cf(&self.db, HEADWORDS)?;
+        let readings = get_cf(&self.db, READINGS)?;
+
         let headword_ids_blob = self
             .db
-            .get_pinned_cf(&self.headwords, lemma.as_bytes())
+            .get_pinned_cf(headwords, lemma.as_bytes())
             .wrap_err("failed to get record IDs for headword")?;
         let reading_ids_blob = self
             .db
-            .get_pinned_cf(&self.readings, lemma.as_bytes())
+            .get_pinned_cf(readings, lemma.as_bytes())
             .wrap_err("failed to get record IDs for reading")?;
 
         let records = iter::empty()
             .chain(
                 headword_ids_blob
                     .iter()
-                    .flat_map(|ids_blob| self.get_by_ids(ids_blob))
+                    .flat_map(|ids_blob| self.get_by_ids(records, ids_blob))
                     .map(|r| r.wrap_err("failed to query headwords")),
             )
             .chain(
                 reading_ids_blob
                     .iter()
-                    .flat_map(|ids_blob| self.get_by_ids(ids_blob))
+                    .flat_map(|ids_blob| self.get_by_ids(records, ids_blob))
                     .map(|r| r.wrap_err("failed to query readings")),
             );
 
@@ -317,17 +266,23 @@ impl<C: Codec> super::Lookups for Lookups<'_, C> {
     }
 }
 
-impl<C: Codec> Lookups<'_, C> {
+fn get_cf<'db>(db: &'db DB, name: &str) -> Result<&'db ColumnFamily> {
+    db.cf_handle(name)
+        .ok_or_else(|| eyre!("no column family `{name}"))
+}
+
+impl<C: Codec> Lookups<C> {
     fn get_by_ids<'db, 'blob: 'db>(
         &'db self,
+        records: &'db ColumnFamily,
         ids_blob: &'blob DBPinnableSlice<'db>,
     ) -> impl Iterator<Item = Result<Record>> + 'db {
-        let mut decoder = C::decoder();
+        let mut decoder = self.codec.decoder();
 
         let get_record = move |id: RecordId| {
             let blob = self
                 .db
-                .get_pinned_cf(&self.records, id_to_bytes(id))
+                .get_pinned_cf(records, id_to_bytes(id))
                 .wrap_err_with(|| eyre!("failed to get {id:?}"))?
                 .ok_or_else(|| eyre!("no record {id:?}"))?;
             let record = decoder

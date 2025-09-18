@@ -1,26 +1,24 @@
-use {crate::codec::CodecKind, eyre::Result, wordbase_api::Record};
+use {eyre::Result, wordbase_api::Record};
 
+#[derive(Debug, Clone, Default)]
 pub struct Codec;
 
 impl super::Codec for Codec {
     type Encoder = Encoder;
     type Decoder = Decoder;
 
-    fn kind() -> CodecKind {
-        CodecKind::Rmp
-    }
-
-    fn encoder() -> Self::Encoder {
+    fn encoder(&self) -> Self::Encoder {
         Encoder {
             scratch: Vec::new(),
         }
     }
 
-    fn decoder() -> Self::Decoder {
+    fn decoder(&self) -> Self::Decoder {
         Decoder(())
     }
 }
 
+#[derive(Debug)]
 pub struct Encoder {
     scratch: Vec<u8>,
 }
@@ -33,6 +31,7 @@ impl super::Encoder for Encoder {
     }
 }
 
+#[derive(Debug)]
 pub struct Decoder(());
 
 impl super::Decoder for Decoder {

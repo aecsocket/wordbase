@@ -1,29 +1,26 @@
 use {
-    crate::codec::CodecKind,
     eyre::{Context, Result},
     rkyv::rancor,
     wordbase_api::{ArchivedRecord, Record},
 };
 
+#[derive(Debug, Clone, Default)]
 pub struct Codec;
 
 impl super::Codec for Codec {
     type Encoder = Encoder;
     type Decoder = Decoder;
 
-    fn kind() -> CodecKind {
-        CodecKind::Rkyv
-    }
-
-    fn encoder() -> Self::Encoder {
+    fn encoder(&self) -> Self::Encoder {
         Encoder {}
     }
 
-    fn decoder() -> Self::Decoder {
+    fn decoder(&self) -> Self::Decoder {
         Decoder(())
     }
 }
 
+#[derive(Debug)]
 pub struct Encoder {}
 
 impl super::Encoder for Encoder {
@@ -33,6 +30,7 @@ impl super::Encoder for Encoder {
     }
 }
 
+#[derive(Debug)]
 pub struct Decoder(());
 
 impl super::Decoder for Decoder {
