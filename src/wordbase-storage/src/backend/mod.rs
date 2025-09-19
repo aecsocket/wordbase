@@ -38,21 +38,23 @@ pub type RocksDb = rocksdb::Backend;
 pub trait Backend: Send + Sync + 'static {
     fn import(data_dir: &Path) -> Result<impl ImportStorage + use<Self>>;
 
-    fn open(data_dir: &Path) -> Result<impl Lookups>;
+    fn open(data_dir: &Path) -> Result<impl Lookups + use<Self>>;
 }
 
-pub trait ImportStorage: Send {
+pub trait ImportStorage: Send + Sync {
     fn transaction(&mut self) -> Result<impl ImportTransaction>;
-}
-
-pub trait ImportTransaction: Send {
-    fn open_tables(&mut self) -> Result<impl ImportTables>;
 
     fn commit(self) -> Result<()>;
 }
 
-pub trait ImportTables: Send {
-    fn batch(&self) -> impl ImportBatch;
+pub trait ImportTransaction: Send + Sync {
+    type Batch<'txn>: ImportBatch
+    where
+        Self: 'txn;
+
+    fn batch(&self) -> Result<Self::Batch<'_>>;
+
+    fn commit(self) -> Result<()>;
 }
 
 pub trait ImportBatch {

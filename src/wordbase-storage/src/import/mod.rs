@@ -1,67 +1,121 @@
 use {
-    bytes::Bytes,
     eyre::Result,
-    std::{
-        fs::File,
-        io::Cursor,
-        path::{Path, PathBuf},
-    },
+    wordbase_api::{Record, RecordId, Term},
 };
 
 pub mod yomitan;
 
-pub trait OpenArchive: Send + Sync {
-    fn open_archive(&self) -> Result<impl Archive + 'static>;
+#[derive(Debug, Clone)]
+pub struct ImportProgress {
+    pub progress: f64,
 }
 
-impl<A, F> OpenArchive for F
-where
-    A: Archive + 'static,
-    F: Fn() -> Result<A> + Send + Sync,
-{
-    #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn open_archive(&self) -> Result<A> {
-        (self)()
-    }
+pub trait ImportTransaction: Send + Sync {
+    type Batch<'txn>: ImportBatch
+    where
+        Self: 'txn;
+
+    fn batch(&self) -> Result<Self::Batch<'_>>;
 }
 
-impl OpenArchive for Bytes {
-    fn open_archive(&self) -> Result<impl Archive + 'static> {
-        Ok(Cursor::new(self.clone()))
-    }
+pub trait ImportBatch {
+    fn insert_record(&mut self, record: impl Into<Record>) -> Result<RecordId>;
+
+    fn insert_term(&mut self, term: &Term, record_id: RecordId) -> Result<()>;
 }
-
-impl OpenArchive for &'static [u8] {
-    fn open_archive(&self) -> Result<impl Archive + 'static> {
-        Ok(Cursor::new(*self))
-    }
-}
-
-impl OpenArchive for &Path {
-    fn open_archive(&self) -> Result<impl Archive + 'static> {
-        Ok(File::open(self)?)
-    }
-}
-
-impl OpenArchive for PathBuf {
-    fn open_archive(&self) -> Result<impl Archive + 'static> {
-        Ok(File::open(self)?)
-    }
-}
-
-pub trait Archive: Send + Sync + Unpin + std::io::Read + std::io::Seek {}
-
-impl<T: Send + Sync + Unpin + std::io::Read + std::io::Seek> Archive for T {}
 
 pub trait FinishImport: Send {
     fn finish(
         self,
-        txn: &mut impl ImportTransaction,
+        txn: &impl ImportTransaction,
         tx_progress: async_channel::Sender<ImportProgress>,
     ) -> Result<()>;
 }
 
-#[derive(Debug, Clone)]
-pub struct ImportProgress {
-    pub progress: f64,
+pub mod imp {
+    use {
+        crate::{
+            backend,
+            codec::{Codec, Encoder},
+        },
+        eyre::{Context as _, Result, eyre},
+        std::sync::{
+            Mutex,
+            atomic::{self, AtomicU64},
+        },
+        wordbase_api::{Record, RecordId, Term},
+    };
+
+    #[derive(Debug)]
+    pub struct ImportTransaction<'a, T, C> {
+        txn: &'a T,
+        codec: &'a C,
+        record_id: Mutex<u64>,
+    }
+
+    impl<'a, T: backend::ImportTransaction, C: Codec> ImportTransaction<'a, T, C> {
+        pub fn new(txn: &'a T, codec: &'a C) -> Self {
+            Self {
+                txn,
+                codec,
+                record_id: Mutex::new(0),
+            }
+        }
+    }
+
+    impl<T: backend::ImportTransaction, C: Codec> super::ImportTransaction
+        for ImportTransaction<'_, T, C>
+    {
+        type Batch<'txn>
+            = ImportBatch<'txn, T::Batch<'txn>, C::Encoder>
+        where
+            Self: 'txn;
+
+        fn batch(&self) -> Result<ImportBatch<'_, T::Batch<'_>, C::Encoder>> {
+            Ok(ImportBatch {
+                batch: self.txn.batch()?,
+                encoder: self.codec.encoder(),
+                record_id: &self.record_id,
+            })
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct ImportBatch<'txn, B, E> {
+        batch: B,
+        encoder: E,
+        record_id: &'txn Mutex<u64>,
+    }
+
+    impl<B: backend::ImportBatch, E: Encoder> super::ImportBatch for ImportBatch<'_, B, E> {
+        fn insert_record(&mut self, record: impl Into<Record>) -> Result<RecordId> {
+            self.insert_record_(&record.into())
+        }
+
+        fn insert_term(&mut self, term: &Term, record_id: RecordId) -> Result<()> {
+            self.batch.insert_term(term, record_id)
+        }
+    }
+
+    impl<B: backend::ImportBatch, E: Encoder> ImportBatch<'_, B, E> {
+        fn insert_record_(&mut self, record: &Record) -> Result<RecordId> {
+            let record_id = {
+                let mut r = self.record_id.lock().unwrap();
+                *r += 1;
+                RecordId(*r)
+            };
+
+            // let record_id = RecordId(self.record_id.fetch_add(1,
+            // atomic::Ordering::SeqCst));
+            println!("rid = {record_id:?}");
+            let record_blob = self
+                .encoder
+                .encode(record)
+                .wrap_err("failed to encode record")?;
+            self.batch
+                .insert_record(record_id, record_blob.as_ref())
+                .wrap_err_with(|| eyre!("failed to insert {record_id:?}"))?;
+            Ok(record_id)
+        }
+    }
 }

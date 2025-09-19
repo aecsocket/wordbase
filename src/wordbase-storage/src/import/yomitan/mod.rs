@@ -1,17 +1,15 @@
 use {
     crate::{
-        backend::{Backend, ImportTables},
-        codec::Codec,
-        import::{Archive, FinishImport, ImportProgress, OpenArchive},
+        archive::{Archive, OpenArchive},
+        import::{FinishImport, ImportBatch, ImportProgress, ImportTransaction},
     },
     eyre::{Context as _, Result, eyre},
     rayon::prelude::*,
     serde::de::DeserializeOwned,
-    std::sync::atomic::{self, AtomicU64, AtomicUsize},
-    tokio::sync::Mutex,
+    std::sync::atomic::{self, AtomicUsize},
     tracing::{debug, trace, trace_span},
     wordbase_api::{
-        DictionaryKind, DictionaryMeta, FrequencyValue, Record, RecordId, Term,
+        DictionaryKind, DictionaryMeta, FrequencyValue, Term,
         dict::{
             jpn::PitchPosition,
             yomitan::{
@@ -43,7 +41,7 @@ pub fn start<O: OpenArchive>(
     impl<O: OpenArchive> FinishImport for Finish<O> {
         fn finish(
             self,
-            txn: &mut impl ImportTransaction,
+            txn: &impl ImportTransaction,
             tx_progress: async_channel::Sender<ImportProgress>,
         ) -> Result<()> {
             finish_import(&self.open_archive, &self.index, txn, &tx_progress)
@@ -76,23 +74,10 @@ pub fn start<O: OpenArchive>(
     ))
 }
 
-pub struct Transaction<B, C> {
-    backend: B,
-    codec: C,
-    next_record_id: AtomicU64,
-}
-
-impl<B: ImportTables, C: Codec> Transaction<B, C> {
-    pub fn insert_record(&mut self, record: impl Into<Record>) -> Result<RecordId> {
-        todo!();
-        // let record_id = RecordId(self.next_record_id.)
-    }
-}
-
 fn finish_import(
     open_archive: &impl OpenArchive,
     index: &schema::Index,
-    txn: &mut impl ImportTransaction,
+    txn: &impl ImportTransaction,
     tx_progress: &async_channel::Sender<ImportProgress>,
 ) -> Result<()> {
     let archive = archive_reader(open_archive)?;
@@ -124,14 +109,11 @@ fn finish_import(
         kanji_meta_banks.len()
     );
 
-    debug!("Opening tables");
-    let tables = Mutex::new(txn.open_tables()?);
-
     debug!("Processing banks");
     let banks_done = AtomicUsize::new(0);
     let bank_cx = BankContext {
         open_archive,
-        tables: &tables,
+        txn,
         num_banks,
         banks_done: &banks_done,
         index,
@@ -189,44 +171,42 @@ fn finish_import(
     Ok(())
 }
 
-struct BankContext<'cx, O, W> {
+struct BankContext<'cx, O, T> {
     open_archive: &'cx O,
-    tables: &'cx Mutex<W>,
+    txn: &'cx T,
     num_banks: usize,
     banks_done: &'cx AtomicUsize,
     index: &'cx schema::Index,
     tx_progress: &'cx async_channel::Sender<ImportProgress>,
 }
 
-fn parse_bank<T, O: OpenArchive, W: ImportTables>(
-    cx: &BankContext<O, W>,
+fn parse_bank<E, O: OpenArchive, T: ImportTransaction>(
+    cx: &BankContext<O, T>,
     path: &str,
-) -> Result<Vec<T>>
+) -> Result<Vec<E>>
 where
-    Vec<T>: DeserializeOwned,
+    Vec<E>: DeserializeOwned,
 {
     let mut archive = archive_reader(cx.open_archive)?;
     let file = archive.by_name(path).wrap_err("file does not exist")?;
-    serde_json::from_reader::<_, Vec<T>>(file).wrap_err("failed to parse file")
+    serde_json::from_reader::<_, Vec<E>>(file).wrap_err("failed to parse file")
 }
 
-fn import_bank<T, O: OpenArchive, W: ImportTables>(
-    cx: &BankContext<O, W>,
+fn import_bank<'txn, E, O: OpenArchive, T: ImportTransaction>(
+    cx: &'txn BankContext<O, T>,
     path: &str,
-    mut import_item: impl FnMut(&mut W, T, &schema::Index) -> Result<()>,
+    mut import_item: impl FnMut(&mut T::Batch<'txn>, E, &schema::Index) -> Result<()>,
 ) -> Result<()>
 where
-    Vec<T>: DeserializeOwned,
+    Vec<E>: DeserializeOwned,
 {
     let _span = trace_span!("bank", ?path).entered();
     let bank = parse_bank(cx, path)?;
 
     {
-        trace!("Parsed bank, waiting for tables lock");
-        let mut tables = cx.tables.blocking_lock();
-
+        let mut batch = cx.txn.batch().wrap_err("failed to begin writing batch")?;
         for data in bank {
-            import_item(&mut *tables, data, cx.index)?;
+            import_item(&mut batch, data, cx.index)?;
         }
     }
 
@@ -240,7 +220,7 @@ where
 }
 
 fn import_term(
-    tables: &mut impl ImportTables,
+    batch: &mut impl ImportBatch,
     data: schema::Term,
     all_tags: &[GlossaryTag],
 ) -> Result<()> {
@@ -281,15 +261,15 @@ fn import_term(
     };
 
     (|| {
-        let record_id = tables.insert_record(record)?;
-        tables.insert_term(&term, record_id)?;
+        let record_id = batch.insert_record(record)?;
+        batch.insert_term(&term, record_id)?;
         eyre::Ok(())
     })()
     .wrap_err_with(|| eyre!("failed to insert glossary for {term}"))
 }
 
 fn import_term_meta(
-    tables: &mut impl ImportTables,
+    batch: &mut impl ImportBatch,
     data: schema::TermMeta,
     index: &schema::Index,
 ) -> Result<()> {
@@ -307,8 +287,8 @@ fn import_term_meta(
             };
 
             (|| {
-                let record_id = tables.insert_record(record)?;
-                tables.insert_term(&term, record_id)?;
+                let record_id = batch.insert_record(record)?;
+                batch.insert_term(&term, record_id)?;
                 eyre::Ok(())
             })()
             .wrap_err_with(|| eyre!("failed to insert frequency for {term}"))?;
@@ -332,8 +312,8 @@ fn import_term_meta(
                         devoice: map_positions(pitch.devoice),
                     };
 
-                    let record_id = tables.insert_record(record)?;
-                    tables.insert_term(&term, record_id)?;
+                    let record_id = batch.insert_record(record)?;
+                    batch.insert_term(&term, record_id)?;
                 }
                 eyre::Ok(())
             })()
@@ -353,8 +333,8 @@ fn import_term_meta(
             };
 
             (|| {
-                let record_id = tables.insert_record(record)?;
-                tables.insert_term(&term, record_id)?;
+                let record_id = batch.insert_record(record)?;
+                batch.insert_term(&term, record_id)?;
                 eyre::Ok(())
             })()
             .wrap_err_with(|| eyre!("failed to insert phonetics for {term}"))?;
@@ -364,7 +344,7 @@ fn import_term_meta(
 }
 
 fn import_kanji(
-    tables: &mut impl ImportTables,
+    batch: &mut impl ImportBatch,
     data: schema::Kanji,
     _index: &schema::Index,
 ) -> Result<()> {
@@ -385,15 +365,15 @@ fn import_kanji(
     };
 
     (|| {
-        let record_id = tables.insert_record(record)?;
-        tables.insert_term(&term, record_id)?;
+        let record_id = batch.insert_record(record)?;
+        batch.insert_term(&term, record_id)?;
         eyre::Ok(())
     })()
     .wrap_err_with(|| eyre!("failed to insert kanji for {term}"))
 }
 
 fn import_kanji_meta(
-    tables: &mut impl ImportTables,
+    batch: &mut impl ImportBatch,
     data: schema::KanjiMeta,
     index: &schema::Index,
 ) -> Result<()> {
@@ -401,8 +381,8 @@ fn import_kanji_meta(
     let record = map_generic_frequency_data(index, data.data);
 
     (|| {
-        let record_id = tables.insert_record(record)?;
-        tables.insert_term(&term, record_id)?;
+        let record_id = batch.insert_record(record)?;
+        batch.insert_term(&term, record_id)?;
         eyre::Ok(())
     })()
     .wrap_err_with(|| eyre!("failed to insert kanji frequency for {term}"))

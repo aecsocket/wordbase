@@ -11,37 +11,37 @@ use {
 const DATABASE_PATH: &str = "database.db";
 
 const CREATE_RECORDS: &str = "
-CREATE TABLE records (
+CREATE TABLE record (
     id   INTEGER PRIMARY KEY,
     data BLOB    NOT NULL
 )";
 
 const CREATE_HEADWORDS: &str = "
-CREATE TABLE headwords (
-    key    TEXT    PRIMARY KEY,
-    record INTEGER NOT NULL REFERENCES records(id)
+CREATE TABLE headword (
+    text   TEXT    PRIMARY KEY,
+    record INTEGER NOT NULL REFERENCES record(id)
 )";
 
 const CREATE_READINGS: &str = "
-CREATE TABLE readings (
-    key    TEXT    PRIMARY KEY,
-    record INTEGER NOT NULL REFERENCES records(id)
+CREATE TABLE reading (
+    text   TEXT    PRIMARY KEY,
+    record INTEGER NOT NULL REFERENCES record(id)
 )";
 
 const INSERT_RECORD: &str = "
-INSERT INTO records (id, data)
+INSERT INTO record (id, data)
 VALUES (?, ?)";
 
 const INSERT_HEADWORD: &str = "
-INSERT INTO headwords (key, record)
+INSERT INTO headword (text, record)
 VALUES (?, ?)";
 
 const INSERT_READING: &str = "
-INSERT INTO readings (key, record)
+INSERT INTO reading (text, record)
 VALUES (?, ?)";
 
 const GET_RECORDS: &str = "
-SELECT id, data FROM records
+SELECT id, data FROM record
 LIMIT 1";
 
 #[derive(Debug)]
@@ -124,24 +124,41 @@ impl super::ImportStorage for ImportStorage {
         .wrap_err("failed to start transaction")?;
         Ok(ImportTransaction {
             txn,
-            insert_record: &mut self.insert_record,
-            insert_headword: &mut self.insert_headword,
-            insert_reading: &mut self.insert_reading,
+            insert_record: &self.insert_record,
+            insert_headword: &self.insert_headword,
+            insert_reading: &self.insert_reading,
         })
+    }
+
+    fn commit(self) -> Result<()> {
+        Ok(())
     }
 }
 
+#[derive(Debug)]
 pub struct ImportTransaction<'stg> {
+    #[debug(skip)]
     txn: Transaction,
-    insert_record: &'stg mut Statement,
-    insert_headword: &'stg mut Statement,
-    insert_reading: &'stg mut Statement,
+    #[debug(skip)]
+    insert_record: &'stg Statement,
+    #[debug(skip)]
+    insert_headword: &'stg Statement,
+    #[debug(skip)]
+    insert_reading: &'stg Statement,
 }
 
-impl super::ImportTransaction for ImportTransaction<'_> {
-    #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn open_tables(&mut self) -> Result<&mut Self> {
-        Ok(self)
+impl<'stg> super::ImportTransaction for ImportTransaction<'stg> {
+    type Batch<'txn>
+        = ImportBatch<'stg>
+    where
+        Self: 'txn;
+
+    fn batch(&self) -> Result<Self::Batch<'_>> {
+        Ok(ImportBatch {
+            insert_record: self.insert_record,
+            insert_headword: self.insert_headword,
+            insert_reading: self.insert_reading,
+        })
     }
 
     fn commit(self) -> Result<()> {
@@ -150,17 +167,21 @@ impl super::ImportTransaction for ImportTransaction<'_> {
     }
 }
 
-impl super::ImportTables for &mut ImportTransaction<'_> {
-    #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn batch(&self) -> &Self {
-        self
-    }
+#[derive(Debug)]
+pub struct ImportBatch<'stg> {
+    #[debug(skip)]
+    insert_record: &'stg Statement,
+    #[debug(skip)]
+    insert_headword: &'stg Statement,
+    #[debug(skip)]
+    insert_reading: &'stg Statement,
 }
 
-impl super::ImportBatch for &&mut ImportTransaction<'_> {
+impl super::ImportBatch for ImportBatch<'_> {
     fn insert_record(&mut self, record_id: RecordId, record: &[u8]) -> Result<()> {
-        block_on(self.insert_record.execute((record_id.0, record)))
-            .wrap_err("failed to insert record")?;
+        println!("inserting {record_id:?}");
+        block_on(self.insert_record.execute((record_id.0, record)))?;
+        println!("inserted {record_id:?}");
         Ok(())
     }
 

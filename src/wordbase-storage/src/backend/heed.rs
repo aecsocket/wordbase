@@ -15,7 +15,7 @@ use {
     wordbase_api::{Record, RecordId, Term},
 };
 
-type RecordIdTy = heed::types::U64<byteorder::LE>;
+type U64LE = heed::types::U64<byteorder::LE>;
 type RecordTy = heed::types::Bytes;
 
 const RECORDS: &str = "records";
@@ -23,6 +23,31 @@ const HEADWORDS: &str = "headwords";
 const READINGS: &str = "readings";
 const NUM_DBS: u32 = 3;
 const MAP_SIZE: usize = 128 * 1024 * 1024 * 1024; // TODO is this the max db size?
+
+fn env_open_options() -> EnvOpenOptions {
+    let mut opts = EnvOpenOptions::new();
+    opts.map_size(MAP_SIZE);
+    opts.max_dbs(NUM_DBS);
+    opts
+}
+
+fn records_db_options<'env: 'name, 'name>(
+    env: &'env Env,
+) -> DatabaseOpenOptions<'env, 'name, WithTls, U64LE, RecordTy> {
+    env.database_options()
+        .name(RECORDS)
+        .types::<U64LE, RecordTy>()
+}
+
+fn term_db_options<'env: 'name, 'name>(
+    env: &'env Env,
+    name: &'name str,
+) -> DatabaseOpenOptions<'env, 'name, WithTls, Str, U64LE> {
+    env.database_options()
+        .name(name)
+        .flags(DatabaseFlags::DUP_SORT)
+        .types::<Str, U64LE>()
+}
 
 #[derive(Debug, Clone)]
 pub struct Backend;
@@ -65,13 +90,7 @@ impl super::Backend for Backend {
     }
 }
 
-fn env_open_options() -> EnvOpenOptions {
-    let mut opts = EnvOpenOptions::new();
-    opts.map_size(MAP_SIZE);
-    opts.max_dbs(NUM_DBS);
-    opts
-}
-
+#[derive(Debug)]
 pub struct ImportStorage {
     env: Env,
 }
@@ -79,93 +98,71 @@ pub struct ImportStorage {
 impl super::ImportStorage for ImportStorage {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
     fn transaction(&mut self) -> Result<ImportTransaction<'_>> {
+        let mut txn = self
+            .env
+            .write_txn()
+            .wrap_err("failed to begin transaction")?;
         Ok(ImportTransaction {
-            txn: self
-                .env
-                .write_txn()
-                .wrap_err("failed to begin write transaction")?,
-            env: &self.env,
-        })
-    }
-}
-
-pub struct ImportTransaction<'stg> {
-    txn: RwTxn<'stg>,
-    env: &'stg Env,
-}
-
-impl<'stg> super::ImportTransaction for ImportTransaction<'stg> {
-    #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn open_tables(&mut self) -> Result<ImportTables<'stg, '_>> {
-        Ok(ImportTables {
-            records: records_db_options(self.env)
-                .create(&mut self.txn)
+            records: records_db_options(&self.env)
+                .create(&mut txn)
                 .wrap_err_with(|| eyre!("failed to create database `{RECORDS}`"))?,
-            headwords: term_db_options(self.env, HEADWORDS)
-                .create(&mut self.txn)
+            headwords: term_db_options(&self.env, HEADWORDS)
+                .create(&mut txn)
                 .wrap_err_with(|| eyre!("failed to create database `{HEADWORDS}`"))?,
-            readings: term_db_options(self.env, READINGS)
-                .create(&mut self.txn)
+            readings: term_db_options(&self.env, READINGS)
+                .create(&mut txn)
                 .wrap_err_with(|| eyre!("failed to create database `{READINGS}`"))?,
-            txn: Mutex::new(&mut self.txn),
+            txn: Mutex::new(txn),
         })
     }
 
     fn commit(self) -> Result<()> {
-        self.txn.commit()?;
         Ok(())
     }
 }
 
-fn records_db_options<'env: 'name, 'name>(
-    env: &'env Env,
-) -> DatabaseOpenOptions<'env, 'name, WithTls, RecordIdTy, RecordTy> {
-    env.database_options()
-        .name(RECORDS)
-        .types::<RecordIdTy, RecordTy>()
+#[derive(Debug)]
+pub struct ImportTransaction<'stg> {
+    records: Database<U64LE, RecordTy>,
+    headwords: Database<Str, U64LE>,
+    readings: Database<Str, U64LE>,
+    #[debug(skip)]
+    txn: Mutex<RwTxn<'stg>>,
 }
 
-fn term_db_options<'env: 'name, 'name>(
-    env: &'env Env,
-    name: &'name str,
-) -> DatabaseOpenOptions<'env, 'name, WithTls, Str, RecordIdTy> {
-    env.database_options()
-        .name(name)
-        .flags(DatabaseFlags::DUP_SORT)
-        .types::<Str, RecordIdTy>()
-}
+impl<'stg> super::ImportTransaction for ImportTransaction<'stg> {
+    type Batch<'txn>
+        = ImportBatch<'stg, 'txn>
+    where
+        Self: 'txn;
 
-pub struct ImportTables<'stg, 'txn> {
-    txn: Mutex<&'txn mut RwTxn<'stg>>,
-    records: Database<RecordIdTy, RecordTy>,
-    headwords: Database<Str, RecordIdTy>,
-    readings: Database<Str, RecordIdTy>,
-}
-
-impl<'stg, 'txn> super::ImportTables for ImportTables<'stg, 'txn> {
-    #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn batch(&self) -> ImportBatch<'stg, 'txn, '_> {
-        ImportBatch {
-            txn: self.txn.lock().expect("mutex poisoned"),
+    fn batch(&self) -> Result<Self::Batch<'_>> {
+        Ok(ImportBatch {
+            txn: self.txn.lock().expect("txn poisoned"),
             records: &self.records,
             headwords: &self.headwords,
             readings: &self.readings,
-        }
+        })
+    }
+
+    fn commit(self) -> Result<()> {
+        self.txn.into_inner().expect("txn poisoned").commit()?;
+        Ok(())
     }
 }
 
-pub struct ImportBatch<'stg, 'txn, 'tbl> {
-    txn: MutexGuard<'tbl, &'txn mut RwTxn<'stg>>,
-    records: &'tbl Database<RecordIdTy, RecordTy>,
-    headwords: &'tbl Database<Str, RecordIdTy>,
-    readings: &'tbl Database<Str, RecordIdTy>,
+#[derive(Debug)]
+pub struct ImportBatch<'stg, 'txn> {
+    #[debug(skip)]
+    txn: MutexGuard<'txn, RwTxn<'stg>>,
+    records: &'txn Database<U64LE, RecordTy>,
+    headwords: &'txn Database<Str, U64LE>,
+    readings: &'txn Database<Str, U64LE>,
 }
 
-impl super::ImportBatch for ImportBatch<'_, '_, '_> {
+impl super::ImportBatch for ImportBatch<'_, '_> {
     fn insert_record(&mut self, record_id: RecordId, record: &[u8]) -> Result<()> {
-        self.records
-            .put(&mut self.txn, &record_id.0, record)
-            .wrap_err("failed to insert record")?;
+        self.records.put(&mut self.txn, &record_id.0, record)?;
         Ok(())
     }
 
@@ -186,9 +183,9 @@ impl super::ImportBatch for ImportBatch<'_, '_, '_> {
 
 #[derive(Debug)]
 pub struct Lookups {
-    records: Database<RecordIdTy, RecordTy>,
-    headwords: Database<Str, RecordIdTy>,
-    readings: Database<Str, RecordIdTy>,
+    records: Database<U64LE, RecordTy>,
+    headwords: Database<Str, U64LE>,
+    readings: Database<Str, U64LE>,
     #[debug(skip)]
     txn: RoTxn<'static, WithTls>,
 }
@@ -209,7 +206,7 @@ impl Lookups {
         mut decoder: impl Decoder,
         lemma: &str,
     ) -> impl Iterator<Item = Result<(TermPart, Record)>> {
-        let get_ids = |part: TermPart, db: &Database<Str, RecordIdTy>| {
+        let get_ids = |part: TermPart, db: &Database<Str, U64LE>| {
             match db.get_duplicates(&self.txn, lemma) {
                 Ok(Some(id_results)) => Either::Left(id_results.map(move |result| {
                     let (_, record_id) =

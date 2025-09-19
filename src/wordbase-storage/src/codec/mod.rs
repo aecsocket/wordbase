@@ -1,6 +1,6 @@
 use {eyre::Result, std::fmt::Debug, wordbase_api::Record};
 
-pub trait Codec: Send + Sync + Debug + Clone + 'static {
+pub trait Codec: Send + Sync + Debug + 'static {
     type Encoder: Encoder;
     type Decoder: Decoder;
 

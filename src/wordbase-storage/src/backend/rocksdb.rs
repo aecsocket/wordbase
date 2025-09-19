@@ -79,6 +79,7 @@ fn record_id_cf_open_options(env: &Env) -> Options {
     options
 }
 
+#[derive(Debug)]
 pub struct ImportStorage {
     db: DB,
 }
@@ -88,16 +89,25 @@ impl super::ImportStorage for ImportStorage {
     fn transaction(&mut self) -> Result<ImportTransaction<'_>> {
         Ok(ImportTransaction { db: &self.db })
     }
+
+    fn commit(self) -> Result<()> {
+        Ok(())
+    }
 }
 
-pub struct ImportTransaction<'s> {
-    db: &'s DB,
+#[derive(Debug)]
+pub struct ImportTransaction<'stg> {
+    db: &'stg DB,
 }
 
-impl super::ImportTransaction for ImportTransaction<'_> {
-    #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn open_tables(&mut self) -> Result<ImportTables<'_>> {
-        Ok(ImportTables {
+impl<'stg> super::ImportTransaction for ImportTransaction<'stg> {
+    type Batch<'txn>
+        = ImportBatch<'stg>
+    where
+        Self: 'txn;
+
+    fn batch(&self) -> Result<Self::Batch<'_>> {
+        Ok(ImportBatch {
             records: self
                 .db
                 .cf_handle(RECORDS)
@@ -128,14 +138,18 @@ impl super::ImportTransaction for ImportTransaction<'_> {
     }
 }
 
-pub struct ImportTables<'s> {
-    records: &'s ColumnFamily,
-    headwords: &'s ColumnFamily,
-    readings: &'s ColumnFamily,
-    db: &'s DB,
+#[derive(Debug)]
+pub struct ImportBatch<'stg> {
+    #[debug(skip)]
+    records: &'stg ColumnFamily,
+    #[debug(skip)]
+    headwords: &'stg ColumnFamily,
+    #[debug(skip)]
+    readings: &'stg ColumnFamily,
+    db: &'stg DB,
 }
 
-impl super::ImportBatch for ImportTables<'_> {
+impl super::ImportBatch for ImportBatch<'_> {
     fn insert_record(&mut self, record_id: RecordId, record: &[u8]) -> Result<()> {
         put(self.db, self.records, &id_to_bytes(record_id), record)
             .wrap_err("failed to insert record")?;

@@ -7,7 +7,11 @@ use {
         Database, MultimapTable, MultimapTableDefinition, ReadOnlyDatabase, ReadOnlyMultimapTable,
         ReadOnlyTable, ReadTransaction, ReadableDatabase, Table, TableDefinition, WriteTransaction,
     },
-    std::{iter, path::Path},
+    std::{
+        iter,
+        path::Path,
+        sync::{Mutex, MutexGuard},
+    },
     tracing::debug,
     wordbase_api::{Record, RecordId, Term},
 };
@@ -22,11 +26,13 @@ pub struct Backend;
 
 impl super::Backend for Backend {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn import(data_dir: &Path) -> Result<ImportStorage> {
+    fn import(data_dir: &Path) -> Result<ImportTransaction> {
         let db_path = data_dir.join(DATABASE_PATH);
-        Ok(ImportStorage {
-            db: Database::create(&db_path)
-                .wrap_err_with(|| eyre!("failed to create database at {db_path:?}"))?,
+        let db = Database::create(&db_path)
+            .wrap_err_with(|| eyre!("failed to create database at {db_path:?}"))?;
+        Ok(ImportTransaction {
+            txn: db.begin_write().wrap_err("failed to begin write")?,
+            _db: db,
         })
     }
 
@@ -54,63 +60,81 @@ impl super::Backend for Backend {
     }
 }
 
-pub struct ImportStorage {
-    db: Database,
-}
-
-impl super::ImportStorage for ImportStorage {
-    #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn transaction(&mut self) -> Result<ImportTransaction> {
-        Ok(ImportTransaction {
-            txn: self
-                .db
-                .begin_write()
-                .wrap_err("failed to begin write transaction")?,
-        })
-    }
-}
-
+#[derive(Debug)]
 pub struct ImportTransaction {
+    #[debug(skip)]
     txn: WriteTransaction,
+    _db: Database,
 }
 
-impl super::ImportTransaction for ImportTransaction {
+impl super::ImportStorage for ImportTransaction {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn open_tables(&mut self) -> Result<ImportTables<'_>> {
+    fn transaction(&mut self) -> Result<ImportTables<'_>> {
         Ok(ImportTables {
-            records: self
-                .txn
-                .open_table(RECORDS)
-                .wrap_err("failed to open records table")?,
-            headwords: self
-                .txn
-                .open_multimap_table(HEADWORDS)
-                .wrap_err("failed to open headwords table")?,
-            readings: self
-                .txn
-                .open_multimap_table(READINGS)
-                .wrap_err("failed to open readings table")?,
+            tables: Mutex::new(Tables {
+                records: self
+                    .txn
+                    .open_table(RECORDS)
+                    .wrap_err("failed to create records table")?,
+                headwords: self
+                    .txn
+                    .open_multimap_table(HEADWORDS)
+                    .wrap_err("failed to create headwords table")?,
+                readings: self
+                    .txn
+                    .open_multimap_table(READINGS)
+                    .wrap_err("failed to create readings table")?,
+            }),
         })
     }
 
     fn commit(self) -> Result<()> {
-        debug!("Committing");
-        self.txn.commit().wrap_err("failed to commit transaction")?;
-        // compacting appears to be useless
-
+        self.txn.commit()?;
         Ok(())
     }
 }
 
-pub struct ImportBatch<'txn> {
-    records: &'txn mut Table<'txn, u64, &'static [u8]>,
-    headwords: &'txn mut MultimapTable<'txn, &'static str, u64>,
-    readings: &'txn mut MultimapTable<'txn, &'static str, u64>,
+#[derive(Debug)]
+pub struct ImportTables<'txn> {
+    tables: Mutex<Tables<'txn>>,
 }
 
-impl super::ImportBatch for ImportBatch<'_> {
+#[derive(Debug)]
+struct Tables<'txn> {
+    #[debug(skip)]
+    records: Table<'txn, u64, &'static [u8]>,
+    #[debug(skip)]
+    headwords: MultimapTable<'txn, &'static str, u64>,
+    #[debug(skip)]
+    readings: MultimapTable<'txn, &'static str, u64>,
+}
+
+impl<'txn> super::ImportTransaction for ImportTables<'txn> {
+    type Batch<'tbl>
+        = ImportBatch<'txn, 'tbl>
+    where
+        Self: 'tbl;
+
+    fn batch(&self) -> Result<Self::Batch<'_>> {
+        Ok(ImportBatch {
+            tables: self.tables.lock().expect("tables poisoned"),
+        })
+    }
+
+    fn commit(self) -> Result<()> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct ImportBatch<'txn, 'tbl> {
+    tables: MutexGuard<'tbl, Tables<'txn>>,
+}
+
+impl super::ImportBatch for ImportBatch<'_, '_> {
     fn insert_record(&mut self, record_id: RecordId, record: &[u8]) -> Result<()> {
-        self.records
+        self.tables
+            .records
             .insert(record_id.0, record)
             .wrap_err("failed to insert record")?;
         Ok(())
@@ -118,12 +142,14 @@ impl super::ImportBatch for ImportBatch<'_> {
 
     fn insert_term(&mut self, term: &Term, record_id: RecordId) -> Result<()> {
         if let Some(headword) = term.headword() {
-            self.headwords
+            self.tables
+                .headwords
                 .insert(headword.as_str(), record_id.0)
                 .wrap_err("failed to insert headword")?;
         }
         if let Some(reading) = term.reading() {
-            self.readings
+            self.tables
+                .readings
                 .insert(reading.as_str(), record_id.0)
                 .wrap_err("failed to insert reading")?;
         }

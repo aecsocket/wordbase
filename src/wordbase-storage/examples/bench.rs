@@ -3,7 +3,6 @@
 use {
     ascii_table::AsciiTable,
     eyre::{Context, Result, eyre},
-    futures::StreamExt,
     humansize::{DECIMAL, format_size},
     std::{
         io,
@@ -15,9 +14,11 @@ use {
     tracing::{debug, info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
     wordbase_storage::{
-        codec::{Rkyv, Rmp},
-        dictionary::{self, ImportEvent, InbuiltStorage},
-        storage::{Heed, Libsql, Lookups, Redb, RocksDb},
+        backend::{
+            Backend, Heed, ImportStorage, ImportTransaction, Libsql, Lookups, Redb, RocksDb,
+        },
+        codec::{Codec, Rkyv, Rmp},
+        import::{self, FinishImport},
     },
 };
 
@@ -52,20 +53,20 @@ async fn main() -> Result<()> {
         results: &mut results,
     };
 
-    bench_db::<Libsql<Rmp>>(&mut cx, "libsql+rmp").await?;
-    bench_db::<Libsql<Rkyv>>(&mut cx, "libsql+rkyv").await?;
+    bench_db::<Libsql, Rmp>(&mut cx, "libsql+rmp").await?;
+    bench_db::<Libsql, Rkyv>(&mut cx, "libsql+rkyv").await?;
 
-    bench_db::<Heed<Rmp>>(&mut cx, "heed+rmp").await?;
-    bench_db::<Heed<Rkyv>>(&mut cx, "heed+rkyv").await?;
+    bench_db::<Heed, Rmp>(&mut cx, "heed+rmp").await?;
+    bench_db::<Heed, Rkyv>(&mut cx, "heed+rkyv").await?;
 
-    bench_db::<Redb<Rmp>>(&mut cx, "redb+rmp").await?;
-    bench_db::<Redb<Rkyv>>(&mut cx, "redb+rkyv").await?;
+    bench_db::<Redb, Rmp>(&mut cx, "redb+rmp").await?;
+    bench_db::<Redb, Rkyv>(&mut cx, "redb+rkyv").await?;
 
-    bench_db::<RocksDb<Rmp>>(&mut cx, "rocksdb+rmp").await?;
-    bench_db::<RocksDb<Rkyv>>(&mut cx, "rocksdb+rkyv").await?;
+    bench_db::<RocksDb, Rmp>(&mut cx, "rocksdb+rmp").await?;
+    bench_db::<RocksDb, Rkyv>(&mut cx, "rocksdb+rkyv").await?;
 
-    // bench_db::<Turso<Rmp>>(&mut cx, "turso+rmp").await?;
-    // bench_db::<Turso<Rkyv>>(&mut cx, "turso+rkyv").await?;
+    // bench_db::<Turso, Rmp>(&mut cx, "turso+rmp").await?;
+    // bench_db::<Turso, Rkyv>(&mut cx, "turso+rkyv").await?;
 
     let mut table = AsciiTable::default();
     table.column(0).set_header("DB type");
@@ -84,11 +85,10 @@ struct BenchContext<'a> {
     results: &'a mut Vec<Vec<String>>,
 }
 
-async fn bench_db<S>(cx: &mut BenchContext<'_>, name: &str) -> Result<()>
-where
-    S: InbuiltStorage,
-    S::Codec: Default,
-{
+async fn bench_db<B: Backend, C: Codec + Default>(
+    cx: &mut BenchContext<'_>,
+    name: &str,
+) -> Result<()> {
     async move {
         const LOOKUP_ITERS: usize = 10_000;
 
@@ -99,23 +99,20 @@ where
         info!("Benchmarking `{name}` at {dict_dir:?}");
 
         // import
-
         let start = Instant::now();
-        let storage = S::new().wrap_err("failed to make storage")?;
 
-        let import =
-            dictionary::import(storage.clone(), dict_dir.clone(), cx.archive.to_path_buf());
-        tokio::pin!(import);
-        while let Some(event) = import
-            .next()
-            .await
-            .transpose()
-            .wrap_err("failed to import dictionary")?
-        {
-            if matches!(event, ImportEvent::Done) {
-                break;
-            }
-        }
+        let mut storage = B::import(&dict_dir).wrap_err("failed to make storage")?;
+        let codec = C::default();
+        let txn = storage
+            .transaction()
+            .wrap_err("failed to begin transaction")?;
+
+        let import_txn = import::imp::ImportTransaction::new(&txn, &codec);
+        let (_, import) = import::yomitan::start(cx.archive)?;
+        let (tx_progress, _) = async_channel::bounded(1);
+        import.finish(&import_txn, tx_progress)?;
+        txn.commit().wrap_err("failed to commit transaction")?;
+        storage.commit().wrap_err("failed to commit storage")?;
 
         let import_time = start.elapsed();
         let import_time = format!("{import_time:.2?}");
@@ -129,14 +126,12 @@ where
 
         // lookups
 
-        let (_, lookups) = dictionary::open(&dict_dir)
-            .await
-            .wrap_err("failed to open dictionary for lookups")?;
+        let lookups = B::open(&dict_dir).wrap_err("failed to open dictionary for lookups")?;
 
         let start = Instant::now();
         for i in 0..LOOKUP_ITERS {
             lookups
-                .lookup_lemma(cx.lemma)
+                .lookup_lemma(|| codec.decoder(), cx.lemma)
                 .wrap_err("failed to fetch records")?;
 
             if i % 1000 == 0 {
@@ -147,7 +142,7 @@ where
         let lookup_time = format!("{lookup_time:.2?}");
 
         let records = lookups
-            .lookup_lemma(cx.lemma)
+            .lookup_lemma(|| codec.decoder(), cx.lemma)
             .wrap_err("failed to fetch records")?;
         info!(
             "Looked up {LOOKUP_ITERS} times in {lookup_time}, with {} records",
