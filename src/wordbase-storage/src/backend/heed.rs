@@ -1,8 +1,5 @@
 use {
-    crate::{
-        codec::{Codec, Decoder, Encoder},
-        storage::TermPart,
-    },
+    crate::{backend::TermPart, codec::Decoder},
     derive_more::Debug,
     either::Either,
     eyre::{Context, Result, eyre},
@@ -13,7 +10,7 @@ use {
     std::{
         iter,
         path::Path,
-        sync::atomic::{self, AtomicU64},
+        sync::{Mutex, MutexGuard},
     },
     wordbase_api::{Record, RecordId, Term},
 };
@@ -25,32 +22,23 @@ const RECORDS: &str = "records";
 const HEADWORDS: &str = "headwords";
 const READINGS: &str = "readings";
 const NUM_DBS: u32 = 3;
+const MAP_SIZE: usize = 128 * 1024 * 1024 * 1024; // TODO is this the max db size?
 
 #[derive(Debug, Clone)]
-pub struct Storage<C> {
-    codec: C,
-}
+pub struct Backend;
 
-impl<C: Codec> super::Storage for Storage<C> {
-    type Codec = C;
-
-    fn with_codec(codec: Self::Codec) -> Result<Self> {
-        Ok(Self { codec })
-    }
-
+impl super::Backend for Backend {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn create_import_storage(&self, data_dir: &Path) -> Result<ImportStorage<C>> {
+    fn import(data_dir: &Path) -> Result<ImportStorage> {
         Ok(ImportStorage {
             // TODO safety comment
             env: unsafe { env_open_options().open(data_dir) }
                 .wrap_err("failed to open database env")?,
-            next_record_id: AtomicU64::new(0),
-            codec: self.codec.clone(),
         })
     }
 
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn open(&self, data_dir: &Path) -> Result<Lookups<C>> {
+    fn open(data_dir: &Path) -> Result<Lookups> {
         // TODO safety comment
         let env = unsafe { env_open_options().flags(EnvFlags::READ_ONLY).open(data_dir) }
             .wrap_err("failed to open database env")?;
@@ -73,49 +61,42 @@ impl<C: Codec> super::Storage for Storage<C> {
                 .wrap_err_with(|| eyre!("failed to open database `{READINGS}`"))?
                 .ok_or_else(|| eyre!("no database `{READINGS}`"))?,
             txn,
-            codec: self.codec.clone(),
         })
     }
 }
 
 fn env_open_options() -> EnvOpenOptions {
     let mut opts = EnvOpenOptions::new();
-    opts.map_size(128 * 1024 * 1024 * 1024); // TODO is this the max db size?
+    opts.map_size(MAP_SIZE);
     opts.max_dbs(NUM_DBS);
     opts
 }
 
-pub struct ImportStorage<C> {
+pub struct ImportStorage {
     env: Env,
-    next_record_id: AtomicU64,
-    codec: C,
 }
 
-impl<C: Codec> super::ImportStorage for ImportStorage<C> {
+impl super::ImportStorage for ImportStorage {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn begin_write(&mut self) -> Result<ImportTransaction<'_, C>> {
+    fn transaction(&mut self) -> Result<ImportTransaction<'_>> {
         Ok(ImportTransaction {
             txn: self
                 .env
                 .write_txn()
                 .wrap_err("failed to begin write transaction")?,
-            next_record_id: &self.next_record_id,
             env: &self.env,
-            codec: self.codec.clone(),
         })
     }
 }
 
-pub struct ImportTransaction<'s, C> {
-    txn: RwTxn<'s>,
-    next_record_id: &'s AtomicU64,
-    env: &'s Env,
-    codec: C,
+pub struct ImportTransaction<'stg> {
+    txn: RwTxn<'stg>,
+    env: &'stg Env,
 }
 
-impl<'s, C: Codec> super::ImportTransaction for ImportTransaction<'s, C> {
+impl<'stg> super::ImportTransaction for ImportTransaction<'stg> {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn open_tables(&mut self) -> Result<ImportTables<'s, '_, C::Encoder>> {
+    fn open_tables(&mut self) -> Result<ImportTables<'stg, '_>> {
         Ok(ImportTables {
             records: records_db_options(self.env)
                 .create(&mut self.txn)
@@ -126,9 +107,7 @@ impl<'s, C: Codec> super::ImportTransaction for ImportTransaction<'s, C> {
             readings: term_db_options(self.env, READINGS)
                 .create(&mut self.txn)
                 .wrap_err_with(|| eyre!("failed to create database `{READINGS}`"))?,
-            txn: &mut self.txn,
-            next_record_id: self.next_record_id,
-            encoder: self.codec.encoder(),
+            txn: Mutex::new(&mut self.txn),
         })
     }
 
@@ -156,69 +135,80 @@ fn term_db_options<'env: 'name, 'name>(
         .types::<Str, RecordIdTy>()
 }
 
-pub struct ImportTables<'s, 't, E> {
-    txn: &'t mut RwTxn<'s>,
+pub struct ImportTables<'stg, 'txn> {
+    txn: Mutex<&'txn mut RwTxn<'stg>>,
     records: Database<RecordIdTy, RecordTy>,
     headwords: Database<Str, RecordIdTy>,
     readings: Database<Str, RecordIdTy>,
-    next_record_id: &'t AtomicU64,
-    encoder: E,
 }
 
-impl<E: Encoder> super::ImportTables for ImportTables<'_, '_, E> {
-    fn insert_record(&mut self, record: impl Into<Record>) -> Result<RecordId> {
-        self.insert_record_(&record.into())
+impl<'stg, 'txn> super::ImportTables for ImportTables<'stg, 'txn> {
+    #[expect(refining_impl_trait, reason = "explicit refinement")]
+    fn batch(&self) -> ImportBatch<'stg, 'txn, '_> {
+        ImportBatch {
+            txn: self.txn.lock().expect("mutex poisoned"),
+            records: &self.records,
+            headwords: &self.headwords,
+            readings: &self.readings,
+        }
+    }
+}
+
+pub struct ImportBatch<'stg, 'txn, 'tbl> {
+    txn: MutexGuard<'tbl, &'txn mut RwTxn<'stg>>,
+    records: &'tbl Database<RecordIdTy, RecordTy>,
+    headwords: &'tbl Database<Str, RecordIdTy>,
+    readings: &'tbl Database<Str, RecordIdTy>,
+}
+
+impl super::ImportBatch for ImportBatch<'_, '_, '_> {
+    fn insert_record(&mut self, record_id: RecordId, record: &[u8]) -> Result<()> {
+        self.records
+            .put(&mut self.txn, &record_id.0, record)
+            .wrap_err("failed to insert record")?;
+        Ok(())
     }
 
     fn insert_term(&mut self, term: &Term, record_id: RecordId) -> Result<()> {
         if let Some(headword) = term.headword() {
             self.headwords
-                .put(self.txn, headword.as_str(), &record_id.0)
+                .put(&mut self.txn, headword.as_str(), &record_id.0)
                 .wrap_err("failed to insert headword")?;
         }
         if let Some(reading) = term.reading() {
             self.readings
-                .put(self.txn, reading.as_str(), &record_id.0)
+                .put(&mut self.txn, reading.as_str(), &record_id.0)
                 .wrap_err("failed to insert reading")?;
         }
         Ok(())
     }
 }
 
-impl<E: Encoder> ImportTables<'_, '_, E> {
-    fn insert_record_(&mut self, record: &Record) -> Result<RecordId> {
-        let id = self.next_record_id.fetch_add(1, atomic::Ordering::SeqCst);
-        let blob = self
-            .encoder
-            .encode(record)
-            .wrap_err("failed to encode record")?;
-        self.records
-            .put(self.txn, &id, blob.as_ref())
-            .wrap_err("failed to insert record")?;
-        Ok(RecordId(id))
-    }
-}
-
 #[derive(Debug)]
-pub struct Lookups<C> {
+pub struct Lookups {
     records: Database<RecordIdTy, RecordTy>,
     headwords: Database<Str, RecordIdTy>,
     readings: Database<Str, RecordIdTy>,
     #[debug(skip)]
     txn: RoTxn<'static, WithTls>,
-    codec: C,
 }
 
-impl<C: Codec> super::Lookups for Lookups<C> {
-    fn lookup_lemma(&self, lemma: &str) -> Result<Vec<(TermPart, Record)>> {
-        self.lookup_lemma_(lemma).collect()
+impl super::Lookups for Lookups {
+    fn lookup_lemma<D: Decoder>(
+        &self,
+        make_decoder: impl Fn() -> D,
+        lemma: &str,
+    ) -> Result<Vec<(TermPart, Record)>> {
+        self.lookup_lemma_(make_decoder(), lemma).collect()
     }
 }
 
-impl<C: Codec> Lookups<C> {
-    fn lookup_lemma_(&self, lemma: &str) -> impl Iterator<Item = Result<(TermPart, Record)>> {
-        let mut decoder = self.codec.decoder();
-
+impl Lookups {
+    fn lookup_lemma_(
+        &self,
+        mut decoder: impl Decoder,
+        lemma: &str,
+    ) -> impl Iterator<Item = Result<(TermPart, Record)>> {
         let get_ids = |part: TermPart, db: &Database<Str, RecordIdTy>| {
             match db.get_duplicates(&self.txn, lemma) {
                 Ok(Some(id_results)) => Either::Left(id_results.map(move |result| {

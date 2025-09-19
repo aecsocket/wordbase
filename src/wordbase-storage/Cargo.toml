@@ -1,5 +1,5 @@
 [package]
-name = "wordbase"
+name = "wordbase-storage"
 
 authors.workspace      = true
 categories.workspace   = true
@@ -16,24 +16,23 @@ workspace = true
 all-features = true
 
 [features]
-all-storages = [
-  "storage-heed",
-  "storage-redb",
-  "storage-rocksdb",
-  "storage-libsql",
+all-backends = [
+  "backend-heed",
+  "backend-redb",
+  "backend-rocksdb",
+  "backend-libsql",
 ]
-storage-heed = ["dep:heed"]
-storage-libsql = ["dep:libsql"]
-storage-redb = ["dep:redb"]
-storage-rocksdb = ["dep:rocksdb"]
-# storage-turso   = ["dep:turso"]
+backend-heed = ["dep:heed"]
+backend-libsql = ["dep:libsql"]
+backend-redb = ["dep:redb"]
+backend-rocksdb = ["dep:rocksdb"]
+# backend-turso   = ["dep:turso"]
 
 all-codecs = ["codec-rkyv", "codec-rmp"]
 codec-rkyv = ["dep:rkyv"]
 codec-rmp  = ["dep:rmp-serde"]
 
 [dependencies]
-arc-swap      = { workspace = true }
 async-channel = { workspace = true }
 async-stream  = { workspace = true }
 bytes         = { workspace = true }
@@ -43,12 +42,7 @@ eyre          = { workspace = true }
 foldhash      = { workspace = true }
 futures       = { workspace = true }
 heed          = { workspace = true, optional = true }
-indexmap      = { workspace = true, features = ["serde"] }
 libsql        = { workspace = true, optional = true, features = ["core"] }
-lindera       = { workspace = true, features = ["embedded-unidic"] }
-maud          = { workspace = true }
-paste         = { workspace = true }
-poem-openapi  = { workspace = true, optional = true }
 rayon         = { workspace = true }
 redb          = { workspace = true, optional = true }
 regex         = { workspace = true }
@@ -58,15 +52,12 @@ rusqlite      = { workspace = true, optional = true, features = ["bundled"] }
 serde         = { workspace = true, features = ["derive"] }
 serde_json    = { workspace = true, features = ["preserve_order"] }
 serde_repr    = { workspace = true }
-tera          = { workspace = true, features = ["preserve_order"] }
 tokio         = { workspace = true, features = ["sync", "macros", "fs"] }
 tracing       = { workspace = true }
 # turso                = { workspace = true, optional = true }
-unicode-segmentation = { workspace = true }
-uniffi               = { workspace = true, optional = true, features = ["tokio"] }
-uuid                 = { workspace = true }
-wordbase-api         = { workspace = true, features = ["serde", "rkyv"] }
-zip                  = { workspace = true }
+uuid         = { workspace = true }
+wordbase-api = { workspace = true, features = ["serde", "rkyv"] }
+zip          = { workspace = true }
 
 derive_more = { workspace = true, features = [
   "debug",
@@ -90,4 +81,4 @@ humansize          = { workspace = true }
 tempfile           = { workspace = true }
 tokio              = { workspace = true, features = ["full"] }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-wordbase           = { path = ".", features = ["all-storages", "all-codecs"] }
+wordbase-storage   = { path = ".", features = ["all-backends", "all-codecs"] }

@@ -1,16 +1,17 @@
 use {
     crate::{
+        backend::{Backend, ImportTables},
+        codec::Codec,
         import::{Archive, FinishImport, ImportProgress, OpenArchive},
-        storage::{ImportTables, ImportTransaction},
     },
     eyre::{Context as _, Result, eyre},
     rayon::prelude::*,
     serde::de::DeserializeOwned,
-    std::sync::atomic::{self, AtomicUsize},
+    std::sync::atomic::{self, AtomicU64, AtomicUsize},
     tokio::sync::Mutex,
     tracing::{debug, trace, trace_span},
     wordbase_api::{
-        DictionaryKind, DictionaryMeta, FrequencyValue, Term,
+        DictionaryKind, DictionaryMeta, FrequencyValue, Record, RecordId, Term,
         dict::{
             jpn::PitchPosition,
             yomitan::{
@@ -73,6 +74,19 @@ pub fn start<O: OpenArchive>(
             index,
         },
     ))
+}
+
+pub struct Transaction<B, C> {
+    backend: B,
+    codec: C,
+    next_record_id: AtomicU64,
+}
+
+impl<B: ImportTables, C: Codec> Transaction<B, C> {
+    pub fn insert_record(&mut self, record: impl Into<Record>) -> Result<RecordId> {
+        todo!();
+        // let record_id = RecordId(self.next_record_id.)
+    }
 }
 
 fn finish_import(

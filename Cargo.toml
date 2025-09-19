@@ -6,6 +6,7 @@ members = [
   "src/wordbase-cli",
   "src/wordbase-desktop",
   "src/wordbase-gtk",
+  "src/wordbase-storage",
   "src/wordbase-sys",
   "src/wordbase-uniffi-bindgen",
 ]

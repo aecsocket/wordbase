@@ -1,7 +1,7 @@
 use {
     crate::{
+        backend::{Backend, ImportStorage, ImportTransaction, Lookups, TermPart},
         import::{self, FinishImport, ImportProgress, OpenArchive},
-        storage::{ImportStorage, ImportTransaction, Lookups, Storage, TermPart},
     },
     eyre::{Context, Result, eyre},
     futures::Stream,
@@ -16,13 +16,13 @@ pub struct DictionaryManifest {
     pub meta: DictionaryMeta,
 }
 
-pub trait InbuiltStorage: Storage {
+pub trait InbuiltStorage: Backend {
     fn strategy() -> StorageStrategy;
 }
 
 macro_rules! storage_strategies {
     ( $($storage_mod:ident + $codec_mod:ident => $name:ident),* $(,)? ) => {
-        $(impl InbuiltStorage for crate::storage::$storage_mod::Storage<crate::codec::$codec_mod::Codec> {
+        $(impl InbuiltStorage for crate::backend::$storage_mod::Backend<crate::codec::$codec_mod::Codec> {
             fn strategy() -> StorageStrategy {
                 StorageStrategy::$name
             }
@@ -63,10 +63,12 @@ macro_rules! storage_strategies {
 }
 
 storage_strategies!(
-    redb + rmp => RedbRmp,
-    redb + rkyv => RedbRkyv,
     heed + rmp => HeedRmp,
     heed + rkyv => HeedRkyv,
+    libsql + rmp => LibsqlRmp,
+    libsql + rkyv => LibsqlRkyv,
+    redb + rmp => RedbRmp,
+    redb + rkyv => RedbRkyv,
     rocksdb + rmp => RocksDbRmp,
     rocksdb + rkyv => RocksDbRkyv,
     // turso + rmp => TursoRmp,

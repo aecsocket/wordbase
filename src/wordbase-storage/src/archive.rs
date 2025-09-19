@@ -1,5 +1,4 @@
 use {
-    crate::storage::ImportTransaction,
     bytes::Bytes,
     eyre::Result,
     std::{
@@ -9,7 +8,9 @@ use {
     },
 };
 
-pub mod yomitan;
+pub trait Archive: Send + Sync + Unpin + std::io::Read + std::io::Seek {}
+
+impl<T: Send + Sync + Unpin + std::io::Read + std::io::Seek> Archive for T {}
 
 pub trait OpenArchive: Send + Sync {
     fn open_archive(&self) -> Result<impl Archive + 'static>;
@@ -48,21 +49,4 @@ impl OpenArchive for PathBuf {
     fn open_archive(&self) -> Result<impl Archive + 'static> {
         Ok(File::open(self)?)
     }
-}
-
-pub trait Archive: Send + Sync + Unpin + std::io::Read + std::io::Seek {}
-
-impl<T: Send + Sync + Unpin + std::io::Read + std::io::Seek> Archive for T {}
-
-pub trait FinishImport: Send {
-    fn finish(
-        self,
-        txn: &mut impl ImportTransaction,
-        tx_progress: async_channel::Sender<ImportProgress>,
-    ) -> Result<()>;
-}
-
-#[derive(Debug, Clone)]
-pub struct ImportProgress {
-    pub progress: f64,
 }

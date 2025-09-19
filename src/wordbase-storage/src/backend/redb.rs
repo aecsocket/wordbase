@@ -1,8 +1,5 @@
 use {
-    crate::{
-        codec::{Codec, Decoder, Encoder},
-        storage::TermPart,
-    },
+    crate::{backend::TermPart, codec::Decoder},
     derive_more::Debug,
     either::Either,
     eyre::{Context, Result, eyre},
@@ -10,11 +7,7 @@ use {
         Database, MultimapTable, MultimapTableDefinition, ReadOnlyDatabase, ReadOnlyMultimapTable,
         ReadOnlyTable, ReadTransaction, ReadableDatabase, Table, TableDefinition, WriteTransaction,
     },
-    std::{
-        iter,
-        path::Path,
-        sync::atomic::{self, AtomicU64},
-    },
+    std::{iter, path::Path},
     tracing::debug,
     wordbase_api::{Record, RecordId, Term},
 };
@@ -24,31 +17,21 @@ const RECORDS: TableDefinition<u64, &[u8]> = TableDefinition::new("records");
 const HEADWORDS: MultimapTableDefinition<&str, u64> = MultimapTableDefinition::new("headwords");
 const READINGS: MultimapTableDefinition<&str, u64> = MultimapTableDefinition::new("readings");
 
-#[derive(Debug, Clone)]
-pub struct Storage<C> {
-    codec: C,
-}
+#[derive(Debug)]
+pub struct Backend;
 
-impl<C: Codec> super::Storage for Storage<C> {
-    type Codec = C;
-
-    fn with_codec(codec: Self::Codec) -> Result<Self> {
-        Ok(Self { codec })
-    }
-
+impl super::Backend for Backend {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn create_import_storage(&self, data_dir: &Path) -> Result<ImportStorage<C>> {
+    fn import(data_dir: &Path) -> Result<ImportStorage> {
         let db_path = data_dir.join(DATABASE_PATH);
         Ok(ImportStorage {
             db: Database::create(&db_path)
                 .wrap_err_with(|| eyre!("failed to create database at {db_path:?}"))?,
-            next_record_id: AtomicU64::new(0),
-            codec: self.codec.clone(),
         })
     }
 
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn open(&self, data_dir: &Path) -> Result<Lookups<C>> {
+    fn open(data_dir: &Path) -> Result<Lookups> {
         let db_path = data_dir.join(DATABASE_PATH);
         let db = ReadOnlyDatabase::open(&db_path).wrap_err("failed to open database")?;
         let txn = db
@@ -65,42 +48,35 @@ impl<C: Codec> super::Storage for Storage<C> {
             readings: txn
                 .open_multimap_table(READINGS)
                 .wrap_err("failed to open readings table")?,
-            codec: self.codec.clone(),
             _txn: txn,
             _db: db,
         })
     }
 }
 
-pub struct ImportStorage<C> {
+pub struct ImportStorage {
     db: Database,
-    next_record_id: AtomicU64,
-    codec: C,
 }
 
-impl<C: Codec> super::ImportStorage for ImportStorage<C> {
+impl super::ImportStorage for ImportStorage {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn begin_write(&mut self) -> Result<ImportTransaction<'_, C>> {
+    fn transaction(&mut self) -> Result<ImportTransaction> {
         Ok(ImportTransaction {
             txn: self
                 .db
                 .begin_write()
                 .wrap_err("failed to begin write transaction")?,
-            next_record_id: &self.next_record_id,
-            codec: self.codec.clone(),
         })
     }
 }
 
-pub struct ImportTransaction<'s, C> {
+pub struct ImportTransaction {
     txn: WriteTransaction,
-    next_record_id: &'s AtomicU64,
-    codec: C,
 }
 
-impl<C: Codec> super::ImportTransaction for ImportTransaction<'_, C> {
+impl super::ImportTransaction for ImportTransaction {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn open_tables(&mut self) -> Result<ImportTables<'_, C::Encoder>> {
+    fn open_tables(&mut self) -> Result<ImportTables<'_>> {
         Ok(ImportTables {
             records: self
                 .txn
@@ -114,8 +90,6 @@ impl<C: Codec> super::ImportTransaction for ImportTransaction<'_, C> {
                 .txn
                 .open_multimap_table(READINGS)
                 .wrap_err("failed to open readings table")?,
-            next_record_id: self.next_record_id,
-            encoder: self.codec.encoder(),
         })
     }
 
@@ -128,17 +102,18 @@ impl<C: Codec> super::ImportTransaction for ImportTransaction<'_, C> {
     }
 }
 
-pub struct ImportTables<'t, E> {
-    records: Table<'t, u64, &'static [u8]>,
-    headwords: MultimapTable<'t, &'static str, u64>,
-    readings: MultimapTable<'t, &'static str, u64>,
-    next_record_id: &'t AtomicU64,
-    encoder: E,
+pub struct ImportBatch<'txn> {
+    records: &'txn mut Table<'txn, u64, &'static [u8]>,
+    headwords: &'txn mut MultimapTable<'txn, &'static str, u64>,
+    readings: &'txn mut MultimapTable<'txn, &'static str, u64>,
 }
 
-impl<E: Encoder> super::ImportTables for ImportTables<'_, E> {
-    fn insert_record(&mut self, record: impl Into<Record>) -> Result<RecordId> {
-        self.insert_record_(&record.into())
+impl super::ImportBatch for ImportBatch<'_> {
+    fn insert_record(&mut self, record_id: RecordId, record: &[u8]) -> Result<()> {
+        self.records
+            .insert(record_id.0, record)
+            .wrap_err("failed to insert record")?;
+        Ok(())
     }
 
     fn insert_term(&mut self, term: &Term, record_id: RecordId) -> Result<()> {
@@ -156,44 +131,35 @@ impl<E: Encoder> super::ImportTables for ImportTables<'_, E> {
     }
 }
 
-impl<E: Encoder> ImportTables<'_, E> {
-    fn insert_record_(&mut self, record: &Record) -> Result<RecordId> {
-        let id = self.next_record_id.fetch_add(1, atomic::Ordering::SeqCst);
-        let blob = self
-            .encoder
-            .encode(record)
-            .wrap_err("failed to encode record")?;
-        self.records
-            .insert(id, blob.as_ref())
-            .wrap_err("failed to insert record")?;
-        Ok(RecordId(id))
-    }
-}
-
 #[derive(Debug)]
-pub struct Lookups<C> {
+pub struct Lookups {
     #[debug(skip)]
     records: ReadOnlyTable<u64, &'static [u8]>,
     #[debug(skip)]
     headwords: ReadOnlyMultimapTable<&'static str, u64>,
     #[debug(skip)]
     readings: ReadOnlyMultimapTable<&'static str, u64>,
-    codec: C,
     _txn: ReadTransaction,
     #[debug(skip)]
     _db: ReadOnlyDatabase,
 }
 
-impl<C: Codec> super::Lookups for Lookups<C> {
-    fn lookup_lemma(&self, lemma: &str) -> Result<Vec<(TermPart, Record)>> {
-        self.lookup_lemma_(lemma).collect()
+impl super::Lookups for Lookups {
+    fn lookup_lemma<D: Decoder>(
+        &self,
+        make_decoder: impl Fn() -> D,
+        lemma: &str,
+    ) -> Result<Vec<(TermPart, Record)>> {
+        self.lookup_lemma_(make_decoder(), lemma).collect()
     }
 }
 
-impl<C: Codec> Lookups<C> {
-    fn lookup_lemma_(&self, lemma: &str) -> impl Iterator<Item = Result<(TermPart, Record)>> {
-        let mut decoder = self.codec.decoder();
-
+impl Lookups {
+    fn lookup_lemma_(
+        &self,
+        mut decoder: impl Decoder,
+        lemma: &str,
+    ) -> impl Iterator<Item = Result<(TermPart, Record)>> {
         let get_ids = |part: TermPart, table: &ReadOnlyMultimapTable<_, _>| {
             match table.get(lemma) {
                 Ok(values) => Either::Left(values.map(move |id| {

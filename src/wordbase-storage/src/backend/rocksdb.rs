@@ -1,22 +1,12 @@
 use {
-    crate::{
-        codec::{Codec, Decoder, Encoder},
-        storage::TermPart,
-    },
+    crate::{backend::TermPart, codec::Decoder},
     derive_more::Debug,
     either::Either,
     eyre::{Context, Result, eyre},
     rocksdb::{
         ColumnFamily, DB, DBPinnableSlice, Env, Options, WaitForCompactOptions, WriteOptions,
     },
-    std::{
-        iter,
-        path::Path,
-        sync::{
-            LazyLock,
-            atomic::{self, AtomicU64},
-        },
-    },
+    std::{iter, path::Path, sync::LazyLock},
     wordbase_api::{Record, RecordId, Term},
 };
 
@@ -25,58 +15,42 @@ const HEADWORDS: &str = "headwords";
 const READINGS: &str = "readings";
 const COLUMN_FAMILIES: &[&str] = &[RECORDS, HEADWORDS, READINGS];
 
-#[derive(Debug, Clone)]
-pub struct Storage<C> {
-    codec: C,
-    #[debug(ignore)]
-    env: Env,
-}
+#[derive(Debug)]
+pub struct Backend;
 
-impl<C: Codec> super::Storage for Storage<C> {
-    type Codec = C;
-
-    fn with_codec(codec: Self::Codec) -> Result<Self> {
-        Ok(Self {
-            codec,
-            env: Env::new().wrap_err("failed to open env")?,
-        })
-    }
-
+impl super::Backend for Backend {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn create_import_storage(&self, data_dir: &Path) -> Result<ImportStorage<C>> {
-        let options = db_open_options(&self.env);
+    fn import(data_dir: &Path) -> Result<ImportStorage> {
+        let env = Env::new().wrap_err("failed to create database env")?;
+
+        let options = db_open_options(&env);
         let mut db = DB::open(&options, data_dir)
             .wrap_err_with(|| eyre!("failed to create database at {data_dir:?}"))?;
         db.create_cf(RECORDS, &options)
             .wrap_err_with(|| eyre!("failed to create column family `{RECORDS}`"))?;
 
-        let options = record_id_cf_open_options(&self.env);
+        let options = record_id_cf_open_options(&env);
         db.create_cf(HEADWORDS, &options)
             .wrap_err_with(|| eyre!("failed to create column family `{HEADWORDS}`"))?;
         db.create_cf(READINGS, &options)
             .wrap_err_with(|| eyre!("failed to create column family `{RECORDS}`"))?;
 
-        Ok(ImportStorage {
-            db,
-            next_record_id: AtomicU64::new(0),
-            codec: self.codec.clone(),
-        })
+        Ok(ImportStorage { db })
     }
 
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn open(&self, data_dir: &Path) -> Result<Lookups<C>> {
+    fn open(data_dir: &Path) -> Result<Lookups> {
+        let env = Env::new().wrap_err("failed to create database env")?;
+
         let db = DB::open_cf_for_read_only(
-            &db_open_options(&self.env),
+            &db_open_options(&env),
             data_dir,
             COLUMN_FAMILIES,
             false, // error_if_log_file_exist
         )
         .wrap_err("failed to open database")?;
 
-        Ok(Lookups {
-            db,
-            codec: self.codec.clone(),
-        })
+        Ok(Lookups { db })
     }
 }
 
@@ -105,32 +79,24 @@ fn record_id_cf_open_options(env: &Env) -> Options {
     options
 }
 
-pub struct ImportStorage<C> {
+pub struct ImportStorage {
     db: DB,
-    next_record_id: AtomicU64,
-    codec: C,
 }
 
-impl<C: Codec> super::ImportStorage for ImportStorage<C> {
+impl super::ImportStorage for ImportStorage {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn begin_write(&mut self) -> Result<ImportTransaction<'_, C>> {
-        Ok(ImportTransaction {
-            db: &self.db,
-            next_record_id: &self.next_record_id,
-            codec: self.codec.clone(),
-        })
+    fn transaction(&mut self) -> Result<ImportTransaction<'_>> {
+        Ok(ImportTransaction { db: &self.db })
     }
 }
 
-pub struct ImportTransaction<'s, C> {
+pub struct ImportTransaction<'s> {
     db: &'s DB,
-    next_record_id: &'s AtomicU64,
-    codec: C,
 }
 
-impl<C: Codec> super::ImportTransaction for ImportTransaction<'_, C> {
+impl super::ImportTransaction for ImportTransaction<'_> {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn open_tables(&mut self) -> Result<ImportTables<'_, C::Encoder>> {
+    fn open_tables(&mut self) -> Result<ImportTables<'_>> {
         Ok(ImportTables {
             records: self
                 .db
@@ -145,8 +111,6 @@ impl<C: Codec> super::ImportTransaction for ImportTransaction<'_, C> {
                 .cf_handle(READINGS)
                 .ok_or_else(|| eyre!("no column family `{READINGS}`"))?,
             db: self.db,
-            next_record_id: self.next_record_id,
-            encoder: self.codec.encoder(),
         })
     }
 
@@ -164,18 +128,18 @@ impl<C: Codec> super::ImportTransaction for ImportTransaction<'_, C> {
     }
 }
 
-pub struct ImportTables<'s, E> {
+pub struct ImportTables<'s> {
     records: &'s ColumnFamily,
     headwords: &'s ColumnFamily,
     readings: &'s ColumnFamily,
     db: &'s DB,
-    next_record_id: &'s AtomicU64,
-    encoder: E,
 }
 
-impl<E: Encoder> super::ImportTables for ImportTables<'_, E> {
-    fn insert_record(&mut self, record: impl Into<Record>) -> Result<RecordId> {
-        self.insert_record_(&record.into())
+impl super::ImportBatch for ImportTables<'_> {
+    fn insert_record(&mut self, record_id: RecordId, record: &[u8]) -> Result<()> {
+        put(self.db, self.records, &id_to_bytes(record_id), record)
+            .wrap_err("failed to insert record")?;
+        Ok(())
     }
 
     fn insert_term(&mut self, term: &Term, record_id: RecordId) -> Result<()> {
@@ -201,19 +165,6 @@ impl<E: Encoder> super::ImportTables for ImportTables<'_, E> {
     }
 }
 
-impl<E: Encoder> ImportTables<'_, E> {
-    fn insert_record_(&mut self, record: &Record) -> Result<RecordId> {
-        let id = RecordId(self.next_record_id.fetch_add(1, atomic::Ordering::SeqCst));
-        let blob = self
-            .encoder
-            .encode(record)
-            .wrap_err("failed to encode record")?;
-        put(self.db, self.records, &id_to_bytes(id), blob.as_ref())
-            .wrap_err("failed to insert record")?;
-        Ok(id)
-    }
-}
-
 fn put(db: &DB, cf: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
     static WRITE_OPTIONS: LazyLock<WriteOptions> = LazyLock::new(|| {
         let mut opts = WriteOptions::new();
@@ -226,13 +177,16 @@ fn put(db: &DB, cf: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
 }
 
 #[derive(Debug)]
-pub struct Lookups<C> {
+pub struct Lookups {
     db: DB,
-    codec: C,
 }
 
-impl<C: Codec> super::Lookups for Lookups<C> {
-    fn lookup_lemma(&self, lemma: &str) -> Result<Vec<(TermPart, Record)>> {
+impl super::Lookups for Lookups {
+    fn lookup_lemma<D: Decoder>(
+        &self,
+        make_decoder: impl Fn() -> D,
+        lemma: &str,
+    ) -> Result<Vec<(TermPart, Record)>> {
         let records = get_cf(&self.db, RECORDS)?;
         let headwords = get_cf(&self.db, HEADWORDS)?;
         let readings = get_cf(&self.db, READINGS)?;
@@ -250,21 +204,20 @@ impl<C: Codec> super::Lookups for Lookups<C> {
             .chain(
                 headword_ids_blob
                     .iter()
-                    .flat_map(|ids_blob| self.get_by_ids(records, ids_blob))
-                    .map(|r| {
-                        r.map(|record| (TermPart::Headword, record))
-                            .wrap_err("failed to query headwords")
-                    }),
+                    .map(|blob| (TermPart::Headword, blob)),
             )
             .chain(
                 reading_ids_blob
                     .iter()
-                    .flat_map(|ids_blob| self.get_by_ids(records, ids_blob))
-                    .map(|r| {
-                        r.map(|record| (TermPart::Reading, record))
-                            .wrap_err("failed to query readings")
-                    }),
-            );
+                    .map(|blob| (TermPart::Reading, blob)),
+            )
+            .flat_map(move |(part, blob)| {
+                self.get_by_ids(make_decoder(), records, blob)
+                    .map(move |r| {
+                        r.map(|record| (part, record))
+                            .wrap_err_with(|| eyre!("failed to query {part:?}"))
+                    })
+            });
 
         records.collect::<Result<Vec<_>, _>>()
     }
@@ -275,14 +228,13 @@ fn get_cf<'db>(db: &'db DB, name: &str) -> Result<&'db ColumnFamily> {
         .ok_or_else(|| eyre!("no column family `{name}"))
 }
 
-impl<C: Codec> Lookups<C> {
+impl Lookups {
     fn get_by_ids<'db, 'blob: 'db>(
         &'db self,
+        mut decoder: impl Decoder,
         records: &'db ColumnFamily,
         ids_blob: &'blob DBPinnableSlice<'db>,
     ) -> impl Iterator<Item = Result<Record>> + 'db {
-        let mut decoder = self.codec.decoder();
-
         let get_record = move |id: RecordId| {
             let blob = self
                 .db

@@ -14,10 +14,10 @@ use {
     tokio::fs,
     tracing::{debug, info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
-    wordbase::{
+    wordbase_storage::{
         codec::{Rkyv, Rmp},
         dictionary::{self, ImportEvent, InbuiltStorage},
-        storage::{Heed, Lookups, Redb, RocksDb, Turso},
+        storage::{Heed, Libsql, Lookups, Redb, RocksDb},
     },
 };
 
@@ -52,12 +52,14 @@ async fn main() -> Result<()> {
         results: &mut results,
     };
 
-
-    bench_db::<Redb<Rmp>>(&mut cx, "redb+rmp").await?;
-    bench_db::<Redb<Rkyv>>(&mut cx, "redb+rkyv").await?;
+    bench_db::<Libsql<Rmp>>(&mut cx, "libsql+rmp").await?;
+    bench_db::<Libsql<Rkyv>>(&mut cx, "libsql+rkyv").await?;
 
     bench_db::<Heed<Rmp>>(&mut cx, "heed+rmp").await?;
     bench_db::<Heed<Rkyv>>(&mut cx, "heed+rkyv").await?;
+
+    bench_db::<Redb<Rmp>>(&mut cx, "redb+rmp").await?;
+    bench_db::<Redb<Rkyv>>(&mut cx, "redb+rkyv").await?;
 
     bench_db::<RocksDb<Rmp>>(&mut cx, "rocksdb+rmp").await?;
     bench_db::<RocksDb<Rkyv>>(&mut cx, "rocksdb+rkyv").await?;
