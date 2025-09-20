@@ -1,0 +1,60 @@
+[package]
+name = "wordbase-storage-backend"
+
+authors.workspace      = true
+categories.workspace   = true
+edition.workspace      = true
+keywords.workspace     = true
+license.workspace      = true
+repository.workspace   = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+all-backends = [
+  "backend-heed",
+  "backend-redb",
+  "backend-rocksdb",
+  "backend-libsql",
+]
+
+backend-heed    = ["dep:heed"]
+backend-libsql  = ["dep:libsql"]
+backend-redb    = ["dep:redb"]
+backend-rocksdb = ["dep:rocksdb"]
+backend-turso   = ["dep:turso"]
+
+all-codecs = ["codec-rkyv", "codec-rmp"]
+
+codec-rkyv = ["dep:rkyv", "wordbase-api/rkyv"]
+codec-rmp  = ["dep:rmp-serde"]
+
+[dependencies]
+wordbase-api     = { workspace = true, features = ["serde", "rkyv"] }
+wordbase-storage = { workspace = true }
+
+derive_more = { workspace = true, features = ["debug"] }
+either      = { workspace = true }
+eyre        = { workspace = true }
+futures     = { workspace = true }
+heed        = { workspace = true, optional = true }
+libsql      = { workspace = true, optional = true, features = ["core"] }
+redb        = { workspace = true, optional = true }
+rmp-serde   = { workspace = true, optional = true }
+rocksdb     = { workspace = true, optional = true }
+serde       = { workspace = true, features = ["derive"] }
+tokio       = { workspace = true, features = ["sync", "macros", "fs"] }
+tracing     = { workspace = true }
+turso       = { workspace = true, optional = true }
+
+rkyv = { workspace = true, optional = true, features = [
+  # this isn't ideal, but rocksdb doesn't let us enforce alignment guarantees
+  # and without `unaligned` rkyv requires 8-byte alignment for records
+  # fortunately, enabling this doesn't seem to decrease performace too bad on x86?
+  "unaligned",
+] }

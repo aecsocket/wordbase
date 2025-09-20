@@ -1,8 +1,4 @@
 use {
-    crate::{
-        archive::{Archive, OpenArchive},
-        import::{FinishImport, ImportBatch, ImportProgress, ImportTransaction},
-    },
     eyre::{Context as _, Result, eyre},
     rayon::prelude::*,
     serde::de::DeserializeOwned,
@@ -18,21 +14,25 @@ use {
             },
         },
     },
+    wordbase_storage::{
+        archive::{Archive, OpenArchive},
+        import::{FinishImport, ImportBatch, ImportProgress, ImportTransaction, StartImport},
+    },
     zip::ZipArchive,
 };
 
 mod schema;
 
-fn archive_reader(open_archive: &impl OpenArchive) -> Result<ZipArchive<impl Archive + 'static>> {
-    let archive = open_archive
-        .open_archive()
-        .wrap_err("failed to open archive")?;
-    ZipArchive::new(archive).wrap_err("failed to read zip archive")
+/// Importer for [`wordbase_api::dict::yomitan`].
+pub struct Yomitan;
+
+impl StartImport for Yomitan {
+    fn start(open_archive: impl OpenArchive) -> Result<(DictionaryMeta, impl FinishImport)> {
+        start(open_archive)
+    }
 }
 
-pub fn start<O: OpenArchive>(
-    open_archive: O,
-) -> Result<(DictionaryMeta, impl FinishImport + use<O>)> {
+fn start<O: OpenArchive>(open_archive: O) -> Result<(DictionaryMeta, impl FinishImport + use<O>)> {
     struct Finish<O> {
         open_archive: O,
         index: schema::Index,
@@ -72,6 +72,13 @@ pub fn start<O: OpenArchive>(
             index,
         },
     ))
+}
+
+fn archive_reader(open_archive: &impl OpenArchive) -> Result<ZipArchive<impl Archive + 'static>> {
+    let archive = open_archive
+        .open_archive()
+        .wrap_err("failed to open archive")?;
+    ZipArchive::new(archive).wrap_err("failed to read zip archive")
 }
 
 fn finish_import(

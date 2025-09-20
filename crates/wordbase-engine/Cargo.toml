@@ -1,5 +1,5 @@
 [package]
-name = "wordbase"
+name = "wordbase-engine"
 
 authors.workspace      = true
 categories.workspace   = true
@@ -15,24 +15,12 @@ workspace = true
 [package.metadata.docs.rs]
 all-features = true
 
-[features]
-all-storages = [
-  "storage-heed",
-  "storage-redb",
-  "storage-rocksdb",
-  "storage-libsql",
-]
-storage-heed = ["dep:heed"]
-storage-libsql = ["dep:libsql"]
-storage-redb = ["dep:redb"]
-storage-rocksdb = ["dep:rocksdb"]
-# storage-turso   = ["dep:turso"]
-
-all-codecs = ["codec-rkyv", "codec-rmp"]
-codec-rkyv = ["dep:rkyv"]
-codec-rmp  = ["dep:rmp-serde"]
-
 [dependencies]
+wordbase-api             = { workspace = true }
+wordbase-import          = { workspace = true }
+wordbase-storage         = { workspace = true }
+wordbase-storage-backend = { workspace = true }
+
 arc-swap      = { workspace = true }
 async-channel = { workspace = true }
 async-stream  = { workspace = true }
@@ -65,7 +53,6 @@ tracing       = { workspace = true }
 unicode-segmentation = { workspace = true }
 uniffi               = { workspace = true, optional = true, features = ["tokio"] }
 uuid                 = { workspace = true }
-wordbase-api         = { workspace = true, features = ["serde", "rkyv"] }
 zip                  = { workspace = true }
 
 derive_more = { workspace = true, features = [
@@ -84,10 +71,13 @@ rkyv = { workspace = true, optional = true, features = [
 ] }
 
 [dev-dependencies]
-ascii_table        = { workspace = true, features = ["wide_characters"] }
-clap               = { workspace = true, features = ["derive"] }
-humansize          = { workspace = true }
-tempfile           = { workspace = true }
-tokio              = { workspace = true, features = ["full"] }
+ascii_table = { workspace = true, features = ["wide_characters"] }
+clap = { workspace = true, features = ["derive"] }
+humansize = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-wordbase           = { path = ".", features = ["all-storages", "all-codecs"] }
+wordbase-storage-backend = { workspace = true, features = [
+  "all-backends",
+  "all-codecs",
+] }

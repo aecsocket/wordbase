@@ -1,6 +1,6 @@
-use {eyre::Result, std::fmt::Debug, wordbase_api::Record};
+use {eyre::Result, wordbase_api::Record};
 
-pub trait Codec: Send + Sync + Debug + 'static {
+pub trait Codec: Send + Sync + 'static {
     type Encoder: Encoder;
     type Decoder: Decoder;
 
@@ -18,13 +18,3 @@ pub trait Encoder: Send + Sync + 'static {
 pub trait Decoder: Send + Sync + 'static {
     fn decode(&mut self, bytes: &[u8]) -> Result<Record>;
 }
-
-#[cfg(feature = "codec-rkyv")]
-pub mod rkyv;
-#[cfg(feature = "codec-rkyv")]
-pub type Rkyv = rkyv::Codec;
-
-#[cfg(feature = "codec-rmp")]
-pub mod rmp;
-#[cfg(feature = "codec-rmp")]
-pub type Rmp = rmp::Codec;

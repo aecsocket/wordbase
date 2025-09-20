@@ -1,9 +1,9 @@
-use {eyre::Result, wordbase_api::Record};
+use {eyre::Result, wordbase_api::Record, wordbase_storage::codec};
 
 #[derive(Debug, Clone, Default)]
 pub struct Codec;
 
-impl super::Codec for Codec {
+impl codec::Codec for Codec {
     type Encoder = Encoder;
     type Decoder = Decoder;
 
@@ -23,7 +23,7 @@ pub struct Encoder {
     scratch: Vec<u8>,
 }
 
-impl super::Encoder for Encoder {
+impl codec::Encoder for Encoder {
     type Output<'enc> = &'enc [u8];
 
     fn encode(&mut self, record: &Record) -> Result<Self::Output<'_>> {
@@ -36,7 +36,7 @@ impl super::Encoder for Encoder {
 #[derive(Debug)]
 pub struct Decoder(());
 
-impl super::Decoder for Decoder {
+impl codec::Decoder for Decoder {
     fn decode(&mut self, bytes: &[u8]) -> Result<Record> {
         Ok(rmp_serde::from_slice(bytes)?)
     }

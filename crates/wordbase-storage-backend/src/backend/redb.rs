@@ -1,5 +1,4 @@
 use {
-    crate::{RecordRow, codec::Decoder},
     derive_more::Debug,
     either::Either,
     eyre::{Context, Result, eyre},
@@ -14,6 +13,10 @@ use {
     },
     tracing::debug,
     wordbase_api::{Record, RecordId, Term, TermPart},
+    wordbase_storage::{
+        backend::{self, RecordRow},
+        codec::Decoder,
+    },
 };
 
 const DATABASE_PATH: &str = "database.redb";
@@ -24,7 +27,7 @@ const READINGS: MultimapTableDefinition<&str, u64> = MultimapTableDefinition::ne
 #[derive(Debug)]
 pub struct Backend;
 
-impl super::Backend for Backend {
+impl backend::Backend for Backend {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
     fn import(data_dir: &Path) -> Result<ImportTransaction> {
         let db_path = data_dir.join(DATABASE_PATH);
@@ -67,7 +70,7 @@ pub struct ImportTransaction {
     _db: Database,
 }
 
-impl super::ImportStorage for ImportTransaction {
+impl backend::ImportStorage for ImportTransaction {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
     fn transaction(&mut self) -> Result<ImportTables<'_>> {
         Ok(ImportTables {
@@ -109,7 +112,7 @@ struct Tables<'txn> {
     readings: MultimapTable<'txn, &'static str, u64>,
 }
 
-impl<'txn> super::ImportTransaction for ImportTables<'txn> {
+impl<'txn> backend::ImportTransaction for ImportTables<'txn> {
     type Batch<'tbl>
         = ImportBatch<'txn, 'tbl>
     where
@@ -131,7 +134,7 @@ pub struct ImportBatch<'txn, 'tbl> {
     tables: MutexGuard<'tbl, Tables<'txn>>,
 }
 
-impl super::ImportBatch for ImportBatch<'_, '_> {
+impl backend::ImportBatch for ImportBatch<'_, '_> {
     fn insert_record(&mut self, record_id: RecordId, record: &[u8]) -> Result<()> {
         self.tables
             .records
@@ -170,7 +173,7 @@ pub struct Lookups {
     _db: ReadOnlyDatabase,
 }
 
-impl super::Lookups for Lookups {
+impl backend::Lookups for Lookups {
     fn lookup_lemma<D: Decoder>(
         &self,
         make_decoder: impl Fn() -> D,

@@ -33,10 +33,13 @@ too_many_lines          = "allow"
 type_complexity         = "allow"
 
 [workspace.dependencies]
-jmdict-furigana  = { path = "crates/jmdict-furigana" }
-wordbase         = { path = "crates/wordbase" }
-wordbase-api     = { path = "crates/wordbase-api" }
-wordbase-desktop = { path = "crates/wordbase-desktop" }
+jmdict-furigana          = { path = "crates/jmdict-furigana" }
+wordbase-api             = { path = "crates/wordbase-api" }
+wordbase-desktop         = { path = "crates/wordbase-desktop" }
+wordbase-engine          = { path = "crates/wordbase-engine" }
+wordbase-import          = { path = "crates/wordbase-import" }
+wordbase-storage         = { path = "crates/wordbase-storage" }
+wordbase-storage-backend = { path = "crates/wordbase-storage-backend" }
 
 adw                  = { package = "libadwaita", version = "0.7.2" }
 android_logger       = { version = "0.15.0" }

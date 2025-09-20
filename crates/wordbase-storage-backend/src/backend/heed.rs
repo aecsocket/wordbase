@@ -1,5 +1,4 @@
 use {
-    crate::{RecordRow, codec::Decoder},
     derive_more::Debug,
     either::Either,
     eyre::{Context, Result, eyre},
@@ -14,6 +13,10 @@ use {
         sync::{Mutex, MutexGuard},
     },
     wordbase_api::{Record, RecordId, Term, TermPart},
+    wordbase_storage::{
+        backend::{self, RecordRow},
+        codec::Decoder,
+    },
 };
 
 type U64LE = heed::types::U64<byteorder::LE>;
@@ -50,7 +53,7 @@ fn term_db_options<'env: 'name, 'name, T>(
 #[derive(Debug, Clone)]
 pub struct Backend;
 
-impl super::Backend for Backend {
+impl backend::Backend for Backend {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
     fn import(data_dir: &Path) -> Result<ImportStorage> {
         Ok(ImportStorage {
@@ -98,7 +101,7 @@ pub struct ImportStorage {
     env: Env,
 }
 
-impl super::ImportStorage for ImportStorage {
+impl backend::ImportStorage for ImportStorage {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
     fn transaction(&mut self) -> Result<ImportTransaction<'_>> {
         let mut txn = self
@@ -133,7 +136,7 @@ pub struct ImportTransaction<'stg> {
     txn: Mutex<RwTxn<'stg>>,
 }
 
-impl<'stg> super::ImportTransaction for ImportTransaction<'stg> {
+impl<'stg> backend::ImportTransaction for ImportTransaction<'stg> {
     type Batch<'txn>
         = ImportBatch<'stg, 'txn>
     where
@@ -163,7 +166,7 @@ pub struct ImportBatch<'stg, 'txn> {
     readings: &'txn Database<Str, U64LE>,
 }
 
-impl super::ImportBatch for ImportBatch<'_, '_> {
+impl backend::ImportBatch for ImportBatch<'_, '_> {
     fn insert_record(&mut self, record_id: RecordId, record: &[u8]) -> Result<()> {
         self.records.put(&mut self.txn, &record_id.0, record)?;
         Ok(())
@@ -193,7 +196,7 @@ pub struct Lookups {
     txn: RoTxn<'static, WithoutTls>,
 }
 
-impl super::Lookups for Lookups {
+impl backend::Lookups for Lookups {
     fn lookup_lemma<D: Decoder>(
         &self,
         make_decoder: impl Fn() -> D,

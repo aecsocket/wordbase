@@ -1,5 +1,4 @@
 use {
-    crate::{RecordRow, codec::Decoder},
     derive_more::Debug,
     eyre::{Context, ContextCompat, Result, bail, eyre},
     futures::executor::block_on,
@@ -7,6 +6,10 @@ use {
     std::path::Path,
     tokio::sync::{Mutex, MutexGuard},
     wordbase_api::{RecordId, Term, TermPart},
+    wordbase_storage::{
+        backend::{self, RecordRow},
+        codec::Decoder,
+    },
 };
 
 const DATABASE_PATH: &str = "database.db";
@@ -61,7 +64,7 @@ WHERE reading.text = ?";
 #[derive(Debug)]
 pub struct Backend;
 
-impl super::Backend for Backend {
+impl backend::Backend for Backend {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
     fn import(data_dir: &Path) -> Result<ImportStorage> {
         block_on(async {
@@ -132,7 +135,7 @@ struct Statements {
     insert_reading: Statement,
 }
 
-impl super::ImportStorage for ImportStorage {
+impl backend::ImportStorage for ImportStorage {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
     fn transaction(&mut self) -> Result<ImportTransaction<'_>> {
         let txn = block_on(
@@ -158,7 +161,7 @@ pub struct ImportTransaction<'stg> {
     statements: &'stg Mutex<Statements>,
 }
 
-impl<'stg> super::ImportTransaction for ImportTransaction<'stg> {
+impl<'stg> backend::ImportTransaction for ImportTransaction<'stg> {
     type Batch<'txn>
         = ImportBatch<'stg>
     where
@@ -181,7 +184,7 @@ pub struct ImportBatch<'stg> {
     statements: MutexGuard<'stg, Statements>,
 }
 
-impl super::ImportBatch for ImportBatch<'_> {
+impl backend::ImportBatch for ImportBatch<'_> {
     fn insert_record(&mut self, record_id: RecordId, record: &[u8]) -> Result<()> {
         block_on(async {
             self.statements
@@ -227,7 +230,7 @@ pub struct Lookups {
     get_records: Statement,
 }
 
-impl super::Lookups for Lookups {
+impl backend::Lookups for Lookups {
     fn lookup_lemma<D: Decoder>(
         &self,
         make_decoder: impl Fn() -> D,

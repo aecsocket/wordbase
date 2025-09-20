@@ -25,6 +25,7 @@ name       = "wordbase"
 android = ["dep:android_logger", "tracing/log-always"]
 
 [dependencies]
+wordbase-engine = { workspace = true, features = ["uniffi"] }
+
 android_logger = { workspace = true, optional = true }
 tracing        = { workspace = true }
-wordbase       = { workspace = true, features = ["uniffi"] }

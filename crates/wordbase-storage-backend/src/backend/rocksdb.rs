@@ -1,5 +1,4 @@
 use {
-    crate::{RecordRow, codec::Decoder},
     derive_more::Debug,
     either::Either,
     eyre::{Context, Result, eyre},
@@ -8,6 +7,10 @@ use {
     },
     std::{iter, path::Path, sync::LazyLock},
     wordbase_api::{Record, RecordId, Term, TermPart},
+    wordbase_storage::{
+        backend::{self, RecordRow},
+        codec::Decoder,
+    },
 };
 
 const RECORDS: &str = "records";
@@ -17,7 +20,7 @@ const READINGS: &str = "readings";
 #[derive(Debug)]
 pub struct Backend;
 
-impl super::Backend for Backend {
+impl backend::Backend for Backend {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
     fn import(data_dir: &Path) -> Result<ImportStorage> {
         let env = Env::new().wrap_err("failed to create database env")?;
@@ -86,7 +89,7 @@ pub struct ImportStorage {
     db: DB,
 }
 
-impl super::ImportStorage for ImportStorage {
+impl backend::ImportStorage for ImportStorage {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
     fn transaction(&mut self) -> Result<ImportTransaction<'_>> {
         Ok(ImportTransaction { db: &self.db })
@@ -102,7 +105,7 @@ pub struct ImportTransaction<'stg> {
     db: &'stg DB,
 }
 
-impl<'stg> super::ImportTransaction for ImportTransaction<'stg> {
+impl<'stg> backend::ImportTransaction for ImportTransaction<'stg> {
     type Batch<'txn>
         = ImportBatch<'stg>
     where
@@ -151,7 +154,7 @@ pub struct ImportBatch<'stg> {
     db: &'stg DB,
 }
 
-impl super::ImportBatch for ImportBatch<'_> {
+impl backend::ImportBatch for ImportBatch<'_> {
     fn insert_record(&mut self, record_id: RecordId, record: &[u8]) -> Result<()> {
         put(self.db, self.records, &id_to_bytes(record_id), record)
             .wrap_err("failed to insert record")?;
@@ -202,7 +205,7 @@ pub struct Lookups {
     db: DB,
 }
 
-impl super::Lookups for Lookups {
+impl backend::Lookups for Lookups {
     fn lookup_lemma<D: Decoder>(
         &self,
         make_decoder: impl Fn() -> D,
@@ -248,11 +251,6 @@ impl super::Lookups for Lookups {
     }
 }
 
-fn get_cf<'db>(db: &'db DB, name: &str) -> Result<&'db ColumnFamily> {
-    db.cf_handle(name)
-        .ok_or_else(|| eyre!("no column family `{name}"))
-}
-
 impl Lookups {
     fn get_by_ids<'db, 'blob: 'db>(
         &'db self,
@@ -285,6 +283,11 @@ impl Lookups {
         }
         .into_iter()
     }
+}
+
+fn get_cf<'db>(db: &'db DB, name: &str) -> Result<&'db ColumnFamily> {
+    db.cf_handle(name)
+        .ok_or_else(|| eyre!("no column family `{name}"))
 }
 
 fn id_to_bytes(record_id: RecordId) -> [u8; size_of::<u64>()] {

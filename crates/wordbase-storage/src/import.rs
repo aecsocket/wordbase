@@ -1,9 +1,20 @@
 use {
+    crate::archive::OpenArchive,
     eyre::Result,
-    wordbase_api::{Record, RecordId, Term},
+    wordbase_api::{DictionaryMeta, Record, RecordId, Term},
 };
 
-pub mod yomitan;
+pub trait StartImport: Send + Sync + 'static {
+    fn start(open_archive: impl OpenArchive) -> Result<(DictionaryMeta, impl FinishImport)>;
+}
+
+pub trait FinishImport: Send {
+    fn finish(
+        self,
+        txn: &impl ImportTransaction,
+        tx_progress: async_channel::Sender<ImportProgress>,
+    ) -> Result<()>;
+}
 
 #[derive(Debug, Clone)]
 pub struct ImportProgress {
@@ -24,14 +35,6 @@ pub trait ImportBatch {
     fn insert_term(&mut self, term: &Term, record_id: RecordId) -> Result<()>;
 }
 
-pub trait FinishImport: Send {
-    fn finish(
-        self,
-        txn: &impl ImportTransaction,
-        tx_progress: async_channel::Sender<ImportProgress>,
-    ) -> Result<()>;
-}
-
 pub mod imp {
     use {
         crate::{
@@ -40,6 +43,7 @@ pub mod imp {
         },
         eyre::{Context as _, Result, eyre},
         std::sync::atomic::{self, AtomicU64},
+        tracing::trace_span,
         wordbase_api::{Record, RecordId, Term},
     };
 
@@ -90,6 +94,7 @@ pub mod imp {
         }
 
         fn insert_term(&mut self, term: &Term, record_id: RecordId) -> Result<()> {
+            let _span = trace_span!("insert_term", ?term, ?record_id).entered();
             self.batch.insert_term(term, record_id)
         }
     }
@@ -97,6 +102,8 @@ pub mod imp {
     impl<B: backend::ImportBatch, E: Encoder> ImportBatch<'_, B, E> {
         fn insert_record_(&mut self, record: &Record) -> Result<RecordId> {
             let record_id = RecordId(self.record_id.fetch_add(1, atomic::Ordering::SeqCst));
+            let _span = trace_span!("insert_record", ?record_id).entered();
+
             let record_blob = self
                 .encoder
                 .encode(record)

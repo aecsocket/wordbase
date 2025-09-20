@@ -1,34 +1,9 @@
 use {
-    crate::{RecordRow, codec::Decoder},
+    crate::codec::Decoder,
     eyre::Result,
     std::path::Path,
-    wordbase_api::{RecordId, Term},
+    wordbase_api::{Record, RecordId, Term, TermPart},
 };
-
-#[cfg(feature = "backend-heed")]
-pub mod heed;
-#[cfg(feature = "backend-heed")]
-pub type Heed = heed::Backend;
-
-#[cfg(feature = "backend-libsql")]
-pub mod libsql;
-#[cfg(feature = "backend-libsql")]
-pub type Libsql = libsql::Backend;
-
-#[cfg(feature = "backend-redb")]
-pub mod redb;
-#[cfg(feature = "backend-redb")]
-pub type Redb = redb::Backend;
-
-#[cfg(feature = "backend-rocksdb")]
-pub mod rocksdb;
-#[cfg(feature = "backend-rocksdb")]
-pub type Rocksdb = rocksdb::Backend;
-
-#[cfg(feature = "backend-turso")]
-pub mod turso;
-#[cfg(feature = "backend-turso")]
-pub type Turso = turso::Backend;
 
 pub trait Backend: Send + Sync + 'static {
     fn import(data_dir: &Path) -> Result<impl ImportStorage + use<Self>>;
@@ -64,4 +39,11 @@ pub trait Lookups: Send {
         make_decoder: impl Fn() -> D,
         lemma: &str,
     ) -> Result<Vec<RecordRow>>;
+}
+
+#[derive(Debug)]
+pub struct RecordRow {
+    pub term_part: TermPart,
+    pub record_id: RecordId,
+    pub record: Record,
 }

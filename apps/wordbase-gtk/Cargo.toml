@@ -17,8 +17,8 @@ workspace = true
 all-features = true
 
 [dependencies]
-wordbase         = { workspace = true }
 wordbase-desktop = { workspace = true }
+wordbase-engine  = { workspace = true }
 
 adw                = { workspace = true, features = ["v1_7"] }
 anyhow             = { workspace = true }

@@ -1,9 +1,9 @@
 use {
-    crate::backend::{self, Backend},
     eyre::{Result, eyre},
     serde::{Deserialize, Serialize},
     std::path::Path,
     wordbase_api::Record,
+    wordbase_storage::backend::RecordRow,
 };
 
 macro_rules! backends {
@@ -21,21 +21,23 @@ macro_rules! backends {
         pub enum InbuiltLookups {
             $(
                 #[cfg(feature = $feature)]
-                $name(Box<backend::$mod::Lookups>),
+                $name(Box<crate::backend::$mod::Lookups>),
             )*
         }
 
-        impl backend::Lookups for InbuiltLookups {
-            fn lookup_lemma<D: crate::codec::Decoder>(
+        impl wordbase_storage::backend::Lookups for InbuiltLookups {
+            fn lookup_lemma<D: wordbase_storage::codec::Decoder>(
                 &self,
                 make_decoder: impl Fn() -> D,
                 lemma: &str,
-            ) -> Result<Vec<crate::RecordRow>> {
+            ) -> Result<Vec<RecordRow>> {
                 match self {
                     $(
                         #[cfg(feature = $feature)]
-                        Self::$name(this) => backend::Lookups::lookup_lemma(&**this, make_decoder, lemma),
+                        Self::$name(this) => wordbase_storage::backend::Lookups::lookup_lemma(&**this, make_decoder, lemma),
                     )*
+                    #[allow(unreachable_patterns, reason = "depends on enabled features")]
+                    _ => unreachable!(),
                 }
             }
         }
@@ -45,7 +47,7 @@ macro_rules! backends {
                 $(
                     #[cfg(feature = $feature)]
                     BackendKind::$name => {
-                        backend::$name::open(data_dir)
+                        <crate::backend::$name as wordbase_storage::backend::Backend>::open(data_dir)
                             .map(Box::new)
                             .map(InbuiltLookups::$name)
                     }
@@ -76,7 +78,7 @@ macro_rules! codecs {
             )*
         }
 
-        impl crate::codec::Codec for InbuiltCodec {
+        impl wordbase_storage::codec::Codec for InbuiltCodec {
             type Encoder = InbuiltEncoder;
             type Decoder = InbuiltDecoder;
 
@@ -86,6 +88,8 @@ macro_rules! codecs {
                         #[cfg(feature = $feature)]
                         Self::$name(this) => InbuiltEncoder::$name(this.encoder()),
                     )*
+                    #[allow(unreachable_patterns, reason = "depends on enabled features")]
+                    _ => unreachable!(),
                 }
             }
 
@@ -95,6 +99,8 @@ macro_rules! codecs {
                         #[cfg(feature = $feature)]
                         Self::$name(this) => InbuiltDecoder::$name(this.decoder()),
                     )*
+                    #[allow(unreachable_patterns, reason = "depends on enabled features")]
+                    _ => unreachable!(),
                 }
             }
         }
@@ -112,7 +118,7 @@ macro_rules! codecs {
         pub enum InbuiltEncoderOutput<'enc> {
             $(
                 #[cfg(feature = $feature)]
-                $name(<crate::codec::$mod::Encoder as crate::codec::Encoder>::Output<'enc>),
+                $name(<crate::codec::$mod::Encoder as wordbase_storage::codec::Encoder>::Output<'enc>),
             )*
         }
 
@@ -123,11 +129,13 @@ macro_rules! codecs {
                         #[cfg(feature = $feature)]
                         Self::$name(this) => this.as_ref(),
                     )*
+                    #[allow(unreachable_patterns, reason = "depends on enabled features")]
+                    _ => unreachable!(),
                 }
             }
         }
 
-        impl crate::codec::Encoder for InbuiltEncoder {
+        impl wordbase_storage::codec::Encoder for InbuiltEncoder {
             type Output<'enc> = InbuiltEncoderOutput<'enc>;
 
             fn encode(&mut self, record: &wordbase_api::Record) -> Result<Self::Output<'_>> {
@@ -136,6 +144,8 @@ macro_rules! codecs {
                         #[cfg(feature = $feature)]
                         Self::$name(this) => this.encode(record).map(InbuiltEncoderOutput::$name),
                     )*
+                    #[allow(unreachable_patterns, reason = "depends on enabled features")]
+                    _ => unreachable!(),
                 }
             }
         }
@@ -149,13 +159,15 @@ macro_rules! codecs {
             )*
         }
 
-        impl crate::codec::Decoder for InbuiltDecoder {
+        impl wordbase_storage::codec::Decoder for InbuiltDecoder {
             fn decode(&mut self, bytes: &[u8]) -> Result<Record> {
                 match self {
                     $(
                         #[cfg(feature = $feature)]
                         Self::$name(this) => this.decode(bytes),
                     )*
+                    #[allow(unreachable_patterns, reason = "depends on enabled features")]
+                    _ => unreachable!(),
                 }
             }
         }

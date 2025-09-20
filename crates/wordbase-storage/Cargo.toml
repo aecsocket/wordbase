@@ -15,72 +15,10 @@ workspace = true
 [package.metadata.docs.rs]
 all-features = true
 
-[features]
-all-backends = [
-  "backend-heed",
-  "backend-redb",
-  "backend-rocksdb",
-  "backend-libsql",
-]
-
-backend-heed    = ["dep:heed"]
-backend-libsql  = ["dep:libsql"]
-backend-redb    = ["dep:redb"]
-backend-rocksdb = ["dep:rocksdb"]
-backend-turso   = ["dep:turso"]
-
-all-codecs = ["codec-rkyv", "codec-rmp"]
-
-codec-rkyv = ["dep:rkyv"]
-codec-rmp  = ["dep:rmp-serde"]
-
 [dependencies]
+wordbase-api = { workspace = true }
+
 async-channel = { workspace = true }
-async-stream  = { workspace = true }
 bytes         = { workspace = true }
-color-eyre    = { workspace = true }
-either        = { workspace = true }
 eyre          = { workspace = true }
-foldhash      = { workspace = true }
-futures       = { workspace = true }
-heed          = { workspace = true, optional = true }
-libsql        = { workspace = true, optional = true, features = ["core"] }
-paste         = { workspace = true }
-rayon         = { workspace = true }
-redb          = { workspace = true, optional = true }
-regex         = { workspace = true }
-rmp-serde     = { workspace = true, optional = true }
-rocksdb       = { workspace = true, optional = true }
-serde         = { workspace = true, features = ["derive"] }
-serde_json    = { workspace = true, features = ["preserve_order"] }
-serde_repr    = { workspace = true }
-tokio         = { workspace = true, features = ["sync", "macros", "fs"] }
 tracing       = { workspace = true }
-turso         = { workspace = true, optional = true }
-uuid          = { workspace = true }
-wordbase-api  = { workspace = true, features = ["serde", "rkyv"] }
-zip           = { workspace = true }
-
-derive_more = { workspace = true, features = [
-  "debug",
-  "from",
-  "display",
-  "error",
-  "deref",
-  "deref_mut",
-] }
-rkyv = { workspace = true, optional = true, features = [
-  # this isn't ideal, but rocksdb doesn't let us enforce alignment guarantees
-  # and without `unaligned` rkyv requires 8-byte alignment for records
-  # fortunately, enabling this doesn't seem to decrease performace too bad on x86?
-  "unaligned",
-] }
-
-[dev-dependencies]
-ascii_table        = { workspace = true, features = ["wide_characters"] }
-clap               = { workspace = true, features = ["derive"] }
-humansize          = { workspace = true }
-tempfile           = { workspace = true }
-tokio              = { workspace = true, features = ["full"] }
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
-wordbase-storage   = { path = ".", features = ["all-backends", "all-codecs"] }
