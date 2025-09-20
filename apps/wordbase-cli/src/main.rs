@@ -2,10 +2,11 @@
 
 use {
     eyre::{Context, OptionExt, Result},
-    std::{io, path::PathBuf, time::Instant},
+    std::{io, path::PathBuf, str::FromStr, time::Instant},
+    tokio::fs,
     tracing::{info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
-    wordbase::{DictionaryId, import::FinishImport},
+    wordbase_engine::{Dictionaries, DictionaryId},
 };
 
 #[derive(Debug, Clone, clap::Parser)]
@@ -34,7 +35,8 @@ enum DictCommand {
     Rm { id: String },
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_writer(io::stderr)
         .with_env_filter(
@@ -51,22 +53,51 @@ fn main() -> Result<()> {
     } else {
         wordbase_desktop::data_dir().ok_or_eyre("failed to get default data directory")?
     };
+    fs::create_dir_all(&data_dir)
+        .await
+        .wrap_err("failed to create data directory")?;
+
+    let dicts_dir = data_dir.join("dictionaries");
+    fs::create_dir_all(&dicts_dir)
+        .await
+        .wrap_err("failed to create dictionaries directory")?;
+
+    let mut dictionaries = Dictionaries::new(&dicts_dir).await?;
 
     match args.command {
         Command::Dict {
+            command: DictCommand::Ls,
+        } => {
+            info!("Dictionaries ({})", dictionaries.list().len());
+            for dict in dictionaries.list() {
+                info!(
+                    "- {}: {} v{:?}",
+                    dict.state.id.0.hyphenated(),
+                    dict.state.meta.name,
+                    dict.state.meta.version,
+                );
+            }
+        }
+        Command::Dict {
             command: DictCommand::Import { path },
         } => {
-            let dictionaries_dir = data_dir.join("dictionaries");
-            std::fs::create_dir_all(&dictionaries_dir)
-                .wrap_err("failed to create dictionaries directory")?;
-            let storage = db::redb::Storage { dictionaries_dir };
-            let storage = storage.begin_import(DictionaryId::random())?;
-
             let start = Instant::now();
-            wordbase::import::yomitan::start(&path)?.finish(storage)?;
-            info!("Finished in {:?}", start.elapsed());
+            dictionaries.import(&path).await?;
+            info!("Imported in {:?}", start.elapsed());
         }
-        Command::Lookup { lemma } => {}
+        Command::Dict {
+            command: DictCommand::Rm { id },
+        } => {
+            let id = id.parse::<DictionaryId>()?;
+            let start = Instant::now();
+            dictionaries.remove(id).await?;
+            info!("Removed in {:?}", start.elapsed());
+        }
+        Command::Lookup { lemma } => {
+            for row in dictionaries.lookup(&lemma).await? {
+                info!("{row:?}");
+            }
+        }
     }
     Ok(())
 }

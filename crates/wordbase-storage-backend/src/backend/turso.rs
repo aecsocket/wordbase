@@ -8,11 +8,11 @@ use {
         Builder, Connection, Statement,
         transaction::{Transaction, TransactionBehavior},
     },
-    wordbase_api::{RecordId, Term, TermPart},
     wordbase_storage::{
         backend::{self, RecordRow},
         codec::Decoder,
     },
+    wordbase_storage_api::{RecordId, Term, TermPart},
 };
 
 const DATABASE_PATH: &str = "database.db";
@@ -65,9 +65,11 @@ JOIN reading INDEXED BY reading_text ON record.id = reading.record
 WHERE reading.text = ?";
 
 #[derive(Debug)]
-pub struct Backend;
+pub struct Turso;
 
-impl backend::Backend for Backend {
+impl backend::Backend for Turso {
+    type Lookups = Lookups;
+
     #[expect(refining_impl_trait, reason = "explicit refinement")]
     fn import(data_dir: &Path) -> Result<ImportStorage> {
         block_on(async {
@@ -96,8 +98,7 @@ impl backend::Backend for Backend {
         })
     }
 
-    #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn open(data_dir: &Path) -> Result<Lookups> {
+    fn open(data_dir: &Path) -> Result<Self::Lookups> {
         block_on(async {
             let conn = connect(data_dir).await?;
             Ok(Lookups {
@@ -235,7 +236,7 @@ pub struct Lookups {
 }
 
 impl backend::Lookups for Lookups {
-    fn lookup_lemma<D: Decoder>(
+    fn lookup<D: Decoder>(
         &self,
         make_decoder: impl Fn() -> D,
         lemma: &str,

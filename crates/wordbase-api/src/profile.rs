@@ -1,5 +1,6 @@
 use {
     crate::{DictionaryId, NormString},
+    std::str::FromStr,
     uuid::Uuid,
 };
 
@@ -97,6 +98,14 @@ impl Profile {
 )]
 #[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
 pub struct ProfileId(pub Uuid);
+
+impl FromStr for ProfileId {
+    type Err = <Uuid as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::from_str(s).map(Self)
+    }
+}
 
 #[cfg(feature = "uniffi")]
 crate::uuid_wrapper!(ProfileId);

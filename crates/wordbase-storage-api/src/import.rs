@@ -7,26 +7,31 @@
 //! be to add `<T: backend::ImportTransaction, C: codec::Codec>` generic
 //! parameters to the importer code. However, these generics are viral and would
 //! make the logic more annoying to write; and the importer logic shouldn't even
-//! care about the concrete transaction or codec types.
+//! care about the concrete storage or codec types.
 //!
 //! To avoid this, we define our own `trait ImportTransaction` which is
 //! effectively a dyn-compatible version of [`backend::ImportTransaction`], and
 //! also has some extra logic like auto-incrementing record IDs and using a
 //! codec for encoding internally instead of requiring the caller to encode the
 //! record. This also means that importer code only has to monomorphize once on
-//! `dyn ImportTransaction`, reducing codegen.
+//! `dyn ImportTransaction`, reducing codegen. Technically this might result in
+//! slower performance due to the dynamic dispatch, but the difference is
+//! negligible.
 
 use {
     crate::{archive::OpenArchive, backend, codec},
     eyre::{Context, Result, eyre},
-    std::sync::atomic::{self, AtomicU64},
+    std::{
+        fmt::Debug,
+        sync::atomic::{self, AtomicU64},
+    },
     tracing::trace_span,
     wordbase_api::{DictionaryMeta, Record, RecordId, Term},
 };
 
 /// Importer which can read an [`OpenArchive`] of a specific format and insert
 /// records into persistent storage.
-pub trait StartImport {
+pub trait Importer: Send + Sync + Debug + 'static {
     /// Begins importing an [`OpenArchive`].
     ///
     /// # Errors
@@ -39,20 +44,8 @@ pub trait StartImport {
     ) -> Result<(DictionaryMeta, Box<dyn FinishImport + 'a>)>;
 }
 
-impl<F> StartImport for F
-where
-    F: for<'a> Fn(&'a dyn OpenArchive) -> Result<(DictionaryMeta, Box<dyn FinishImport + 'a>)>,
-{
-    fn start<'a>(
-        &self,
-        open_archive: &'a dyn OpenArchive,
-    ) -> Result<(DictionaryMeta, Box<dyn FinishImport + 'a>)> {
-        (self)(open_archive)
-    }
-}
-
 /// Continuation of [`StartImport::start`].
-pub trait FinishImport {
+pub trait FinishImport: Send {
     /// Continues the import process and finishes it.
     ///
     /// # Errors
@@ -60,7 +53,7 @@ pub trait FinishImport {
     /// Errors if there was an invalid record, a record could not be inserted
     /// into storage, or some other implementation-specific error occurred.
     fn finish(
-        self,
+        self: Box<Self>,
         txn: &dyn ImportTransaction,
         tx_progress: async_channel::Sender<ImportProgress>,
     ) -> Result<()>;
@@ -68,10 +61,10 @@ pub trait FinishImport {
 
 impl<F> FinishImport for F
 where
-    F: FnOnce(&dyn ImportTransaction, async_channel::Sender<ImportProgress>) -> Result<()>,
+    F: FnOnce(&dyn ImportTransaction, async_channel::Sender<ImportProgress>) -> Result<()> + Send,
 {
     fn finish(
-        self,
+        self: Box<Self>,
         txn: &dyn ImportTransaction,
         tx_progress: async_channel::Sender<ImportProgress>,
     ) -> Result<()> {
@@ -135,7 +128,7 @@ impl<T: ?Sized + ImportBatch> ImportBatchExt for T {
 
 /// Creates a new [`ImportTransaction`] based on an existing
 /// [`backend::ImportTransaction`] and [`codec::Codec`].
-pub fn import_transaction<'a>(
+pub fn transaction<'a>(
     txn: &'a impl backend::ImportTransaction,
     codec: &'a impl codec::Codec,
 ) -> impl ImportTransaction + 'a {

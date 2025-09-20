@@ -29,7 +29,6 @@ bytes         = { workspace = true }
 data-encoding = { workspace = true, optional = true }
 itertools     = { workspace = true }
 maud          = { workspace = true, optional = true }
-paste         = { workspace = true }
 poem          = { workspace = true, optional = true }
 poem-openapi  = { workspace = true, optional = true, features = ["uuid"] }
 rkyv          = { workspace = true, optional = true, features = ["bytes-1", "uuid-1"] }

@@ -1,3 +1,5 @@
+//! See [`Libsql`].
+
 use {
     derive_more::Debug,
     eyre::{Context, ContextCompat, Result, bail, eyre},
@@ -6,7 +8,7 @@ use {
     std::path::Path,
     tokio::sync::{Mutex, MutexGuard},
     wordbase_api::{RecordId, Term, TermPart},
-    wordbase_storage::{
+    wordbase_storage_api::{
         backend::{self, RecordRow},
         codec::Decoder,
     },
@@ -62,11 +64,13 @@ JOIN reading INDEXED BY reading_text ON record.id = reading.record
 WHERE reading.text = ?";
 
 #[derive(Debug)]
-pub struct Backend;
+pub struct Libsql;
 
-impl backend::Backend for Backend {
+impl backend::Backend for Libsql {
+    type Lookups = LookupStorage;
+
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn import(data_dir: &Path) -> Result<ImportStorage> {
+    fn create_import_storage(data_dir: &Path) -> Result<ImportStorage> {
         block_on(async {
             let conn = connect(data_dir).await?;
             conn.execute_batch(SETUP)
@@ -93,11 +97,10 @@ impl backend::Backend for Backend {
         })
     }
 
-    #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn open(data_dir: &Path) -> Result<Lookups> {
+    fn open(data_dir: &Path) -> Result<Self::Lookups> {
         block_on(async {
             let conn = connect(data_dir).await?;
-            Ok(Lookups {
+            Ok(LookupStorage {
                 get_records: conn
                     .prepare(GET_RECORDS)
                     .await
@@ -225,13 +228,13 @@ impl backend::ImportBatch for ImportBatch<'_> {
 }
 
 #[derive(Debug)]
-pub struct Lookups {
+pub struct LookupStorage {
     #[debug(skip)]
     get_records: Statement,
 }
 
-impl backend::Lookups for Lookups {
-    fn lookup_lemma<D: Decoder>(
+impl backend::LookupStorage for LookupStorage {
+    fn lookup<D: Decoder>(
         &self,
         make_decoder: impl Fn() -> D,
         lemma: &str,

@@ -17,6 +17,9 @@ workspace = true
 all-features = true
 
 [dependencies]
+wordbase-desktop = { workspace = true, features = ["http"] }
+wordbase-engine  = { workspace = true }
+
 ascii_table        = { workspace = true, features = ["wide_characters"] }
 clap               = { workspace = true, features = ["derive"] }
 eyre               = { workspace = true }
@@ -27,5 +30,3 @@ serde_json         = { workspace = true, features = ["preserve_order"] }
 tokio              = { workspace = true, features = ["full"] }
 tracing            = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-wordbase-desktop   = { workspace = true, features = ["http"] }
-wordbase-engine    = { workspace = true }

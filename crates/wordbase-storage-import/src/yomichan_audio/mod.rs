@@ -1,18 +1,19 @@
 use {
-    eyre::Result,
+    eyre::{Result, bail},
     wordbase_api::DictionaryMeta,
-    wordbase_storage::{
+    wordbase_storage_api::{
         archive::OpenArchive,
-        import::{FinishImport, StartImport},
+        import::{FinishImport, Importer},
     },
 };
 
 mod schema;
 
 /// Importer for [`wordbase_api::v1::yomichan_audio`].
+#[derive(Debug)]
 pub struct YomichanAudio;
 
-impl StartImport for YomichanAudio {
+impl Importer for YomichanAudio {
     fn start<'a>(
         &self,
         open_archive: &'a dyn OpenArchive,
@@ -24,7 +25,8 @@ impl StartImport for YomichanAudio {
 pub fn start(
     open_archive: &dyn OpenArchive,
 ) -> Result<(DictionaryMeta, Box<dyn FinishImport + '_>)> {
-    todo!();
+    _ = open_archive;
+    bail!("unimplemented");
 }
 
-fn archive_reader(open_archive: &dyn OpenArchive) {}
+// fn archive_reader(open_archive: &dyn OpenArchive) {}

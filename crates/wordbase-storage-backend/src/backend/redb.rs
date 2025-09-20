@@ -1,3 +1,5 @@
+//! See [`Redb`].
+
 use {
     derive_more::Debug,
     either::Either,
@@ -13,7 +15,7 @@ use {
     },
     tracing::debug,
     wordbase_api::{Record, RecordId, Term, TermPart},
-    wordbase_storage::{
+    wordbase_storage_api::{
         backend::{self, RecordRow},
         codec::Decoder,
     },
@@ -25,11 +27,13 @@ const HEADWORDS: MultimapTableDefinition<&str, u64> = MultimapTableDefinition::n
 const READINGS: MultimapTableDefinition<&str, u64> = MultimapTableDefinition::new("readings");
 
 #[derive(Debug)]
-pub struct Backend;
+pub struct Redb;
 
-impl backend::Backend for Backend {
+impl backend::Backend for Redb {
+    type Lookups = LookupStorage;
+
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn import(data_dir: &Path) -> Result<ImportTransaction> {
+    fn create_import_storage(data_dir: &Path) -> Result<ImportTransaction> {
         let db_path = data_dir.join(DATABASE_PATH);
         let db = Database::create(&db_path)
             .wrap_err_with(|| eyre!("failed to create database at {db_path:?}"))?;
@@ -39,15 +43,14 @@ impl backend::Backend for Backend {
         })
     }
 
-    #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn open(data_dir: &Path) -> Result<Lookups> {
+    fn open(data_dir: &Path) -> Result<Self::Lookups> {
         let db_path = data_dir.join(DATABASE_PATH);
         let db = ReadOnlyDatabase::open(&db_path).wrap_err("failed to open database")?;
         let txn = db
             .begin_read()
             .wrap_err("failed to begin read transaction")?;
 
-        Ok(Lookups {
+        Ok(LookupStorage {
             records: txn
                 .open_table(RECORDS)
                 .wrap_err("failed to open records table")?,
@@ -161,7 +164,7 @@ impl backend::ImportBatch for ImportBatch<'_, '_> {
 }
 
 #[derive(Debug)]
-pub struct Lookups {
+pub struct LookupStorage {
     #[debug(skip)]
     records: ReadOnlyTable<u64, &'static [u8]>,
     #[debug(skip)]
@@ -173,8 +176,8 @@ pub struct Lookups {
     _db: ReadOnlyDatabase,
 }
 
-impl backend::Lookups for Lookups {
-    fn lookup_lemma<D: Decoder>(
+impl backend::LookupStorage for LookupStorage {
+    fn lookup<D: Decoder>(
         &self,
         make_decoder: impl Fn() -> D,
         lemma: &str,
@@ -183,7 +186,7 @@ impl backend::Lookups for Lookups {
     }
 }
 
-impl Lookups {
+impl LookupStorage {
     fn lookup_lemma_(
         &self,
         mut decoder: impl Decoder,

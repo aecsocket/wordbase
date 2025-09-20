@@ -14,11 +14,10 @@ use {
             },
         },
     },
-    wordbase_storage::{
+    wordbase_storage_api::{
         archive::{Archive, OpenArchive},
         import::{
-            FinishImport, ImportBatch, ImportBatchExt, ImportProgress, ImportTransaction,
-            StartImport,
+            FinishImport, ImportBatch, ImportBatchExt, ImportProgress, ImportTransaction, Importer,
         },
     },
     zip::ZipArchive,
@@ -27,9 +26,10 @@ use {
 mod schema;
 
 /// Importer for [`wordbase_api::v1::yomitan`].
+#[derive(Debug)]
 pub struct Yomitan;
 
-impl StartImport for Yomitan {
+impl Importer for Yomitan {
     fn start<'a>(
         &self,
         open_archive: &'a dyn OpenArchive,

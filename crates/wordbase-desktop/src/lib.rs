@@ -9,9 +9,7 @@ use std::path::PathBuf;
 pub use texthooker::*;
 
 /// Gets the directory where the desktop app's user data is stored.
-///
-/// Pass this directory into [`wordbase::Engine::new`] to use the default data
-/// directory.
+#[must_use]
 pub fn data_dir() -> Option<PathBuf> {
     directories::ProjectDirs::from("app.wordbase", "aecsocket", "Wordbase")
         .map(|dirs| dirs.data_dir().to_path_buf())

@@ -1,14 +1,17 @@
+//! See [`Rkyv`].
+
 use {
     eyre::{Context, Result},
     rkyv::{rancor, util::AlignedVec},
     wordbase_api::{ArchivedRecord, Record},
-    wordbase_storage::codec,
+    wordbase_storage_api::codec,
 };
 
+/// Uses [`rkyv`] for fast serialization and zero-copy deserialization.
 #[derive(Debug, Clone, Default)]
-pub struct Codec;
+pub struct Rkyv;
 
-impl codec::Codec for Codec {
+impl codec::Codec for Rkyv {
     type Encoder = Encoder;
     type Decoder = Decoder;
 
@@ -21,8 +24,11 @@ impl codec::Codec for Codec {
     }
 }
 
+/// [`rkyv`] encoder.
 #[derive(Debug)]
-pub struct Encoder {}
+pub struct Encoder {
+    // TODO: scratch space
+}
 
 impl codec::Encoder for Encoder {
     type Output<'enc> = AlignedVec;
@@ -33,6 +39,7 @@ impl codec::Encoder for Encoder {
     }
 }
 
+/// [`rkyv`] decoder.
 #[derive(Debug)]
 pub struct Decoder(());
 

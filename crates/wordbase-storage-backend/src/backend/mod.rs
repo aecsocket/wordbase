@@ -1,24 +1,28 @@
+//! [`wordbase_storage::backend::Backend`] implementations.
+
+pub use wordbase_storage_api::backend::*;
+
 #[cfg(feature = "backend-heed")]
 pub mod heed;
 #[cfg(feature = "backend-heed")]
-pub type Heed = heed::Backend;
+pub use heed::Heed;
 
 #[cfg(feature = "backend-libsql")]
 pub mod libsql;
 #[cfg(feature = "backend-libsql")]
-pub type Libsql = libsql::Backend;
+pub use libsql::Libsql;
 
 #[cfg(feature = "backend-redb")]
 pub mod redb;
 #[cfg(feature = "backend-redb")]
-pub type Redb = redb::Backend;
+pub use redb::Redb;
 
 #[cfg(feature = "backend-rocksdb")]
 pub mod rocksdb;
 #[cfg(feature = "backend-rocksdb")]
-pub type Rocksdb = rocksdb::Backend;
+pub use rocksdb::Rocksdb;
 
-#[cfg(feature = "backend-turso")]
-pub mod turso;
-#[cfg(feature = "backend-turso")]
-pub type Turso = turso::Backend;
+// #[cfg(feature = "backend-turso")]
+// pub mod turso;
+// #[cfg(feature = "backend-turso")]
+// pub use turso::Turso;

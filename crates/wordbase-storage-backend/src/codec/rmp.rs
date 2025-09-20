@@ -1,9 +1,12 @@
-use {eyre::Result, wordbase_api::Record, wordbase_storage::codec};
+//! See [`Rmp`].
 
+use {eyre::Result, wordbase_api::Record, wordbase_storage_api::codec};
+
+/// Uses [`rmp_serde`] for serialization and deserialization.
 #[derive(Debug, Clone, Default)]
-pub struct Codec;
+pub struct Rmp;
 
-impl codec::Codec for Codec {
+impl codec::Codec for Rmp {
     type Encoder = Encoder;
     type Decoder = Decoder;
 
@@ -18,6 +21,7 @@ impl codec::Codec for Codec {
     }
 }
 
+/// [`rmp_serde`] encoder.
 #[derive(Debug)]
 pub struct Encoder {
     scratch: Vec<u8>,
@@ -33,6 +37,7 @@ impl codec::Encoder for Encoder {
     }
 }
 
+/// [`rmp_serde`] decoder.
 #[derive(Debug)]
 pub struct Decoder(());
 

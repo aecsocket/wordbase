@@ -27,7 +27,7 @@ backend-heed    = ["dep:heed"]
 backend-libsql  = ["dep:libsql"]
 backend-redb    = ["dep:redb"]
 backend-rocksdb = ["dep:rocksdb"]
-backend-turso   = ["dep:turso"]
+# backend-turso   = ["dep:turso"]
 
 all-codecs = ["codec-rkyv", "codec-rmp"]
 
@@ -35,8 +35,8 @@ codec-rkyv = ["dep:rkyv", "wordbase-api/rkyv"]
 codec-rmp  = ["dep:rmp-serde"]
 
 [dependencies]
-wordbase-api     = { workspace = true, features = ["serde", "rkyv"] }
-wordbase-storage = { workspace = true }
+wordbase-api         = { workspace = true, features = ["serde", "rkyv"] }
+wordbase-storage-api = { workspace = true }
 
 derive_more = { workspace = true, features = ["debug"] }
 either      = { workspace = true }
@@ -47,7 +47,6 @@ libsql      = { workspace = true, optional = true, features = ["core"] }
 redb        = { workspace = true, optional = true }
 rmp-serde   = { workspace = true, optional = true }
 rocksdb     = { workspace = true, optional = true }
-serde       = { workspace = true, features = ["derive"] }
 tokio       = { workspace = true, features = ["sync", "macros", "fs"] }
 tracing     = { workspace = true }
 turso       = { workspace = true, optional = true }

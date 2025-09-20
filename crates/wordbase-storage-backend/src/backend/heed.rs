@@ -1,3 +1,5 @@
+//! See [`Heed`].
+
 use {
     derive_more::Debug,
     either::Either,
@@ -13,7 +15,7 @@ use {
         sync::{Mutex, MutexGuard},
     },
     wordbase_api::{Record, RecordId, Term, TermPart},
-    wordbase_storage::{
+    wordbase_storage_api::{
         backend::{self, RecordRow},
         codec::Decoder,
     },
@@ -50,12 +52,15 @@ fn term_db_options<'env: 'name, 'name, T>(
         .types::<Str, U64LE>()
 }
 
+/// Uses the [`heed`] wrapper around [LMDB](https://en.wikipedia.org/wiki/Lightning_Memory-Mapped_Database).
 #[derive(Debug, Clone)]
-pub struct Backend;
+pub struct Heed;
 
-impl backend::Backend for Backend {
+impl backend::Backend for Heed {
+    type Lookups = LookupStorage;
+
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn import(data_dir: &Path) -> Result<ImportStorage> {
+    fn create_import_storage(data_dir: &Path) -> Result<ImportStorage> {
         Ok(ImportStorage {
             // TODO safety comment
             env: unsafe { env_open_options().open(data_dir) }
@@ -63,8 +68,7 @@ impl backend::Backend for Backend {
         })
     }
 
-    #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn open(data_dir: &Path) -> Result<Lookups> {
+    fn open(data_dir: &Path) -> Result<Self::Lookups> {
         // TODO safety comment
         let env = unsafe {
             env_open_options()
@@ -78,7 +82,7 @@ impl backend::Backend for Backend {
             .static_read_txn()
             .wrap_err("failed to begin read transaction")?;
 
-        Ok(Lookups {
+        Ok(LookupStorage {
             records: records_db_options(&env)
                 .open(&txn)
                 .wrap_err_with(|| eyre!("failed to open database `{RECORDS}`"))?
@@ -188,7 +192,7 @@ impl backend::ImportBatch for ImportBatch<'_, '_> {
 }
 
 #[derive(Debug)]
-pub struct Lookups {
+pub struct LookupStorage {
     records: Database<U64LE, Bytes>,
     headwords: Database<Str, U64LE>,
     readings: Database<Str, U64LE>,
@@ -196,8 +200,8 @@ pub struct Lookups {
     txn: RoTxn<'static, WithoutTls>,
 }
 
-impl backend::Lookups for Lookups {
-    fn lookup_lemma<D: Decoder>(
+impl backend::LookupStorage for LookupStorage {
+    fn lookup<D: Decoder>(
         &self,
         make_decoder: impl Fn() -> D,
         lemma: &str,
@@ -206,7 +210,7 @@ impl backend::Lookups for Lookups {
     }
 }
 
-impl Lookups {
+impl LookupStorage {
     fn lookup_lemma_(
         &self,
         mut decoder: impl Decoder,

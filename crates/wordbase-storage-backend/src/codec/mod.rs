@@ -1,9 +1,13 @@
+//! [`wordbase_storage::codec::Codec`] implementations.
+
+pub use wordbase_storage_api::codec::*;
+
 #[cfg(feature = "codec-rkyv")]
 pub mod rkyv;
 #[cfg(feature = "codec-rkyv")]
-pub type Rkyv = rkyv::Codec;
+pub use rkyv::Rkyv;
 
 #[cfg(feature = "codec-rmp")]
 pub mod rmp;
 #[cfg(feature = "codec-rmp")]
-pub type Rmp = rmp::Codec;
+pub use rmp::Rmp;

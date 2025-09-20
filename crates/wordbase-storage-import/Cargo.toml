@@ -1,5 +1,5 @@
 [package]
-name = "wordbase-import"
+name = "wordbase-storage-import"
 
 authors.workspace      = true
 categories.workspace   = true
@@ -16,13 +16,13 @@ workspace = true
 all-features = true
 
 [dependencies]
-wordbase-api     = { workspace = true, features = ["serde"] }
-wordbase-storage = { workspace = true }
+wordbase-api         = { workspace = true, features = ["serde"] }
+wordbase-storage-api = { workspace = true }
 
 async-channel = { workspace = true }
+bytes         = { workspace = true }
 eyre          = { workspace = true }
 foldhash      = { workspace = true }
-bytes         = { workspace = true }
 rayon         = { workspace = true }
 regex         = { workspace = true }
 serde         = { workspace = true, features = ["derive"] }

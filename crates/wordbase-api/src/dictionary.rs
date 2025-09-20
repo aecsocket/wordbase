@@ -1,4 +1,4 @@
-use uuid::Uuid;
+use {std::str::FromStr, uuid::Uuid};
 
 /// Imported collection of [`Record`]s in the engine.
 ///
@@ -116,6 +116,14 @@ impl DictionaryId {
     #[must_use]
     pub fn random() -> Self {
         Self(Uuid::now_v7())
+    }
+}
+
+impl FromStr for DictionaryId {
+    type Err = <Uuid as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::from_str(s).map(Self)
     }
 }
 

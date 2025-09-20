@@ -1,3 +1,5 @@
+//! See [`Rocksdb`].
+
 use {
     derive_more::Debug,
     either::Either,
@@ -7,7 +9,7 @@ use {
     },
     std::{iter, path::Path, sync::LazyLock},
     wordbase_api::{Record, RecordId, Term, TermPart},
-    wordbase_storage::{
+    wordbase_storage_api::{
         backend::{self, RecordRow},
         codec::Decoder,
     },
@@ -18,11 +20,13 @@ const HEADWORDS: &str = "headwords";
 const READINGS: &str = "readings";
 
 #[derive(Debug)]
-pub struct Backend;
+pub struct Rocksdb;
 
-impl backend::Backend for Backend {
+impl backend::Backend for Rocksdb {
+    type Lookups = LookupStorage;
+
     #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn import(data_dir: &Path) -> Result<ImportStorage> {
+    fn create_import_storage(data_dir: &Path) -> Result<ImportStorage> {
         let env = Env::new().wrap_err("failed to create database env")?;
 
         let options = db_open_options(&env);
@@ -40,8 +44,7 @@ impl backend::Backend for Backend {
         Ok(ImportStorage { db })
     }
 
-    #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn open(data_dir: &Path) -> Result<Lookups> {
+    fn open(data_dir: &Path) -> Result<Self::Lookups> {
         let env = Env::new().wrap_err("failed to create database env")?;
         let column_families = [
             (RECORDS, db_open_options(&env)),
@@ -55,7 +58,7 @@ impl backend::Backend for Backend {
             false, // error_if_log_file_exist
         )
         .wrap_err("failed to open database")?;
-        Ok(Lookups { db })
+        Ok(LookupStorage { db })
     }
 }
 
@@ -201,12 +204,12 @@ fn merge(db: &DB, cf: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
 }
 
 #[derive(Debug)]
-pub struct Lookups {
+pub struct LookupStorage {
     db: DB,
 }
 
-impl backend::Lookups for Lookups {
-    fn lookup_lemma<D: Decoder>(
+impl backend::LookupStorage for LookupStorage {
+    fn lookup<D: Decoder>(
         &self,
         make_decoder: impl Fn() -> D,
         lemma: &str,
@@ -251,7 +254,7 @@ impl backend::Lookups for Lookups {
     }
 }
 
-impl Lookups {
+impl LookupStorage {
     fn get_by_ids<'db, 'blob: 'db>(
         &'db self,
         mut decoder: impl Decoder,
