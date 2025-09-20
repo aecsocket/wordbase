@@ -31,7 +31,8 @@ pub struct Profile {
     /// The user-set dictionary [position] always takes priority over any
     /// frequency sorting.
     ///
-    /// [position]: Dictionary::position
+    /// [`Dictionary`]: crate::Dictionary
+    /// [position]: crate::Dictionary::position
     pub sorting_dictionary: Option<DictionaryId>,
     /// System font family to use for text under this profile.
     ///
@@ -46,6 +47,8 @@ pub struct Profile {
     ///
     /// If a dictionary is enabled, it will be used to provide results for
     /// lookups when using this profile.
+    ///
+    /// [`Dictionary`]: crate::Dictionary
     pub enabled_dictionaries: Vec<DictionaryId>,
 }
 

@@ -1,10 +1,11 @@
 #![doc = include_str!("../README.md")]
 
-use std::sync::OnceLock;
-
-use async_zip::base::read::seek::ZipFileReader;
-use foldhash::HashMap;
-use futures::{AsyncReadExt, io::Cursor};
+use {
+    async_zip::base::read::seek::ZipFileReader,
+    foldhash::HashMap,
+    futures::{AsyncReadExt, io::Cursor},
+    std::sync::OnceLock,
+};
 
 type Term<'a> = (&'a str, &'a str);
 type Furigana<'a> = &'a [(&'a str, &'a str)];
@@ -28,8 +29,8 @@ pub fn get(headword: &str, reading: &str) -> Option<Furigana<'static>> {
 #[must_use]
 pub fn entries() -> &'static EntryMap {
     ENTRIES.get().expect(
-        "furigana entry map is not initialized yet - \
-        make sure to call `jmdict_furigana::init()` before `get()`",
+        "furigana entry map is not initialized yet - make sure to call `jmdict_furigana::init()` \
+         before `get()`",
     )
 }
 
@@ -98,7 +99,8 @@ mod tests {
     use super::*;
 
     #[test]
-    #[should_panic = "furigana entry map is not initialized yet - make sure to call `jmdict_furigana::init()` before `get()`"]
+    #[should_panic = "furigana entry map is not initialized yet - make sure to call \
+                      `jmdict_furigana::init()` before `get()`"]
     fn get_before_init() {
         _ = get("", "");
     }

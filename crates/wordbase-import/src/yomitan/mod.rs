@@ -5,8 +5,8 @@ use {
     std::sync::atomic::{self, AtomicUsize},
     tracing::{debug, trace, trace_span},
     wordbase_api::{
-        DictionaryKind, DictionaryMeta, FrequencyValue, Term,
-        dict::{
+        DictionaryMeta, FrequencyValue, Term,
+        v1::{
             jpn::PitchPosition,
             yomitan::{
                 Frequency, Glossary, GlossaryTag, Kanji, PhoneticTranscription, Phonetics, Pitch,
@@ -16,39 +16,30 @@ use {
     },
     wordbase_storage::{
         archive::{Archive, OpenArchive},
-        import::{FinishImport, ImportBatch, ImportProgress, ImportTransaction, StartImport},
+        import::{
+            FinishImport, ImportBatch, ImportBatchExt, ImportProgress, ImportTransaction,
+            StartImport,
+        },
     },
     zip::ZipArchive,
 };
 
 mod schema;
 
-/// Importer for [`wordbase_api::dict::yomitan`].
+/// Importer for [`wordbase_api::v1::yomitan`].
 pub struct Yomitan;
 
 impl StartImport for Yomitan {
-    fn start(open_archive: impl OpenArchive) -> Result<(DictionaryMeta, impl FinishImport)> {
+    fn start<'a>(
+        &self,
+        open_archive: &'a dyn OpenArchive,
+    ) -> Result<(DictionaryMeta, Box<dyn FinishImport + 'a>)> {
         start(open_archive)
     }
 }
 
-fn start<O: OpenArchive>(open_archive: O) -> Result<(DictionaryMeta, impl FinishImport + use<O>)> {
-    struct Finish<O> {
-        open_archive: O,
-        index: schema::Index,
-    }
-
-    impl<O: OpenArchive> FinishImport for Finish<O> {
-        fn finish(
-            self,
-            txn: &impl ImportTransaction,
-            tx_progress: async_channel::Sender<ImportProgress>,
-        ) -> Result<()> {
-            finish_import(&self.open_archive, &self.index, txn, &tx_progress)
-        }
-    }
-
-    let mut archive = archive_reader(&open_archive)?;
+fn start(open_archive: &dyn OpenArchive) -> Result<(DictionaryMeta, Box<dyn FinishImport + '_>)> {
+    let mut archive = archive_reader(open_archive)?;
 
     let index = {
         let file = archive
@@ -59,7 +50,7 @@ fn start<O: OpenArchive>(open_archive: O) -> Result<(DictionaryMeta, impl Finish
         serde_json::from_reader::<_, schema::Index>(file).wrap_err("failed to parse index")?
     };
 
-    let mut meta = DictionaryMeta::new(DictionaryKind::Yomitan, &index.title);
+    let mut meta = DictionaryMeta::new(&index.title);
     meta.version = Some(index.revision.clone());
     meta.description = index.description.clone();
     meta.url = index.url.clone();
@@ -67,24 +58,24 @@ fn start<O: OpenArchive>(open_archive: O) -> Result<(DictionaryMeta, impl Finish
 
     Ok((
         meta,
-        Finish {
-            open_archive,
-            index,
-        },
+        Box::new(move |txn: &dyn ImportTransaction, tx_progress| {
+            let index = &index;
+            finish(open_archive, index, txn, &tx_progress)
+        }),
     ))
 }
 
-fn archive_reader(open_archive: &impl OpenArchive) -> Result<ZipArchive<impl Archive + 'static>> {
+fn archive_reader(open_archive: &dyn OpenArchive) -> Result<ZipArchive<impl Archive + 'static>> {
     let archive = open_archive
         .open_archive()
         .wrap_err("failed to open archive")?;
     ZipArchive::new(archive).wrap_err("failed to read zip archive")
 }
 
-fn finish_import(
-    open_archive: &impl OpenArchive,
+fn finish(
+    open_archive: &dyn OpenArchive,
     index: &schema::Index,
-    txn: &impl ImportTransaction,
+    txn: &dyn ImportTransaction,
     tx_progress: &async_channel::Sender<ImportProgress>,
 ) -> Result<()> {
     let archive = archive_reader(open_archive)?;
@@ -131,7 +122,7 @@ fn finish_import(
         let mut tags = tag_banks
             .into_iter()
             .try_fold(Vec::new(), |mut acc, path| {
-                let bank = parse_bank::<schema::Tag, _, _>(&bank_cx, &path)
+                let bank = parse_bank::<schema::Tag>(&bank_cx, &path)
                     .wrap_err_with(|| eyre!("failed to parse term bank `{path}`"))?;
                 let tags = bank.into_iter().map(|tag| GlossaryTag {
                     name: tag.name,
@@ -178,19 +169,16 @@ fn finish_import(
     Ok(())
 }
 
-struct BankContext<'cx, O, T> {
-    open_archive: &'cx O,
-    txn: &'cx T,
+struct BankContext<'cx> {
+    open_archive: &'cx dyn OpenArchive,
+    txn: &'cx dyn ImportTransaction,
     num_banks: usize,
     banks_done: &'cx AtomicUsize,
     index: &'cx schema::Index,
     tx_progress: &'cx async_channel::Sender<ImportProgress>,
 }
 
-fn parse_bank<E, O: OpenArchive, T: ImportTransaction>(
-    cx: &BankContext<O, T>,
-    path: &str,
-) -> Result<Vec<E>>
+fn parse_bank<E>(cx: &BankContext, path: &str) -> Result<Vec<E>>
 where
     Vec<E>: DeserializeOwned,
 {
@@ -199,10 +187,10 @@ where
     serde_json::from_reader::<_, Vec<E>>(file).wrap_err("failed to parse file")
 }
 
-fn import_bank<'txn, E, O: OpenArchive, T: ImportTransaction>(
-    cx: &'txn BankContext<O, T>,
+fn import_bank<E>(
+    cx: &BankContext,
     path: &str,
-    mut import_item: impl FnMut(&mut T::Batch<'txn>, E, &schema::Index) -> Result<()>,
+    mut import_item: impl FnMut(&mut dyn ImportBatch, E, &schema::Index) -> Result<()>,
 ) -> Result<()>
 where
     Vec<E>: DeserializeOwned,
@@ -213,7 +201,7 @@ where
     {
         let mut batch = cx.txn.batch().wrap_err("failed to begin writing batch")?;
         for data in bank {
-            import_item(&mut batch, data, cx.index)?;
+            import_item(&mut *batch, data, cx.index)?;
         }
     }
 
@@ -227,7 +215,7 @@ where
 }
 
 fn import_term(
-    batch: &mut impl ImportBatch,
+    batch: &mut dyn ImportBatch,
     data: schema::Term,
     all_tags: &[GlossaryTag],
 ) -> Result<()> {
@@ -276,7 +264,7 @@ fn import_term(
 }
 
 fn import_term_meta(
-    batch: &mut impl ImportBatch,
+    batch: &mut dyn ImportBatch,
     data: schema::TermMeta,
     index: &schema::Index,
 ) -> Result<()> {
@@ -351,7 +339,7 @@ fn import_term_meta(
 }
 
 fn import_kanji(
-    batch: &mut impl ImportBatch,
+    batch: &mut dyn ImportBatch,
     data: schema::Kanji,
     _index: &schema::Index,
 ) -> Result<()> {
@@ -380,7 +368,7 @@ fn import_kanji(
 }
 
 fn import_kanji_meta(
-    batch: &mut impl ImportBatch,
+    batch: &mut dyn ImportBatch,
     data: schema::KanjiMeta,
     index: &schema::Index,
 ) -> Result<()> {

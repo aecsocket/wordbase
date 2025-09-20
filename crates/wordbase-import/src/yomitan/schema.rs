@@ -8,7 +8,7 @@ use {
     serde::Deserialize,
     serde_repr::Deserialize_repr,
     std::sync::LazyLock,
-    wordbase_api::dict::yomitan::structured,
+    wordbase_api::v1::yomitan::structured,
 };
 
 macro_rules! re {

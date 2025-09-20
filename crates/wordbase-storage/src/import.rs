@@ -1,106 +1,168 @@
+//! Types for dictionary import operations.
+//!
+//! # Why [`ImportTransaction`] instead of [`backend::ImportTransaction`]?
+//!
+//! When writing an importer for a dictionary format, the code must be generic
+//! over the storage backend and codec used. The typical approach for this would
+//! be to add `<T: backend::ImportTransaction, C: codec::Codec>` generic
+//! parameters to the importer code. However, these generics are viral and would
+//! make the logic more annoying to write; and the importer logic shouldn't even
+//! care about the concrete transaction or codec types.
+//!
+//! To avoid this, we define our own `trait ImportTransaction` which is
+//! effectively a dyn-compatible version of [`backend::ImportTransaction`], and
+//! also has some extra logic like auto-incrementing record IDs and using a
+//! codec for encoding internally instead of requiring the caller to encode the
+//! record. This also means that importer code only has to monomorphize once on
+//! `dyn ImportTransaction`, reducing codegen.
+
 use {
-    crate::archive::OpenArchive,
-    eyre::Result,
+    crate::{archive::OpenArchive, backend, codec},
+    eyre::{Context, Result, eyre},
+    std::sync::atomic::{self, AtomicU64},
+    tracing::trace_span,
     wordbase_api::{DictionaryMeta, Record, RecordId, Term},
 };
 
-pub trait StartImport: Send + Sync + 'static {
-    fn start(open_archive: impl OpenArchive) -> Result<(DictionaryMeta, impl FinishImport)>;
+/// Importer which can read an [`OpenArchive`] of a specific format and insert
+/// records into persistent storage.
+pub trait StartImport {
+    /// Begins importing an [`OpenArchive`].
+    ///
+    /// # Errors
+    ///
+    /// Errors if the archive is not valid for this importer, or some
+    /// implementation-specific validation fails.
+    fn start<'a>(
+        &self,
+        open_archive: &'a dyn OpenArchive,
+    ) -> Result<(DictionaryMeta, Box<dyn FinishImport + 'a>)>;
 }
 
-pub trait FinishImport: Send {
+impl<F> StartImport for F
+where
+    F: for<'a> Fn(&'a dyn OpenArchive) -> Result<(DictionaryMeta, Box<dyn FinishImport + 'a>)>,
+{
+    fn start<'a>(
+        &self,
+        open_archive: &'a dyn OpenArchive,
+    ) -> Result<(DictionaryMeta, Box<dyn FinishImport + 'a>)> {
+        (self)(open_archive)
+    }
+}
+
+/// Continuation of [`StartImport::start`].
+pub trait FinishImport {
+    /// Continues the import process and finishes it.
+    ///
+    /// # Errors
+    ///
+    /// Errors if there was an invalid record, a record could not be inserted
+    /// into storage, or some other implementation-specific error occurred.
     fn finish(
         self,
-        txn: &impl ImportTransaction,
+        txn: &dyn ImportTransaction,
         tx_progress: async_channel::Sender<ImportProgress>,
     ) -> Result<()>;
 }
 
-#[derive(Debug, Clone)]
-pub struct ImportProgress {
-    pub progress: f64,
+impl<F> FinishImport for F
+where
+    F: FnOnce(&dyn ImportTransaction, async_channel::Sender<ImportProgress>) -> Result<()>,
+{
+    fn finish(
+        self,
+        txn: &dyn ImportTransaction,
+        tx_progress: async_channel::Sender<ImportProgress>,
+    ) -> Result<()> {
+        (self)(txn, tx_progress)
+    }
 }
 
+/// Allows importing [`Record`]s into persistent storage.
+///
+/// Dyn-compatible version of [`backend::ImportTransaction`].
 pub trait ImportTransaction: Send + Sync {
-    type Batch<'txn>: ImportBatch
-    where
-        Self: 'txn;
-
-    fn batch(&self) -> Result<Self::Batch<'_>>;
+    /// Begins writing a batch of records into storage.
+    ///
+    /// [`ImportBatch`] may take a lock, so keep it live for the shortest
+    /// possible time.
+    ///
+    /// # Errors
+    ///
+    /// Implementation-specific.
+    fn batch(&self) -> Result<Box<dyn ImportBatch + '_>>;
 }
 
+/// Allows importing [`Record`]s into persistent storage.
+///
+/// Dyn-compatible version of [`backend::ImportBatch`], which automatically
+/// assigns a unique ID to each record.
 pub trait ImportBatch {
-    fn insert_record(&mut self, record: impl Into<Record>) -> Result<RecordId>;
+    /// Inserts a record into storage, and returns its newly-assigned ID.
+    ///
+    /// Prefer using [`ImportBatchExt::insert_record`].
+    ///
+    /// # Errors
+    ///
+    /// Implementation-specific.
+    fn insert_record_ref(&mut self, record: &Record) -> Result<RecordId>;
 
+    /// Inserts a term into storage, associating it with a previously-inserted
+    /// record.
+    ///
+    /// # Errors
+    ///
+    /// Implementation-specific.
     fn insert_term(&mut self, term: &Term, record_id: RecordId) -> Result<()>;
 }
 
-pub mod imp {
-    use {
-        crate::{
-            backend,
-            codec::{Codec, Encoder},
-        },
-        eyre::{Context as _, Result, eyre},
-        std::sync::atomic::{self, AtomicU64},
-        tracing::trace_span,
-        wordbase_api::{Record, RecordId, Term},
-    };
+/// Extension trait for [`ImportBatch`].
+pub trait ImportBatchExt {
+    /// Inserts a record into storage, and returns its newly-assigned ID.
+    ///
+    /// # Errors
+    ///
+    /// Implementation-specific.
+    fn insert_record(&mut self, record: impl Into<Record>) -> Result<RecordId>;
+}
 
-    #[derive(Debug)]
-    pub struct ImportTransaction<'a, T, C> {
+impl<T: ?Sized + ImportBatch> ImportBatchExt for T {
+    fn insert_record(&mut self, record: impl Into<Record>) -> Result<RecordId> {
+        <Self as ImportBatch>::insert_record_ref(self, &record.into())
+    }
+}
+
+/// Creates a new [`ImportTransaction`] based on an existing
+/// [`backend::ImportTransaction`] and [`codec::Codec`].
+pub fn import_transaction<'a>(
+    txn: &'a impl backend::ImportTransaction,
+    codec: &'a impl codec::Codec,
+) -> impl ImportTransaction + 'a {
+    struct Transaction<'a, T, C> {
         txn: &'a T,
         codec: &'a C,
         record_id: AtomicU64,
     }
 
-    impl<'a, T: backend::ImportTransaction, C: Codec> ImportTransaction<'a, T, C> {
-        pub fn new(txn: &'a T, codec: &'a C) -> Self {
-            Self {
-                txn,
-                codec,
-                record_id: AtomicU64::default(),
-            }
-        }
-    }
-
-    impl<T: backend::ImportTransaction, C: Codec> super::ImportTransaction
-        for ImportTransaction<'_, T, C>
-    {
-        type Batch<'txn>
-            = ImportBatch<'txn, T::Batch<'txn>, C::Encoder>
-        where
-            Self: 'txn;
-
-        fn batch(&self) -> Result<ImportBatch<'_, T::Batch<'_>, C::Encoder>> {
-            Ok(ImportBatch {
+    impl<T: backend::ImportTransaction, C: codec::Codec> ImportTransaction for Transaction<'_, T, C> {
+        fn batch(&self) -> Result<Box<dyn ImportBatch + '_>> {
+            Ok(Box::new(Batch {
                 batch: self.txn.batch()?,
                 encoder: self.codec.encoder(),
                 record_id: &self.record_id,
-            })
+            }))
         }
     }
 
-    #[derive(Debug)]
-    pub struct ImportBatch<'txn, B, E> {
+    struct Batch<'txn, B, E> {
         batch: B,
         encoder: E,
         record_id: &'txn AtomicU64,
     }
 
-    impl<B: backend::ImportBatch, E: Encoder> super::ImportBatch for ImportBatch<'_, B, E> {
-        fn insert_record(&mut self, record: impl Into<Record>) -> Result<RecordId> {
-            self.insert_record_(&record.into())
-        }
-
-        fn insert_term(&mut self, term: &Term, record_id: RecordId) -> Result<()> {
-            let _span = trace_span!("insert_term", ?term, ?record_id).entered();
-            self.batch.insert_term(term, record_id)
-        }
-    }
-
-    impl<B: backend::ImportBatch, E: Encoder> ImportBatch<'_, B, E> {
-        fn insert_record_(&mut self, record: &Record) -> Result<RecordId> {
+    impl<B: backend::ImportBatch, E: codec::Encoder> ImportBatch for Batch<'_, B, E> {
+        fn insert_record_ref(&mut self, record: &Record) -> Result<RecordId> {
             let record_id = RecordId(self.record_id.fetch_add(1, atomic::Ordering::SeqCst));
             let _span = trace_span!("insert_record", ?record_id).entered();
 
@@ -113,5 +175,25 @@ pub mod imp {
                 .wrap_err_with(|| eyre!("failed to insert {record_id:?}"))?;
             Ok(record_id)
         }
+
+        fn insert_term(&mut self, term: &Term, record_id: RecordId) -> Result<()> {
+            let _span = trace_span!("insert_term", ?term, ?record_id).entered();
+            self.batch.insert_term(term, record_id)
+        }
     }
+
+    Transaction {
+        txn,
+        codec,
+        record_id: AtomicU64::default(),
+    }
+}
+
+/// Progress update on a dictionary import operation.
+#[derive(Debug, Clone)]
+pub struct ImportProgress {
+    /// Estimate of how complete the import operation is.
+    ///
+    /// Expressed as a fraction between `0.0` and `1.0`.
+    pub progress: f64,
 }

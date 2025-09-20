@@ -1,52 +1,67 @@
+//! See [`Archive`].
+
 use {
     bytes::Bytes,
     eyre::Result,
     std::{
         fs::File,
-        io::Cursor,
+        io::{Cursor, Read, Seek},
         path::{Path, PathBuf},
     },
 };
 
-pub trait Archive: Send + Sync + Unpin + std::io::Read + std::io::Seek {}
+/// Stream of bytes which can be read from to import a dictionary.
+///
+/// This trait is automatically implemented for compatible types.
+pub trait Archive: Send + Sync + Read + Seek {}
 
-impl<T: Send + Sync + Unpin + std::io::Read + std::io::Seek> Archive for T {}
+impl<T: ?Sized + Send + Sync + Read + Seek> Archive for T {}
 
+/// Allows creating a readable [`Archive`].
+///
+/// This is implemented on:
+/// - [`Bytes`]
+/// - `&'static [u8]`
+/// - [`&Path`][Path] - opening a [`File`]
+/// - [`PathBuf`] - opening a [`File`]
 pub trait OpenArchive: Send + Sync {
-    fn open_archive(&self) -> Result<impl Archive + 'static>;
+    /// Opens an [`Archive`] and passes ownership to the caller.
+    ///
+    /// # Errors
+    ///
+    /// Errors if the archive could not be opened.
+    fn open_archive(&self) -> Result<Box<dyn Archive>>;
 }
 
-impl<A, F> OpenArchive for F
+impl<F> OpenArchive for F
 where
-    A: Archive + 'static,
-    F: Fn() -> Result<A> + Send + Sync,
+    F: Fn() -> Result<Box<dyn Archive>> + Send + Sync,
 {
-    #[expect(refining_impl_trait, reason = "explicit refinement")]
-    fn open_archive(&self) -> Result<A> {
+    fn open_archive(&self) -> Result<Box<dyn Archive>> {
         (self)()
     }
 }
 
 impl OpenArchive for Bytes {
-    fn open_archive(&self) -> Result<impl Archive + 'static> {
-        Ok(Cursor::new(self.clone()))
+    fn open_archive(&self) -> Result<Box<dyn Archive>> {
+        Ok(Box::new(Cursor::new(self.clone())))
     }
 }
 
 impl OpenArchive for &'static [u8] {
-    fn open_archive(&self) -> Result<impl Archive + 'static> {
-        Ok(Cursor::new(*self))
+    fn open_archive(&self) -> Result<Box<dyn Archive>> {
+        Ok(Box::new(Cursor::new(*self)))
     }
 }
 
 impl OpenArchive for &Path {
-    fn open_archive(&self) -> Result<impl Archive + 'static> {
-        Ok(File::open(self)?)
+    fn open_archive(&self) -> Result<Box<dyn Archive>> {
+        Ok(Box::new(File::open(self)?))
     }
 }
 
 impl OpenArchive for PathBuf {
-    fn open_archive(&self) -> Result<impl Archive + 'static> {
-        Ok(File::open(self)?)
+    fn open_archive(&self) -> Result<Box<dyn Archive>> {
+        Ok(Box::new(File::open(self)?))
     }
 }

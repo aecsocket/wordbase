@@ -22,6 +22,7 @@ wordbase-storage = { workspace = true }
 async-channel = { workspace = true }
 eyre          = { workspace = true }
 foldhash      = { workspace = true }
+bytes         = { workspace = true }
 rayon         = { workspace = true }
 regex         = { workspace = true }
 serde         = { workspace = true, features = ["derive"] }

@@ -91,7 +91,7 @@ pub struct Nhk16 {
     ///
     /// See [`yomitan::Pitch::position`].
     ///
-    /// [`yomitan::Pitch::position`]: crate::dict::yomitan::Pitch::position
+    /// [`yomitan::Pitch::position`]: crate::v1::yomitan::Pitch::position
     pub pitch_positions: Vec<PitchPosition>,
 }
 
@@ -113,7 +113,7 @@ pub struct Shinmeikai8 {
     ///
     /// See [`yomitan::Pitch::position`].
     ///
-    /// [`yomitan::Pitch::position`]: crate::dict::yomitan::Pitch::position
+    /// [`yomitan::Pitch::position`]: crate::v1::yomitan::Pitch::position
     pub pitch_number: Option<PitchPosition>,
     /// Pitch pattern of this pronunciation.
     ///

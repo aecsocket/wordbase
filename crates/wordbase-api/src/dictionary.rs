@@ -4,6 +4,8 @@ use uuid::Uuid;
 ///
 /// This represents a dictionary which has already been imported into the
 /// engine, whereas [`DictionaryMeta`] may not.
+///
+/// [`Record`]: crate::Record
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
@@ -22,6 +24,8 @@ pub struct Dictionary {
     ///
     /// A higher position means records from this dictionary will be returned
     /// later, and should be displayed to the user with a lower priority.
+    ///
+    /// [`Record`]: crate::Record
     pub position: i64,
 }
 
