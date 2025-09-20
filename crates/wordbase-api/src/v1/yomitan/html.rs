@@ -34,8 +34,8 @@ struct Rendering<'t, T> {
     /// Whether we are currently inside an `<li>`.
     ///
     /// Some dictionaries, like [this Words.hk dictionary](https://github.com/MarvNC/wordshk-yomitan/)
-    /// will place `<li>`s inside `<li>`s. This is illegal according to HTML, and
-    /// the nested `<li>` must first be placed inside a `<ul>`.
+    /// will place `<li>`s inside `<li>`s. This is illegal according to HTML,
+    /// and the nested `<li>` must first be placed inside a `<ul>`.
     in_li: bool,
 }
 
@@ -258,9 +258,7 @@ fn write_style_css(w: &mut impl fmt::Write, s: &ContentStyle) -> fmt::Result {
 
 #[cfg(test)]
 mod tests {
-    use crate::dict::yomitan::structured::StyledElement;
-
-    use super::*;
+    use {super::*, crate::v1::yomitan::structured::StyledElement};
 
     #[test]
     fn style_escape() {

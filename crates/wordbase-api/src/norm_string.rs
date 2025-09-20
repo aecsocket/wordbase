@@ -18,9 +18,6 @@ use {
 #[debug("{_0:?}")]
 pub struct NormString(String);
 
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(NormString, String);
-
 impl NormString {
     /// Attempts to create a new value from an existing string.
     ///
@@ -166,6 +163,10 @@ const _: () = {
         }
     }
 };
+
+// uses `TryFrom` for lifting
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(NormString, String);
 
 #[cfg(test)]
 mod tests {

@@ -1,12 +1,15 @@
 #![doc = include_str!("../README.md")]
 
-pub mod dict;
+mod dictionary;
 mod norm_string;
+mod profile;
 mod protocol;
+mod record;
 mod term;
+pub mod v1;
 
 use {derive_more::From, uuid::Uuid};
-pub use {norm_string::*, protocol::*, term::*, uuid};
+pub use {dictionary::*, norm_string::*, profile::*, protocol::*, record::*, term::*, uuid};
 
 #[cfg(feature = "uniffi")]
 uniffi::setup_scaffolding!();
@@ -107,7 +110,6 @@ uniffi::setup_scaffolding!();
 /// }
 /// # fn deserialize<T>(_: &[u8]) -> T { unimplemented!() }
 /// ```
-#[macro_export]
 macro_rules! for_kinds { ($macro:ident) => { $macro!(
     Yomitan(yomitan) {
         Glossary,
@@ -123,106 +125,6 @@ macro_rules! for_kinds { ($macro:ident) => { $macro!(
         Shinmeikai8,
     },
 ); } }
-
-/// Imported collection of [`Record`]s in the engine.
-///
-/// This represents a dictionary which has already been imported into the
-/// engine, whereas [`DictionaryMeta`] may not.
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
-#[cfg_attr(feature = "poem", derive(poem_openapi::Object), oai(example))]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-pub struct Dictionary {
-    /// Unique identifier for this dictionary in the database.
-    pub id: DictionaryId,
-    /// Meta information about this dictionary.
-    pub meta: DictionaryMeta,
-    /// What position [`Record`]s from this dictionary will be returned during
-    /// lookups, relative to other dictionaries.
-    ///
-    /// A higher position means records from this dictionary will be returned
-    /// later, and should be displayed to the user with a lower priority.
-    pub position: i64,
-}
-
-#[cfg(feature = "poem")]
-impl poem_openapi::types::Example for Dictionary {
-    fn example() -> Self {
-        let mut meta = DictionaryMeta::new(DictionaryKind::Yomitan, "Jitendex");
-        meta.version = Some("2025.02.11.0".into());
-        meta.url = Some("https://jitendex.org".into());
-        Self {
-            id: DictionaryId(uuid::uuid!("6c0be404-fb5f-4f25-a9cc-6bf78667bb2b")),
-            meta,
-            position: 3,
-        }
-    }
-}
-
-/// Metadata for a [`Dictionary`].
-///
-/// This is `#[non_exhaustive]`: to create a new value, you must use
-/// [`DictionaryMeta::new`] to create an initial value, then set fields
-/// explicitly.
-///
-/// # Examples
-///
-/// ```
-/// # use wordbase_api::{DictionaryMeta, DictionaryKind};
-/// let mut meta = DictionaryMeta::new(DictionaryKind::Yomitan, "My Dictionary");
-/// meta.version = Some("1.0.0".into());
-/// meta.url = Some("https://example.com".into());
-/// ```
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
-#[cfg_attr(feature = "poem", derive(poem_openapi::Object))]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[non_exhaustive]
-pub struct DictionaryMeta {
-    /// What kind of dictionary this was imported from.
-    pub kind: DictionaryKind,
-    /// Human-readable display name.
-    ///
-    /// This value is **not guaranteed to be unique** across all dictionaries,
-    /// however you may treat this as a stable identifier for a dictionary in
-    /// its unimported form (i.e. the archive itself), and use this to detect if
-    /// you attempt to import an already-imported dictionary.
-    pub name: String,
-    /// Arbitrary version string.
-    ///
-    /// This does not guarantee to conform to any format, e.g. semantic
-    /// versioning.
-    pub version: Option<String>,
-    /// Describes the content of this dictionary.
-    pub description: Option<String>,
-    /// Homepage URL where users can learn more about this dictionary.
-    pub url: Option<String>,
-    /// Attribution information for the content of this dictionary.
-    pub attribution: Option<String>,
-}
-
-impl DictionaryMeta {
-    /// Creates a new value with only the required fields.
-    #[must_use]
-    pub fn new(kind: DictionaryKind, name: impl Into<String>) -> Self {
-        Self {
-            kind,
-            name: name.into(),
-            version: None,
-            description: None,
-            url: None,
-            attribution: None,
-        }
-    }
-}
 
 macro_rules! define_types { ($($dict_kind:ident($dict_path:ident) { $($record_kind:ident),* $(,)? }),* $(,)?) => { paste::paste! {
 
@@ -317,167 +219,36 @@ pub trait RecordType:
     const KIND: RecordKind;
 }
 
-/// Opaque and unique identifier for a [`Record`] in the engine.
+/// Texthooker sentence event received from a [TextractorSender] server, in the
+/// [exSTATic] format.
 ///
-/// Multiple [`Term`]s may link to a single [`Record`].
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+/// [TextractorSender]: https://github.com/KamWithK/TextractorSender
+/// [exSTATic]: https://github.com/KamWithK/exSTATic/
+#[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
-#[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
-pub struct RecordId(pub u64);
-
-#[cfg(feature = "uniffi")]
-uniffi::custom_newtype!(RecordId, u64);
-
-/// Opaque and unique identifier for a [`Dictionary`] in the engine.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
-#[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
-pub struct DictionaryId(pub Uuid);
-
-impl DictionaryId {
-    /// Creates a new random ID.
-    #[must_use]
-    pub fn random() -> Self {
-        Self(Uuid::now_v7())
-    }
-}
-
-/// How often a [`Term`] appears in a single [`Dictionary`].
-///
-/// This value is used for sorting lookup results. However, the value given is
-/// only valid in the context of a **single specific** [`Dictionary`]. That is,
-/// if you take a [`FrequencyValue`] from one [`Dictionary`] and compare it to
-/// another [`FrequencyValue`] from a different [`Dictionary`], the result is
-/// meaningless.
-///
-/// There is explicitly no way to get the [`i64`] from this value while ignoring
-/// the variant, as the value does not make sense without knowing if it's a rank
-/// or an occurrence.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
-    rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
-)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
-pub enum FrequencyValue {
-    /// Lower value represents a [`Term`] which appears more frequently.
-    Rank(i64),
-    /// Lower value represents a [`Term`] which appears less frequently.
-    Occurrence(i64),
-}
-
-/// Collection of user-defined settings which can be freely switched between.
-///
-/// The engine does not have a concept of a current profile. Instead, it is the
-/// app's responsibility to manage a current profile, and pass that profile ID
-/// into operations which require it (e.g. lookups).
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
-#[cfg_attr(feature = "poem", derive(poem_openapi::Object), oai(example))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[non_exhaustive]
-pub struct Profile {
-    /// Unique identifier for this profile in the database.
-    pub id: ProfileId,
-    /// Name of the profile.
+pub struct TexthookerSentence {
+    /// Path of the process from which this texthooker sentence was extracted.
     ///
-    /// User-defined profiles will always have a name. If the name is missing,
-    /// then this is the default profile made on startup, and should be labelled
-    /// to the user as "Default Profile" or similar.
-    pub name: Option<NormString>,
-    /// Which [`Dictionary`] is used for sorting records by their frequencies.
+    /// This is not guaranteed to be in any format, but may be used as a
+    /// persistent identifier.
+    pub process_path: String,
+    /// Extracted sentence.
     ///
-    /// The user-set dictionary [position] always takes priority over any
-    /// frequency sorting.
-    ///
-    /// [position]: Dictionary::position
-    pub sorting_dictionary: Option<DictionaryId>,
-    /// System font family to use for text under this profile.
-    ///
-    /// This is *only* the family, e.g. `Adwaita Sans`, not the face like
-    /// `Adwaita Sans Regular`.
-    pub font_family: Option<String>,
-    /// Name of the Anki deck used for AnkiConnect integration.
-    pub anki_deck: Option<String>,
-    /// Name of the Anki note type used for creating new notes.
-    pub anki_note_type: Option<String>,
-    /// Set of [`Dictionary`] entries which are enabled under this profile.
-    ///
-    /// If a dictionary is enabled, it will be used to provide results for
-    /// lookups when using this profile.
-    pub enabled_dictionaries: Vec<DictionaryId>,
+    /// This may be malformed in some way, e.g. it may have trailing whitespace.
+    pub sentence: String,
 }
-
-#[cfg(feature = "poem")]
-impl poem_openapi::types::Example for Profile {
-    fn example() -> Self {
-        Self {
-            id: ProfileId(uuid::uuid!("f619b6a1-28cb-4e32-8294-85b7f51f76c5")),
-            name: Some(NormString::new("Japanese").expect("valid `NormString`")),
-            sorting_dictionary: Some(DictionaryId(uuid::uuid!(
-                "6c0be404-fb5f-4f25-a9cc-6bf78667bb2b"
-            ))),
-            font_family: None,
-            anki_deck: Some("Japanese Cards".into()),
-            anki_note_type: Some("Lapis".into()),
-            enabled_dictionaries: vec![
-                DictionaryId(uuid::uuid!("6c0be404-fb5f-4f25-a9cc-6bf78667bb2b")),
-                DictionaryId(uuid::uuid!("cb5b772c-6cd7-47dd-aca8-651de6f376ae")),
-            ],
-        }
-    }
-}
-
-impl Profile {
-    /// Creates a new profile with the default state.
-    #[must_use]
-    pub fn new(id: ProfileId) -> Self {
-        Self {
-            id,
-            name: None,
-            sorting_dictionary: None,
-            font_family: None,
-            anki_deck: None,
-            anki_note_type: None,
-            enabled_dictionaries: Vec::new(),
-        }
-    }
-}
-
-/// Opaque and unique identifier for a [`Profile`] in the engine.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
-#[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
-pub struct ProfileId(pub Uuid);
 
 #[cfg(feature = "uniffi")]
-const _: () = {
-    #[derive(uniffi::Record)]
-    pub struct UuidFfi {
-        hi: u64,
-        lo: u64,
-    }
+macro_rules! uuid_wrapper {
+    ($ty:ident) => {
+        const _: () = {
+            #[derive(uniffi::Record)]
+            pub struct UuidFfi {
+                hi: u64,
+                lo: u64,
+            }
 
-    macro_rules! uuid_wrapper {
-        ($ty:ident) => {
             uniffi::custom_type!($ty, UuidFfi, {
                 lower: |id| {
                     let (hi, lo) = id.0.as_u64_pair();
@@ -486,8 +257,7 @@ const _: () = {
                 try_lift: |ffi| Ok($ty(Uuid::from_u64_pair(ffi.hi, ffi.lo))),
             });
         };
-    }
-
-    uuid_wrapper!(DictionaryId);
-    uuid_wrapper!(ProfileId);
-};
+    };
+}
+#[cfg(feature = "uniffi")]
+pub(crate) use uuid_wrapper;
