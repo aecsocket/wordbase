@@ -39,10 +39,7 @@ pub mod imp {
             codec::{Codec, Encoder},
         },
         eyre::{Context as _, Result, eyre},
-        std::sync::{
-            Mutex,
-            atomic::{self, AtomicU64},
-        },
+        std::sync::atomic::{self, AtomicU64},
         wordbase_api::{Record, RecordId, Term},
     };
 
@@ -50,7 +47,7 @@ pub mod imp {
     pub struct ImportTransaction<'a, T, C> {
         txn: &'a T,
         codec: &'a C,
-        record_id: Mutex<u64>,
+        record_id: AtomicU64,
     }
 
     impl<'a, T: backend::ImportTransaction, C: Codec> ImportTransaction<'a, T, C> {
@@ -58,7 +55,7 @@ pub mod imp {
             Self {
                 txn,
                 codec,
-                record_id: Mutex::new(0),
+                record_id: AtomicU64::default(),
             }
         }
     }
@@ -84,7 +81,7 @@ pub mod imp {
     pub struct ImportBatch<'txn, B, E> {
         batch: B,
         encoder: E,
-        record_id: &'txn Mutex<u64>,
+        record_id: &'txn AtomicU64,
     }
 
     impl<B: backend::ImportBatch, E: Encoder> super::ImportBatch for ImportBatch<'_, B, E> {
@@ -99,15 +96,7 @@ pub mod imp {
 
     impl<B: backend::ImportBatch, E: Encoder> ImportBatch<'_, B, E> {
         fn insert_record_(&mut self, record: &Record) -> Result<RecordId> {
-            let record_id = {
-                let mut r = self.record_id.lock().unwrap();
-                *r += 1;
-                RecordId(*r)
-            };
-
-            // let record_id = RecordId(self.record_id.fetch_add(1,
-            // atomic::Ordering::SeqCst));
-            println!("rid = {record_id:?}");
+            let record_id = RecordId(self.record_id.fetch_add(1, atomic::Ordering::SeqCst));
             let record_blob = self
                 .encoder
                 .encode(record)

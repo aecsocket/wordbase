@@ -1,48 +1,62 @@
 use {
     crate::{backend::TermPart, codec::Decoder},
     derive_more::Debug,
-    eyre::{Context, Result, eyre},
+    eyre::{Context, ContextCompat, Result, bail, eyre},
     futures::executor::block_on,
     libsql::{Builder, Connection, Statement, Transaction, TransactionBehavior},
     std::path::Path,
+    tokio::sync::{Mutex, MutexGuard},
     wordbase_api::{Record, RecordId, Term},
 };
 
 const DATABASE_PATH: &str = "database.db";
 
-const CREATE_RECORDS: &str = "
+const SETUP: &str = "
 CREATE TABLE record (
     id   INTEGER PRIMARY KEY,
     data BLOB    NOT NULL
-)";
+);
 
-const CREATE_HEADWORDS: &str = "
 CREATE TABLE headword (
-    text   TEXT    PRIMARY KEY,
+    text   TEXT    NOT NULL,
     record INTEGER NOT NULL REFERENCES record(id)
-)";
+);
 
-const CREATE_READINGS: &str = "
 CREATE TABLE reading (
-    text   TEXT    PRIMARY KEY,
+    text   TEXT    NOT NULL,
     record INTEGER NOT NULL REFERENCES record(id)
-)";
+);
+
+CREATE INDEX headword_text ON headword(text);
+CREATE INDEX reading_text ON reading(text);
+";
 
 const INSERT_RECORD: &str = "
 INSERT INTO record (id, data)
-VALUES (?, ?)";
+VALUES (?1, ?2)";
 
 const INSERT_HEADWORD: &str = "
 INSERT INTO headword (text, record)
-VALUES (?, ?)";
+VALUES (?1, ?2)";
 
 const INSERT_READING: &str = "
 INSERT INTO reading (text, record)
-VALUES (?, ?)";
+VALUES (?1, ?2)";
 
+// don't use `WHERE headword.text = ? OR reading.text = ?`
+// because that will not use our indexes
 const GET_RECORDS: &str = "
-SELECT id, data FROM record
-LIMIT 1";
+SELECT record.id, record.data, 0 as part
+FROM record
+JOIN headword INDEXED BY headword_text ON record.id = headword.record
+WHERE headword.text = ?
+
+UNION ALL
+
+SELECT record.id, record.data, 1 as part
+FROM record
+JOIN reading INDEXED BY reading_text ON record.id = reading.record
+WHERE reading.text = ?";
 
 #[derive(Debug)]
 pub struct Backend;
@@ -52,30 +66,25 @@ impl super::Backend for Backend {
     fn import(data_dir: &Path) -> Result<ImportStorage> {
         block_on(async {
             let conn = connect(data_dir).await?;
-
-            conn.execute(CREATE_RECORDS, ())
+            conn.execute_batch(SETUP)
                 .await
-                .wrap_err("failed to create records table")?;
-            conn.execute(CREATE_HEADWORDS, ())
-                .await
-                .wrap_err("failed to create headwords table")?;
-            conn.execute(CREATE_READINGS, ())
-                .await
-                .wrap_err("failed to create readings table")?;
+                .wrap_err("failed to setup database")?;
 
             Ok(ImportStorage {
-                insert_record: conn
-                    .prepare(INSERT_RECORD)
-                    .await
-                    .wrap_err("failed to prepare insert record statement")?,
-                insert_headword: conn
-                    .prepare(INSERT_HEADWORD)
-                    .await
-                    .wrap_err("failed to prepare insert headword statement")?,
-                insert_reading: conn
-                    .prepare(INSERT_READING)
-                    .await
-                    .wrap_err("failed to prepare insert reading statement")?,
+                statements: Mutex::new(Statements {
+                    insert_record: conn
+                        .prepare(INSERT_RECORD)
+                        .await
+                        .wrap_err("failed to prepare insert record statement")?,
+                    insert_headword: conn
+                        .prepare(INSERT_HEADWORD)
+                        .await
+                        .wrap_err("failed to prepare insert headword statement")?,
+                    insert_reading: conn
+                        .prepare(INSERT_READING)
+                        .await
+                        .wrap_err("failed to prepare insert reading statement")?,
+                }),
                 conn,
             })
         })
@@ -107,11 +116,20 @@ async fn connect(data_dir: &Path) -> Result<Connection> {
     db.connect().wrap_err("failed to connect to database")
 }
 
+#[derive(Debug)]
 pub struct ImportStorage {
-    insert_record: Statement,
-    insert_headword: Statement,
-    insert_reading: Statement,
+    statements: Mutex<Statements>,
     conn: Connection,
+}
+
+#[derive(Debug)]
+struct Statements {
+    #[debug(skip)]
+    insert_record: Statement,
+    #[debug(skip)]
+    insert_headword: Statement,
+    #[debug(skip)]
+    insert_reading: Statement,
 }
 
 impl super::ImportStorage for ImportStorage {
@@ -124,9 +142,7 @@ impl super::ImportStorage for ImportStorage {
         .wrap_err("failed to start transaction")?;
         Ok(ImportTransaction {
             txn,
-            insert_record: &self.insert_record,
-            insert_headword: &self.insert_headword,
-            insert_reading: &self.insert_reading,
+            statements: &self.statements,
         })
     }
 
@@ -139,12 +155,7 @@ impl super::ImportStorage for ImportStorage {
 pub struct ImportTransaction<'stg> {
     #[debug(skip)]
     txn: Transaction,
-    #[debug(skip)]
-    insert_record: &'stg Statement,
-    #[debug(skip)]
-    insert_headword: &'stg Statement,
-    #[debug(skip)]
-    insert_reading: &'stg Statement,
+    statements: &'stg Mutex<Statements>,
 }
 
 impl<'stg> super::ImportTransaction for ImportTransaction<'stg> {
@@ -155,9 +166,7 @@ impl<'stg> super::ImportTransaction for ImportTransaction<'stg> {
 
     fn batch(&self) -> Result<Self::Batch<'_>> {
         Ok(ImportBatch {
-            insert_record: self.insert_record,
-            insert_headword: self.insert_headword,
-            insert_reading: self.insert_reading,
+            statements: self.statements.blocking_lock(),
         })
     }
 
@@ -169,38 +178,41 @@ impl<'stg> super::ImportTransaction for ImportTransaction<'stg> {
 
 #[derive(Debug)]
 pub struct ImportBatch<'stg> {
-    #[debug(skip)]
-    insert_record: &'stg Statement,
-    #[debug(skip)]
-    insert_headword: &'stg Statement,
-    #[debug(skip)]
-    insert_reading: &'stg Statement,
+    statements: MutexGuard<'stg, Statements>,
 }
 
 impl super::ImportBatch for ImportBatch<'_> {
     fn insert_record(&mut self, record_id: RecordId, record: &[u8]) -> Result<()> {
-        println!("inserting {record_id:?}");
-        block_on(self.insert_record.execute((record_id.0, record)))?;
-        println!("inserted {record_id:?}");
-        Ok(())
+        block_on(async {
+            self.statements
+                .insert_record
+                .execute((record_id.0, record))
+                .await?;
+            self.statements.insert_record.reset();
+            eyre::Ok(())
+        })
     }
 
     fn insert_term(&mut self, term: &Term, record_id: RecordId) -> Result<()> {
         let insert_headword = async {
             if let Some(headword) = term.headword() {
-                self.insert_headword
+                self.statements
+                    .insert_headword
                     .execute((headword.as_str(), record_id.0))
                     .await
                     .wrap_err("failed to insert headword")?;
+                self.statements.insert_headword.reset();
             }
             eyre::Ok(())
         };
         let insert_reading = async {
             if let Some(reading) = term.reading() {
-                self.insert_reading
+                self.statements
+                    .insert_reading
                     .execute((reading.as_str(), record_id.0))
                     .await
                     .wrap_err("failed to insert reading")?;
+                self.statements.insert_reading.reset();
             }
             eyre::Ok(())
         };
@@ -222,14 +234,41 @@ impl super::Lookups for Lookups {
         lemma: &str,
     ) -> Result<Vec<(TermPart, Record)>> {
         block_on(async {
-            let rows = self
+            let mut decoder = make_decoder();
+            let mut records = Vec::new();
+
+            let mut rows = self
                 .get_records
-                .query(&[lemma])
+                .query([lemma])
                 .await
                 .wrap_err("failed to get records")?;
-            eyre::Ok(())
-        });
 
-        Ok(vec![])
+            while let Some(row) = rows.next().await.wrap_err("failed to get row")? {
+                let record_id = RecordId(row.get::<u64>(0).wrap_err("failed to get column `id`")?);
+
+                (|| {
+                    let record_blob = row.get_value(1).wrap_err("failed to get column `data`")?;
+                    let record_blob = record_blob
+                        .as_blob()
+                        .wrap_err("column `data` is not a blob")?;
+                    let record = decoder
+                        .decode(record_blob)
+                        .wrap_err("failed to decode record")?;
+
+                    let part = row.get::<u32>(2).wrap_err("failed to get column `part`")?;
+                    let part = match part {
+                        0 => TermPart::Headword,
+                        1 => TermPart::Reading,
+                        _ => bail!("invalid term part `{part}`"),
+                    };
+
+                    records.push((part, record));
+                    eyre::Ok(())
+                })()
+                .wrap_err_with(|| eyre!("failed to get {record_id:?}"))?;
+            }
+
+            eyre::Ok(records)
+        })
     }
 }

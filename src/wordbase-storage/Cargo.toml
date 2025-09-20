@@ -48,7 +48,6 @@ redb          = { workspace = true, optional = true }
 regex         = { workspace = true }
 rmp-serde     = { workspace = true, optional = true }
 rocksdb       = { workspace = true, optional = true }
-rusqlite      = { workspace = true, optional = true, features = ["bundled"] }
 serde         = { workspace = true, features = ["derive"] }
 serde_json    = { workspace = true, features = ["preserve_order"] }
 serde_repr    = { workspace = true }

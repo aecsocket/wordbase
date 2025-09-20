@@ -6028,7 +6028,6 @@ dependencies = [
  "rkyv",
  "rmp-serde",
  "rocksdb",
- "rusqlite",
  "serde",
  "serde_json",
  "serde_repr",

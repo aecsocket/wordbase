@@ -53,16 +53,16 @@ async fn main() -> Result<()> {
         results: &mut results,
     };
 
-    bench_db::<Libsql, Rmp>(&mut cx, "libsql+rmp").await?;
-    bench_db::<Libsql, Rkyv>(&mut cx, "libsql+rkyv").await?;
-
-    bench_db::<Heed, Rmp>(&mut cx, "heed+rmp").await?;
+    // bench_db::<Heed, Rmp>(&mut cx, "heed+rmp").await?;
     bench_db::<Heed, Rkyv>(&mut cx, "heed+rkyv").await?;
 
-    bench_db::<Redb, Rmp>(&mut cx, "redb+rmp").await?;
-    bench_db::<Redb, Rkyv>(&mut cx, "redb+rkyv").await?;
+    // bench_db::<Libsql, Rmp>(&mut cx, "libsql+rmp").await?;
+    bench_db::<Libsql, Rkyv>(&mut cx, "libsql+rkyv").await?;
 
-    bench_db::<RocksDb, Rmp>(&mut cx, "rocksdb+rmp").await?;
+    // bench_db::<Redb, Rmp>(&mut cx, "redb+rmp").await?;
+    // bench_db::<Redb, Rkyv>(&mut cx, "redb+rkyv").await?;
+
+    // bench_db::<RocksDb, Rmp>(&mut cx, "rocksdb+rmp").await?;
     bench_db::<RocksDb, Rkyv>(&mut cx, "rocksdb+rkyv").await?;
 
     // bench_db::<Turso, Rmp>(&mut cx, "turso+rmp").await?;
@@ -73,6 +73,7 @@ async fn main() -> Result<()> {
     table.column(1).set_header("Size");
     table.column(2).set_header("Import");
     table.column(3).set_header("Lookup");
+    table.column(4).set_header("# records");
     info!("Results:\n{}", table.format(&results));
 
     Ok(())
@@ -128,6 +129,7 @@ async fn bench_db<B: Backend, C: Codec + Default>(
 
         let lookups = B::open(&dict_dir).wrap_err("failed to open dictionary for lookups")?;
 
+        info!("Benchmarking lookups");
         let start = Instant::now();
         for i in 0..LOOKUP_ITERS {
             lookups
@@ -149,8 +151,13 @@ async fn bench_db<B: Backend, C: Codec + Default>(
             records.len()
         );
 
-        cx.results
-            .push(vec![name.into(), storage_size, import_time, lookup_time]);
+        cx.results.push(vec![
+            name.into(),
+            storage_size,
+            import_time,
+            lookup_time,
+            records.len().to_string(),
+        ]);
         eyre::Ok(())
     }
     .await

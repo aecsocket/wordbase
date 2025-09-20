@@ -13,7 +13,6 @@ use {
 const RECORDS: &str = "records";
 const HEADWORDS: &str = "headwords";
 const READINGS: &str = "readings";
-const COLUMN_FAMILIES: &[&str] = &[RECORDS, HEADWORDS, READINGS];
 
 #[derive(Debug)]
 pub struct Backend;
@@ -29,7 +28,7 @@ impl super::Backend for Backend {
         db.create_cf(RECORDS, &options)
             .wrap_err_with(|| eyre!("failed to create column family `{RECORDS}`"))?;
 
-        let options = record_id_cf_open_options(&env);
+        let options = term_cf_options(&env);
         db.create_cf(HEADWORDS, &options)
             .wrap_err_with(|| eyre!("failed to create column family `{HEADWORDS}`"))?;
         db.create_cf(READINGS, &options)
@@ -41,15 +40,18 @@ impl super::Backend for Backend {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
     fn open(data_dir: &Path) -> Result<Lookups> {
         let env = Env::new().wrap_err("failed to create database env")?;
-
-        let db = DB::open_cf_for_read_only(
+        let column_families = [
+            (RECORDS, db_open_options(&env)),
+            (HEADWORDS, term_cf_options(&env)),
+            (READINGS, term_cf_options(&env)),
+        ];
+        let db = DB::open_cf_with_opts_for_read_only(
             &db_open_options(&env),
             data_dir,
-            COLUMN_FAMILIES,
+            column_families,
             false, // error_if_log_file_exist
         )
         .wrap_err("failed to open database")?;
-
         Ok(Lookups { db })
     }
 }
@@ -64,7 +66,7 @@ fn db_open_options(env: &Env) -> Options {
     options
 }
 
-fn record_id_cf_open_options(env: &Env) -> Options {
+fn term_cf_options(env: &Env) -> Options {
     let mut options = db_open_options(env);
     options.set_merge_operator_associative("concat", |_new_key, existing_val, operands| {
         let mut result = Vec::with_capacity(operands.len());
@@ -158,7 +160,7 @@ impl super::ImportBatch for ImportBatch<'_> {
 
     fn insert_term(&mut self, term: &Term, record_id: RecordId) -> Result<()> {
         if let Some(headword) = term.headword() {
-            put(
+            merge(
                 self.db,
                 self.headwords,
                 headword.as_bytes(),
@@ -167,7 +169,7 @@ impl super::ImportBatch for ImportBatch<'_> {
             .wrap_err("failed to insert headword")?;
         }
         if let Some(reading) = term.reading() {
-            put(
+            merge(
                 self.db,
                 self.readings,
                 reading.as_bytes(),
@@ -179,14 +181,19 @@ impl super::ImportBatch for ImportBatch<'_> {
     }
 }
 
-fn put(db: &DB, cf: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
-    static WRITE_OPTIONS: LazyLock<WriteOptions> = LazyLock::new(|| {
-        let mut opts = WriteOptions::new();
-        opts.disable_wal(true);
-        opts
-    });
+static WRITE_OPTIONS: LazyLock<WriteOptions> = LazyLock::new(|| {
+    let mut opts = WriteOptions::new();
+    opts.disable_wal(true);
+    opts
+});
 
+fn put(db: &DB, cf: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
     db.put_cf_opt(cf, key, value, &WRITE_OPTIONS)?;
+    Ok(())
+}
+
+fn merge(db: &DB, cf: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
+    db.merge_cf_opt(cf, key, value, &WRITE_OPTIONS)?;
     Ok(())
 }
 

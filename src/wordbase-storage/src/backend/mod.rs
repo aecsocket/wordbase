@@ -25,11 +25,6 @@ pub mod rocksdb;
 #[cfg(feature = "backend-rocksdb")]
 pub type RocksDb = rocksdb::Backend;
 
-// #[cfg(feature = "backend-rusqlite")]
-// pub mod rusqlite;
-// #[cfg(feature = "backend-rusqlite")]
-// pub type Rusqlite = rusqlite::Storage;
-
 // #[cfg(feature = "backend-turso")]
 // pub mod turso;
 // #[cfg(feature = "backend-turso")]
