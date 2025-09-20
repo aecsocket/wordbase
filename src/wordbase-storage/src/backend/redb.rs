@@ -1,5 +1,5 @@
 use {
-    crate::{backend::TermPart, codec::Decoder},
+    crate::{RecordRow, codec::Decoder},
     derive_more::Debug,
     either::Either,
     eyre::{Context, Result, eyre},
@@ -13,7 +13,7 @@ use {
         sync::{Mutex, MutexGuard},
     },
     tracing::debug,
-    wordbase_api::{Record, RecordId, Term},
+    wordbase_api::{Record, RecordId, Term, TermPart},
 };
 
 const DATABASE_PATH: &str = "database.redb";
@@ -175,7 +175,7 @@ impl super::Lookups for Lookups {
         &self,
         make_decoder: impl Fn() -> D,
         lemma: &str,
-    ) -> Result<Vec<(TermPart, Record)>> {
+    ) -> Result<Vec<RecordRow>> {
         self.lookup_lemma_(make_decoder(), lemma).collect()
     }
 }
@@ -185,7 +185,7 @@ impl Lookups {
         &self,
         mut decoder: impl Decoder,
         lemma: &str,
-    ) -> impl Iterator<Item = Result<(TermPart, Record)>> {
+    ) -> impl Iterator<Item = Result<RecordRow>> {
         let get_ids = |part: TermPart, table: &ReadOnlyMultimapTable<_, _>| {
             match table.get(lemma) {
                 Ok(values) => Either::Left(values.map(move |id| {
@@ -221,6 +221,14 @@ impl Lookups {
                     .map(|r| r.wrap_err("failed to query readings")),
             );
 
-        ids.map(move |id| id.and_then(|(part, id)| get_record(id).map(|record| (part, record))))
+        ids.map(move |id| {
+            id.and_then(|(term_part, record_id)| {
+                get_record(record_id).map(|record| RecordRow {
+                    term_part,
+                    record_id,
+                    record,
+                })
+            })
+        })
     }
 }

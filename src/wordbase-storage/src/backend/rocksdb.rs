@@ -1,5 +1,5 @@
 use {
-    crate::{backend::TermPart, codec::Decoder},
+    crate::{RecordRow, codec::Decoder},
     derive_more::Debug,
     either::Either,
     eyre::{Context, Result, eyre},
@@ -7,7 +7,7 @@ use {
         ColumnFamily, DB, DBPinnableSlice, Env, Options, WaitForCompactOptions, WriteOptions,
     },
     std::{iter, path::Path, sync::LazyLock},
-    wordbase_api::{Record, RecordId, Term},
+    wordbase_api::{Record, RecordId, Term, TermPart},
 };
 
 const RECORDS: &str = "records";
@@ -207,7 +207,7 @@ impl super::Lookups for Lookups {
         &self,
         make_decoder: impl Fn() -> D,
         lemma: &str,
-    ) -> Result<Vec<(TermPart, Record)>> {
+    ) -> Result<Vec<RecordRow>> {
         let records = get_cf(&self.db, RECORDS)?;
         let headwords = get_cf(&self.db, HEADWORDS)?;
         let readings = get_cf(&self.db, READINGS)?;
@@ -232,11 +232,15 @@ impl super::Lookups for Lookups {
                     .iter()
                     .map(|blob| (TermPart::Reading, blob)),
             )
-            .flat_map(move |(part, blob)| {
+            .flat_map(move |(term_part, blob)| {
                 self.get_by_ids(make_decoder(), records, blob)
                     .map(move |r| {
-                        r.map(|record| (part, record))
-                            .wrap_err_with(|| eyre!("failed to query {part:?}"))
+                        r.map(|(record_id, record)| RecordRow {
+                            term_part,
+                            record_id,
+                            record,
+                        })
+                        .wrap_err_with(|| eyre!("failed to query {term_part:?}"))
                     })
             });
 
@@ -255,7 +259,7 @@ impl Lookups {
         mut decoder: impl Decoder,
         records: &'db ColumnFamily,
         ids_blob: &'blob DBPinnableSlice<'db>,
-    ) -> impl Iterator<Item = Result<Record>> + 'db {
+    ) -> impl Iterator<Item = Result<(RecordId, Record)>> + 'db {
         let get_record = move |id: RecordId| {
             let blob = self
                 .db
@@ -265,7 +269,7 @@ impl Lookups {
             let record = decoder
                 .decode(&blob)
                 .wrap_err_with(|| eyre!("failed to decode {id:?}"))?;
-            Ok(record)
+            Ok((id, record))
         };
 
         match ids_blob.as_chunks::<{ size_of::<RecordId>() }>() {

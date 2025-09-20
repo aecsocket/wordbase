@@ -10,7 +10,9 @@ pub trait Codec: Send + Sync + Debug + 'static {
 }
 
 pub trait Encoder: Send + Sync + 'static {
-    fn encode(&mut self, record: &Record) -> Result<impl AsRef<[u8]>>;
+    type Output<'enc>: AsRef<[u8]>;
+
+    fn encode(&mut self, record: &Record) -> Result<Self::Output<'_>>;
 }
 
 pub trait Decoder: Send + Sync + 'static {

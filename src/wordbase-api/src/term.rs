@@ -32,6 +32,15 @@ pub enum Term {
     Full(NormString, NormString),
 }
 
+/// Part of a [`Term`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TermPart {
+    /// [`Term::Headword`].
+    Headword,
+    /// [`Term::Reading`].
+    Reading,
+}
+
 /// Attempted to create a [`Term`] from a headword/reading pair, but both were
 /// not present or empty.
 #[derive(Debug, Display, Clone, Default, Error)]

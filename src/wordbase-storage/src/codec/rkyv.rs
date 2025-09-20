@@ -1,6 +1,6 @@
 use {
     eyre::{Context, Result},
-    rkyv::rancor,
+    rkyv::{rancor, util::AlignedVec},
     wordbase_api::{ArchivedRecord, Record},
 };
 
@@ -24,7 +24,9 @@ impl super::Codec for Codec {
 pub struct Encoder {}
 
 impl super::Encoder for Encoder {
-    fn encode(&mut self, record: &Record) -> Result<impl AsRef<[u8]>> {
+    type Output<'enc> = AlignedVec;
+
+    fn encode(&mut self, record: &Record) -> Result<Self::Output<'_>> {
         let bytes = rkyv::to_bytes::<rancor::Error>(record)?;
         Ok(bytes)
     }

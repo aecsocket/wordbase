@@ -1,8 +1,8 @@
 use {
-    crate::codec::Decoder,
+    crate::{RecordRow, codec::Decoder},
     eyre::Result,
     std::path::Path,
-    wordbase_api::{Record, RecordId, Term},
+    wordbase_api::{RecordId, Term},
 };
 
 #[cfg(feature = "backend-heed")]
@@ -23,12 +23,12 @@ pub type Redb = redb::Backend;
 #[cfg(feature = "backend-rocksdb")]
 pub mod rocksdb;
 #[cfg(feature = "backend-rocksdb")]
-pub type RocksDb = rocksdb::Backend;
+pub type Rocksdb = rocksdb::Backend;
 
-// #[cfg(feature = "backend-turso")]
-// pub mod turso;
-// #[cfg(feature = "backend-turso")]
-// pub type Turso = turso::Storage;
+#[cfg(feature = "backend-turso")]
+pub mod turso;
+#[cfg(feature = "backend-turso")]
+pub type Turso = turso::Backend;
 
 pub trait Backend: Send + Sync + 'static {
     fn import(data_dir: &Path) -> Result<impl ImportStorage + use<Self>>;
@@ -58,16 +58,10 @@ pub trait ImportBatch {
     fn insert_term(&mut self, term: &Term, record_id: RecordId) -> Result<()>;
 }
 
-pub trait Lookups {
+pub trait Lookups: Send {
     fn lookup_lemma<D: Decoder>(
         &self,
         make_decoder: impl Fn() -> D,
         lemma: &str,
-    ) -> Result<Vec<(TermPart, Record)>>;
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TermPart {
-    Headword,
-    Reading,
+    ) -> Result<Vec<RecordRow>>;
 }

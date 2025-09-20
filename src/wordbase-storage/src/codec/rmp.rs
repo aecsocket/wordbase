@@ -24,7 +24,9 @@ pub struct Encoder {
 }
 
 impl super::Encoder for Encoder {
-    fn encode(&mut self, record: &Record) -> Result<impl AsRef<[u8]>> {
+    type Output<'enc> = &'enc [u8];
+
+    fn encode(&mut self, record: &Record) -> Result<Self::Output<'_>> {
         self.scratch.clear();
         rmp_serde::encode::write(&mut self.scratch, record)?;
         Ok(self.scratch.as_slice())

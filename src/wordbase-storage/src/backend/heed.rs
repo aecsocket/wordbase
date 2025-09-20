@@ -1,22 +1,22 @@
 use {
-    crate::{backend::TermPart, codec::Decoder},
+    crate::{RecordRow, codec::Decoder},
     derive_more::Debug,
     either::Either,
     eyre::{Context, Result, eyre},
     heed::{
         Database, DatabaseFlags, DatabaseOpenOptions, Env, EnvFlags, EnvOpenOptions, RoTxn, RwTxn,
-        WithTls, byteorder, types::Str,
+        WithoutTls, byteorder,
+        types::{Bytes, Str},
     },
     std::{
         iter,
         path::Path,
         sync::{Mutex, MutexGuard},
     },
-    wordbase_api::{Record, RecordId, Term},
+    wordbase_api::{Record, RecordId, Term, TermPart},
 };
 
 type U64LE = heed::types::U64<byteorder::LE>;
-type RecordTy = heed::types::Bytes;
 
 const RECORDS: &str = "records";
 const HEADWORDS: &str = "headwords";
@@ -25,24 +25,22 @@ const NUM_DBS: u32 = 3;
 const MAP_SIZE: usize = 128 * 1024 * 1024 * 1024; // TODO is this the max db size?
 
 fn env_open_options() -> EnvOpenOptions {
-    let mut opts = EnvOpenOptions::new();
+    let mut opts = heed::EnvOpenOptions::new();
     opts.map_size(MAP_SIZE);
     opts.max_dbs(NUM_DBS);
     opts
 }
 
-fn records_db_options<'env: 'name, 'name>(
-    env: &'env Env,
-) -> DatabaseOpenOptions<'env, 'name, WithTls, U64LE, RecordTy> {
-    env.database_options()
-        .name(RECORDS)
-        .types::<U64LE, RecordTy>()
+fn records_db_options<'env: 'name, 'name, T>(
+    env: &'env Env<T>,
+) -> DatabaseOpenOptions<'env, 'name, T, U64LE, Bytes> {
+    env.database_options().name(RECORDS).types::<U64LE, Bytes>()
 }
 
-fn term_db_options<'env: 'name, 'name>(
-    env: &'env Env,
+fn term_db_options<'env: 'name, 'name, T>(
+    env: &'env Env<T>,
     name: &'name str,
-) -> DatabaseOpenOptions<'env, 'name, WithTls, Str, U64LE> {
+) -> DatabaseOpenOptions<'env, 'name, T, Str, U64LE> {
     env.database_options()
         .name(name)
         .flags(DatabaseFlags::DUP_SORT)
@@ -65,8 +63,13 @@ impl super::Backend for Backend {
     #[expect(refining_impl_trait, reason = "explicit refinement")]
     fn open(data_dir: &Path) -> Result<Lookups> {
         // TODO safety comment
-        let env = unsafe { env_open_options().flags(EnvFlags::READ_ONLY).open(data_dir) }
-            .wrap_err("failed to open database env")?;
+        let env = unsafe {
+            env_open_options()
+                .read_txn_without_tls()
+                .flags(EnvFlags::READ_ONLY)
+                .open(data_dir)
+        }
+        .wrap_err("failed to open database env")?;
         let txn = env
             .clone()
             .static_read_txn()
@@ -123,7 +126,7 @@ impl super::ImportStorage for ImportStorage {
 
 #[derive(Debug)]
 pub struct ImportTransaction<'stg> {
-    records: Database<U64LE, RecordTy>,
+    records: Database<U64LE, Bytes>,
     headwords: Database<Str, U64LE>,
     readings: Database<Str, U64LE>,
     #[debug(skip)]
@@ -155,7 +158,7 @@ impl<'stg> super::ImportTransaction for ImportTransaction<'stg> {
 pub struct ImportBatch<'stg, 'txn> {
     #[debug(skip)]
     txn: MutexGuard<'txn, RwTxn<'stg>>,
-    records: &'txn Database<U64LE, RecordTy>,
+    records: &'txn Database<U64LE, Bytes>,
     headwords: &'txn Database<Str, U64LE>,
     readings: &'txn Database<Str, U64LE>,
 }
@@ -183,11 +186,11 @@ impl super::ImportBatch for ImportBatch<'_, '_> {
 
 #[derive(Debug)]
 pub struct Lookups {
-    records: Database<U64LE, RecordTy>,
+    records: Database<U64LE, Bytes>,
     headwords: Database<Str, U64LE>,
     readings: Database<Str, U64LE>,
     #[debug(skip)]
-    txn: RoTxn<'static, WithTls>,
+    txn: RoTxn<'static, WithoutTls>,
 }
 
 impl super::Lookups for Lookups {
@@ -195,7 +198,7 @@ impl super::Lookups for Lookups {
         &self,
         make_decoder: impl Fn() -> D,
         lemma: &str,
-    ) -> Result<Vec<(TermPart, Record)>> {
+    ) -> Result<Vec<RecordRow>> {
         self.lookup_lemma_(make_decoder(), lemma).collect()
     }
 }
@@ -205,7 +208,7 @@ impl Lookups {
         &self,
         mut decoder: impl Decoder,
         lemma: &str,
-    ) -> impl Iterator<Item = Result<(TermPart, Record)>> {
+    ) -> impl Iterator<Item = Result<RecordRow>> {
         let get_ids = |part: TermPart, db: &Database<Str, U64LE>| {
             match db.get_duplicates(&self.txn, lemma) {
                 Ok(Some(id_results)) => Either::Left(id_results.map(move |result| {
@@ -243,6 +246,14 @@ impl Lookups {
                     .map(|r| r.wrap_err("failed to query readings")),
             );
 
-        ids.map(move |id| id.and_then(|(part, id)| get_record(id).map(|record| (part, record))))
+        ids.map(move |id| {
+            id.and_then(|(term_part, record_id)| {
+                get_record(record_id).map(|record| RecordRow {
+                    term_part,
+                    record_id,
+                    record,
+                })
+            })
+        })
     }
 }

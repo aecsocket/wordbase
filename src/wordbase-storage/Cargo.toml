@@ -22,13 +22,15 @@ all-backends = [
   "backend-rocksdb",
   "backend-libsql",
 ]
-backend-heed = ["dep:heed"]
-backend-libsql = ["dep:libsql"]
-backend-redb = ["dep:redb"]
+
+backend-heed    = ["dep:heed"]
+backend-libsql  = ["dep:libsql"]
+backend-redb    = ["dep:redb"]
 backend-rocksdb = ["dep:rocksdb"]
-# backend-turso   = ["dep:turso"]
+backend-turso   = ["dep:turso"]
 
 all-codecs = ["codec-rkyv", "codec-rmp"]
+
 codec-rkyv = ["dep:rkyv"]
 codec-rmp  = ["dep:rmp-serde"]
 
@@ -43,6 +45,7 @@ foldhash      = { workspace = true }
 futures       = { workspace = true }
 heed          = { workspace = true, optional = true }
 libsql        = { workspace = true, optional = true, features = ["core"] }
+paste         = { workspace = true }
 rayon         = { workspace = true }
 redb          = { workspace = true, optional = true }
 regex         = { workspace = true }
@@ -53,10 +56,10 @@ serde_json    = { workspace = true, features = ["preserve_order"] }
 serde_repr    = { workspace = true }
 tokio         = { workspace = true, features = ["sync", "macros", "fs"] }
 tracing       = { workspace = true }
-# turso                = { workspace = true, optional = true }
-uuid         = { workspace = true }
-wordbase-api = { workspace = true, features = ["serde", "rkyv"] }
-zip          = { workspace = true }
+turso         = { workspace = true, optional = true }
+uuid          = { workspace = true }
+wordbase-api  = { workspace = true, features = ["serde", "rkyv"] }
+zip           = { workspace = true }
 
 derive_more = { workspace = true, features = [
   "debug",

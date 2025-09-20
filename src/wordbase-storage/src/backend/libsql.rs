@@ -1,12 +1,12 @@
 use {
-    crate::{backend::TermPart, codec::Decoder},
+    crate::{RecordRow, codec::Decoder},
     derive_more::Debug,
     eyre::{Context, ContextCompat, Result, bail, eyre},
     futures::executor::block_on,
     libsql::{Builder, Connection, Statement, Transaction, TransactionBehavior},
     std::path::Path,
     tokio::sync::{Mutex, MutexGuard},
-    wordbase_api::{Record, RecordId, Term},
+    wordbase_api::{RecordId, Term, TermPart},
 };
 
 const DATABASE_PATH: &str = "database.db";
@@ -232,7 +232,7 @@ impl super::Lookups for Lookups {
         &self,
         make_decoder: impl Fn() -> D,
         lemma: &str,
-    ) -> Result<Vec<(TermPart, Record)>> {
+    ) -> Result<Vec<RecordRow>> {
         block_on(async {
             let mut decoder = make_decoder();
             let mut records = Vec::new();
@@ -256,13 +256,17 @@ impl super::Lookups for Lookups {
                         .wrap_err("failed to decode record")?;
 
                     let part = row.get::<u32>(2).wrap_err("failed to get column `part`")?;
-                    let part = match part {
+                    let term_part = match part {
                         0 => TermPart::Headword,
                         1 => TermPart::Reading,
                         _ => bail!("invalid term part `{part}`"),
                     };
 
-                    records.push((part, record));
+                    records.push(RecordRow {
+                        term_part,
+                        record_id,
+                        record,
+                    });
                     eyre::Ok(())
                 })()
                 .wrap_err_with(|| eyre!("failed to get {record_id:?}"))?;

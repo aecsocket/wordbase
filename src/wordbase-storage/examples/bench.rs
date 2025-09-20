@@ -14,10 +14,8 @@ use {
     tracing::{debug, info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
     wordbase_storage::{
-        backend::{
-            Backend, Heed, ImportStorage, ImportTransaction, Libsql, Lookups, Redb, RocksDb,
-        },
-        codec::{Codec, Rkyv, Rmp},
+        backend::{self, Backend, ImportStorage, ImportTransaction, Lookups},
+        codec::{self, Codec},
         import::{self, FinishImport},
     },
 };
@@ -53,20 +51,20 @@ async fn main() -> Result<()> {
         results: &mut results,
     };
 
-    // bench_db::<Heed, Rmp>(&mut cx, "heed+rmp").await?;
-    bench_db::<Heed, Rkyv>(&mut cx, "heed+rkyv").await?;
+    // bench_db::<backend::Heed, codec::Rmp>(&mut cx, "heed+rmp").await?;
+    bench_db::<backend::Heed, codec::Rkyv>(&mut cx, "heed+rkyv").await?;
 
-    // bench_db::<Libsql, Rmp>(&mut cx, "libsql+rmp").await?;
-    bench_db::<Libsql, Rkyv>(&mut cx, "libsql+rkyv").await?;
+    // bench_db::<backend::Libsql, codec::Rmp>(&mut cx, "libsql+rmp").await?;
+    bench_db::<backend::Libsql, codec::Rkyv>(&mut cx, "libsql+rkyv").await?;
 
-    // bench_db::<Redb, Rmp>(&mut cx, "redb+rmp").await?;
-    // bench_db::<Redb, Rkyv>(&mut cx, "redb+rkyv").await?;
+    // bench_db::<backend::Redb, codec::Rmp>(&mut cx, "redb+rmp").await?;
+    // bench_db::<backend::Redb, codec::Rkyv>(&mut cx, "redb+rkyv").await?;
 
-    // bench_db::<RocksDb, Rmp>(&mut cx, "rocksdb+rmp").await?;
-    bench_db::<RocksDb, Rkyv>(&mut cx, "rocksdb+rkyv").await?;
+    // bench_db::<backend::Rocksdb, codec::Rmp>(&mut cx, "rocksdb+rmp").await?;
+    bench_db::<backend::Rocksdb, codec::Rkyv>(&mut cx, "rocksdb+rkyv").await?;
 
-    // bench_db::<Turso, Rmp>(&mut cx, "turso+rmp").await?;
-    // bench_db::<Turso, Rkyv>(&mut cx, "turso+rkyv").await?;
+    bench_db::<backend::Turso, codec::Rmp>(&mut cx, "turso+rmp").await?;
+    bench_db::<backend::Turso, codec::Rkyv>(&mut cx, "turso+rkyv").await?;
 
     let mut table = AsciiTable::default();
     table.column(0).set_header("DB type");
