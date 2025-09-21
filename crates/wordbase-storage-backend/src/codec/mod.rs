@@ -1,4 +1,4 @@
-//! [`wordbase_storage::codec::Codec`] implementations.
+//! [`wordbase_storage_api::codec::Codec`] implementations.
 
 pub use wordbase_storage_api::codec::*;
 

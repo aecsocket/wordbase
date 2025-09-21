@@ -20,32 +20,20 @@ uniffi = ["dep:uniffi"]
 
 [dependencies]
 wordbase-api = { workspace = true }
-wordbase-storage = { workspace = true }
-wordbase-storage-backend = { workspace = true, features = [
-  "backend-rocksdb",
-  "codec-rkyv",
-] }
-wordbase-storage-import = { workspace = true }
+# wordbase-storage = { workspace = true, features = [
+#   "backend-rocksdb",
+#   "codec-rkyv",
+# ] }
 
 async-channel = { workspace = true }
-color-eyre    = { workspace = true }
 eyre          = { workspace = true }
+foldhash      = { workspace = true }
+itertools     = { workspace = true }
 rayon         = { workspace = true }
 serde         = { workspace = true, features = ["derive"] }
 serde_json    = { workspace = true, features = ["preserve_order"] }
+sqlx          = { workspace = true, features = ["runtime-tokio", "sqlite"] }
 tokio         = { workspace = true, features = ["sync", "macros", "fs"] }
 tracing       = { workspace = true }
 uniffi        = { workspace = true, optional = true }
-
-[dev-dependencies]
-ascii_table        = { workspace = true, features = ["wide_characters"] }
-clap               = { workspace = true, features = ["derive"] }
-humansize          = { workspace = true }
-tempfile           = { workspace = true }
-tokio              = { workspace = true, features = ["full"] }
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
-
-wordbase-storage-backend = { workspace = true, features = [
-  "all-backends",
-  "all-codecs",
-] }
+uuid          = { workspace = true }

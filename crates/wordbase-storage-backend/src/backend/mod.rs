@@ -1,4 +1,4 @@
-//! [`wordbase_storage::backend::Backend`] implementations.
+//! [`wordbase_storage_api::backend::Backend`] implementations.
 
 pub use wordbase_storage_api::backend::*;
 

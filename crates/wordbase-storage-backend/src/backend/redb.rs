@@ -14,7 +14,7 @@ use {
         sync::{Mutex, MutexGuard},
     },
     tracing::debug,
-    wordbase_api::{Record, RecordId, Term, TermPart},
+    wordbase_api::{NoHeadwordOrReading, Record, RecordId, Term},
     wordbase_storage_api::{
         backend::{self, RecordRow},
         codec::Decoder,
@@ -23,9 +23,13 @@ use {
 
 const DATABASE_PATH: &str = "database.redb";
 const RECORDS: TableDefinition<u64, &[u8]> = TableDefinition::new("records");
-const HEADWORDS: MultimapTableDefinition<&str, u64> = MultimapTableDefinition::new("headwords");
-const READINGS: MultimapTableDefinition<&str, u64> = MultimapTableDefinition::new("readings");
+const HEADWORDS: MultimapTableDefinition<&str, (Option<&str>, u64)> =
+    MultimapTableDefinition::new("headwords");
+const READINGS: MultimapTableDefinition<&str, (Option<&str>, u64)> =
+    MultimapTableDefinition::new("readings");
 
+/// [`backend::Backend`] implementation which uses [`redb`] written in pure
+/// Rust.
 #[derive(Debug)]
 pub struct Redb;
 
@@ -66,6 +70,7 @@ impl backend::Backend for Redb {
     }
 }
 
+/// [`backend::ImportTransaction`] for [`Redb`].
 #[derive(Debug)]
 pub struct ImportTransaction {
     #[debug(skip)]
@@ -100,6 +105,7 @@ impl backend::ImportStorage for ImportTransaction {
     }
 }
 
+/// [`backend::ImportTables`] for [`Redb`].
 #[derive(Debug)]
 pub struct ImportTables<'txn> {
     tables: Mutex<Tables<'txn>>,
@@ -110,9 +116,9 @@ struct Tables<'txn> {
     #[debug(skip)]
     records: Table<'txn, u64, &'static [u8]>,
     #[debug(skip)]
-    headwords: MultimapTable<'txn, &'static str, u64>,
+    headwords: MultimapTable<'txn, &'static str, (Option<&'static str>, u64)>,
     #[debug(skip)]
-    readings: MultimapTable<'txn, &'static str, u64>,
+    readings: MultimapTable<'txn, &'static str, (Option<&'static str>, u64)>,
 }
 
 impl<'txn> backend::ImportTransaction for ImportTables<'txn> {
@@ -132,6 +138,7 @@ impl<'txn> backend::ImportTransaction for ImportTables<'txn> {
     }
 }
 
+/// [`backend::ImportBatch`] for [`Redb`].
 #[derive(Debug)]
 pub struct ImportBatch<'txn, 'tbl> {
     tables: MutexGuard<'tbl, Tables<'txn>>,
@@ -147,30 +154,34 @@ impl backend::ImportBatch for ImportBatch<'_, '_> {
     }
 
     fn insert_term(&mut self, term: &Term, record_id: RecordId) -> Result<()> {
-        if let Some(headword) = term.headword() {
+        let headword = term.headword().map(|s| s.as_str());
+        let reading = term.reading().map(|s| s.as_str());
+
+        if let Some(headword) = headword {
             self.tables
                 .headwords
-                .insert(headword.as_str(), record_id.0)
+                .insert(headword, (reading, record_id.0))
                 .wrap_err("failed to insert headword")?;
         }
-        if let Some(reading) = term.reading() {
+        if let Some(reading) = reading {
             self.tables
                 .readings
-                .insert(reading.as_str(), record_id.0)
+                .insert(reading, (headword, record_id.0))
                 .wrap_err("failed to insert reading")?;
         }
         Ok(())
     }
 }
 
+/// [`backend::LookupStorage`] for [`Redb`].
 #[derive(Debug)]
 pub struct LookupStorage {
     #[debug(skip)]
     records: ReadOnlyTable<u64, &'static [u8]>,
     #[debug(skip)]
-    headwords: ReadOnlyMultimapTable<&'static str, u64>,
+    headwords: ReadOnlyMultimapTable<&'static str, (Option<&'static str>, u64)>,
     #[debug(skip)]
-    readings: ReadOnlyMultimapTable<&'static str, u64>,
+    readings: ReadOnlyMultimapTable<&'static str, (Option<&'static str>, u64)>,
     _txn: ReadTransaction,
     #[debug(skip)]
     _db: ReadOnlyDatabase,
@@ -187,24 +198,29 @@ impl backend::LookupStorage for LookupStorage {
 }
 
 impl LookupStorage {
+    fn get_ids(
+        &self,
+        term_primary: &str,
+        table: &ReadOnlyMultimapTable<&str, (Option<&str>, u64)>,
+        make_term: impl Fn(Option<&str>) -> Result<Term, NoHeadwordOrReading>,
+    ) -> impl Iterator<Item = Result<(Term, RecordId)>> {
+        match table.get(term_primary) {
+            Ok(rows) => Either::Left(rows.map(move |row| {
+                let row = row.wrap_err("failed to get single record ID")?;
+                let (term_secondary, id) = row.value();
+                let term = make_term(term_secondary)?;
+                eyre::Ok((term, RecordId(id)))
+            })),
+            Err(err) => Either::Right(Err(err).wrap_err("failed to get all record IDs for key")),
+        }
+        .into_iter()
+    }
+
     fn lookup_lemma_(
         &self,
         mut decoder: impl Decoder,
         lemma: &str,
     ) -> impl Iterator<Item = Result<RecordRow>> {
-        let get_ids = |part: TermPart, table: &ReadOnlyMultimapTable<_, _>| {
-            match table.get(lemma) {
-                Ok(values) => Either::Left(values.map(move |id| {
-                    let id = id.wrap_err("failed to get single record ID")?;
-                    eyre::Ok((part, RecordId(id.value())))
-                })),
-                Err(err) => {
-                    Either::Right(Err(err).wrap_err("failed to get all record IDs for key"))
-                }
-            }
-            .into_iter()
-        };
-
         let mut get_record = move |id: RecordId| -> Result<Record> {
             let blob = self
                 .records
@@ -219,18 +235,22 @@ impl LookupStorage {
 
         let ids = iter::empty()
             .chain(
-                get_ids(TermPart::Headword, &self.headwords)
-                    .map(|r| r.wrap_err("failed to query headwords")),
+                self.get_ids(lemma, &self.headwords, move |reading| {
+                    Term::from_parts(Some(lemma), reading)
+                })
+                .map(|r| r.wrap_err("failed to query headwords")),
             )
             .chain(
-                get_ids(TermPart::Reading, &self.readings)
-                    .map(|r| r.wrap_err("failed to query readings")),
+                self.get_ids(lemma, &self.readings, move |headword| {
+                    Term::from_parts(headword, Some(lemma))
+                })
+                .map(|r| r.wrap_err("failed to query readings")),
             );
 
         ids.map(move |id| {
-            id.and_then(|(term_part, record_id)| {
+            id.and_then(|(term, record_id)| {
                 get_record(record_id).map(|record| RecordRow {
-                    term_part,
+                    term,
                     record_id,
                     record,
                 })

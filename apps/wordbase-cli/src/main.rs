@@ -23,7 +23,7 @@ enum Command {
         #[command(subcommand)]
         command: DictCommand,
     },
-    Lookup {
+    LookupLemma {
         lemma: String,
     },
 }
@@ -68,8 +68,9 @@ async fn main() -> Result<()> {
         Command::Dict {
             command: DictCommand::Ls,
         } => {
-            info!("Dictionaries ({})", dictionaries.list().len());
-            for dict in dictionaries.list() {
+            let dictionaries = dictionaries.list().await;
+            info!("Dictionaries ({})", dictionaries.len());
+            for dict in dictionaries.iter() {
                 info!(
                     "- {}: {} v{:?}",
                     dict.state.id.0.hyphenated(),
@@ -93,7 +94,7 @@ async fn main() -> Result<()> {
             dictionaries.remove(id).await?;
             info!("Removed in {:?}", start.elapsed());
         }
-        Command::Lookup { lemma } => {
+        Command::LookupLemma { lemma } => {
             for row in dictionaries.lookup(&lemma).await? {
                 info!("{row:?}");
             }

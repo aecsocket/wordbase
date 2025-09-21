@@ -44,7 +44,7 @@ pub trait Importer: Send + Sync + Debug + 'static {
     ) -> Result<(DictionaryMeta, Box<dyn FinishImport + 'a>)>;
 }
 
-/// Continuation of [`StartImport::start`].
+/// Continuation of [`Importer::start`].
 pub trait FinishImport: Send {
     /// Continues the import process and finishes it.
     ///

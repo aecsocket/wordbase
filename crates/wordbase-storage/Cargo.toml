@@ -16,7 +16,23 @@ workspace = true
 all-features = true
 
 [features]
-uniffi = ["dep:uniffi"]
+all-backends = [
+  "backend-heed",
+  "backend-redb",
+  "backend-rocksdb",
+  "backend-libsql",
+]
+
+backend-heed    = ["wordbase-storage-backend/backend-heed"]
+backend-libsql  = ["wordbase-storage-backend/backend-libsql"]
+backend-redb    = ["wordbase-storage-backend/backend-redb"]
+backend-rocksdb = ["wordbase-storage-backend/backend-rocksdb"]
+# backend-turso   = ["wordbase-storage-backend/backend-turso"]
+
+all-codecs = ["codec-rkyv", "codec-rmp"]
+
+codec-rkyv = ["wordbase-storage-backend/codec-rkyv"]
+codec-rmp  = ["wordbase-storage-backend/codec-rmp"]
 
 [dependencies]
 wordbase-api             = { workspace = true }
@@ -30,7 +46,7 @@ eyre          = { workspace = true }
 rayon         = { workspace = true }
 serde         = { workspace = true, features = ["derive"] }
 serde_json    = { workspace = true, features = ["preserve_order"] }
-tokio         = { workspace = true, features = ["sync", "macros", "fs"] }
+tokio         = { workspace = true, features = ["sync", "macros", "fs", "rt"] }
 tracing       = { workspace = true }
 uniffi        = { workspace = true, optional = true }
 
@@ -41,8 +57,4 @@ humansize          = { workspace = true }
 tempfile           = { workspace = true }
 tokio              = { workspace = true, features = ["full"] }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-
-wordbase-storage-backend = { workspace = true, features = [
-  "all-backends",
-  "all-codecs",
-] }
+disqualified = { workspace = true }

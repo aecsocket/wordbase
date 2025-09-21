@@ -3,18 +3,19 @@
 use {
     derive_more::Debug,
     either::Either,
-    eyre::{Context, Result, eyre},
+    eyre::{Context, OptionExt, Result, eyre},
     heed::{
-        Database, DatabaseFlags, DatabaseOpenOptions, Env, EnvFlags, EnvOpenOptions, RoTxn, RwTxn,
-        WithoutTls, byteorder,
+        BytesDecode, BytesEncode, Database, DatabaseFlags, DatabaseOpenOptions, Env, EnvFlags,
+        EnvOpenOptions, RoTxn, RwTxn, WithoutTls, byteorder,
         types::{Bytes, Str},
     },
     std::{
+        borrow::Cow,
         iter,
         path::Path,
         sync::{Mutex, MutexGuard},
     },
-    wordbase_api::{Record, RecordId, Term, TermPart},
+    wordbase_api::{NoHeadwordOrReading, Record, RecordId, Term},
     wordbase_storage_api::{
         backend::{self, RecordRow},
         codec::Decoder,
@@ -45,14 +46,51 @@ fn records_db_options<'env: 'name, 'name, T>(
 fn term_db_options<'env: 'name, 'name, T>(
     env: &'env Env<T>,
     name: &'name str,
-) -> DatabaseOpenOptions<'env, 'name, T, Str, U64LE> {
+) -> DatabaseOpenOptions<'env, 'name, T, Str, TermEntry<'static>> {
     env.database_options()
         .name(name)
         .flags(DatabaseFlags::DUP_SORT)
-        .types::<Str, U64LE>()
+        .types::<Str, TermEntry<'static>>()
 }
 
-/// Uses the [`heed`] wrapper around [LMDB](https://en.wikipedia.org/wiki/Lightning_Memory-Mapped_Database).
+#[derive(Debug)]
+struct TermEntry<'a> {
+    record_id: RecordId,
+    secondary: &'a str,
+}
+
+impl<'a> BytesEncode<'a> for TermEntry<'a> {
+    type EItem = Self;
+
+    fn bytes_encode(item: &'a Self::EItem) -> Result<Cow<'a, [u8]>, heed::BoxedError> {
+        const ID_SIZE: usize = size_of::<u64>();
+
+        let mut buf = vec![0; ID_SIZE + item.secondary.len()];
+        buf[..ID_SIZE].copy_from_slice(&item.record_id.0.to_le_bytes());
+        buf[ID_SIZE..].copy_from_slice(item.secondary.as_bytes());
+
+        Ok(Cow::Owned(buf))
+    }
+}
+
+impl<'a> BytesDecode<'a> for TermEntry<'a> {
+    type DItem = Self;
+
+    fn bytes_decode(bytes: &'a [u8]) -> Result<Self::DItem, heed::BoxedError> {
+        let (id_bytes, rest) = bytes
+            .split_first_chunk::<{ size_of::<u64>() }>()
+            .ok_or_eyre("missing record ID")?;
+        let record_id = RecordId(u64::from_le_bytes(*id_bytes));
+        let secondary = str::from_utf8(rest).wrap_err("invalid term secondary")?;
+        Ok(Self {
+            record_id,
+            secondary,
+        })
+    }
+}
+
+/// [`backend::Backend`] implementation which uses the [`heed`] wrapper around
+/// [LMDB](https://en.wikipedia.org/wiki/Lightning_Memory-Mapped_Database).
 #[derive(Debug, Clone)]
 pub struct Heed;
 
@@ -100,6 +138,7 @@ impl backend::Backend for Heed {
     }
 }
 
+/// [`backend::ImportStorage`] for [`Heed`].
 #[derive(Debug)]
 pub struct ImportStorage {
     env: Env,
@@ -131,11 +170,12 @@ impl backend::ImportStorage for ImportStorage {
     }
 }
 
+/// [`backend::ImportTransaction`] for [`Heed`].
 #[derive(Debug)]
 pub struct ImportTransaction<'stg> {
     records: Database<U64LE, Bytes>,
-    headwords: Database<Str, U64LE>,
-    readings: Database<Str, U64LE>,
+    headwords: Database<Str, TermEntry<'static>>,
+    readings: Database<Str, TermEntry<'static>>,
     #[debug(skip)]
     txn: Mutex<RwTxn<'stg>>,
 }
@@ -161,13 +201,14 @@ impl<'stg> backend::ImportTransaction for ImportTransaction<'stg> {
     }
 }
 
+/// [`backend::ImportBatch`] for [`Heed`].
 #[derive(Debug)]
 pub struct ImportBatch<'stg, 'txn> {
     #[debug(skip)]
     txn: MutexGuard<'txn, RwTxn<'stg>>,
     records: &'txn Database<U64LE, Bytes>,
-    headwords: &'txn Database<Str, U64LE>,
-    readings: &'txn Database<Str, U64LE>,
+    headwords: &'txn Database<Str, TermEntry<'static>>,
+    readings: &'txn Database<Str, TermEntry<'static>>,
 }
 
 impl backend::ImportBatch for ImportBatch<'_, '_> {
@@ -177,25 +218,43 @@ impl backend::ImportBatch for ImportBatch<'_, '_> {
     }
 
     fn insert_term(&mut self, term: &Term, record_id: RecordId) -> Result<()> {
-        if let Some(headword) = term.headword() {
+        let headword = term.headword().map(|s| s.as_str());
+        let reading = term.reading().map(|s| s.as_str());
+
+        if let Some(headword) = headword {
             self.headwords
-                .put(&mut self.txn, headword.as_str(), &record_id.0)
+                .put(
+                    &mut self.txn,
+                    headword,
+                    &TermEntry {
+                        record_id,
+                        secondary: reading.unwrap_or(""),
+                    },
+                )
                 .wrap_err("failed to insert headword")?;
         }
-        if let Some(reading) = term.reading() {
+        if let Some(reading) = reading {
             self.readings
-                .put(&mut self.txn, reading.as_str(), &record_id.0)
+                .put(
+                    &mut self.txn,
+                    reading,
+                    &TermEntry {
+                        record_id,
+                        secondary: headword.unwrap_or(""),
+                    },
+                )
                 .wrap_err("failed to insert reading")?;
         }
         Ok(())
     }
 }
 
+/// [`backend::LookupStorage`] for [`Heed`].
 #[derive(Debug)]
 pub struct LookupStorage {
     records: Database<U64LE, Bytes>,
-    headwords: Database<Str, U64LE>,
-    readings: Database<Str, U64LE>,
+    headwords: Database<Str, TermEntry<'static>>,
+    readings: Database<Str, TermEntry<'static>>,
     #[debug(skip)]
     txn: RoTxn<'static, WithoutTls>,
 }
@@ -211,26 +270,31 @@ impl backend::LookupStorage for LookupStorage {
 }
 
 impl LookupStorage {
+    fn get_ids(
+        &self,
+        primary: &str,
+        db: &Database<Str, TermEntry<'static>>,
+        make_term: impl Fn(&str) -> Result<Term, NoHeadwordOrReading>,
+    ) -> impl Iterator<Item = Result<(Term, RecordId)>> {
+        match db.get_duplicates(&self.txn, primary) {
+            Ok(Some(rows)) => Either::Left(rows.map(move |row| {
+                let (_, entry) = row.wrap_err("failed to get single record ID")?;
+                let term = make_term(entry.secondary)?;
+                eyre::Ok((term, entry.record_id))
+            })),
+            Ok(None) => Either::Right(None),
+            Err(err) => Either::Right(Some(
+                Err(err).wrap_err("failed to get all record IDs for key"),
+            )),
+        }
+        .into_iter()
+    }
+
     fn lookup_lemma_(
         &self,
         mut decoder: impl Decoder,
         lemma: &str,
     ) -> impl Iterator<Item = Result<RecordRow>> {
-        let get_ids = |part: TermPart, db: &Database<Str, U64LE>| {
-            match db.get_duplicates(&self.txn, lemma) {
-                Ok(Some(id_results)) => Either::Left(id_results.map(move |result| {
-                    let (_, record_id) =
-                        result.wrap_err_with(|| eyre!("failed to get single record ID"))?;
-                    eyre::Ok((part, RecordId(record_id)))
-                })),
-                Ok(None) => Either::Right(None),
-                Err(err) => Either::Right(Some(
-                    Err(err).wrap_err("failed to get all record IDs for key"),
-                )),
-            }
-            .into_iter()
-        };
-
         let mut get_record = move |id: RecordId| -> Result<Record> {
             let blob = self
                 .records
@@ -245,18 +309,22 @@ impl LookupStorage {
 
         let ids = iter::empty()
             .chain(
-                get_ids(TermPart::Headword, &self.headwords)
-                    .map(|r| r.wrap_err("failed to query headwords")),
+                self.get_ids(lemma, &self.headwords, move |reading| {
+                    Term::from_full(lemma, reading)
+                })
+                .map(|r| r.wrap_err("failed to query headwords")),
             )
             .chain(
-                get_ids(TermPart::Reading, &self.readings)
-                    .map(|r| r.wrap_err("failed to query readings")),
+                self.get_ids(lemma, &self.readings, move |headword| {
+                    Term::from_full(headword, lemma)
+                })
+                .map(|r| r.wrap_err("failed to query readings")),
             );
 
         ids.map(move |id| {
-            id.and_then(|(term_part, record_id)| {
+            id.and_then(|(term, record_id)| {
                 get_record(record_id).map(|record| RecordRow {
-                    term_part,
+                    term,
                     record_id,
                     record,
                 })

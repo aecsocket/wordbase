@@ -2,12 +2,12 @@
 
 use {
     derive_more::Debug,
-    eyre::{Context, ContextCompat, Result, bail, eyre},
+    eyre::{Context, ContextCompat, Result, eyre},
     futures::executor::block_on,
     libsql::{Builder, Connection, Statement, Transaction, TransactionBehavior},
     std::path::Path,
     tokio::sync::{Mutex, MutexGuard},
-    wordbase_api::{RecordId, Term, TermPart},
+    wordbase_api::{RecordId, Term},
     wordbase_storage_api::{
         backend::{self, RecordRow},
         codec::Decoder,
@@ -22,47 +22,41 @@ CREATE TABLE record (
     data BLOB    NOT NULL
 );
 
-CREATE TABLE headword (
-    text   TEXT    NOT NULL,
-    record INTEGER NOT NULL REFERENCES record(id)
+CREATE TABLE term (
+    headword TEXT,
+    reading  TEXT,
+    record   INTEGER NOT NULL REFERENCES record(id)
 );
 
-CREATE TABLE reading (
-    text   TEXT    NOT NULL,
-    record INTEGER NOT NULL REFERENCES record(id)
-);
-
-CREATE INDEX headword_text ON headword(text);
-CREATE INDEX reading_text ON reading(text);
+CREATE INDEX term_headword ON term(headword);
+CREATE INDEX term_reading ON term(reading);
 ";
 
 const INSERT_RECORD: &str = "
 INSERT INTO record (id, data)
 VALUES (?1, ?2)";
 
-const INSERT_HEADWORD: &str = "
-INSERT INTO headword (text, record)
-VALUES (?1, ?2)";
+const INSERT_TERM: &str = "
+INSERT INTO term (headword, reading, record)
+VALUES (?1, ?2, ?3)";
 
-const INSERT_READING: &str = "
-INSERT INTO reading (text, record)
-VALUES (?1, ?2)";
-
-// don't use `WHERE headword.text = ? OR reading.text = ?`
+// don't use `WHERE term.headword = ? OR term.reading = ?`
 // because that will not use our indexes
 const GET_RECORDS: &str = "
-SELECT record.id, record.data, 0 as part
+SELECT term.headword, term.reading, record.id, record.data
 FROM record
-JOIN headword INDEXED BY headword_text ON record.id = headword.record
-WHERE headword.text = ?
+JOIN term INDEXED BY term_headword ON term.record = record.id
+WHERE term.headword = ?1
 
 UNION ALL
 
-SELECT record.id, record.data, 1 as part
+SELECT term.headword, term.reading, record.id, record.data
 FROM record
-JOIN reading INDEXED BY reading_text ON record.id = reading.record
-WHERE reading.text = ?";
+JOIN term INDEXED BY term_reading ON term.record = record.id
+WHERE term.reading = ?1";
 
+/// [`backend::Backend`] implementation which uses the [`libsql`] wrapper around
+/// [SQLite](https://sqlite.org/index.html).
 #[derive(Debug)]
 pub struct Libsql;
 
@@ -83,14 +77,10 @@ impl backend::Backend for Libsql {
                         .prepare(INSERT_RECORD)
                         .await
                         .wrap_err("failed to prepare insert record statement")?,
-                    insert_headword: conn
-                        .prepare(INSERT_HEADWORD)
+                    insert_term: conn
+                        .prepare(INSERT_TERM)
                         .await
-                        .wrap_err("failed to prepare insert headword statement")?,
-                    insert_reading: conn
-                        .prepare(INSERT_READING)
-                        .await
-                        .wrap_err("failed to prepare insert reading statement")?,
+                        .wrap_err("failed to prepare insert term statement")?,
                 }),
                 conn,
             })
@@ -122,6 +112,7 @@ async fn connect(data_dir: &Path) -> Result<Connection> {
     db.connect().wrap_err("failed to connect to database")
 }
 
+/// [`backend::ImportStorage`] for [`Libsql`].
 #[derive(Debug)]
 pub struct ImportStorage {
     statements: Mutex<Statements>,
@@ -133,9 +124,7 @@ struct Statements {
     #[debug(skip)]
     insert_record: Statement,
     #[debug(skip)]
-    insert_headword: Statement,
-    #[debug(skip)]
-    insert_reading: Statement,
+    insert_term: Statement,
 }
 
 impl backend::ImportStorage for ImportStorage {
@@ -157,6 +146,7 @@ impl backend::ImportStorage for ImportStorage {
     }
 }
 
+/// [`backend::ImportTransaction`] for [`Libsql`].
 #[derive(Debug)]
 pub struct ImportTransaction<'stg> {
     #[debug(skip)]
@@ -182,6 +172,7 @@ impl<'stg> backend::ImportTransaction for ImportTransaction<'stg> {
     }
 }
 
+/// [`backend::ImportBatch`] for [`Libsql`].
 #[derive(Debug)]
 pub struct ImportBatch<'stg> {
     statements: MutexGuard<'stg, Statements>,
@@ -200,33 +191,20 @@ impl backend::ImportBatch for ImportBatch<'_> {
     }
 
     fn insert_term(&mut self, term: &Term, record_id: RecordId) -> Result<()> {
-        let insert_headword = async {
-            if let Some(headword) = term.headword() {
-                self.statements
-                    .insert_headword
-                    .execute((headword.as_str(), record_id.0))
-                    .await
-                    .wrap_err("failed to insert headword")?;
-                self.statements.insert_headword.reset();
-            }
+        block_on(async {
+            let headword = term.headword().map(|s| s.as_str());
+            let reading = term.reading().map(|s| s.as_str());
+            self.statements
+                .insert_term
+                .execute((headword, reading, record_id.0))
+                .await?;
+            self.statements.insert_term.reset();
             eyre::Ok(())
-        };
-        let insert_reading = async {
-            if let Some(reading) = term.reading() {
-                self.statements
-                    .insert_reading
-                    .execute((reading.as_str(), record_id.0))
-                    .await
-                    .wrap_err("failed to insert reading")?;
-                self.statements.insert_reading.reset();
-            }
-            eyre::Ok(())
-        };
-        block_on(async move { tokio::try_join!(insert_headword, insert_reading) })?;
-        Ok(())
+        })
     }
 }
 
+/// [`backend::LookupStorage`] for [`Libsql`].
 #[derive(Debug)]
 pub struct LookupStorage {
     #[debug(skip)]
@@ -250,10 +228,22 @@ impl backend::LookupStorage for LookupStorage {
                 .wrap_err("failed to get records")?;
 
             while let Some(row) = rows.next().await.wrap_err("failed to get row")? {
-                let record_id = RecordId(row.get::<u64>(0).wrap_err("failed to get column `id`")?);
+                let headword = row
+                    .get::<Option<String>>(0)
+                    .wrap_err("failed to get column `headword`")?;
+                let reading = row
+                    .get::<Option<String>>(1)
+                    .wrap_err("failed to get column `reading`")?;
+                let record_id = row
+                    .get::<u64>(2)
+                    .map(RecordId)
+                    .wrap_err("failed to get column `record_id`")?;
+                let record_blob = row.get_value(3).wrap_err("failed to get column `data`")?;
+
+                let term = Term::from_parts(headword, reading)
+                    .wrap_err_with(|| eyre!("failed to get record for {record_id:?}"))?;
 
                 (|| {
-                    let record_blob = row.get_value(1).wrap_err("failed to get column `data`")?;
                     let record_blob = record_blob
                         .as_blob()
                         .wrap_err("column `data` is not a blob")?;
@@ -261,21 +251,14 @@ impl backend::LookupStorage for LookupStorage {
                         .decode(record_blob)
                         .wrap_err("failed to decode record")?;
 
-                    let part = row.get::<u32>(2).wrap_err("failed to get column `part`")?;
-                    let term_part = match part {
-                        0 => TermPart::Headword,
-                        1 => TermPart::Reading,
-                        _ => bail!("invalid term part `{part}`"),
-                    };
-
                     records.push(RecordRow {
-                        term_part,
+                        term: term.clone(),
                         record_id,
                         record,
                     });
                     eyre::Ok(())
                 })()
-                .wrap_err_with(|| eyre!("failed to get {record_id:?}"))?;
+                .wrap_err_with(|| eyre!("failed to get record for {term} ({record_id:?})"))?;
             }
 
             eyre::Ok(records)

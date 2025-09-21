@@ -2,9 +2,11 @@
 
 use {
     ascii_table::AsciiTable,
+    disqualified::ShortName,
     eyre::{Context, Result, eyre},
     humansize::{DECIMAL, format_size},
     std::{
+        any::type_name,
         io,
         path::{Path, PathBuf},
         time::Instant,
@@ -48,23 +50,33 @@ async fn main() -> Result<()> {
         results: &mut results,
     };
 
-    // bench_db::<backend::Heed, codec::Rmp>(&mut cx, "heed+rmp").await?;
-    // bench_db::<backend::Heed, codec::Rkyv>(&mut cx, "heed+rkyv").await?;
+    #[cfg(all(feature = "backend-heed", feature = "codec-rmp"))]
+    bench_db::<backend::Heed, codec::Rmp>(&mut cx).await?;
+    #[cfg(all(feature = "backend-heed", feature = "codec-rkyv"))]
+    bench_db::<backend::Heed, codec::Rkyv>(&mut cx).await?;
 
-    // bench_db::<backend::Libsql, codec::Rmp>(&mut cx, "libsql+rmp").await?;
-    // bench_db::<backend::Libsql, codec::Rkyv>(&mut cx, "libsql+rkyv").await?;
+    #[cfg(all(feature = "backend-libsql", feature = "codec-rmp"))]
+    bench_db::<backend::Libsql, codec::Rmp>(&mut cx).await?;
+    #[cfg(all(feature = "backend-libsql", feature = "codec-rkyv"))]
+    bench_db::<backend::Libsql, codec::Rkyv>(&mut cx).await?;
 
-    // bench_db::<backend::Redb, codec::Rmp>(&mut cx, "redb+rmp").await?;
-    // bench_db::<backend::Redb, codec::Rkyv>(&mut cx, "redb+rkyv").await?;
+    #[cfg(all(feature = "backend-redb", feature = "codec-rmp"))]
+    bench_db::<backend::Redb, codec::Rmp>(&mut cx).await?;
+    #[cfg(all(feature = "backend-redb", feature = "codec-rkyv"))]
+    bench_db::<backend::Redb, codec::Rkyv>(&mut cx).await?;
 
-    // bench_db::<backend::Rocksdb, codec::Rmp>(&mut cx, "rocksdb+rmp").await?;
-    bench_db::<backend::Rocksdb, codec::Rkyv>(&mut cx, "rocksdb+rkyv").await?;
+    #[cfg(all(feature = "backend-rocksdb", feature = "codec-rmp"))]
+    bench_db::<backend::Rocksdb, codec::Rmp>(&mut cx).await?;
+    #[cfg(all(feature = "backend-rocksdb", feature = "codec-rkyv"))]
+    bench_db::<backend::Rocksdb, codec::Rkyv>(&mut cx).await?;
 
-    // bench_db::<backend::Turso, codec::Rmp>(&mut cx, "turso+rmp").await?;
-    // bench_db::<backend::Turso, codec::Rkyv>(&mut cx, "turso+rkyv").await?;
+    #[cfg(all(feature = "backend-turso", feature = "codec-rmp"))]
+    bench_db::<backend::Turso, codec::Rmp>(&mut cx).await?;
+    #[cfg(all(feature = "backend-turso", feature = "codec-rkyv"))]
+    bench_db::<backend::Turso, codec::Rkyv>(&mut cx).await?;
 
     let mut table = AsciiTable::default();
-    table.column(0).set_header("DB type");
+    table.column(0).set_header("Storage");
     table.column(1).set_header("Size");
     table.column(2).set_header("Import");
     table.column(3).set_header("Lookup");
@@ -83,12 +95,13 @@ struct BenchContext<'a> {
 
 async fn bench_db<B: backend::Backend, C: codec::Codec + Default>(
     cx: &mut BenchContext<'_>,
-    name: &str,
 ) -> Result<()> {
+    let name = ShortName::of::<(B, C)>();
+
     async move {
         const LOOKUP_ITERS: usize = 10_000;
 
-        let data_dir = cx.temp_dir.path().join(name);
+        let data_dir = cx.temp_dir.path().join(name.0);
         fs::create_dir_all(&data_dir)
             .await
             .wrap_err_with(|| eyre!("failed to create directory {data_dir:?}"))?;
@@ -137,7 +150,7 @@ async fn bench_db<B: backend::Backend, C: codec::Codec + Default>(
         );
 
         cx.results.push(vec![
-            name.into(),
+            name.to_string(),
             storage_size,
             import_time,
             lookup_time,
@@ -149,7 +162,7 @@ async fn bench_db<B: backend::Backend, C: codec::Codec + Default>(
     .wrap_err_with(|| eyre!("failed to benchmark `{name}`"))
 }
 
-fn get_size(path: impl AsRef<Path>) -> std::io::Result<u64> {
+fn get_size(path: impl AsRef<Path>) -> io::Result<u64> {
     let metadata = path.as_ref().symlink_metadata()?;
     if metadata.is_dir() {
         Ok(std::fs::read_dir(path)?

@@ -8,7 +8,7 @@ use {
     crate::codec::Decoder,
     eyre::Result,
     std::path::Path,
-    wordbase_api::{Record, RecordId, Term, TermPart},
+    wordbase_api::{Record, RecordId, Term},
 };
 
 /// Allows inserting [`Record`]s into a persistent storage on disk, and opening
@@ -75,8 +75,8 @@ pub trait LookupStorage: Send {
 /// [`Record`] and its metadata returned by a [`LookupStorage::lookup`].
 #[derive(Debug)]
 pub struct RecordRow {
-    /// Did this record come from a term's headword or its reading?
-    pub term_part: TermPart,
+    /// Term which points to this record.
+    pub term: Term,
     /// Record ID.
     pub record_id: RecordId,
     /// Record data.

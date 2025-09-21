@@ -8,7 +8,7 @@ use {
         ColumnFamily, DB, DBPinnableSlice, Env, Options, WaitForCompactOptions, WriteOptions,
     },
     std::{iter, path::Path, sync::LazyLock},
-    wordbase_api::{Record, RecordId, Term, TermPart},
+    wordbase_api::{Record, RecordId, Term},
     wordbase_storage_api::{
         backend::{self, RecordRow},
         codec::Decoder,
@@ -19,6 +19,8 @@ const RECORDS: &str = "records";
 const HEADWORDS: &str = "headwords";
 const READINGS: &str = "readings";
 
+/// [`backend::Backend`] implementation which uses the [`rocksdb`] wrapper
+/// around [RocksDB](https://rocksdb.org/).
 #[derive(Debug)]
 pub struct Rocksdb;
 
@@ -87,6 +89,7 @@ fn term_cf_options(env: &Env) -> Options {
     options
 }
 
+/// [`backend::ImportStorage`] for [`Rocksdb`].
 #[derive(Debug)]
 pub struct ImportStorage {
     db: DB,
@@ -103,6 +106,7 @@ impl backend::ImportStorage for ImportStorage {
     }
 }
 
+/// [`backend::ImportTransaction`] for [`Rocksdb`].
 #[derive(Debug)]
 pub struct ImportTransaction<'stg> {
     db: &'stg DB,
@@ -146,6 +150,7 @@ impl<'stg> backend::ImportTransaction for ImportTransaction<'stg> {
     }
 }
 
+/// [`backend::ImportBatch`] for [`Rocksdb`].
 #[derive(Debug)]
 pub struct ImportBatch<'stg> {
     #[debug(skip)]
@@ -203,6 +208,7 @@ fn merge(db: &DB, cf: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// [`backend::LookupStorage`] for [`Rocksdb`].
 #[derive(Debug)]
 pub struct LookupStorage {
     db: DB,
