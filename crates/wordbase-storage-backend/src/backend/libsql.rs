@@ -14,6 +14,11 @@ use {
     },
 };
 
+/// [`backend::Backend`] implementation which uses the [`libsql`] wrapper around
+/// [SQLite](https://sqlite.org/index.html).
+#[derive(Debug)]
+pub struct Libsql;
+
 const DATABASE_PATH: &str = "database.db";
 
 const SETUP: &str = "
@@ -54,11 +59,6 @@ SELECT term.headword, term.reading, record.id, record.data
 FROM record
 JOIN term INDEXED BY term_reading ON term.record = record.id
 WHERE term.reading = ?1";
-
-/// [`backend::Backend`] implementation which uses the [`libsql`] wrapper around
-/// [SQLite](https://sqlite.org/index.html).
-#[derive(Debug)]
-pub struct Libsql;
 
 impl backend::Backend for Libsql {
     type Lookups = LookupStorage;

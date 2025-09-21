@@ -6,7 +6,6 @@ use {
     eyre::{Context, Result, eyre},
     humansize::{DECIMAL, format_size},
     std::{
-        any::type_name,
         io,
         path::{Path, PathBuf},
         time::Instant,
@@ -141,20 +140,23 @@ async fn bench_db<B: backend::Backend, C: codec::Codec + Default>(
         let lookup_time = start.elapsed();
         let lookup_time = format!("{lookup_time:.2?}");
 
-        let records = lookups
+        let rows = lookups
             .lookup(cx.lemma)
             .wrap_err("failed to fetch records")?;
         info!(
             "Looked up {LOOKUP_ITERS} times in {lookup_time}, with {} records",
-            records.len()
+            rows.len()
         );
+        for row in &rows {
+            info!("- {} -> {:?}", row.term, row.record_id);
+        }
 
         cx.results.push(vec![
             name.to_string(),
             storage_size,
             import_time,
             lookup_time,
-            records.len().to_string(),
+            rows.len().to_string(),
         ]);
         eyre::Ok(())
     }

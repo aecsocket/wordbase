@@ -22,73 +22,6 @@ use {
     },
 };
 
-type U64LE = heed::types::U64<byteorder::LE>;
-
-const RECORDS: &str = "records";
-const HEADWORDS: &str = "headwords";
-const READINGS: &str = "readings";
-const NUM_DBS: u32 = 3;
-const MAP_SIZE: usize = 128 * 1024 * 1024 * 1024; // TODO is this the max db size?
-
-fn env_open_options() -> EnvOpenOptions {
-    let mut opts = heed::EnvOpenOptions::new();
-    opts.map_size(MAP_SIZE);
-    opts.max_dbs(NUM_DBS);
-    opts
-}
-
-fn records_db_options<'env: 'name, 'name, T>(
-    env: &'env Env<T>,
-) -> DatabaseOpenOptions<'env, 'name, T, U64LE, Bytes> {
-    env.database_options().name(RECORDS).types::<U64LE, Bytes>()
-}
-
-fn term_db_options<'env: 'name, 'name, T>(
-    env: &'env Env<T>,
-    name: &'name str,
-) -> DatabaseOpenOptions<'env, 'name, T, Str, TermEntry<'static>> {
-    env.database_options()
-        .name(name)
-        .flags(DatabaseFlags::DUP_SORT)
-        .types::<Str, TermEntry<'static>>()
-}
-
-#[derive(Debug)]
-struct TermEntry<'a> {
-    record_id: RecordId,
-    secondary: &'a str,
-}
-
-impl<'a> BytesEncode<'a> for TermEntry<'a> {
-    type EItem = Self;
-
-    fn bytes_encode(item: &'a Self::EItem) -> Result<Cow<'a, [u8]>, heed::BoxedError> {
-        const ID_SIZE: usize = size_of::<u64>();
-
-        let mut buf = vec![0; ID_SIZE + item.secondary.len()];
-        buf[..ID_SIZE].copy_from_slice(&item.record_id.0.to_le_bytes());
-        buf[ID_SIZE..].copy_from_slice(item.secondary.as_bytes());
-
-        Ok(Cow::Owned(buf))
-    }
-}
-
-impl<'a> BytesDecode<'a> for TermEntry<'a> {
-    type DItem = Self;
-
-    fn bytes_decode(bytes: &'a [u8]) -> Result<Self::DItem, heed::BoxedError> {
-        let (id_bytes, rest) = bytes
-            .split_first_chunk::<{ size_of::<u64>() }>()
-            .ok_or_eyre("missing record ID")?;
-        let record_id = RecordId(u64::from_le_bytes(*id_bytes));
-        let secondary = str::from_utf8(rest).wrap_err("invalid term secondary")?;
-        Ok(Self {
-            record_id,
-            secondary,
-        })
-    }
-}
-
 /// [`backend::Backend`] implementation which uses the [`heed`] wrapper around
 /// [LMDB](https://en.wikipedia.org/wiki/Lightning_Memory-Mapped_Database).
 #[derive(Debug, Clone)]
@@ -136,6 +69,37 @@ impl backend::Backend for Heed {
             txn,
         })
     }
+}
+
+const RECORDS: &str = "records";
+const HEADWORDS: &str = "headwords";
+const READINGS: &str = "readings";
+const NUM_DBS: u32 = 3;
+const MAP_SIZE: usize = 128 * 1024 * 1024 * 1024; // TODO is this the max db size?
+
+type U64LE = heed::types::U64<byteorder::LE>;
+
+fn env_open_options() -> EnvOpenOptions {
+    let mut opts = heed::EnvOpenOptions::new();
+    opts.map_size(MAP_SIZE);
+    opts.max_dbs(NUM_DBS);
+    opts
+}
+
+fn records_db_options<'env: 'name, 'name, T>(
+    env: &'env Env<T>,
+) -> DatabaseOpenOptions<'env, 'name, T, U64LE, Bytes> {
+    env.database_options().name(RECORDS).types::<U64LE, Bytes>()
+}
+
+fn term_db_options<'env: 'name, 'name, T>(
+    env: &'env Env<T>,
+    name: &'name str,
+) -> DatabaseOpenOptions<'env, 'name, T, Str, TermEntry<'static>> {
+    env.database_options()
+        .name(name)
+        .flags(DatabaseFlags::DUP_SORT)
+        .types::<Str, TermEntry<'static>>()
 }
 
 /// [`backend::ImportStorage`] for [`Heed`].
@@ -246,6 +210,42 @@ impl backend::ImportBatch for ImportBatch<'_, '_> {
                 .wrap_err("failed to insert reading")?;
         }
         Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct TermEntry<'a> {
+    record_id: RecordId,
+    secondary: &'a str,
+}
+
+const RECORD_ID_SIZE: usize = size_of::<RecordId>();
+
+impl<'a> BytesEncode<'a> for TermEntry<'a> {
+    type EItem = Self;
+
+    fn bytes_encode(item: &'a Self::EItem) -> Result<Cow<'a, [u8]>, heed::BoxedError> {
+        let mut buf = vec![0; RECORD_ID_SIZE + item.secondary.len()];
+        buf[..RECORD_ID_SIZE].copy_from_slice(&item.record_id.0.to_le_bytes());
+        buf[RECORD_ID_SIZE..].copy_from_slice(item.secondary.as_bytes());
+
+        Ok(Cow::Owned(buf))
+    }
+}
+
+impl<'a> BytesDecode<'a> for TermEntry<'a> {
+    type DItem = Self;
+
+    fn bytes_decode(bytes: &'a [u8]) -> Result<Self::DItem, heed::BoxedError> {
+        let (id_bytes, rest) = bytes
+            .split_first_chunk::<RECORD_ID_SIZE>()
+            .ok_or_eyre("missing record ID")?;
+        let record_id = RecordId(u64::from_le_bytes(*id_bytes));
+        let secondary = str::from_utf8(rest).wrap_err("invalid term secondary")?;
+        Ok(Self {
+            record_id,
+            secondary,
+        })
     }
 }
 

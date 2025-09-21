@@ -199,7 +199,6 @@ impl backend::LookupStorage for LookupStorage {
 
 impl LookupStorage {
     fn get_ids(
-        &self,
         term_primary: &str,
         table: &ReadOnlyMultimapTable<&str, (Option<&str>, u64)>,
         make_term: impl Fn(Option<&str>) -> Result<Term, NoHeadwordOrReading>,
@@ -235,13 +234,13 @@ impl LookupStorage {
 
         let ids = iter::empty()
             .chain(
-                self.get_ids(lemma, &self.headwords, move |reading| {
+                Self::get_ids(lemma, &self.headwords, move |reading| {
                     Term::from_parts(Some(lemma), reading)
                 })
                 .map(|r| r.wrap_err("failed to query headwords")),
             )
             .chain(
-                self.get_ids(lemma, &self.readings, move |headword| {
+                Self::get_ids(lemma, &self.readings, move |headword| {
                     Term::from_parts(headword, Some(lemma))
                 })
                 .map(|r| r.wrap_err("failed to query readings")),

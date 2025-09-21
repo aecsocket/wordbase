@@ -49,7 +49,7 @@ rmp-serde   = { workspace = true, optional = true }
 rocksdb     = { workspace = true, optional = true }
 tokio       = { workspace = true, features = ["sync", "macros", "fs"] }
 tracing     = { workspace = true }
-turso       = { workspace = true, optional = true }
+# turso       = { workspace = true, optional = true }
 
 rkyv = { workspace = true, optional = true, features = [
   # this isn't ideal, but rocksdb doesn't let us enforce alignment guarantees

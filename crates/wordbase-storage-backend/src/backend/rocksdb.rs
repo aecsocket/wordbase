@@ -2,27 +2,27 @@
 
 use {
     derive_more::Debug,
-    either::Either,
-    eyre::{Context, Result, eyre},
+    eyre::{Context, OptionExt, Result, eyre},
     rocksdb::{
-        ColumnFamily, DB, DBPinnableSlice, Env, Options, WaitForCompactOptions, WriteOptions,
+        ColumnFamily, DB, DBPinnableSlice, Env, MergeOperands, Options, WaitForCompactOptions,
+        WriteOptions,
     },
     std::{iter, path::Path, sync::LazyLock},
-    wordbase_api::{Record, RecordId, Term},
+    wordbase_api::{RecordId, Term},
     wordbase_storage_api::{
         backend::{self, RecordRow},
         codec::Decoder,
     },
 };
 
-const RECORDS: &str = "records";
-const HEADWORDS: &str = "headwords";
-const READINGS: &str = "readings";
-
 /// [`backend::Backend`] implementation which uses the [`rocksdb`] wrapper
 /// around [RocksDB](https://rocksdb.org/).
 #[derive(Debug)]
 pub struct Rocksdb;
+
+const RECORDS: &str = "records";
+const HEADWORDS: &str = "headwords";
+const READINGS: &str = "readings";
 
 impl backend::Backend for Rocksdb {
     type Lookups = LookupStorage;
@@ -76,16 +76,7 @@ fn db_open_options(env: &Env) -> Options {
 
 fn term_cf_options(env: &Env) -> Options {
     let mut options = db_open_options(env);
-    options.set_merge_operator_associative("concat", |_new_key, existing_val, operands| {
-        let mut result = Vec::with_capacity(operands.len());
-        if let Some(val) = existing_val {
-            result.extend_from_slice(val);
-        }
-        for op in operands {
-            result.extend_from_slice(op);
-        }
-        Some(result)
-    });
+    options.set_merge_operator_associative("concat_terms", concat_terms);
     options
 }
 
@@ -170,21 +161,32 @@ impl backend::ImportBatch for ImportBatch<'_> {
     }
 
     fn insert_term(&mut self, term: &Term, record_id: RecordId) -> Result<()> {
-        if let Some(headword) = term.headword() {
+        let headword = term.headword().map(|s| s.as_str());
+        let reading = term.reading().map(|s| s.as_str());
+
+        if let Some(headword) = headword {
+            let entry = TermEntry {
+                record_id,
+                secondary: reading.unwrap_or(""),
+            };
             merge(
                 self.db,
                 self.headwords,
                 headword.as_bytes(),
-                &id_to_bytes(record_id),
+                &entry.encode().wrap_err("failed to encode headword")?,
             )
             .wrap_err("failed to insert headword")?;
         }
         if let Some(reading) = term.reading() {
+            let entry = TermEntry {
+                record_id,
+                secondary: headword.unwrap_or(""),
+            };
             merge(
                 self.db,
                 self.readings,
                 reading.as_bytes(),
-                &id_to_bytes(record_id),
+                &entry.encode().wrap_err("failed to encode reading")?,
             )
             .wrap_err("failed to insert reading")?;
         }
@@ -208,6 +210,90 @@ fn merge(db: &DB, cf: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
     Ok(())
 }
 
+#[expect(clippy::unnecessary_wraps, reason = "merge function signature")]
+fn concat_terms(
+    _new_key: &[u8],
+    existing: Option<&[u8]>,
+    operands: &MergeOperands,
+) -> Option<Vec<u8>> {
+    let mut buf = existing.map(<[_]>::to_vec).unwrap_or_default();
+    for op in operands {
+        buf.extend_from_slice(op);
+    }
+    Some(buf)
+}
+
+// Due to the way RocksDB works, when you insert a duplicate value for an
+// existing key, the DB will merge the existing byte slice and the new byte
+// slice you provide. We define the merge function ourselves, but we're only
+// dealing with byte slices at that level.
+//
+// To make merges fast, we encode multiple `TermEntry::encode`s as a single
+// contiguous byte slice with no separators. Therefore, to tell where one entry
+// stops and the next starts, we keep track of the length of `secondary`.
+#[derive(Debug, PartialEq, Eq)]
+struct TermEntry<'a> {
+    record_id: RecordId,
+    secondary: &'a str,
+}
+
+// TODO: clean this dogshit up. octs 2.0 rewrite?
+impl<'buf> TermEntry<'buf> {
+    fn encode(&self) -> Result<Vec<u8>> {
+        let i_secondary_len = size_of::<RecordId>();
+        let i_secondary = i_secondary_len + size_of::<u32>();
+        let len = i_secondary + self.secondary.len();
+        let mut dst = vec![0; len];
+
+        dst[..i_secondary_len].copy_from_slice(&id_to_bytes(self.record_id));
+
+        dst[i_secondary_len..i_secondary].copy_from_slice(
+            &u32::try_from(self.secondary.len())
+                .wrap_err("term text length is larger than `u32::MAX`")?
+                .to_le_bytes(),
+        );
+
+        dst[i_secondary..].copy_from_slice(self.secondary.as_bytes());
+
+        Ok(dst)
+    }
+
+    fn decode(mut src: &'buf [u8]) -> Result<(Self, &'buf [u8])> {
+        let (record_id, rest) = src
+            .split_first_chunk::<{ size_of::<RecordId>() }>()
+            .ok_or_eyre("buffer too short")?;
+        let record_id = bytes_to_id(*record_id);
+        src = rest;
+
+        let (secondary_len, rest) = src
+            .split_first_chunk::<{ size_of::<u32>() }>()
+            .ok_or_eyre("buffer too short")?;
+        let secondary_len = u32::from_le_bytes(*secondary_len);
+        src = rest;
+
+        let (secondary, rest) = src
+            .split_at_checked(secondary_len as usize)
+            .ok_or_else(|| eyre!("term length is {secondary_len} but buffer is shorter"))?;
+
+        let secondary = str::from_utf8(secondary).wrap_err("term secondary is not UTF-8")?;
+        Ok((
+            Self {
+                record_id,
+                secondary,
+            },
+            rest,
+        ))
+    }
+}
+
+fn id_to_bytes(record_id: RecordId) -> [u8; size_of::<u64>()] {
+    record_id.0.to_le_bytes()
+}
+
+fn bytes_to_id(bytes: [u8; size_of::<u64>()]) -> RecordId {
+    RecordId(u64::from_le_bytes(bytes))
+}
+
 /// [`backend::LookupStorage`] for [`Rocksdb`].
 #[derive(Debug)]
 pub struct LookupStorage {
@@ -224,40 +310,39 @@ impl backend::LookupStorage for LookupStorage {
         let headwords = get_cf(&self.db, HEADWORDS)?;
         let readings = get_cf(&self.db, READINGS)?;
 
-        let headword_ids_blob = self
+        let headword_terms_blob = self
             .db
             .get_pinned_cf(headwords, lemma.as_bytes())
             .wrap_err("failed to get record IDs for headword")?;
-        let reading_ids_blob = self
+        let reading_terms_blob = self
             .db
             .get_pinned_cf(readings, lemma.as_bytes())
             .wrap_err("failed to get record IDs for reading")?;
 
         let records = iter::empty()
             .chain(
-                headword_ids_blob
+                headword_terms_blob
                     .iter()
                     .map(|blob| (TermPart::Headword, blob)),
             )
             .chain(
-                reading_ids_blob
+                reading_terms_blob
                     .iter()
                     .map(|blob| (TermPart::Reading, blob)),
             )
             .flat_map(move |(term_part, blob)| {
-                self.get_by_ids(make_decoder(), records, blob)
-                    .map(move |r| {
-                        r.map(|(record_id, record)| RecordRow {
-                            term_part,
-                            record_id,
-                            record,
-                        })
-                        .wrap_err_with(|| eyre!("failed to query {term_part:?}"))
-                    })
+                self.get_by_ids(make_decoder(), records, blob, lemma, term_part)
+                    .map(move |r| r.wrap_err_with(|| eyre!("failed to query {term_part:?}")))
             });
 
         records.collect::<Result<Vec<_>, _>>()
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum TermPart {
+    Headword,
+    Reading,
 }
 
 impl LookupStorage {
@@ -265,9 +350,11 @@ impl LookupStorage {
         &'db self,
         mut decoder: impl Decoder,
         records: &'db ColumnFamily,
-        ids_blob: &'blob DBPinnableSlice<'db>,
-    ) -> impl Iterator<Item = Result<(RecordId, Record)>> + 'db {
-        let get_record = move |id: RecordId| {
+        terms_blob: &'blob DBPinnableSlice<'db>,
+        lemma: &'db str,
+        term_part: TermPart,
+    ) -> impl Iterator<Item = Result<RecordRow>> + 'db {
+        let mut get_record = move |id: RecordId| {
             let blob = self
                 .db
                 .get_pinned_cf(records, id_to_bytes(id))
@@ -276,21 +363,22 @@ impl LookupStorage {
             let record = decoder
                 .decode(&blob)
                 .wrap_err_with(|| eyre!("failed to decode {id:?}"))?;
-            Ok((id, record))
+            eyre::Ok(record)
         };
 
-        match ids_blob.as_chunks::<{ size_of::<RecordId>() }>() {
-            (ids_chunks, []) => Either::Left({
-                let ids = ids_chunks.iter().map(|chunk| bytes_to_id(*chunk));
-                ids.map(get_record)
-            }),
-            _ => Either::Right(iter::once(Err(eyre!(
-                "value is of length {}, which is not a multiple of {}",
-                ids_blob.len(),
-                size_of::<RecordId>()
-            )))),
-        }
-        .into_iter()
+        entries_in(terms_blob).map(move |entry| {
+            let entry = entry?;
+            let term = match term_part {
+                TermPart::Headword => Term::from_full(lemma, entry.secondary),
+                TermPart::Reading => Term::from_full(entry.secondary, lemma),
+            }?;
+            let record = get_record(entry.record_id)?;
+            Ok(RecordRow {
+                term,
+                record_id: entry.record_id,
+                record,
+            })
+        })
     }
 }
 
@@ -299,10 +387,48 @@ fn get_cf<'db>(db: &'db DB, name: &str) -> Result<&'db ColumnFamily> {
         .ok_or_else(|| eyre!("no column family `{name}"))
 }
 
-fn id_to_bytes(record_id: RecordId) -> [u8; size_of::<u64>()] {
-    record_id.0.to_le_bytes()
+fn entries_in(mut buf: &[u8]) -> impl Iterator<Item = Result<TermEntry<'_>>> {
+    iter::from_fn(move || {
+        if buf.is_empty() {
+            return None;
+        }
+        let (entry, rest) = match TermEntry::decode(buf) {
+            Ok(x) => x,
+            Err(err) => return Some(Err(err).wrap_err("failed to decode entry")),
+        };
+        buf = rest;
+        Some(Ok(entry))
+    })
 }
 
-fn bytes_to_id(bytes: [u8; size_of::<u64>()]) -> RecordId {
-    RecordId(u64::from_le_bytes(bytes))
+#[cfg(test)]
+mod tests {
+    use {
+        crate::backend::rocksdb::{TermEntry, entries_in},
+        wordbase_api::RecordId,
+    };
+
+    #[test]
+    fn round_trip_entry() {
+        let entries = [
+            TermEntry {
+                record_id: RecordId(123),
+                secondary: "foo",
+            },
+            TermEntry {
+                record_id: RecordId(456),
+                secondary: "bar",
+            },
+        ];
+        let buf = entries
+            .iter()
+            .flat_map(|entry| entry.encode().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            &entries[..],
+            &entries_in(&buf)
+                .collect::<Result<Vec<TermEntry>, _>>()
+                .unwrap()[..]
+        );
+    }
 }
