@@ -20,11 +20,13 @@ uniffi = ["dep:uniffi"]
 
 [dependencies]
 wordbase-api = { workspace = true }
-# wordbase-storage = { workspace = true, features = [
-#   "backend-rocksdb",
-#   "codec-rkyv",
-# ] }
+wordbase-storage = { workspace = true, features = [
+  "backend-rocksdb",
+  "codec-rkyv",
+] }
 
+futures = { workspace = true }
+arc-swap = { workspace = true }
 async-channel = { workspace = true }
 eyre          = { workspace = true }
 foldhash      = { workspace = true }
@@ -37,3 +39,5 @@ tokio         = { workspace = true, features = ["sync", "macros", "fs"] }
 tracing       = { workspace = true }
 uniffi        = { workspace = true, optional = true }
 uuid          = { workspace = true }
+
+derive_more = { workspace = true, features = ["deref"] }

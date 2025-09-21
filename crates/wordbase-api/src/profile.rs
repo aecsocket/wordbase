@@ -1,5 +1,6 @@
 use {
     crate::{DictionaryId, NormString},
+    derive_more::Display,
     std::str::FromStr,
     uuid::Uuid,
 };
@@ -17,7 +18,6 @@ use {
 )]
 #[cfg_attr(feature = "poem", derive(poem_openapi::Object), oai(example))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[non_exhaustive]
 pub struct Profile {
     /// Unique identifier for this profile in the database.
     pub id: ProfileId,
@@ -35,15 +35,6 @@ pub struct Profile {
     /// [`Dictionary`]: crate::Dictionary
     /// [position]: crate::Dictionary::position
     pub sorting_dictionary: Option<DictionaryId>,
-    /// System font family to use for text under this profile.
-    ///
-    /// This is *only* the family, e.g. `Adwaita Sans`, not the face like
-    /// `Adwaita Sans Regular`.
-    pub font_family: Option<String>,
-    /// Name of the Anki deck used for AnkiConnect integration.
-    pub anki_deck: Option<String>,
-    /// Name of the Anki note type used for creating new notes.
-    pub anki_note_type: Option<String>,
     /// Set of [`Dictionary`] entries which are enabled under this profile.
     ///
     /// If a dictionary is enabled, it will be used to provide results for
@@ -62,9 +53,6 @@ impl poem_openapi::types::Example for Profile {
             sorting_dictionary: Some(DictionaryId(uuid::uuid!(
                 "6c0be404-fb5f-4f25-a9cc-6bf78667bb2b"
             ))),
-            font_family: None,
-            anki_deck: Some("Japanese Cards".into()),
-            anki_note_type: Some("Lapis".into()),
             enabled_dictionaries: vec![
                 DictionaryId(uuid::uuid!("6c0be404-fb5f-4f25-a9cc-6bf78667bb2b")),
                 DictionaryId(uuid::uuid!("cb5b772c-6cd7-47dd-aca8-651de6f376ae")),
@@ -81,16 +69,14 @@ impl Profile {
             id,
             name: None,
             sorting_dictionary: None,
-            font_family: None,
-            anki_deck: None,
-            anki_note_type: None,
             enabled_dictionaries: Vec::new(),
         }
     }
 }
 
 /// Opaque and unique identifier for a [`Profile`] in the engine.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash)]
+#[display("{}", _0.hyphenated())]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "rkyv",
@@ -98,6 +84,14 @@ impl Profile {
 )]
 #[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
 pub struct ProfileId(pub Uuid);
+
+impl ProfileId {
+    /// Creates a new random ID.
+    #[must_use]
+    pub fn random() -> Self {
+        Self(Uuid::now_v7())
+    }
+}
 
 impl FromStr for ProfileId {
     type Err = <Uuid as FromStr>::Err;

@@ -5357,9 +5357,12 @@ dependencies = [
 name = "wordbase-engine"
 version = "0.0.0"
 dependencies = [
+ "arc-swap",
  "async-channel",
+ "derive_more",
  "eyre",
  "foldhash",
+ "futures",
  "itertools 0.14.0",
  "rayon",
  "serde",
@@ -5370,6 +5373,7 @@ dependencies = [
  "uniffi",
  "uuid",
  "wordbase-api",
+ "wordbase-storage",
 ]
 
 [[package]]

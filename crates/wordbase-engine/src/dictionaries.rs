@@ -1,4 +1,5 @@
 use {
+    crate::StorageEngine,
     eyre::{Context, ContextCompat, Result, eyre},
     foldhash::HashSet,
     itertools::Itertools,
@@ -9,7 +10,7 @@ use {
     },
     tracing::warn,
     uuid::Uuid,
-    wordbase_api::{Dictionary, DictionaryId, Record, RecordId},
+    wordbase_api::{Dictionary, DictionaryId, Record, RecordId, Term},
     wordbase_storage::{archive::OpenArchive, backend::Backend},
 };
 
@@ -83,7 +84,7 @@ impl Dictionaries {
         })
     }
 
-    pub async fn list(&self) -> RwLockReadGuard<'_, Vec<OpenDictionary>> {
+    pub async fn all(&self) -> RwLockReadGuard<'_, Vec<OpenDictionary>> {
         self.open.read().await
     }
 
@@ -117,9 +118,12 @@ impl Dictionaries {
         Ok(())
     }
 
-    pub async fn remove(&self, id: DictionaryId) -> Result<()> {
-        self.open.write().await.retain(|dict| dict.state.id != id);
-        let dict_dir = self.dict_dir(id);
+    pub async fn remove(&self, dict_id: DictionaryId) -> Result<()> {
+        self.open
+            .write()
+            .await
+            .retain(|dict| dict.state.id != dict_id);
+        let dict_dir = self.dict_dir(dict_id);
         fs::remove_dir_all(&dict_dir)
             .await
             .wrap_err_with(|| eyre!("failed to remove dictionary directory {dict_dir:?}"))?;
@@ -140,7 +144,7 @@ impl Dictionaries {
                         rows.into_iter().map(|row| RecordEntry {
                             dictionary_id: dict.state.id,
                             dictionary_position: dict.state.position,
-                            term_part: row.term_part,
+                            term: row.term,
                             record_id: row.record_id,
                             record: row.record,
                         })
@@ -161,7 +165,17 @@ impl Dictionaries {
 pub struct RecordEntry {
     pub dictionary_id: DictionaryId,
     pub dictionary_position: i64,
-    pub term_part: TermPart,
+    pub term: Term,
     pub record_id: RecordId,
     pub record: Record,
+}
+
+impl StorageEngine {
+    pub async fn dictionaries(&self) -> RwLockReadGuard<'_, Vec<OpenDictionary>> {
+        self.dictionaries.all().await
+    }
+
+    pub async fn import_dictionary(&self, open_archive: &dyn OpenArchive) -> Result<()> {
+        self.dictionaries.import(open_archive).await
+    }
 }

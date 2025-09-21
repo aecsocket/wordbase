@@ -1,4 +1,4 @@
-use {std::str::FromStr, uuid::Uuid};
+use {derive_more::Display, std::str::FromStr, uuid::Uuid};
 
 /// Imported collection of [`Record`]s in the engine.
 ///
@@ -102,7 +102,8 @@ impl DictionaryMeta {
 }
 
 /// Opaque and unique identifier for a [`Dictionary`] in the engine.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash)]
+#[display("{}", _0.hyphenated())]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "rkyv",
