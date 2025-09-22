@@ -1,12 +1,23 @@
 #![doc = include_str!("../README.md")]
+#![allow(
+    clippy::unused_async,
+    reason = "subcommands can choose if they are async or not"
+)]
 
 use {
-    eyre::{Context, OptionExt, Result, bail},
-    std::{io, path::PathBuf, time::Instant},
-    tracing::{info, level_filters::LevelFilter},
+    eyre::{Context, OptionExt, Result, bail, eyre},
+    serde::Serialize,
+    std::{io, path::PathBuf, sync::Arc},
+    tracing::level_filters::LevelFilter,
     tracing_subscriber::EnvFilter,
-    wordbase_engine::{DictionaryId, ProfileId, StorageEngine},
+    wordbase_engine::{
+        ProfileId, deinflect::Deinflectors, profiles::ProfileState, storage::EngineStorage,
+    },
 };
+
+mod dictionary;
+mod lookup;
+mod profile;
 
 #[derive(Debug, Clone, clap::Parser)]
 struct Args {
@@ -14,8 +25,16 @@ struct Args {
     data_dir: Option<PathBuf>,
     #[arg(short, long)]
     profile_id: Option<String>,
+    #[arg(short, long)]
+    output: Option<OutputFormat>,
     #[clap(subcommand)]
     command: Command,
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+enum OutputFormat {
+    Json,
+    JsonPretty,
 }
 
 #[derive(Debug, Clone, clap::Subcommand)]
@@ -24,9 +43,14 @@ enum Command {
         #[command(subcommand)]
         command: ProfileCommand,
     },
-    Dict {
+    #[clap(alias = "dict")]
+    Dictionary {
         #[command(subcommand)]
-        command: DictCommand,
+        command: DictionaryCommand,
+    },
+    Lookup {
+        first: String,
+        second: Option<String>,
     },
     LookupLemma {
         lemma: String,
@@ -35,18 +59,46 @@ enum Command {
 
 #[derive(Debug, Clone, clap::Subcommand)]
 enum ProfileCommand {
-    Ls,
-    Add { name: String },
-    Rm { id: String },
+    #[clap(alias = "ls")]
+    List,
+    Add {
+        name: String,
+    },
+    #[clap(alias = "rm")]
+    Remove {
+        id: String,
+    },
 }
 
 #[derive(Debug, Clone, clap::Subcommand)]
-enum DictCommand {
-    Ls,
-    Import { path: PathBuf },
-    Rm { id: String },
-    Enable { dictionary_id: String },
-    Disable { dictionary_id: String },
+enum DictionaryCommand {
+    #[clap(alias = "ls")]
+    List,
+    Import {
+        path: PathBuf,
+    },
+    #[clap(alias = "rm")]
+    Remove {
+        id: String,
+    },
+    Enable {
+        dictionary_id: String,
+    },
+    Disable {
+        dictionary_id: String,
+    },
+}
+
+struct App {
+    storage: EngineStorage,
+    profile: Arc<ProfileState>,
+    profile_id: ProfileId,
+}
+
+impl App {
+    pub fn deinflectors(&self) -> Deinflectors {
+        todo!();
+    }
 }
 
 #[tokio::main]
@@ -68,7 +120,7 @@ async fn main() -> Result<()> {
         wordbase_desktop::data_dir().ok_or_eyre("failed to get default data directory")?
     };
 
-    let storage = StorageEngine::new(&data_dir)
+    let storage = EngineStorage::new(&data_dir)
         .await
         .wrap_err("failed to create storage engine")?;
 
@@ -82,85 +134,66 @@ async fn main() -> Result<()> {
             (Some(_), _) => bail!("multiple profiles exist; use `--profile` to select one"),
         }
     };
+    let profile = storage
+        .profiles()
+        .get(&profile_id)
+        .cloned()
+        .ok_or_else(|| eyre!("unknown profile ID {profile_id}"))?;
 
+    let app = App {
+        storage,
+        profile_id,
+        profile,
+    };
+
+    let of = args.output;
     match args.command {
         Command::Profile {
-            command: ProfileCommand::Ls,
-        } => {
-            let dictionaries = storage.dictionaries().await;
-            let profiles = storage.profiles();
-            info!("{} profiles", profiles.len());
-            for (id, profile) in profiles.iter() {
-                info!(
-                    "- {id}: {}",
-                    profile.name.as_ref().map_or("(default)", |s| s.as_str()),
-                );
-
-                let dict_names = dictionaries
-                    .iter()
-                    .filter(|dict| profile.enabled_dictionaries.contains(&dict.state.id))
-                    .map(|dict| &dict.state.meta.name)
-                    .collect::<Vec<_>>();
-                info!("  Dictionaries: {dict_names:?}");
-            }
-        }
+            command: ProfileCommand::List,
+        } => finish(of, profile::list(&app).await?),
         Command::Profile {
             command: ProfileCommand::Add { name },
-        } => {
-            storage.create_profile(&name).await?;
-        }
+        } => finish(of, profile::add(&app, &name).await?),
         Command::Profile {
-            command: ProfileCommand::Rm { id },
-        } => {
-            let id = id.parse::<ProfileId>()?;
-            storage.remove_profile(id).await?;
+            command: ProfileCommand::Remove { id },
+        } => finish(of, profile::remove(&app, &id).await?),
+        //
+        Command::Dictionary {
+            command: DictionaryCommand::List,
+        } => finish(of, dictionary::list(&app).await?),
+        Command::Dictionary {
+            command: DictionaryCommand::Import { path },
+        } => finish(of, dictionary::import(&app, &path).await?),
+        Command::Dictionary {
+            command: DictionaryCommand::Remove { id },
+        } => finish(of, dictionary::remove(&app, &id).await?),
+        Command::Dictionary {
+            command: DictionaryCommand::Enable { dictionary_id },
+        } => finish(of, dictionary::enable(&app, &dictionary_id).await?),
+        Command::Dictionary {
+            command: DictionaryCommand::Disable { dictionary_id },
+        } => finish(of, dictionary::disable(&app, &dictionary_id).await?),
+        //
+        Command::Lookup { first, second } => {
+            finish(of, lookup::sentence(&app, &first, second.as_deref()).await?);
         }
-        Command::Dict {
-            command: DictCommand::Ls,
-        } => {
-            let dictionaries = storage.dictionaries().await;
-            info!("{} dictionaries", dictionaries.len());
-            for dict in dictionaries.iter() {
-                info!(
-                    "- {}: {} ver. {:?}",
-                    dict.state.id, dict.state.meta.name, dict.state.meta.version,
-                );
-            }
+        Command::LookupLemma { lemma } => finish(of, lookup::lemma(&app, &lemma).await?),
+    };
+    Ok(())
+}
+
+fn checkmark(b: bool) -> &'static str {
+    if b { "✔" } else { " " }
+}
+
+fn finish<T: Serialize>(output_format: Option<OutputFormat>, value: T) {
+    match output_format {
+        None => {}
+        Some(OutputFormat::Json) => {
+            _ = serde_json::to_writer(io::stdout(), &value);
         }
-        Command::Dict {
-            command: DictCommand::Import { path },
-        } => {
-            let start = Instant::now();
-            storage.import_dictionary(&path).await?;
-            info!("Imported in {:?}", start.elapsed());
-        }
-        Command::Dict {
-            command: DictCommand::Rm { id },
-        } => {
-            let id = id.parse::<DictionaryId>()?;
-            let start = Instant::now();
-            storage.remove_dictionary(id).await?;
-            info!("Removed in {:?}", start.elapsed());
-        }
-        Command::Dict {
-            command: DictCommand::Enable { dictionary_id },
-        } => {
-            let dictionary_id = dictionary_id.parse::<DictionaryId>()?;
-            storage.enable_dictionary(profile_id, dictionary_id).await?;
-        }
-        Command::Dict {
-            command: DictCommand::Disable { dictionary_id },
-        } => {
-            let dictionary_id = dictionary_id.parse::<DictionaryId>()?;
-            storage
-                .disable_dictionary(profile_id, dictionary_id)
-                .await?;
-        }
-        Command::LookupLemma { lemma } => {
-            for row in storage.lookup_lemma(profile_id, &lemma).await? {
-                info!("{row:?}");
-            }
+        Some(OutputFormat::JsonPretty) => {
+            _ = serde_json::to_writer_pretty(io::stdout(), &value);
         }
     }
-    Ok(())
 }

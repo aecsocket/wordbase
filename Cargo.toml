@@ -33,15 +33,15 @@ too_many_lines          = "allow"
 type_complexity         = "allow"
 
 [workspace.dependencies]
-jmdict-furigana          = { path = "crates/jmdict-furigana" }
-wordbase-api             = { path = "crates/wordbase-api" }
-wordbase-deinflect         = { path = "crates/wordbase-deinflect" }
-wordbase-desktop         = { path = "crates/wordbase-desktop" }
-wordbase-engine          = { path = "crates/wordbase-engine" }
-wordbase-storage         = { path = "crates/wordbase-storage" }
-wordbase-storage-api     = { path = "crates/wordbase-storage-api" }
-wordbase-storage-backend = { path = "crates/wordbase-storage-backend" }
-wordbase-storage-import  = { path = "crates/wordbase-storage-import" }
+jmdict-furigana         = { path = "crates/jmdict-furigana" }
+wordbase-core           = { path = "crates/wordbase-core" }
+wordbase-core-deinflect = { path = "crates/wordbase-core-deinflect" }
+wordbase-core-import    = { path = "crates/wordbase-core-import" }
+wordbase-core-storage   = { path = "crates/wordbase-core-storage" }
+wordbase-desktop        = { path = "crates/wordbase-desktop" }
+wordbase-engine         = { path = "crates/wordbase-engine" }
+wordbase-types          = { path = "crates/wordbase-types" }
+wordbase-server-http    = { path = "crates/wordbase-server-http" }
 
 adw                  = { package = "libadwaita", version = "0.7.2" }
 android_logger       = { version = "0.15.0" }
@@ -66,6 +66,7 @@ data-encoding        = { version = "2.9" }
 derive_more          = { version = "2.0" }
 dioxus               = { version = "0.6" }
 directories          = { version = "6.0" }
+disqualified         = { version = "1.0" }
 distance             = { version = "0.4" }
 either               = { version = "1.15" }
 eyre                 = { version = "0.6.12" }
@@ -78,7 +79,6 @@ glib                 = { version = "0.20" }
 gtk                  = { package = "gtk4", version = "0.9" }
 heed                 = { version = "0.22" }
 hex                  = { version = "0.4" }
-disqualified = { version = "1.0" }
 html-escape          = { version = "0.2" }
 humansize            = { version = "2.1" }
 indexmap             = { version = "2.8" }

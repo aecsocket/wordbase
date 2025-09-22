@@ -16,21 +16,25 @@ workspace = true
 all-features = true
 
 [features]
+poem   = ["wordbase-core/poem"]
 uniffi = ["dep:uniffi"]
 
 [dependencies]
-wordbase-api = { workspace = true }
-wordbase-storage = { workspace = true, features = [
-  "backend-rocksdb",
+wordbase-core           = { workspace = true }
+wordbase-core-deinflect = { workspace = true, features = ["all-deinflectors"] }
+wordbase-core-import    = { workspace = true, features = ["all-importers"] }
+wordbase-types          = { workspace = true }
+
+wordbase-core-storage = { workspace = true, features = [
+  "storage-rocksdb",
   "codec-rkyv",
 ] }
-wordbase-deinflect = { workspace = true }
 
-futures = { workspace = true }
-arc-swap = { workspace = true }
+arc-swap      = { workspace = true }
 async-channel = { workspace = true }
 eyre          = { workspace = true }
 foldhash      = { workspace = true }
+futures       = { workspace = true }
 itertools     = { workspace = true }
 rayon         = { workspace = true }
 serde         = { workspace = true, features = ["derive"] }
@@ -41,4 +45,4 @@ tracing       = { workspace = true }
 uniffi        = { workspace = true, optional = true }
 uuid          = { workspace = true }
 
-derive_more = { workspace = true, features = ["deref"] }
+derive_more = { workspace = true, features = ["deref", "deref_mut"] }

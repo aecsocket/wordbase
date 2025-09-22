@@ -1,6 +1,5 @@
 [package]
 name    = "wordbase-cli"
-version = "0.0.0"
 
 authors.workspace      = true
 categories.workspace   = true
@@ -17,7 +16,8 @@ workspace = true
 all-features = true
 
 [dependencies]
-wordbase-desktop = { workspace = true, features = ["http"] }
+wordbase-desktop = { workspace = true }
+# wordbase-server-http = { workspace = true }
 wordbase-engine  = { workspace = true }
 
 ascii_table        = { workspace = true, features = ["wide_characters"] }

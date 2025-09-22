@@ -6,7 +6,7 @@ use {
     tokio_tungstenite::{MaybeTlsStream, WebSocketStream},
     tokio_util::task::AbortOnDropHandle,
     tracing::{debug, info, trace},
-    wordbase_api::TexthookerSentence,
+    wordbase_types::TexthookerSentence,
 };
 
 /// Connects to a [`TextractorSender`] server and receives [sentences] from a

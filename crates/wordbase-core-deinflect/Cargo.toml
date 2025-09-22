@@ -1,0 +1,32 @@
+[package]
+name = "wordbase-core-deinflect"
+
+authors.workspace      = true
+categories.workspace   = true
+edition.workspace      = true
+keywords.workspace     = true
+license.workspace      = true
+repository.workspace   = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+all-deinflectors = ["deinflector-latin"]
+
+deinflector-latin = ["dep:unicode-segmentation"]
+
+[dependencies]
+wordbase-core = { workspace = true }
+
+eyre                 = { workspace = true }
+lindera              = { workspace = true }
+unicode-segmentation = { workspace = true, optional = true }
+itertools = { workspace = true }
+
+[dev-dependencies]
+indexmap             = { workspace = true }

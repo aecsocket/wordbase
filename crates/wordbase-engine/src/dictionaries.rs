@@ -1,33 +1,40 @@
 use {
-    crate::storage::StorageEngine,
+    crate::storage::EngineStorage,
+    arc_swap::ArcSwap,
+    derive_more::{Deref, DerefMut},
     eyre::{Context, ContextCompat, Result, eyre},
     foldhash::HashSet,
-    itertools::Itertools,
-    std::path::PathBuf,
-    tokio::{
-        fs,
-        sync::{RwLock, RwLockReadGuard},
-    },
+    serde::Serialize,
+    std::{path::PathBuf, sync::Arc},
+    tokio::fs,
     tracing::warn,
     uuid::Uuid,
-    wordbase_api::{Dictionary, DictionaryId, Record, RecordId, Term},
-    wordbase_storage::{archive::OpenArchive, backend::Backend},
+    wordbase_core::{archive::OpenArchive, dictionary, importer::Importer, storage::Storage},
+    wordbase_core_storage::{codec, storage},
+    wordbase_types::{DictionaryId, DictionaryMeta, Record, RecordId, Term},
 };
 
-type DefaultBackend = wordbase_storage::backend::Rocksdb;
-type DefaultCodec = wordbase_storage::codec::Rkyv;
-type Lookups = wordbase_storage::Lookups<<DefaultBackend as Backend>::Lookups, DefaultCodec>;
+type DefaultStorage = storage::Rocksdb;
+type DefaultCodec = codec::Rkyv;
+type Lookups = dictionary::Lookups<<DefaultStorage as Storage>::Lookups, DefaultCodec>;
+
+const IMPORTERS: &[&dyn Importer] = wordbase_core_import::IMPORTERS;
 
 #[derive(Debug)]
 pub struct Dictionaries {
     data_dir: PathBuf,
-    open: RwLock<Vec<OpenDictionary>>,
+    open: ArcSwap<OpenDictionaries>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Deref, DerefMut, Serialize)]
+pub struct OpenDictionaries(pub Vec<Arc<OpenDictionary>>);
+
+#[derive(Debug, Serialize)]
 pub struct OpenDictionary {
-    pub state: Dictionary,
-    lookups: Lookups,
+    pub id: DictionaryId,
+    pub meta: DictionaryMeta,
+    #[serde(skip_serializing)]
+    pub lookups: Lookups,
 }
 
 impl Dictionaries {
@@ -55,21 +62,18 @@ impl Dictionaries {
                     .map(DictionaryId)
                     .wrap_err("not a valid dictionary ID")?;
 
-                let (manifest, lookups) = wordbase_storage::open::<DefaultBackend, DefaultCodec>(
+                let (manifest, lookups) = dictionary::open::<DefaultStorage, DefaultCodec>(
                     &entry.path(),
                     DefaultCodec::default(),
                 )
                 .await
                 .wrap_err("failed to open storage")?;
 
-                open.push(OpenDictionary {
-                    state: Dictionary {
-                        id: dict_id,
-                        meta: manifest.meta,
-                        position: 0,
-                    },
+                open.push(Arc::new(OpenDictionary {
+                    id: dict_id,
+                    meta: manifest.meta,
                     lookups,
-                });
+                }));
                 eyre::Ok(())
             }
             .await;
@@ -80,49 +84,48 @@ impl Dictionaries {
 
         Ok(Self {
             data_dir,
-            open: RwLock::new(open),
+            open: ArcSwap::from_pointee(OpenDictionaries(open)),
         })
     }
 
-    pub async fn all(&self) -> RwLockReadGuard<'_, Vec<OpenDictionary>> {
-        self.open.read().await
+    pub fn all(&self) -> Arc<OpenDictionaries> {
+        self.open.load().clone()
     }
 
     fn dict_dir(&self, id: DictionaryId) -> PathBuf {
         self.data_dir.join(id.0.hyphenated().to_string())
     }
 
-    pub async fn import(&self, open_archive: &dyn OpenArchive) -> Result<()> {
+    pub async fn import(&self, open_archive: &dyn OpenArchive) -> Result<DictionaryId> {
         let dict_id = DictionaryId::random();
         let dict_dir = self.dict_dir(dict_id);
         fs::create_dir_all(&dict_dir)
             .await
             .wrap_err_with(|| eyre!("failed to create dictionary directory {dict_dir:?}"))?;
 
-        wordbase_storage::import::<DefaultBackend, DefaultCodec>(open_archive, &dict_dir).await?;
-        let (manifest, lookups) = wordbase_storage::open::<DefaultBackend, DefaultCodec>(
-            &dict_dir,
-            DefaultCodec::default(),
-        )
-        .await
-        .wrap_err("failed to reopen dictionary for lookups")?;
+        dictionary::import::<DefaultStorage, DefaultCodec>(open_archive, &dict_dir, IMPORTERS)
+            .await?;
+        let (manifest, lookups) =
+            dictionary::open::<DefaultStorage, DefaultCodec>(&dict_dir, DefaultCodec::default())
+                .await
+                .wrap_err("failed to reopen dictionary for lookups")?;
 
-        self.open.write().await.push(OpenDictionary {
-            state: Dictionary {
-                id: dict_id,
-                meta: manifest.meta,
-                position: 0,
-            },
+        let mut dicts = OpenDictionaries::clone(&self.open.load());
+        dicts.push(Arc::new(OpenDictionary {
+            id: dict_id,
+            meta: manifest.meta,
             lookups,
-        });
-        Ok(())
+        }));
+        self.open.store(Arc::new(dicts));
+
+        Ok(dict_id)
     }
 
     pub async fn remove(&self, dict_id: DictionaryId) -> Result<()> {
-        self.open
-            .write()
-            .await
-            .retain(|dict| dict.state.id != dict_id);
+        let mut dicts = OpenDictionaries::clone(&self.open.load());
+        dicts.retain(|dict| dict.id != dict_id);
+        self.open.store(Arc::new(dicts));
+
         let dict_dir = self.dict_dir(dict_id);
         fs::remove_dir_all(&dict_dir)
             .await
@@ -130,52 +133,56 @@ impl Dictionaries {
         Ok(())
     }
 
-    pub async fn lookup(
+    // sorting deferred to caller
+    pub fn lookup(
         &self,
         lemma: &str,
         enabled_dicts: &HashSet<DictionaryId>,
     ) -> Result<Vec<RecordEntry>> {
-        let mut entries = {
-            let open = self.open.read().await;
-            open.iter()
-                .filter(|dict| enabled_dicts.contains(&dict.state.id))
-                .map(|dict| {
-                    dict.lookups.lookup(lemma).map(|rows| {
-                        rows.into_iter().map(|row| RecordEntry {
-                            dictionary_id: dict.state.id,
-                            dictionary_position: dict.state.position,
-                            term: row.term,
-                            record_id: row.record_id,
-                            record: row.record,
-                        })
-                    })
+        self.open
+            .load()
+            .iter()
+            .filter(|dict| enabled_dicts.contains(&dict.id))
+            .flat_map(|dict| match dict.lookups.lookup(lemma) {
+                Ok(x) => x
+                    .into_iter()
+                    .map(|row| Ok((dict.clone(), row)))
+                    .collect::<Vec<_>>(),
+                Err(err) => vec![Err(err).wrap_err_with(|| {
+                    eyre!(
+                        "failed to look up in dictionary {:?} ({:?})",
+                        dict.meta.name,
+                        dict.id
+                    )
+                })],
+            })
+            .map(|r| {
+                let (dictionary, row) = r?;
+                Ok(RecordEntry {
+                    dictionary,
+                    term: row.term,
+                    record_id: row.record_id,
+                    record: row.record,
                 })
-                .flatten_ok()
-                .collect::<Result<Vec<_>, _>>()?
-        };
-
-        // TODO more sorting
-        entries.sort_unstable_by_key(|entry| entry.dictionary_position);
-
-        Ok(entries)
+            })
+            .collect::<Result<Vec<_>, _>>()
     }
 }
 
 #[derive(Debug)]
 pub struct RecordEntry {
-    pub dictionary_id: DictionaryId,
-    pub dictionary_position: i64,
+    pub dictionary: Arc<OpenDictionary>,
     pub term: Term,
     pub record_id: RecordId,
     pub record: Record,
 }
 
-impl StorageEngine {
-    pub async fn dictionaries(&self) -> RwLockReadGuard<'_, Vec<OpenDictionary>> {
-        self.dictionaries.all().await
+impl EngineStorage {
+    pub fn dictionaries(&self) -> Arc<OpenDictionaries> {
+        self.dictionaries.all()
     }
 
-    pub async fn import_dictionary(&self, open_archive: &dyn OpenArchive) -> Result<()> {
+    pub async fn import_dictionary(&self, open_archive: &dyn OpenArchive) -> Result<DictionaryId> {
         self.dictionaries.import(open_archive).await
     }
 }

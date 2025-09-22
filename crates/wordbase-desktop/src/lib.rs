@@ -1,8 +1,5 @@
 #![doc = include_str!("../README.md")]
 
-#[cfg(feature = "http")]
-pub mod http;
-
 mod texthooker;
 
 use std::path::PathBuf;

@@ -1,7 +1,7 @@
 use {
     crate::{
         dictionaries::{Dictionaries, RecordEntry},
-        profiles::Profiles,
+        profiles::{self, Profiles},
     },
     arc_swap::ArcSwap,
     eyre::{Context, Result, eyre},
@@ -11,16 +11,17 @@ use {
     },
     std::path::Path,
     tokio::fs,
+    wordbase_types::{DictionaryId, ProfileId},
 };
 
 #[derive(Debug)]
-pub struct StorageEngine {
+pub struct EngineStorage {
     pub(crate) dictionaries: Dictionaries,
     pub(crate) profiles: ArcSwap<Profiles>,
-    db: Pool<Sqlite>,
+    pub(crate) db: Pool<Sqlite>,
 }
 
-impl StorageEngine {
+impl EngineStorage {
     pub async fn new(data_dir: impl AsRef<Path>) -> Result<Self> {
         Self::new_(data_dir.as_ref()).await
     }
@@ -66,18 +67,13 @@ impl StorageEngine {
         Ok(())
     }
 
-    pub async fn lookup_lemma(
-        &self,
-        profile_id: ProfileId,
-        lemma: &str,
-    ) -> Result<Vec<RecordEntry>> {
+    pub fn lookup_lemma(&self, profile_id: ProfileId, lemma: &str) -> Result<Vec<RecordEntry>> {
         let profiles = self.profiles.load();
         let profile = profiles
             .get(&profile_id)
             .ok_or_else(|| eyre!("invalid profile {profile_id:?}"))?;
         self.dictionaries
             .lookup(lemma, &profile.enabled_dictionaries)
-            .await
     }
 }
 

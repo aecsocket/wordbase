@@ -1,5 +1,5 @@
 [package]
-name = "wordbase-desktop"
+name = "wordbase-server-http"
 
 authors.workspace      = true
 categories.workspace   = true
@@ -16,16 +16,16 @@ workspace = true
 all-features = true
 
 [dependencies]
-wordbase-types = { workspace = true, features = ["serde"] }
-wordbase-engine = { workspace = true }
+wordbase-types = { workspace = true, features = ["poem"] }
+wordbase-engine = { workspace = true, features = ["poem"] }
 
-async-channel     = { workspace = true }
+async-stream      = { workspace = true, optional = true }
 bytes             = { workspace = true }
 directories       = { workspace = true }
 eyre              = { workspace = true }
 futures           = { workspace = true }
+poem              = { workspace = true, features = ["anyhow"] }
+poem-openapi      = { workspace = true, features = ["swagger-ui"] }
 serde_json        = { workspace = true }
 tokio             = { workspace = true, features = ["net", "time"] }
-tokio-tungstenite = { workspace = true }
-tokio-util        = { workspace = true, features = ["rt"] }
 tracing           = { workspace = true }

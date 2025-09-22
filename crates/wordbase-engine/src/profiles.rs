@@ -1,19 +1,20 @@
 use {
-    crate::StorageEngine,
-    derive_more::Deref,
+    crate::storage::EngineStorage,
+    derive_more::{Deref, DerefMut},
     eyre::{Context, Result, eyre},
     foldhash::{HashMap, HashMapExt, HashSet, HashSetExt},
     futures::StreamExt,
+    serde::Serialize,
     sqlx::{Pool, Sqlite},
     std::{collections::hash_map, sync::Arc},
     uuid::Uuid,
-    wordbase_api::{DictionaryId, NormString, ProfileId},
+    wordbase_types::{DictionaryId, NormString, ProfileId},
 };
 
-#[derive(Debug, Deref)]
-pub struct Profiles(pub HashMap<ProfileId, ProfileState>);
+#[derive(Debug, Deref, DerefMut, Serialize)]
+pub struct Profiles(pub HashMap<ProfileId, Arc<ProfileState>>);
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct ProfileState {
     pub name: Option<NormString>,
     pub sorting_dictionary: Option<DictionaryId>,
@@ -90,6 +91,11 @@ pub(crate) async fn fetch(db: &Pool<Sqlite>) -> Result<Profiles> {
         }
     }
 
+    let profiles = profiles
+        .into_iter()
+        .map(|(id, profile)| (id, Arc::new(profile)))
+        .collect();
+
     Ok(Profiles(profiles))
 }
 
@@ -149,7 +155,7 @@ pub(crate) async fn remove_dictionary(db: &Pool<Sqlite>, dict_id: DictionaryId) 
     Ok(())
 }
 
-impl StorageEngine {
+impl EngineStorage {
     pub fn profiles(&self) -> Arc<Profiles> {
         self.profiles.load().clone()
     }

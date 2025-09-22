@@ -5983,24 +5983,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c573471f125075647d03df72e026074b7203790d41351cd6edc96f46bcccd36"
 
 [[package]]
-name = "wordbase-api"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "data-encoding",
- "derive_more",
- "itertools 0.14.0",
- "maud",
- "poem",
- "poem-openapi",
- "rkyv",
- "serde",
- "serde_json",
- "uniffi",
- "uuid",
-]
-
-[[package]]
 name = "wordbase-cli"
 version = "0.0.0"
 dependencies = [
@@ -6019,11 +6001,78 @@ dependencies = [
 ]
 
 [[package]]
-name = "wordbase-deinflect"
+name = "wordbase-core"
 version = "0.0.0"
 dependencies = [
+ "async-channel",
+ "bytes",
+ "eyre",
+ "rayon",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "wordbase-types",
+]
+
+[[package]]
+name = "wordbase-core-deinflect"
+version = "0.0.0"
+dependencies = [
+ "eyre",
+ "indexmap",
+ "itertools 0.14.0",
  "lindera",
- "wordbase-api",
+ "unicode-segmentation",
+ "wordbase-core",
+]
+
+[[package]]
+name = "wordbase-core-import"
+version = "0.0.0"
+dependencies = [
+ "async-channel",
+ "bytes",
+ "derive_more",
+ "eyre",
+ "foldhash",
+ "rayon",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "tracing",
+ "wordbase-core",
+ "wordbase-types",
+ "zip",
+]
+
+[[package]]
+name = "wordbase-core-storage"
+version = "0.0.0"
+dependencies = [
+ "ascii_table",
+ "clap",
+ "color-eyre",
+ "derive_more",
+ "disqualified",
+ "either",
+ "eyre",
+ "futures",
+ "heed",
+ "humansize",
+ "libsql",
+ "redb",
+ "rkyv",
+ "rmp-serde",
+ "rocksdb",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "wordbase-core",
+ "wordbase-core-import",
+ "wordbase-types",
 ]
 
 [[package]]
@@ -6031,20 +6080,17 @@ name = "wordbase-desktop"
 version = "0.0.0"
 dependencies = [
  "async-channel",
- "async-stream",
  "bytes",
  "directories",
  "eyre",
  "futures",
- "poem",
- "poem-openapi",
  "serde_json",
  "tokio",
  "tokio-tungstenite",
  "tokio-util",
  "tracing",
- "wordbase-api",
  "wordbase-engine",
+ "wordbase-types",
 ]
 
 [[package]]
@@ -6066,9 +6112,11 @@ dependencies = [
  "tracing",
  "uniffi",
  "uuid",
- "wordbase-api",
- "wordbase-deinflect",
- "wordbase-storage",
+ "wordbase-core",
+ "wordbase-core-deinflect",
+ "wordbase-core-import",
+ "wordbase-core-storage",
+ "wordbase-types",
 ]
 
 [[package]]
@@ -6114,79 +6162,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "wordbase-storage"
+name = "wordbase-server-http"
 version = "0.0.0"
 dependencies = [
- "ascii_table",
- "async-channel",
- "clap",
- "color-eyre",
- "disqualified",
- "eyre",
- "humansize",
- "rayon",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uniffi",
- "wordbase-api",
- "wordbase-storage-api",
- "wordbase-storage-backend",
- "wordbase-storage-import",
-]
-
-[[package]]
-name = "wordbase-storage-api"
-version = "0.0.0"
-dependencies = [
- "async-channel",
+ "async-stream",
  "bytes",
- "eyre",
- "tracing",
- "wordbase-api",
-]
-
-[[package]]
-name = "wordbase-storage-backend"
-version = "0.0.0"
-dependencies = [
- "derive_more",
- "either",
+ "directories",
  "eyre",
  "futures",
- "heed",
- "libsql",
- "redb",
- "rkyv",
- "rmp-serde",
- "rocksdb",
+ "poem",
+ "poem-openapi",
+ "serde_json",
  "tokio",
  "tracing",
- "wordbase-api",
- "wordbase-storage-api",
-]
-
-[[package]]
-name = "wordbase-storage-import"
-version = "0.0.0"
-dependencies = [
- "async-channel",
- "bytes",
- "derive_more",
- "eyre",
- "foldhash",
- "rayon",
- "regex",
- "serde",
- "serde_json",
- "serde_repr",
- "tracing",
- "wordbase-api",
- "wordbase-storage-api",
- "zip",
+ "wordbase-engine",
+ "wordbase-types",
 ]
 
 [[package]]
@@ -6196,6 +6186,24 @@ dependencies = [
  "android_logger",
  "tracing",
  "wordbase-engine",
+]
+
+[[package]]
+name = "wordbase-types"
+version = "0.0.0"
+dependencies = [
+ "bytes",
+ "data-encoding",
+ "derive_more",
+ "itertools 0.14.0",
+ "maud",
+ "poem",
+ "poem-openapi",
+ "rkyv",
+ "serde",
+ "serde_json",
+ "uniffi",
+ "uuid",
 ]
 
 [[package]]
