@@ -1,5 +1,5 @@
 use {
-    crate::StorageEngine,
+    crate::storage::StorageEngine,
     eyre::{Context, ContextCompat, Result, eyre},
     foldhash::HashSet,
     itertools::Itertools,

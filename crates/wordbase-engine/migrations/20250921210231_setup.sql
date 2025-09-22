@@ -10,3 +10,10 @@ CREATE TABLE profile_dictionary (
     dictionary BLOB NOT NULL,
     UNIQUE (profile, dictionary)
 );
+CREATE TRIGGER prevent_last_profile_delete
+BEFORE DELETE ON profile
+FOR EACH ROW
+WHEN (SELECT COUNT(*) FROM profile) = 1
+BEGIN
+    SELECT RAISE(ABORT, 'cannot delete last profile');
+END;

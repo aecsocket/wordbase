@@ -24,6 +24,7 @@ wordbase-storage = { workspace = true, features = [
   "backend-rocksdb",
   "codec-rkyv",
 ] }
+wordbase-deinflect = { workspace = true }
 
 futures = { workspace = true }
 arc-swap = { workspace = true }

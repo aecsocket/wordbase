@@ -35,6 +35,7 @@ type_complexity         = "allow"
 [workspace.dependencies]
 jmdict-furigana          = { path = "crates/jmdict-furigana" }
 wordbase-api             = { path = "crates/wordbase-api" }
+wordbase-deinflect         = { path = "crates/wordbase-deinflect" }
 wordbase-desktop         = { path = "crates/wordbase-desktop" }
 wordbase-engine          = { path = "crates/wordbase-engine" }
 wordbase-storage         = { path = "crates/wordbase-storage" }

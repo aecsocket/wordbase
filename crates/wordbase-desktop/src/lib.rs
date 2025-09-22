@@ -1,7 +1,7 @@
 #![doc = include_str!("../README.md")]
 
-// #[cfg(feature = "http")]
-// pub mod http;
+#[cfg(feature = "http")]
+pub mod http;
 
 mod texthooker;
 

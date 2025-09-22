@@ -13,7 +13,7 @@ use {
     },
     std::{fmt::Display, sync::Arc},
     tokio::net::ToSocketAddrs,
-    wordbase::{Dictionary, DictionaryId, NotFound, Profile, ProfileId, Wordbase, lookup::Lookups},
+    wordbase_engine::StorageEngine,
 };
 
 // mod anki; // TODO
@@ -30,10 +30,10 @@ pub const DEFAULT_PORT: u16 = 9518;
 ///
 /// Errors if there is an unrecoverable server error.
 pub async fn serve(
-    engine: Wordbase,
+    storage: StorageEngine,
     lookups: Lookups,
     addr: impl ToSocketAddrs + Send + Display,
-) -> anyhow::Result<()> {
+) -> eyre::Result<()> {
     let addr_str = addr.to_string();
     let v1 = OpenApiService::new(
         App { engine, lookups },

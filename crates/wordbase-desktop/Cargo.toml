@@ -1,7 +1,5 @@
 [package]
-description = "Dictionary and word lookup service - shared desktop logic"
 name        = "wordbase-desktop"
-version     = "0.1.0"
 
 authors.workspace      = true
 categories.workspace   = true
@@ -18,8 +16,7 @@ workspace = true
 all-features = true
 
 [features]
-# http = ["wordbase/poem", "dep:async-stream", "dep:poem", "dep:poem-openapi"]
-http = []
+http = ["wordbase-api/poem", "dep:async-stream", "dep:poem", "dep:poem-openapi"]
 
 [dependencies]
 wordbase-api    = { workspace = true }
