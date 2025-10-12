@@ -1,70 +1,63 @@
 [package]
 name = "wordbase-core-storage"
-
-authors.workspace      = true
-categories.workspace   = true
-edition.workspace      = true
-keywords.workspace     = true
-license.workspace      = true
-repository.workspace   = true
+edition.workspace = true
 rust-version.workspace = true
-
-[lints]
-workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
 
-[features]
-all-storages = [
-  "storage-heed",
-  "storage-redb",
-  "storage-rocksdb",
-  "storage-libsql",
-]
-
-storage-heed    = ["dep:heed"]
-storage-libsql  = ["dep:libsql"]
-storage-redb    = ["dep:redb"]
-storage-rocksdb = ["dep:rocksdb"]
-# storage-turso   = ["dep:turso"]
-
-all-codecs = ["codec-rkyv", "codec-rmp"]
-
-codec-rkyv = ["wordbase-core/rkyv", "dep:rkyv"]
-codec-rmp  = ["dep:rmp-serde"]
-
 [dependencies]
-wordbase-core  = { workspace = true }
-wordbase-types = { workspace = true }
-
 derive_more = { workspace = true, features = ["debug"] }
-either      = { workspace = true }
-eyre        = { workspace = true }
-futures     = { workspace = true }
-heed        = { workspace = true, optional = true }
-libsql      = { workspace = true, optional = true, features = ["core"] }
-redb        = { workspace = true, optional = true }
-rmp-serde   = { workspace = true, optional = true }
-rocksdb     = { workspace = true, optional = true }
-tokio       = { workspace = true, features = ["sync", "macros", "fs"] }
-tracing     = { workspace = true }
-# turso       = { workspace = true, optional = true }
-
-rkyv = { workspace = true, optional = true, features = [
+either = { workspace = true }
+eyre = { workspace = true }
+futures = { workspace = true }
+heed = { workspace = true, optional = true }
+libsql = { workspace = true, features = ["core"], optional = true }
+redb = { workspace = true, optional = true }
+# turso = { workspace = true, optional = true }
+rkyv = { workspace = true, features = [
   # this isn't ideal, but rocksdb doesn't let us enforce alignment guarantees
   # and without `unaligned` rkyv requires 8-byte alignment for records
   # fortunately, enabling this doesn't seem to decrease performace too bad on x86?
   "unaligned",
-] }
+], optional = true }
+rmp-serde = { workspace = true, optional = true }
+rocksdb = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["fs", "macros", "sync"] }
+tracing = { workspace = true }
+wordbase-core = { workspace = true }
+wordbase-types = { workspace = true }
 
 [dev-dependencies]
-ascii_table          = { workspace = true, features = ["wide_characters"] }
-clap                 = { workspace = true, features = ["derive"] }
-color-eyre           = { workspace = true }
-disqualified         = { workspace = true }
-humansize            = { workspace = true }
-tempfile             = { workspace = true }
-tokio                = { workspace = true, features = ["full"] }
-tracing-subscriber   = { workspace = true, features = ["env-filter"] }
+ascii_table = { workspace = true, features = ["wide_characters"] }
+clap = { workspace = true, features = ["derive"] }
+color-eyre = { workspace = true }
+disqualified = { workspace = true }
+humansize = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 wordbase-core-import = { workspace = true }
+
+[features]
+# storage-turso   = ["dep:turso"]
+all-codecs = ["codec-rkyv", "codec-rmp"]
+all-storages = [
+  "storage-heed",
+  "storage-libsql",
+  "storage-redb",
+  "storage-rocksdb",
+]
+codec-rkyv = ["dep:rkyv", "wordbase-core/rkyv"]
+codec-rmp = ["dep:rmp-serde"]
+storage-heed = ["dep:heed"]
+storage-libsql = ["dep:libsql"]
+storage-redb = ["dep:redb"]
+storage-rocksdb = ["dep:rocksdb"]
+
+[lints]
+workspace = true

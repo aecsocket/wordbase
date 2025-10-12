@@ -1,48 +1,43 @@
 [package]
 name = "wordbase-engine"
-
-authors.workspace      = true
-categories.workspace   = true
-edition.workspace      = true
-keywords.workspace     = true
-license.workspace      = true
-repository.workspace   = true
+edition.workspace = true
 rust-version.workspace = true
-
-[lints]
-workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
 
+[dependencies]
+arc-swap = { workspace = true }
+async-channel = { workspace = true }
+derive_more = { workspace = true, features = ["deref", "deref_mut"] }
+eyre = { workspace = true }
+foldhash = { workspace = true }
+futures = { workspace = true }
+itertools = { workspace = true }
+rayon = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order"] }
+sqlx = { workspace = true, features = ["runtime-tokio", "sqlite"] }
+tokio = { workspace = true, features = ["fs", "macros", "sync"] }
+tracing = { workspace = true }
+uniffi = { workspace = true, optional = true }
+uuid = { workspace = true }
+wordbase-core = { workspace = true }
+wordbase-core-deinflect = { workspace = true, features = ["all-deinflectors"] }
+wordbase-core-import = { workspace = true, features = ["all-importers"] }
+wordbase-core-storage = { workspace = true, features = [
+  "codec-rkyv",
+  "storage-rocksdb",
+] }
+wordbase-types = { workspace = true }
+
 [features]
-poem   = ["wordbase-core/poem"]
+poem = ["wordbase-core/poem"]
 uniffi = ["dep:uniffi"]
 
-[dependencies]
-wordbase-core           = { workspace = true }
-wordbase-core-deinflect = { workspace = true, features = ["all-deinflectors"] }
-wordbase-core-import    = { workspace = true, features = ["all-importers"] }
-wordbase-types          = { workspace = true }
-
-wordbase-core-storage = { workspace = true, features = [
-  "storage-rocksdb",
-  "codec-rkyv",
-] }
-
-arc-swap      = { workspace = true }
-async-channel = { workspace = true }
-eyre          = { workspace = true }
-foldhash      = { workspace = true }
-futures       = { workspace = true }
-itertools     = { workspace = true }
-rayon         = { workspace = true }
-serde         = { workspace = true, features = ["derive"] }
-serde_json    = { workspace = true, features = ["preserve_order"] }
-sqlx          = { workspace = true, features = ["runtime-tokio", "sqlite"] }
-tokio         = { workspace = true, features = ["sync", "macros", "fs"] }
-tracing       = { workspace = true }
-uniffi        = { workspace = true, optional = true }
-uuid          = { workspace = true }
-
-derive_more = { workspace = true, features = ["deref", "deref_mut"] }
+[lints]
+workspace = true

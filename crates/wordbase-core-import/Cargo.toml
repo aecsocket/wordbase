@@ -1,47 +1,42 @@
 [package]
 name = "wordbase-core-import"
-
-authors.workspace      = true
-categories.workspace   = true
-edition.workspace      = true
-keywords.workspace     = true
-license.workspace      = true
-repository.workspace   = true
+edition.workspace = true
 rust-version.workspace = true
-
-[lints]
-workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
 
-[features]
-all-importers = ["importer-yomitan", "importer-yomichan-audio"]
-
-importer-yomichan-audio = []
-importer-yomitan        = ["dep:zip", "dep:regex"]
-
 [dependencies]
-wordbase-core  = { workspace = true }
-wordbase-types = { workspace = true, features = ["serde"] }
-
 async-channel = { workspace = true }
-bytes         = { workspace = true }
-eyre          = { workspace = true }
-foldhash      = { workspace = true }
-rayon         = { workspace = true }
-regex         = { workspace = true, optional = true }
-serde         = { workspace = true, features = ["derive"] }
-serde_json    = { workspace = true }
-serde_repr    = { workspace = true }
-tracing       = { workspace = true }
-zip           = { workspace = true, optional = true }
-
+bytes = { workspace = true }
 derive_more = { workspace = true, features = [
   "debug",
-  "from",
-  "display",
-  "error",
   "deref",
   "deref_mut",
+  "display",
+  "error",
+  "from",
 ] }
+eyre = { workspace = true }
+foldhash = { workspace = true }
+rayon = { workspace = true }
+regex = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+serde_repr = { workspace = true }
+tracing = { workspace = true }
+wordbase-core = { workspace = true }
+wordbase-types = { workspace = true, features = ["serde"] }
+zip = { workspace = true, optional = true }
+
+[features]
+all-importers = ["importer-yomichan-audio", "importer-yomitan"]
+importer-yomichan-audio = []
+importer-yomitan = ["dep:regex", "dep:zip"]
+
+[lints]
+workspace = true

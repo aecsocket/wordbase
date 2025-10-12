@@ -1,58 +1,54 @@
 [package]
-description = "Dictionary and word lookup service - desktop application"
-name        = "wordbase-desktop"
-
-authors.workspace      = true
-categories.workspace   = true
-edition.workspace      = true
-keywords.workspace     = true
-license.workspace      = true
-repository.workspace   = true
+name = "wordbase-desktop"
+edition.workspace = true
 rust-version.workspace = true
-
-[lints]
-workspace = true
+description = "Dictionary and word lookup service - desktop application"
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
 
+[package.metadata.cargo-shear]
+ignored = [
+  "bzip2",  # to enable transitive dependency features
+]
+
 [dependencies]
-wordbase        = { workspace = true }
-wordbase-engine = { workspace = true }
-
-anyhow      = { workspace = true }
+anyhow = { workspace = true }
+bimap = { workspace = true }
+bzip2 = { workspace = true, features = ["static"] }
+data-encoding = { workspace = true }
+derive_more = { workspace = true, features = ["display"] }
 directories = { workspace = true }
-indexmap    = { workspace = true }
-maud        = { workspace = true }
-notify      = { workspace = true }
-
-bimap              = { workspace = true }
-bzip2              = { workspace = true, features = ["static"] }
-data-encoding      = { workspace = true }
-derive_more        = { workspace = true, features = ["display"] }
-foldhash           = { workspace = true }
-form_urlencoded    = { workspace = true }
-futures            = { workspace = true }
-glib               = { workspace = true, features = ["log"] }
-gtk4               = { workspace = true, features = ["gnome_47", "blueprint"] }
-rand               = { workspace = true }
-relm4              = { workspace = true, features = ["libadwaita", "gnome_47"] }
-relm4-icons        = { workspace = true }
-rmp-serde          = { workspace = true }
-serde              = { workspace = true, features = ["derive"] }
-serde_json         = { workspace = true }
-sqlx               = { workspace = true, features = ["runtime-tokio", "sqlite"] }
-tokio              = { workspace = true, features = ["full"] }
-tokio-util         = { workspace = true, features = ["rt"] }
-tracing            = { workspace = true }
+foldhash = { workspace = true }
+form_urlencoded = { workspace = true }
+futures = { workspace = true }
+glib = { workspace = true, features = ["log"] }
+gtk4 = { workspace = true, features = ["blueprint", "gnome_47"] }
+indexmap = { workspace = true }
+maud = { workspace = true }
+notify = { workspace = true }
+rand = { workspace = true }
+relm4 = { workspace = true, features = ["gnome_47", "libadwaita"] }
+relm4-icons = { workspace = true }
+rmp-serde = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sqlx = { workspace = true, features = ["runtime-tokio", "sqlite"] }
+tokio = { workspace = true, features = ["full"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-webkit6            = { workspace = true }
-zbus               = { workspace = true, features = ["tokio"] }
+webkit6 = { workspace = true }
+wordbase = { workspace = true }
+wordbase-engine = { workspace = true }
+zbus = { workspace = true, features = ["tokio"] }
 
 [build-dependencies]
 relm4-icons-build = { workspace = true }
 
-[package.metadata.cargo-shear]
-ignored = [
-  "bzip2", # to enable transitive dependency features
-]
+[lints]
+workspace = true

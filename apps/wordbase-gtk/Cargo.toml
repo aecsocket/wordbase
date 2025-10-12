@@ -1,63 +1,60 @@
 [package]
-description = "Dictionary and word lookup service - GTK application"
-name        = "wordbase-gtk"
-
-authors.workspace      = true
-categories.workspace   = true
-edition.workspace      = true
-keywords.workspace     = true
-license.workspace      = true
-repository.workspace   = true
+name = "wordbase-gtk"
+edition.workspace = true
 rust-version.workspace = true
-
-[lints]
-workspace = true
+description = "Dictionary and word lookup service - GTK application"
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
 
-[dependencies]
-wordbase-desktop = { workspace = true }
-wordbase-engine  = { workspace = true }
+[package.metadata.cargo-shear]
+ignored = [
+  "bzip2",  # to enable transitive dependency features
+]
 
-adw                = { workspace = true, features = ["v1_7"] }
-anyhow             = { workspace = true }
-arc-swap           = { workspace = true }
-ashpd              = { workspace = true, features = ["gtk4"] }
-bimap              = { workspace = true }
-bytes              = { workspace = true }
-bzip2              = { workspace = true, features = ["static"] }
-data-encoding      = { workspace = true }
-derive_more        = { workspace = true, features = ["display"] }
-directories        = { workspace = true }
-foldhash           = { workspace = true }
-form_urlencoded    = { workspace = true }
-futures            = { workspace = true }
-gio                = { workspace = true }
-glib               = { workspace = true, features = ["log"] }
-gtk                = { workspace = true, features = ["gnome_47", "blueprint"] }
-indexmap           = { workspace = true }
-libspa             = { workspace = true }
-maud               = { workspace = true }
-notify             = { workspace = true }
-pipewire           = { workspace = true }
-rand               = { workspace = true }
-relm4              = { workspace = true, features = ["libadwaita", "gnome_47"] }
-relm4-icons        = { workspace = true }
-rmp-serde          = { workspace = true }
-serde              = { workspace = true, features = ["derive"] }
-serde_json         = { workspace = true }
-tokio              = { workspace = true, features = ["full"] }
-tokio-util         = { workspace = true, features = ["rt"] }
-tracing            = { workspace = true }
+[dependencies]
+adw = { workspace = true, features = ["v1_7"] }
+anyhow = { workspace = true }
+arc-swap = { workspace = true }
+ashpd = { workspace = true, features = ["gtk4"] }
+bimap = { workspace = true }
+bytes = { workspace = true }
+bzip2 = { workspace = true, features = ["static"] }
+data-encoding = { workspace = true }
+derive_more = { workspace = true, features = ["display"] }
+directories = { workspace = true }
+foldhash = { workspace = true }
+form_urlencoded = { workspace = true }
+futures = { workspace = true }
+gio = { workspace = true }
+glib = { workspace = true, features = ["log"] }
+gtk = { workspace = true, features = ["blueprint", "gnome_47"] }
+indexmap = { workspace = true }
+libspa = { workspace = true }
+maud = { workspace = true }
+notify = { workspace = true }
+pipewire = { workspace = true }
+rand = { workspace = true }
+relm4 = { workspace = true, features = ["gnome_47", "libadwaita"] }
+relm4-icons = { workspace = true }
+rmp-serde = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-webkit             = { workspace = true }
-zbus               = { workspace = true, features = ["tokio"] }
+webkit = { workspace = true }
+wordbase-desktop = { workspace = true }
+wordbase-engine = { workspace = true }
+zbus = { workspace = true, features = ["tokio"] }
 
 [build-dependencies]
 relm4-icons-build = { workspace = true }
 
-[package.metadata.cargo-shear]
-ignored = [
-  "bzip2", # to enable transitive dependency features
-]
+[lints]
+workspace = true

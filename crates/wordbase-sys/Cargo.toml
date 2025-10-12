@@ -1,31 +1,28 @@
 [package]
-name    = "wordbase-sys"
-publish = false
-
-authors.workspace      = true
-categories.workspace   = true
-edition.workspace      = true
-keywords.workspace     = true
-license.workspace      = true
-repository.workspace   = true
+name = "wordbase-sys"
+edition.workspace = true
 rust-version.workspace = true
-
-[lints]
-workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+publish = false
 
 [package.metadata.docs.rs]
 all-features = true
 
 [lib]
 crate-type = ["cdylib"]
-doc        = false
-name       = "wordbase"
+doc = false
+name = "wordbase"
+
+[dependencies]
+android_logger = { workspace = true, optional = true }
+tracing = { workspace = true }
+wordbase-engine = { workspace = true, features = ["uniffi"] }
 
 [features]
 android = ["dep:android_logger", "tracing/log-always"]
 
-[dependencies]
-wordbase-engine = { workspace = true, features = ["uniffi"] }
-
-android_logger = { workspace = true, optional = true }
-tracing        = { workspace = true }
+[lints]
+workspace = true

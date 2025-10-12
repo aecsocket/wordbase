@@ -1,32 +1,29 @@
 [package]
 name = "wordbase-core"
-
-authors.workspace      = true
-categories.workspace   = true
-edition.workspace      = true
-keywords.workspace     = true
-license.workspace      = true
-repository.workspace   = true
+edition.workspace = true
 rust-version.workspace = true
-
-[lints]
-workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
+
+[dependencies]
+async-channel = { workspace = true }
+bytes = { workspace = true }
+eyre = { workspace = true }
+rayon = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["fs", "rt"] }
+tracing = { workspace = true }
+wordbase-types = { workspace = true, features = ["serde"] }
 
 [features]
 poem = ["wordbase-types/poem"]
 rkyv = ["wordbase-types/rkyv"]
 
-[dependencies]
-wordbase-types = { workspace = true, features = ["serde"] }
-
-async-channel = { workspace = true }
-bytes         = { workspace = true }
-eyre          = { workspace = true }
-rayon         = { workspace = true }
-serde         = { workspace = true, features = ["derive"] }
-serde_json    = { workspace = true }
-tokio         = { workspace = true, features = ["rt", "fs"] }
-tracing       = { workspace = true }
+[lints]
+workspace = true
