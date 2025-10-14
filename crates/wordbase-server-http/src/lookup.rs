@@ -3,12 +3,15 @@ use {
     axum::{Json, extract::State},
     serde::{Deserialize, Serialize},
     utoipa::ToSchema,
-    utoipa_axum::{router::UtoipaMethodRouter, routes},
+    utoipa_axum::{router::OpenApiRouter, routes},
     wordbase_types::{Deinflection, DictionaryId, ProfileId, Record, RecordId, Term},
 };
 
-pub fn routes() -> UtoipaMethodRouter<App> {
-    routes!(lookup_deinflect, lookup_lemma, lookup_sentence)
+pub fn routes() -> OpenApiRouter<App> {
+    OpenApiRouter::new()
+        .routes(routes!(lookup_deinflect))
+        .routes(routes!(lookup_lemma))
+        .routes(routes!(lookup_sentence))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -25,8 +28,18 @@ fn example_deinflect() -> Deinflect {
     }
 }
 
+/// Reads a sentence and generates deinflections for the word at the given
+/// cursor position.
+///
+/// The generated deinflections can be later looked up to get dictionary results
+/// for the word.
 #[axum::debug_handler]
-#[utoipa::path(post, path = "/lookup/deinflect", responses((status = OK, body = Vec<Deinflection>)))]
+#[utoipa::path(
+    post,
+    path = "/lookup/deinflect",
+    request_body = inline(Deinflect),
+    responses((status = OK, body = Vec<Deinflection>)),
+)]
 async fn lookup_deinflect(
     State(app): State<App>,
     Json(req): Json<Deinflect>,
@@ -56,8 +69,17 @@ fn example_lookup_lemma() -> LookupLemma {
     }
 }
 
+/// Searches dictionaries for records which are used by a given lemma word.
+///
+/// This will not perform any deinflection or processing on the lemma; it will
+/// look them up in the dictionary storages directly.
 #[axum::debug_handler]
-#[utoipa::path(post, path = "/lookup/lemma", responses((status = OK, body = Vec<RecordEntry>)))]
+#[utoipa::path(
+    post,
+    path = "/lookup/lemma",
+    request_body = inline(LookupLemma),
+    responses((status = OK, body = Vec<RecordEntry>)),
+)]
 async fn lookup_lemma(
     State(app): State<App>,
     Json(req): Json<LookupLemma>,

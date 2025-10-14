@@ -8,7 +8,7 @@ use {
     eyre::{Context, OptionExt, Result, bail, eyre},
     serde::Serialize,
     std::{io, path::PathBuf, sync::Arc},
-    tracing::level_filters::LevelFilter,
+    tracing::{info, level_filters::LevelFilter},
     tracing_subscriber::EnvFilter,
     wordbase_engine::{
         ProfileId, deinflect::Deinflectors, profiles::ProfileState, storage::EngineStorage,
@@ -185,6 +185,10 @@ async fn main() -> Result<()> {
         //
         Command::Serve { bind_addr } => {
             let deinflectors = app.deinflectors();
+            info!("");
+            info!("  Serving on  {bind_addr}");
+            info!("        Docs  http://{bind_addr}/docs");
+            info!("");
             wordbase_server_http::serve(app.storage, deinflectors, bind_addr).await?;
         }
     }

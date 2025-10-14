@@ -1,12 +1,15 @@
 use {
     crate::App,
     axum::{Json, extract::State},
-    utoipa_axum::{router::UtoipaMethodRouter, routes},
+    utoipa_axum::{
+        router::{OpenApiRouter, UtoipaMethodRouter},
+        routes,
+    },
     wordbase_types::Profile,
 };
 
-pub fn routes() -> UtoipaMethodRouter<App> {
-    routes!(get_all)
+pub fn routes() -> OpenApiRouter<App> {
+    OpenApiRouter::new().routes(routes!(get_all))
 }
 
 #[axum::debug_handler]

@@ -39,7 +39,7 @@ use {
         )
     )
 )]
-#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema), schema(no_recursion))]
 pub enum Content {
     String(String),
     Element(#[cfg_attr(feature = "rkyv", rkyv(omit_bounds))] Box<Element>),

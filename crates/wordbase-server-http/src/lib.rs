@@ -8,8 +8,8 @@ use {
     std::{fmt::Display, sync::Arc},
     tokio::net::{TcpListener, ToSocketAddrs},
     utoipa::ToSchema,
-    utoipa_axum::router::OpenApiRouter,
-    utoipa_swagger_ui::SwaggerUi,
+    utoipa_axum::{router::OpenApiRouter, routes},
+    utoipa_swagger_ui::{Config, SwaggerUi},
     wordbase_engine::{deinflect::Deinflectors, storage::EngineStorage},
 };
 
@@ -35,16 +35,20 @@ pub async fn serve(
     bind_addr: impl ToSocketAddrs + Send + Display,
 ) -> eyre::Result<()> {
     let (openapi_router, openapi) = OpenApiRouter::new()
-        .routes(utoipa_axum::routes!(health_check))
-        .routes(lookup::routes())
-        .routes(profile::routes())
+        .routes(routes!(health_check))
+        .merge(lookup::routes())
+        .merge(profile::routes())
         .with_state(App {
             storage: storage.into(),
             deinflectors: deinflectors.into(),
         })
         .split_for_parts();
 
-    let app = openapi_router.merge(SwaggerUi::new("/docs").url("/docs/openapi.json", openapi));
+    let app = openapi_router.merge(
+        SwaggerUi::new("/docs")
+            .config(Config::default().try_it_out_enabled(true))
+            .url("/docs/openapi.json", openapi),
+    );
 
     let addr_str = bind_addr.to_string();
     let listener = TcpListener::bind(bind_addr)
@@ -67,7 +71,13 @@ struct Health {
     healthy: bool,
 }
 
-#[utoipa::path(get, path = "/health", responses((status = OK, body = Health)))]
+/// Checks if the server is in a valid state to process requests.
+#[axum::debug_handler]
+#[utoipa::path(
+    get,
+    path = "/health",
+    responses((status = OK, body = Health)),
+)]
 async fn health_check() -> Json<Health> {
     Json(Health { healthy: true })
 }
