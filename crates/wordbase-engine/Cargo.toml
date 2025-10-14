@@ -13,7 +13,12 @@ all-features = true
 [dependencies]
 arc-swap = { workspace = true }
 async-channel = { workspace = true }
-derive_more = { workspace = true, features = ["deref", "deref_mut"] }
+derive_more = { workspace = true, features = [
+  "deref",
+  "deref_mut",
+  "display",
+  "error",
+] }
 eyre = { workspace = true }
 foldhash = { workspace = true }
 futures = { workspace = true }

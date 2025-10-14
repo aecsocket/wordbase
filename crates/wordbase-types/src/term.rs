@@ -221,9 +221,27 @@ const _: () = {
         utoipa::openapi::{RefOr, Schema},
     };
 
+    /// Key for [`Record`]s in a [`Dictionary`].
+    ///
+    /// A term consists of at least one of a headword or a reading.
+    /// If a term part is present, it is guaranteed to be non-empty,
+    /// enforced by [`NormString`].
+    ///
+    /// - headword: the canonical dictionary form of a word
+    /// - reading: disambiguates the headword between entries which use the same
+    ///   headword but for different words (i.e. Japanese kana reading)
+    ///
+    /// For languages without the concept of a reading, only the headword should
+    /// be specified.
+    ///
+    /// [`Record`]: crate::Record
+    /// [`Dictionary`]: crate::Dictionary
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
     struct TermSchema {
+        /// Canonical dictionary form of a word.
         headword: Option<NormString>,
+        /// Disambiguates the headword between entries which use the same
+        /// headword but for different words (i.e. Japanese kana reading).
         reading: Option<NormString>,
     }
 

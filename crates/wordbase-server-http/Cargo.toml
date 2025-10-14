@@ -28,7 +28,7 @@ utoipa-axum = { workspace = true }
 utoipa-swagger-ui = { workspace = true, features = ["axum", "vendored"] }
 serde = { workspace = true, features = ["derive"] }
 uuid = { workspace = true }
-derive_more = { workspace = true, features = ["display", "error"]}
+derive_more = { workspace = true, features = ["display", "error", "from"]}
 
 [lints]
 workspace = true

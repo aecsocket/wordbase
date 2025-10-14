@@ -1,13 +1,14 @@
 use {
-    crate::storage::EngineStorage,
+    crate::{Error, Result, error::Context, storage::EngineStorage},
     derive_more::{Deref, DerefMut},
-    eyre::{Context, Result, eyre},
+    eyre::eyre,
     foldhash::{HashMap, HashMapExt, HashSet, HashSetExt},
     futures::StreamExt,
     serde::Serialize,
     sqlx::{Pool, Sqlite},
     std::{collections::hash_map, sync::Arc},
     uuid::Uuid,
+    wordbase_core::Profile,
     wordbase_types::{DictionaryId, NormString, ProfileId},
 };
 
@@ -16,9 +17,22 @@ pub struct Profiles(pub HashMap<ProfileId, Arc<ProfileState>>);
 
 #[derive(Debug, Serialize)]
 pub struct ProfileState {
+    pub id: ProfileId,
     pub name: Option<NormString>,
     pub sorting_dictionary: Option<DictionaryId>,
     pub enabled_dictionaries: HashSet<DictionaryId>,
+}
+
+impl ProfileState {
+    #[must_use]
+    pub fn to_profile(&self) -> Profile {
+        Profile {
+            id: self.id,
+            name: self.name.clone(),
+            sorting_dictionary: self.sorting_dictionary,
+            enabled_dictionaries: self.enabled_dictionaries.iter().copied().collect(),
+        }
+    }
 }
 
 pub(crate) async fn create(db: &Pool<Sqlite>, name: &str) -> Result<ProfileId> {
@@ -30,7 +44,8 @@ pub(crate) async fn create(db: &Pool<Sqlite>, name: &str) -> Result<ProfileId> {
         name
     )
     .execute(db)
-    .await?;
+    .await
+    .wrap_internal_err("failed to insert profile row")?;
     Ok(profile_id)
 }
 
@@ -38,11 +53,11 @@ pub(crate) async fn fetch(db: &Pool<Sqlite>) -> Result<Profiles> {
     fn map_uuid(data: Vec<u8>) -> Result<Uuid> {
         Ok(Uuid::from_bytes(data.try_into().map_err(
             |data: Vec<u8>| {
-                eyre!(
+                Error::Internal(eyre!(
                     "uuid must be {} bytes but value is of length {}",
                     size_of::<Uuid>(),
                     data.len()
-                )
+                ))
             },
         )?))
     }
@@ -64,20 +79,21 @@ pub(crate) async fn fetch(db: &Pool<Sqlite>) -> Result<Profiles> {
         .next()
         .await
         .transpose()
-        .wrap_err("failed to fetch row")?
+        .wrap_internal_err("failed to fetch row")?
     {
         let profile_id = map_uuid(row.profile_id)
             .map(ProfileId)
-            .wrap_err("failed to map `profile_id`")?;
+            .wrap_internal_err("failed to map `profile_id`")?;
         let profile = match profiles.entry(profile_id) {
             hash_map::Entry::Occupied(entry) => entry.into_mut(),
             hash_map::Entry::Vacant(entry) => entry.insert(ProfileState {
+                id: profile_id,
                 name: NormString::new(row.name),
                 sorting_dictionary: row
                     .sorting_dictionary
                     .map(|id| map_uuid(id).map(DictionaryId))
                     .transpose()
-                    .wrap_err("failed to map `sorting_dictionary`")?,
+                    .wrap_internal_err("failed to map `sorting_dictionary`")?,
                 enabled_dictionaries: HashSet::new(),
             }),
         };
@@ -86,7 +102,7 @@ pub(crate) async fn fetch(db: &Pool<Sqlite>) -> Result<Profiles> {
             profile.enabled_dictionaries.insert(
                 map_uuid(dictionary)
                     .map(DictionaryId)
-                    .wrap_err("failed to map `enabled_dictionary`")?,
+                    .wrap_internal_err("failed to map `enabled_dictionary`")?,
             );
         }
     }
@@ -103,7 +119,16 @@ async fn remove(db: &Pool<Sqlite>, profile_id: ProfileId) -> Result<()> {
     let profile_id = profile_id.0.as_bytes().as_slice();
     sqlx::query!("DELETE FROM profile WHERE id = $1", profile_id)
         .execute(db)
-        .await?;
+        .await
+        .map_err(|err| {
+            if let Some(err) = err.as_database_error()
+                && err.message().contains("cannot delete last profile")
+            {
+                crate::Error::Request(eyre!("cannot delete last profile"))
+            } else {
+                crate::Error::Internal(eyre!(err).wrap_err("failed to delete profile row"))
+            }
+        })?;
     Ok(())
 }
 
@@ -121,7 +146,8 @@ async fn enable_dictionary(
         dict_id
     )
     .execute(db)
-    .await?;
+    .await
+    .wrap_internal_err("failed to insert profile dictionary row")?;
     Ok(())
 }
 
@@ -139,7 +165,8 @@ async fn disable_dictionary(
         dict_id
     )
     .execute(db)
-    .await?;
+    .await
+    .wrap_internal_err("failed to delete profile dictionary row")?;
     Ok(())
 }
 
@@ -151,7 +178,8 @@ pub(crate) async fn remove_dictionary(db: &Pool<Sqlite>, dict_id: DictionaryId) 
         dict_id
     )
     .execute(db)
-    .await?;
+    .await
+    .wrap_internal_err("failed to delete profile dictionary row")?;
     Ok(())
 }
 
@@ -160,8 +188,18 @@ impl EngineStorage {
         self.profiles.load().clone()
     }
 
+    pub fn get_profile(&self, profile_id: ProfileId) -> Result<Arc<ProfileState>> {
+        let profiles = self.profiles.load();
+        let profile = profiles
+            .get(&profile_id)
+            .wrap_request_err_with(|| eyre!("invalid profile {profile_id}"))?;
+        Ok(profile.clone())
+    }
+
     async fn sync_profiles(&self) -> Result<()> {
-        let profiles = fetch(&self.db).await.wrap_err("failed to sync profiles")?;
+        let profiles = fetch(&self.db)
+            .await
+            .wrap_internal_err("failed to sync profiles")?;
         self.profiles.store(Arc::new(profiles));
         Ok(())
     }

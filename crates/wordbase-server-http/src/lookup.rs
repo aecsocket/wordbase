@@ -1,5 +1,5 @@
 use {
-    crate::{App, AppError, Result},
+    crate::{App, Result},
     axum::{Json, extract::State},
     serde::{Deserialize, Serialize},
     utoipa::ToSchema,
@@ -44,10 +44,7 @@ async fn lookup_deinflect(
     State(app): State<App>,
     Json(req): Json<Deinflect>,
 ) -> Result<Json<Vec<Deinflection<'static>>>> {
-    let deinflections = app
-        .deinflectors
-        .deinflect(&req.sentence, req.cursor)
-        .map_err(AppError::Internal)?;
+    let deinflections = app.deinflectors.deinflect(&req.sentence, req.cursor)?;
     let deinflections = deinflections
         .into_iter()
         .map(Deinflection::into_owned)
@@ -86,8 +83,7 @@ async fn lookup_lemma(
 ) -> Result<Json<Vec<RecordEntry>>> {
     let entries = app
         .storage
-        .lookup_lemma(req.profile_id, &req.lemma)
-        .map_err(AppError::Internal)?
+        .lookup_lemma(req.profile_id, &req.lemma)?
         .into_iter()
         .map(RecordEntry::from)
         .collect();
@@ -118,8 +114,7 @@ async fn lookup_sentence(
 ) -> Result<Json<Vec<RecordEntry>>> {
     let entries = app
         .deinflectors
-        .lookup(&app.storage, req.profile_id, &req.sentence, req.cursor)
-        .map_err(AppError::Internal)?
+        .lookup(&app.storage, req.profile_id, &req.sentence, req.cursor)?
         .into_iter()
         .map(RecordEntry::from)
         .collect();

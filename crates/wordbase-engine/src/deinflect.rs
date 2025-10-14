@@ -1,6 +1,10 @@
 use {
-    crate::{dictionaries::RecordEntry, storage::EngineStorage},
-    eyre::{Context, Result, eyre},
+    crate::{
+        dictionaries::RecordEntry,
+        error::{Context as _, Result},
+        storage::EngineStorage,
+    },
+    eyre::eyre,
     rayon::prelude::*,
     wordbase_core::{Deinflection, deinflect::Deinflector},
     wordbase_types::ProfileId,
@@ -25,10 +29,9 @@ impl Deinflectors {
             .flat_map(
                 |deinflector| match deinflector.deinflect(sentence, cursor) {
                     Ok(x) => x.into_iter().map(Ok).collect::<Vec<_>>(),
-                    Err(err) => vec![
-                        Err(err)
-                            .wrap_err_with(|| eyre!("deinflector `{}` failed", deinflector.id())),
-                    ],
+                    Err(err) => vec![Err(err).wrap_internal_err_with(|| {
+                        eyre!("deinflector `{}` failed", deinflector.id())
+                    })],
                 },
             )
             .collect::<Result<Vec<_>>>()?;
@@ -51,12 +54,11 @@ impl Deinflectors {
             .flat_map(
                 |deinf| match storage.lookup_lemma(profile_id, &deinf.lemma) {
                     Ok(x) => x.into_iter().map(Ok).collect::<Vec<_>>(),
-                    Err(err) => vec![
-                        Err(err)
-                            .wrap_err_with(|| eyre!("failed to look up lemma `{}`", deinf.lemma)),
-                    ],
+                    Err(err) => vec![Err(err).wrap_internal_err_with(|| {
+                        eyre!("failed to look up lemma `{}`", deinf.lemma)
+                    })],
                 },
             )
-            .collect::<Result<Vec<_>>>()
+            .collect::<Result<Vec<_>, _>>()
     }
 }

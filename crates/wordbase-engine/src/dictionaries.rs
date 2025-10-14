@@ -1,8 +1,8 @@
 use {
-    crate::storage::EngineStorage,
+    crate::{Result, error::Context, storage::EngineStorage},
     arc_swap::ArcSwap,
     derive_more::{Deref, DerefMut},
-    eyre::{Context, ContextCompat, Result, eyre},
+    eyre::eyre,
     foldhash::HashSet,
     serde::Serialize,
     std::{path::PathBuf, sync::Arc},
@@ -37,12 +37,15 @@ pub struct OpenDictionary {
     pub lookups: Lookups,
 }
 
+#[derive(Debug)]
+pub struct ImportDictionaryError(pub eyre::Report);
+
 impl Dictionaries {
-    pub async fn new(data_dir: impl Into<PathBuf>) -> Result<Self> {
+    pub async fn new(data_dir: impl Into<PathBuf>) -> eyre::Result<Self> {
         Self::new_(data_dir.into()).await
     }
 
-    async fn new_(data_dir: PathBuf) -> Result<Self> {
+    async fn new_(data_dir: PathBuf) -> eyre::Result<Self> {
         let mut dir = fs::read_dir(&data_dir)
             .await
             .wrap_err("failed to read data directory")?;
@@ -56,7 +59,9 @@ impl Dictionaries {
             let file_name = entry.file_name();
 
             let result = async {
-                let file_name = file_name.to_str().wrap_err("file name is not UTF-8")?;
+                let file_name = file_name
+                    .to_str()
+                    .ok_or_else(|| eyre!("file name is not UTF-8"))?;
 
                 let dict_id = Uuid::try_parse(file_name)
                     .map(DictionaryId)
@@ -101,14 +106,17 @@ impl Dictionaries {
         let dict_dir = self.dict_dir(dict_id);
         fs::create_dir_all(&dict_dir)
             .await
-            .wrap_err_with(|| eyre!("failed to create dictionary directory {dict_dir:?}"))?;
+            .wrap_internal_err_with(|| {
+                eyre!("failed to create dictionary directory {dict_dir:?}")
+            })?;
 
         dictionary::import::<DefaultStorage, DefaultCodec>(open_archive, &dict_dir, IMPORTERS)
-            .await?;
+            .await
+            .wrap_request_err("failed to import dictionary")?;
         let (manifest, lookups) =
             dictionary::open::<DefaultStorage, DefaultCodec>(&dict_dir, DefaultCodec::default())
                 .await
-                .wrap_err("failed to reopen dictionary for lookups")?;
+                .wrap_internal_err("failed to reopen dictionary for lookups")?;
 
         let mut dicts = OpenDictionaries::clone(&self.open.load());
         dicts.push(Arc::new(OpenDictionary {
@@ -129,7 +137,9 @@ impl Dictionaries {
         let dict_dir = self.dict_dir(dict_id);
         fs::remove_dir_all(&dict_dir)
             .await
-            .wrap_err_with(|| eyre!("failed to remove dictionary directory {dict_dir:?}"))?;
+            .wrap_internal_err_with(|| {
+                eyre!("failed to remove dictionary directory {dict_dir:?}")
+            })?;
         Ok(())
     }
 
@@ -148,7 +158,7 @@ impl Dictionaries {
                     .into_iter()
                     .map(|row| Ok((dict.clone(), row)))
                     .collect::<Vec<_>>(),
-                Err(err) => vec![Err(err).wrap_err_with(|| {
+                Err(err) => vec![Err(err).wrap_internal_err_with(|| {
                     eyre!(
                         "failed to look up in dictionary {:?} ({:?})",
                         dict.meta.name,

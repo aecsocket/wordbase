@@ -36,6 +36,7 @@ pub enum AudioFormat {
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub struct Audio {
     /// File type of [`Audio::data`].
+    #[cfg_attr(feature = "utoipa", schema(inline))]
     pub format: AudioFormat,
     /// Raw audio file data.
     #[cfg_attr(feature = "utoipa", schema(value_type = Vec<u8>, format = Binary))]

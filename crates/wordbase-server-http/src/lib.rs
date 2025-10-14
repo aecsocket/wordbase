@@ -2,7 +2,12 @@
 #![allow(clippy::unused_async, reason = "API endpoints are inherently async")]
 
 use {
-    axum::Json,
+    axum::{
+        Json,
+        http::StatusCode,
+        response::{IntoResponse, Response},
+    },
+    derive_more::From,
     eyre::{Context, eyre},
     serde::{Deserialize, Serialize},
     std::{fmt::Display, sync::Arc},
@@ -15,11 +20,8 @@ use {
 
 // mod anki; // TODO
 // mod dictionary;
-mod error;
 mod lookup;
 mod profile;
-
-pub use error::*;
 
 /// Default port for serving the HTTP server on.
 pub const DEFAULT_PORT: u16 = 9518;
@@ -76,130 +78,26 @@ struct Health {
 #[utoipa::path(
     get,
     path = "/health",
-    responses((status = OK, body = Health)),
+    responses((status = OK, body = inline(Health))),
 )]
 async fn health_check() -> Json<Health> {
     Json(Health { healthy: true })
 }
 
-// #[OpenApi]
-// impl App {
-//     #[oai(path = "/lookup/sentence", method = "post")]
-//     async fn lookup_sentence(
-//         &self,
-//         req: Json<lookup::Sentence>,
-//     ) -> Result<Json<Vec<lookup::RecordEntry>>> {
-//         lookup::sentence(self, req.0).await.map(Json)
-//     }
+#[derive(Debug, From)]
+struct AppError(pub wordbase_engine::Error);
 
-//     #[oai(path = "/lookup/lemma", method = "post")]
-//     async fn lookup_lemma(
-//         &self,
-//         req: Json<lookup::Lemma>,
-//     ) -> Result<Json<Vec<lookup::RecordEntry>>> {
-//         lookup::lemma(self, req.0).await.map(Json)
-//     }
+type Result<T, E = AppError> = std::result::Result<T, E>;
 
-//     #[oai(path = "/lookup/deinflect", method = "post")]
-//     async fn lookup_deinflect(
-//         &self,
-//         req: Json<lookup::Deinflect>,
-//     ) -> Json<Vec<lookup::Deinflection>> {
-//         Json(lookup::deinflect(self, req.0).await)
-//     }
-
-//     // #[oai(path = "/profile", method = "get")]
-//     // async fn profile_index(&self) -> Json<Vec<Arc<Profile>>> {
-//     //     Json(profile::index(self).await)
-//     // }
-
-//     // #[oai(path = "/profile/:profile_id", method = "get")]
-//     // async fn profile_find(&self, profile_id: Path<ProfileId>) ->
-//     // Result<Json<Arc<Profile>>> {     profile::find(self,
-//     // profile_id.0).await.map(Json) }
-
-//     // #[oai(path = "/profile/:profile_id", method = "delete")]
-//     // async fn profile_delete(&self, profile_id: Path<ProfileId>) ->
-// Result<()> {     //     profile::delete(self, profile_id.0).await
-//     // }
-
-//     // #[oai(path = "/profile", method = "put")]
-//     // async fn profile_add(&self, req: Json<profile::Add>) ->
-//     // Result<Json<profile::AddResponse>> {     profile::add(self,
-//     // req.0).await.map(Json) }
-
-//     // #[oai(path = "/profile/:profile_id/copy", method = "post")]
-//     // async fn profile_copy(
-//     //     &self,
-//     //     profile_id: Path<ProfileId>,
-//     //     req: Json<profile::Add>,
-//     // ) -> Result<Json<profile::AddResponse>> {
-//     //     profile::copy(self, profile_id.0, req.0).await.map(Json)
-//     // }
-
-//     // #[oai(path = "/dictionary", method = "get")]
-//     // async fn dictionary_index(&self) -> Json<Vec<Arc<Dictionary>>> {
-//     //     Json(dictionary::index(self).await)
-//     // }
-
-//     // #[oai(path = "/dictionary/:dictionary_id", method = "get")]
-//     // async fn dictionary_find(
-//     //     &self,
-//     //     dictionary_id: Path<DictionaryId>,
-//     // ) -> Result<Json<Arc<Dictionary>>> {
-//     //     dictionary::find(self, dictionary_id.0).await.map(Json)
-//     // }
-
-//     // #[oai(path = "/dictionary/:dictionary_id", method = "delete")]
-//     // async fn dictionary_delete(&self, dictionary_id: Path<DictionaryId>)
-// ->     // Result<()> {     dictionary::delete(self, dictionary_id.0).await
-//     // }
-
-//     // #[oai(path = "/dictionary/import", method = "post")]
-//     // async fn dictionary_import(
-//     //     &self,
-//     //     req: dictionary::Import,
-//     // ) -> EventStream<BoxStream<'static, dictionary::ImportEvent>> {
-//     //     dictionary::import(self, req).await
-//     // }
-
-//     // #[oai(path = "/dictionary/position/swap", method = "post")]
-//     // async fn dictionary_position_swap(&self, req:
-// Json<dictionary::PositionSwap>)     // -> Result<()> {
-// dictionary::position_swap(self, req.0).await     // }
-
-//     // #[oai(path = "/dictionary/enable", method = "post")]
-//     // async fn dictionary_enable(&self, req: Json<dictionary::ToggleEnable>)
-// ->     // Result<()> {     dictionary::enable(self, req.0).await
-//     // }
-
-//     // #[oai(path = "/dictionary/disable", method = "post")]
-//     // async fn dictionary_disable(&self, req:
-// Json<dictionary::ToggleEnable>) ->     // Result<()> {
-// dictionary::disable(self, req.0).await     // }
-// }
-
-// #[derive(Debug, Clone, Object)]
-// struct Term {
-//     headword: Option<String>,
-//     reading: Option<String>,
-// }
-
-// impl From<wordbase_types::Term> for Term {
-//     fn from(value: wordbase_types::Term) -> Self {
-//         match value {
-//             wordbase_types::Term::Headword(headword) => Self {
-//                 headword: Some(headword.into()),
-//                 reading: None,
-//             },
-//             wordbase_types::Term::Reading(reading) => Self {
-//                 headword: None,
-//                 reading: Some(reading.into()),
-//             },
-//             wordbase_types::Term::Full(headword, reading) => Self {
-//                 headword: Some(headword.into()),
-//                 reading: Some(reading.into()),
-//             },
-//         }
-//     }
-// }
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        match self {
+            Self(wordbase_engine::Error::Internal(err)) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, format!("{err:#?}")).into_response()
+            }
+            Self(wordbase_engine::Error::Request(err)) => {
+                (StatusCode::BAD_REQUEST, format!("{err:#?}")).into_response()
+            }
+        }
+    }
+}

@@ -35,14 +35,16 @@ pub struct Deinflection<'t> {
     /// He is running to the store.
     ///       ^^^^^^^
     /// ```
-    #[cfg_attr(feature = "utoipa", schema(value_type = UsizeRange))]
+    #[cfg_attr(feature = "utoipa", schema(inline, value_type = UsizeRange))]
     pub source_span: Range<usize>,
 }
 
 #[cfg(feature = "utoipa")]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
 struct UsizeRange {
+    /// Lower bound of the range (inclusive).
     start: usize,
+    /// Upper bound of the range (exclusive).
     end: usize,
 }
 

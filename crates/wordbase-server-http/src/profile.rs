@@ -1,64 +1,88 @@
 use {
-    crate::App,
-    axum::{Json, extract::State},
-    utoipa_axum::{
-        router::{OpenApiRouter, UtoipaMethodRouter},
-        routes,
+    crate::{App, Result},
+    axum::{
+        Json,
+        extract::{Path, State},
     },
-    wordbase_types::Profile,
+    serde::{Deserialize, Serialize},
+    utoipa::ToSchema,
+    utoipa_axum::{router::OpenApiRouter, routes},
+    wordbase_types::{Profile, ProfileId},
 };
 
 pub fn routes() -> OpenApiRouter<App> {
-    OpenApiRouter::new().routes(routes!(get_all))
+    OpenApiRouter::new()
+        .routes(routes!(get_all))
+        .routes(routes!(get))
+        .routes(routes!(create))
+        .routes(routes!(delete))
 }
 
+/// Get all profiles.
 #[axum::debug_handler]
-#[utoipa::path(get, path = "/profile", responses((status = OK, body = Vec<Profile>)))]
+#[utoipa::path(
+    get,
+    path = "/profile",
+    responses((status = OK, body = Vec<Profile>))
+)]
 async fn get_all(State(app): State<App>) -> Json<Vec<Profile>> {
-    Json(
-        app.storage
-            .profiles()
-            .iter()
-            .map(|(&id, profile)| Profile {
-                id,
-                name: profile.name.clone(),
-                sorting_dictionary: profile.sorting_dictionary,
-                enabled_dictionaries: profile.enabled_dictionaries.iter().copied().collect(),
-            })
-            .collect(),
-    )
+    let profiles = app
+        .storage
+        .profiles()
+        .values()
+        .map(|profile| profile.to_profile())
+        .collect();
+    Json(profiles)
 }
 
-// pub async fn find(app: &App, profile_id: ProfileId) -> Result<Arc<Profile>> {
-//     Ok(app
-//         .engine
-//         .profiles()
-//         .get(&profile_id)
-//         .cloned()
-//         .ok_or(NotFoundError)?)
-// }
+/// Get a profile by its ID.
+#[axum::debug_handler]
+#[utoipa::path(
+    get,
+    path = "/profile/{id}",
+    params(("id", description = "Profile ID")),
+    responses((status = OK, body = Vec<Profile>))
+)]
+async fn get(State(app): State<App>, Path((id,)): Path<(ProfileId,)>) -> Result<Json<Profile>> {
+    let profile = app.storage.get_profile(id)?.to_profile();
+    Ok(Json(profile))
+}
 
-// pub async fn delete(app: &App, profile_id: ProfileId) -> Result<()> {
-//     app.engine.remove_profile(profile_id).await?;
-//     Ok(())
-// }
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[schema(examples(example_create))]
+struct Create {
+    /// New profile name.
+    name: String,
+}
 
-// pub async fn add(app: &App, req: Add) -> Result<AddResponse> {
-//     let new_profile_id = app.engine.add_profile(req.name).await?;
-//     Ok(AddResponse { new_profile_id })
-// }
+fn example_create() -> Create {
+    Create {
+        name: "German Sentence Mining".into(),
+    }
+}
 
-// #[derive(Debug, Clone, Object)]
-// pub struct Add {
-//     pub name: Option<NormString>,
-// }
+/// Create a profile.
+#[axum::debug_handler]
+#[utoipa::path(
+    put,
+    path = "/profile",
+    request_body = inline(Create),
+    responses((status = OK, body = Vec<Profile>))
+)]
+async fn create(State(app): State<App>, Json(req): Json<Create>) -> Result<Json<ProfileId>> {
+    let profile_id = app.storage.create_profile(&req.name).await?;
+    Ok(Json(profile_id))
+}
 
-// #[derive(Debug, Clone, Object)]
-// pub struct AddResponse {
-//     pub new_profile_id: ProfileId,
-// }
-
-// pub async fn copy(app: &App, profile_id: ProfileId, req: Add) ->
-// Result<AddResponse> {     let new_profile_id =
-// app.engine.copy_profile(profile_id, req.name).await?;     Ok(AddResponse {
-// new_profile_id }) }
+/// Delete a profile.
+#[axum::debug_handler]
+#[utoipa::path(
+    delete,
+    path = "/profile/{id}",
+    params(("id", description = "Profile ID")),
+    responses((status = OK))
+)]
+async fn delete(State(app): State<App>, Path((id,)): Path<(ProfileId,)>) -> Result<()> {
+    app.storage.remove_profile(id).await?;
+    Ok(())
+}

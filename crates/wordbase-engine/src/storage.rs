@@ -1,11 +1,13 @@
 pub use wordbase_core::storage::*;
 use {
     crate::{
+        Result,
         dictionaries::{Dictionaries, RecordEntry},
+        error::Context,
         profiles::{self, Profiles},
     },
     arc_swap::ArcSwap,
-    eyre::{Context, Result, eyre},
+    eyre::eyre,
     sqlx::{
         Pool, Sqlite,
         sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
@@ -23,11 +25,11 @@ pub struct EngineStorage {
 }
 
 impl EngineStorage {
-    pub async fn new(data_dir: impl AsRef<Path>) -> Result<Self> {
+    pub async fn new(data_dir: impl AsRef<Path>) -> eyre::Result<Self> {
         Self::new_(data_dir.as_ref()).await
     }
 
-    async fn new_(data_dir: &Path) -> Result<Self> {
+    async fn new_(data_dir: &Path) -> eyre::Result<Self> {
         fs::create_dir_all(data_dir)
             .await
             .wrap_err_with(|| eyre!("failed to create data directory at {data_dir:?}"))?;
@@ -69,16 +71,16 @@ impl EngineStorage {
     }
 
     pub fn lookup_lemma(&self, profile_id: ProfileId, lemma: &str) -> Result<Vec<RecordEntry>> {
-        let profiles = self.profiles.load();
-        let profile = profiles
-            .get(&profile_id)
-            .ok_or_else(|| eyre!("invalid profile {profile_id:?}"))?;
-        self.dictionaries
+        let profile = self.get_profile(profile_id)?;
+        let records = self
+            .dictionaries
             .lookup(lemma, &profile.enabled_dictionaries)
+            .wrap_internal_err("failed to perform lookup")?;
+        Ok(records)
     }
 }
 
-async fn setup_db(db_path: &Path) -> Result<Pool<Sqlite>> {
+async fn setup_db(db_path: &Path) -> eyre::Result<Pool<Sqlite>> {
     let options = SqliteConnectOptions::new()
         .filename(db_path)
         .create_if_missing(true)
@@ -88,12 +90,12 @@ async fn setup_db(db_path: &Path) -> Result<Pool<Sqlite>> {
         .max_connections(8)
         .connect_with(options)
         .await
-        .context("failed to connect to database")?;
+        .wrap_err("failed to connect to database")?;
 
     sqlx::migrate!()
         .run(&db)
         .await
-        .context("failed to run migrations")?;
+        .wrap_err("failed to run migrations")?;
 
     Ok(db)
 }

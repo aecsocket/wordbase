@@ -3,7 +3,11 @@
 
 pub mod deinflect;
 pub mod dictionaries;
+pub mod error;
 pub mod profiles;
 pub mod storage;
 
-pub use wordbase_core::*;
+pub use {
+    error::{Error, Result},
+    wordbase_core::*,
+};

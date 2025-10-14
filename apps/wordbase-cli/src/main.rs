@@ -101,6 +101,7 @@ struct App {
 
 impl App {
     pub fn deinflectors(&self) -> Deinflectors {
+        _ = self;
         Deinflectors::new(vec![])
     }
 }
