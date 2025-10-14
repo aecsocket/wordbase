@@ -55,6 +55,10 @@ enum Command {
     LookupLemma {
         lemma: String,
     },
+    Serve {
+        #[arg(short, long, default_value = "127.0.0.1:9518")]
+        bind_addr: String,
+    },
 }
 
 #[derive(Debug, Clone, clap::Subcommand)]
@@ -97,7 +101,7 @@ struct App {
 
 impl App {
     pub fn deinflectors(&self) -> Deinflectors {
-        todo!();
+        Deinflectors::new(vec![])
     }
 }
 
@@ -142,8 +146,8 @@ async fn main() -> Result<()> {
 
     let app = App {
         storage,
-        profile_id,
         profile,
+        profile_id,
     };
 
     let of = args.output;
@@ -178,7 +182,12 @@ async fn main() -> Result<()> {
             finish(of, lookup::sentence(&app, &first, second.as_deref()).await?);
         }
         Command::LookupLemma { lemma } => finish(of, lookup::lemma(&app, &lemma).await?),
-    };
+        //
+        Command::Serve { bind_addr } => {
+            let deinflectors = app.deinflectors();
+            wordbase_server_http::serve(app.storage, deinflectors, bind_addr).await?;
+        }
+    }
     Ok(())
 }
 

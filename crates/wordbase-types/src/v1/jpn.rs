@@ -12,6 +12,7 @@ use {itertools::Itertools as _, std::iter};
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub struct PitchPosition(pub u64);
 
 #[cfg(feature = "uniffi")]
@@ -27,6 +28,7 @@ uniffi::custom_newtype!(PitchPosition, u64);
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub enum PitchCategory {
     /// 平板式: first mora is low; all later morae are high.
     ///

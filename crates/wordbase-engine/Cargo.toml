@@ -36,8 +36,7 @@ wordbase-core-storage = { workspace = true, features = [
 wordbase-types = { workspace = true }
 
 [features]
-poem = ["wordbase-core/poem"]
-uniffi = ["dep:uniffi"]
+uniffi = ["dep:uniffi", "wordbase-types/uniffi"]
 
 [lints]
 workspace = true

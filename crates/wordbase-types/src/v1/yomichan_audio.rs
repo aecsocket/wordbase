@@ -14,6 +14,7 @@ use {super::jpn::PitchPosition, bytes::Bytes, derive_more::Display};
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum AudioFormat {
     /// Opus audio format.
@@ -32,10 +33,12 @@ pub enum AudioFormat {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub struct Audio {
     /// File type of [`Audio::data`].
     pub format: AudioFormat,
     /// Raw audio file data.
+    #[cfg_attr(feature = "utoipa", schema(value_type = Vec<u8>, format = Binary))]
     pub data: Bytes,
 }
 
@@ -49,6 +52,7 @@ pub struct Audio {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Forvo {
     /// Username of the speaker.
@@ -67,6 +71,7 @@ pub struct Forvo {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Jpod {
     /// Audio data.
@@ -83,6 +88,7 @@ pub struct Jpod {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Nhk16 {
     /// Audio data.
@@ -105,6 +111,7 @@ pub struct Nhk16 {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Shinmeikai8 {
     /// Audio data.

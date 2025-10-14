@@ -39,6 +39,7 @@ use {
         )
     )
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub enum Content {
     String(String),
     Element(#[cfg_attr(feature = "rkyv", rkyv(omit_bounds))] Box<Element>),
@@ -56,6 +57,7 @@ pub enum Content {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum Element {
     Br(LineBreakElement),
@@ -91,6 +93,7 @@ pub enum Element {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct LineBreakElement {
     pub data: Option<Data>,
@@ -107,6 +110,7 @@ pub struct LineBreakElement {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct UnstyledElement {
     pub content: Option<Content>,
@@ -125,6 +129,7 @@ pub struct UnstyledElement {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct TableElement {
     pub content: Option<Content>,
@@ -146,6 +151,7 @@ pub struct TableElement {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct StyledElement {
     pub content: Option<Content>,
@@ -167,6 +173,7 @@ pub struct StyledElement {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ImageElement {
     #[cfg_attr(feature = "serde", serde(flatten))]
@@ -188,6 +195,7 @@ pub struct ImageElement {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ImageElementBase {
     pub data: Option<Data>,
@@ -218,6 +226,7 @@ pub struct ImageElementBase {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct LinkElement {
     pub content: Option<Content>,
@@ -238,6 +247,7 @@ pub struct LinkElement {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ContentStyle {
     pub font_style: Option<FontStyle>,
@@ -275,19 +285,8 @@ pub struct ContentStyle {
     pub list_style_type: Option<String>,
 }
 
-#[cfg(feature = "serde")]
-macro_rules! display_as_serialize {
-    ($T:ty) => {
-        impl std::fmt::Display for $T {
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                let serializer = FormatterSerializer { f };
-                serde::Serialize::serialize(self, serializer)
-            }
-        }
-    };
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter, strum::Display)]
+#[strum(serialize_all = "kebab-case")]
 #[cfg_attr(
     feature = "serde",
     derive(serde::Serialize, serde::Deserialize),
@@ -298,6 +297,7 @@ macro_rules! display_as_serialize {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum VerticalAlign {
     Baseline,
@@ -310,10 +310,8 @@ pub enum VerticalAlign {
     Bottom,
 }
 
-#[cfg(feature = "serde")]
-display_as_serialize!(VerticalAlign);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter, strum::Display)]
+#[strum(serialize_all = "kebab-case")]
 #[cfg_attr(
     feature = "serde",
     derive(serde::Serialize, serde::Deserialize),
@@ -324,6 +322,7 @@ display_as_serialize!(VerticalAlign);
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum TextDecorationLine {
     Underline,
@@ -331,10 +330,8 @@ pub enum TextDecorationLine {
     LineThrough,
 }
 
-#[cfg(feature = "serde")]
-display_as_serialize!(TextDecorationLine);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter, strum::Display)]
+#[strum(serialize_all = "kebab-case")]
 #[cfg_attr(
     feature = "serde",
     derive(serde::Serialize, serde::Deserialize),
@@ -345,6 +342,7 @@ display_as_serialize!(TextDecorationLine);
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum TextDecorationStyle {
     Solid,
@@ -354,10 +352,8 @@ pub enum TextDecorationStyle {
     Wavy,
 }
 
-#[cfg(feature = "serde")]
-display_as_serialize!(TextDecorationStyle);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter, strum::Display)]
+#[strum(serialize_all = "kebab-case")]
 #[cfg_attr(
     feature = "serde",
     derive(serde::Serialize, serde::Deserialize),
@@ -368,16 +364,15 @@ display_as_serialize!(TextDecorationStyle);
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum FontStyle {
     Normal,
     Italic,
 }
 
-#[cfg(feature = "serde")]
-display_as_serialize!(FontStyle);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter, strum::Display)]
+#[strum(serialize_all = "kebab-case")]
 #[cfg_attr(
     feature = "serde",
     derive(serde::Serialize, serde::Deserialize),
@@ -388,16 +383,15 @@ display_as_serialize!(FontStyle);
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum FontWeight {
     Normal,
     Bold,
 }
 
-#[cfg(feature = "serde")]
-display_as_serialize!(FontWeight);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter, strum::Display)]
+#[strum(serialize_all = "kebab-case")]
 #[cfg_attr(
     feature = "serde",
     derive(serde::Serialize, serde::Deserialize),
@@ -408,6 +402,7 @@ display_as_serialize!(FontWeight);
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum WordBreak {
     Normal,
@@ -415,10 +410,8 @@ pub enum WordBreak {
     KeepAll,
 }
 
-#[cfg(feature = "serde")]
-display_as_serialize!(WordBreak);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter, strum::Display)]
+#[strum(serialize_all = "kebab-case")]
 #[cfg_attr(
     feature = "serde",
     derive(serde::Serialize, serde::Deserialize),
@@ -429,6 +422,7 @@ display_as_serialize!(WordBreak);
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum TextAlign {
     Start,
@@ -439,10 +433,8 @@ pub enum TextAlign {
     Justify,
 }
 
-#[cfg(feature = "serde")]
-display_as_serialize!(TextAlign);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter, strum::Display)]
+#[strum(serialize_all = "kebab-case")]
 #[cfg_attr(
     feature = "serde",
     derive(serde::Serialize, serde::Deserialize),
@@ -453,16 +445,15 @@ display_as_serialize!(TextAlign);
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum SizeUnits {
     Px,
     Em,
 }
 
-#[cfg(feature = "serde")]
-display_as_serialize!(SizeUnits);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter, strum::Display)]
+#[strum(serialize_all = "kebab-case")]
 #[cfg_attr(
     feature = "serde",
     derive(serde::Serialize, serde::Deserialize),
@@ -473,6 +464,7 @@ display_as_serialize!(SizeUnits);
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum ImageRendering {
     Auto,
@@ -480,10 +472,8 @@ pub enum ImageRendering {
     CrispEdges,
 }
 
-#[cfg(feature = "serde")]
-display_as_serialize!(ImageRendering);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter, strum::Display)]
+#[strum(serialize_all = "kebab-case")]
 #[cfg_attr(
     feature = "serde",
     derive(serde::Serialize, serde::Deserialize),
@@ -494,14 +484,12 @@ display_as_serialize!(ImageRendering);
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum ImageAppearance {
     Auto,
     Monochrome,
 }
-
-#[cfg(feature = "serde")]
-display_as_serialize!(ImageAppearance);
 
 #[derive(Debug, Display, Clone)]
 #[cfg_attr(
@@ -514,6 +502,7 @@ display_as_serialize!(ImageAppearance);
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum NumberOrString {
     Number(f64),
@@ -527,38 +516,11 @@ pub enum NumberOrString {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug, Deref, DerefMut))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub struct Data(pub HashMap<String, String>);
 
 #[cfg(feature = "uniffi")]
 uniffi::custom_newtype!(Data, HashMap<String, String>);
-
-// utils
-
-#[cfg(feature = "serde")]
-struct FormatterSerializer<'a, 'b> {
-    pub f: &'a mut core::fmt::Formatter<'b>,
-}
-
-#[cfg(feature = "serde")]
-impl serde::Serializer for FormatterSerializer<'_, '_> {
-    type Ok = ();
-    type Error = core::fmt::Error;
-
-    fn serialize_unit_variant(
-        self,
-        _name: &'static str,
-        _variant_index: u32,
-        variant: &'static str,
-    ) -> Result<Self::Ok, Self::Error> {
-        write!(self.f, "{variant}")
-    }
-
-    serde::__serialize_unimplemented! {
-        bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str bytes none some
-        unit unit_struct newtype_struct newtype_variant
-        seq tuple tuple_struct tuple_variant map struct struct_variant
-    }
-}
 
 #[cfg(feature = "uniffi")]
 const _: () = {
@@ -608,3 +570,37 @@ const _: () = {
 
     uniffi::custom_type!(Content, ContentFfi);
 };
+
+#[cfg(test)]
+mod tests {
+    use {
+        crate::v1::yomitan::structured::{
+            FontStyle, FontWeight, ImageAppearance, ImageRendering, SizeUnits, TextAlign,
+            TextDecorationLine, TextDecorationStyle, VerticalAlign, WordBreak,
+        },
+        serde::Serialize,
+        std::fmt::Display,
+        strum::IntoEnumIterator,
+    };
+
+    fn assert_repr_eq<T: Clone + Display + Serialize>(t: T) {
+        assert_eq!(
+            t.clone().to_string(),
+            serde_json::to_value(t).unwrap().as_str().unwrap()
+        );
+    }
+
+    #[test]
+    fn enum_display_eq_serialize() {
+        VerticalAlign::iter().for_each(assert_repr_eq);
+        TextDecorationLine::iter().for_each(assert_repr_eq);
+        TextDecorationStyle::iter().for_each(assert_repr_eq);
+        FontStyle::iter().for_each(assert_repr_eq);
+        FontWeight::iter().for_each(assert_repr_eq);
+        WordBreak::iter().for_each(assert_repr_eq);
+        TextAlign::iter().for_each(assert_repr_eq);
+        SizeUnits::iter().for_each(assert_repr_eq);
+        ImageRendering::iter().for_each(assert_repr_eq);
+        ImageAppearance::iter().for_each(assert_repr_eq);
+    }
+}

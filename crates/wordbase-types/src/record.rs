@@ -11,7 +11,7 @@ macro_rules! record_kinds {
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
 )]
-#[cfg_attr(feature = "poem", derive(poem_openapi::Enum))]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[repr(u32)]
 #[non_exhaustive]
@@ -31,6 +31,7 @@ pub enum RecordKind {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[non_exhaustive]
 #[expect(missing_docs, reason = "self-explanatory")]
@@ -95,7 +96,7 @@ pub trait RecordType:
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
 )]
-#[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub struct RecordId(pub u64);
 
 #[cfg(feature = "uniffi")]
@@ -122,6 +123,7 @@ uniffi::custom_newtype!(RecordId, u64);
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug, Clone, Copy, PartialEq, Eq, Hash))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum FrequencyValue {
     /// Lower value represents a [`Term`] which appears more frequently.

@@ -1,3 +1,4 @@
+pub use wordbase_core::storage::*;
 use {
     crate::{
         dictionaries::{Dictionaries, RecordEntry},

@@ -23,20 +23,24 @@ derive_more = { workspace = true, features = [
 ] }
 itertools = { workspace = true }
 maud = { workspace = true, optional = true }
-poem = { workspace = true, optional = true }
-poem-openapi = { workspace = true, features = ["uuid"], optional = true }
 rkyv = { workspace = true, features = ["bytes-1", "uuid-1"], optional = true }
 serde = { workspace = true, features = ["derive"], optional = true }
 serde_json = { workspace = true, optional = true }
 uniffi = { workspace = true, optional = true }
 uuid = { workspace = true, features = ["v7"] }
+utoipa = { workspace = true, optional = true, features = ["uuid"] }
+strum = { workspace = true, features = ["derive"] }
+
+[dev-dependencies]
+wordbase-types = { path = ".", features = ["serde"] }
+serde_json = { workspace = true }
 
 [features]
-poem = ["dep:poem", "dep:poem-openapi"]
 render-html = ["dep:maud"]
 rkyv = ["dep:rkyv"]
 serde = ["bytes/serde", "dep:serde", "dep:serde_json", "uuid/serde"]
 uniffi = ["dep:data-encoding", "dep:uniffi"]
+utoipa = ["serde", "dep:utoipa"]
 
 [lints]
 workspace = true

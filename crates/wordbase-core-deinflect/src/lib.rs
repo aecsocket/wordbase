@@ -37,7 +37,7 @@ pub const DEINFLECTORS: &[&dyn Deinflector] = &[&Identity, &Latin];
 mod tests {
     use {
         indexmap::IndexSet,
-        wordbase_core::deinflect::{Deinflection, Deinflector},
+        wordbase_core::{Deinflection, deinflect::Deinflector},
     };
 
     #[track_caller]

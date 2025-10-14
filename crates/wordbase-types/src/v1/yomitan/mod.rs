@@ -23,6 +23,7 @@ use {super::jpn::PitchPosition, crate::FrequencyValue};
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Glossary {
     /// How frequently this word appears, as a ranking relative to other terms
@@ -51,6 +52,7 @@ pub struct Glossary {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct GlossaryTag {
     /// Human-readable name for this tag.
@@ -83,6 +85,7 @@ pub struct GlossaryTag {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Frequency {
     /// Raw integer ranking value.
@@ -106,6 +109,7 @@ pub struct Frequency {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Pitch {
     /// What [mora] position the [downstep] is located on.
@@ -140,6 +144,7 @@ pub struct Pitch {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Phonetics {
     /// Phonetic transcriptions.
@@ -154,6 +159,7 @@ pub struct Phonetics {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PhoneticTranscription {
     /// [International Phonetic Alphabet][ipa] representation of the term.
@@ -176,6 +182,7 @@ pub struct PhoneticTranscription {
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
     rkyv(derive(Debug))
 )]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Kanji {
     /// [On'yomi] readings of this kanji.

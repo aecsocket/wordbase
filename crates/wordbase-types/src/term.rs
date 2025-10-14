@@ -214,6 +214,32 @@ const _: () = {
     }
 };
 
+#[cfg(feature = "utoipa")]
+const _: () = {
+    use {
+        std::borrow::Cow,
+        utoipa::openapi::{RefOr, Schema},
+    };
+
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+    struct TermSchema {
+        headword: Option<NormString>,
+        reading: Option<NormString>,
+    }
+
+    impl utoipa::ToSchema for Term {
+        fn name() -> Cow<'static, str> {
+            Cow::Borrowed("Term")
+        }
+    }
+
+    impl utoipa::PartialSchema for Term {
+        fn schema() -> RefOr<Schema> {
+            TermSchema::schema()
+        }
+    }
+};
+
 #[cfg(feature = "uniffi")]
 const _: () = {
     #[derive(uniffi::Record)]

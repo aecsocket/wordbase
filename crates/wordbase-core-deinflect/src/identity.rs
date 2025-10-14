@@ -1,6 +1,6 @@
 use {
     eyre::{Result, eyre},
-    wordbase_core::deinflect::{Deinflection, Deinflector},
+    wordbase_core::{Deinflection, deinflect::Deinflector},
 };
 
 /// Returns the given text verbatim as a lemma.

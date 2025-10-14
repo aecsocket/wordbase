@@ -6,3 +6,5 @@ pub mod deinflect;
 pub mod dictionary;
 pub mod importer;
 pub mod storage;
+
+pub use wordbase_types::*;

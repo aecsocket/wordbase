@@ -16,7 +16,11 @@ use {
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
 )]
-#[cfg_attr(feature = "poem", derive(poem_openapi::Object), oai(example))]
+#[cfg_attr(
+    feature = "utoipa",
+    derive(utoipa::ToSchema),
+    schema(examples(example_profile))
+)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Profile {
     /// Unique identifier for this profile in the database.
@@ -44,20 +48,18 @@ pub struct Profile {
     pub enabled_dictionaries: Vec<DictionaryId>,
 }
 
-#[cfg(feature = "poem")]
-impl poem_openapi::types::Example for Profile {
-    fn example() -> Self {
-        Self {
-            id: ProfileId(uuid::uuid!("f619b6a1-28cb-4e32-8294-85b7f51f76c5")),
-            name: Some(NormString::new("Japanese").expect("valid `NormString`")),
-            sorting_dictionary: Some(DictionaryId(uuid::uuid!(
-                "6c0be404-fb5f-4f25-a9cc-6bf78667bb2b"
-            ))),
-            enabled_dictionaries: vec![
-                DictionaryId(uuid::uuid!("6c0be404-fb5f-4f25-a9cc-6bf78667bb2b")),
-                DictionaryId(uuid::uuid!("cb5b772c-6cd7-47dd-aca8-651de6f376ae")),
-            ],
-        }
+#[cfg(feature = "utoipa")]
+fn example_profile() -> Profile {
+    Profile {
+        id: ProfileId(uuid::uuid!("f619b6a1-28cb-4e32-8294-85b7f51f76c5")),
+        name: Some(NormString::new("Japanese").expect("valid `NormString`")),
+        sorting_dictionary: Some(DictionaryId(uuid::uuid!(
+            "6c0be404-fb5f-4f25-a9cc-6bf78667bb2b"
+        ))),
+        enabled_dictionaries: vec![
+            DictionaryId(uuid::uuid!("6c0be404-fb5f-4f25-a9cc-6bf78667bb2b")),
+            DictionaryId(uuid::uuid!("cb5b772c-6cd7-47dd-aca8-651de6f376ae")),
+        ],
     }
 }
 
@@ -82,7 +84,7 @@ impl Profile {
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
 )]
-#[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub struct ProfileId(pub Uuid);
 
 impl ProfileId {

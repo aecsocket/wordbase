@@ -22,7 +22,7 @@ tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 wordbase-desktop = { workspace = true }
-# wordbase-server-http = { workspace = true }
+wordbase-server-http = { workspace = true }
 wordbase-engine = { workspace = true }
 
 [lints]

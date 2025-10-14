@@ -2,7 +2,7 @@ use {
     eyre::Result,
     itertools::Itertools,
     unicode_segmentation::UnicodeSegmentation,
-    wordbase_core::deinflect::{Deinflection, Deinflector},
+    wordbase_core::{Deinflection, deinflect::Deinflector},
 };
 
 /// Uses [`UnicodeSegmentation`] to split the text into words and returns each
@@ -32,7 +32,7 @@ impl Deinflector for Latin {
 
 #[cfg(test)]
 mod tests {
-    use {super::Latin, crate::tests::assert_deinflects, wordbase_core::deinflect::Deinflection};
+    use {super::Latin, crate::tests::assert_deinflects, wordbase_core::Deinflection};
 
     #[test]
     fn transformations() {

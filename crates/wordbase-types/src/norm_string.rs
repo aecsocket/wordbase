@@ -11,9 +11,9 @@ use {
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize))]
 #[cfg_attr(
-    feature = "poem",
-    derive(poem_openapi::NewType),
-    oai(from_json = false, from_parameter = false, from_multipart = false)
+    feature = "utoipa",
+    derive(utoipa::ToSchema),
+    schema(pattern = r#"^\S(?:.*\S)?$"#)
 )]
 #[debug("{_0:?}")]
 pub struct NormString(String);
@@ -130,39 +130,6 @@ impl<'de> serde::Deserialize<'de> for NormString {
         deserializer.deserialize_string(Visitor)
     }
 }
-
-#[cfg(feature = "poem")]
-const _: () = {
-    use {
-        poem::web::Field,
-        poem_openapi::types::{
-            ParseError, ParseFromJSON, ParseFromMultipartField, ParseFromParameter, ParseResult,
-        },
-    };
-
-    impl ParseFromJSON for NormString {
-        fn parse_from_json(value: Option<serde_json::Value>) -> ParseResult<Self> {
-            let raw = String::parse_from_json(value).map_err(ParseError::propagate)?;
-            Self::new(raw).ok_or_else(|| ParseError::custom(StringEmpty))
-        }
-    }
-
-    impl ParseFromParameter for NormString {
-        fn parse_from_parameter(value: &str) -> ParseResult<Self> {
-            let raw = String::parse_from_parameter(value).map_err(ParseError::propagate)?;
-            Self::new(raw).ok_or_else(|| ParseError::custom(StringEmpty))
-        }
-    }
-
-    impl ParseFromMultipartField for NormString {
-        async fn parse_from_multipart(field: Option<Field>) -> ParseResult<Self> {
-            let raw = String::parse_from_multipart(field)
-                .await
-                .map_err(ParseError::propagate)?;
-            Self::new(raw).ok_or_else(|| ParseError::custom(StringEmpty))
-        }
-    }
-};
 
 // uses `TryFrom` for lifting
 #[cfg(feature = "uniffi")]

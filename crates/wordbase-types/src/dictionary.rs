@@ -12,7 +12,11 @@ use {derive_more::Display, std::str::FromStr, uuid::Uuid};
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
 )]
-#[cfg_attr(feature = "poem", derive(poem_openapi::Object), oai(example))]
+#[cfg_attr(
+    feature = "utoipa",
+    derive(utoipa::ToSchema),
+    schema(examples(example_dictionary))
+)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Dictionary {
     /// Unique identifier for this dictionary in the database.
@@ -29,17 +33,15 @@ pub struct Dictionary {
     pub position: i64,
 }
 
-#[cfg(feature = "poem")]
-impl poem_openapi::types::Example for Dictionary {
-    fn example() -> Self {
-        let mut meta = DictionaryMeta::new("Jitendex");
-        meta.version = Some("2025.02.11.0".into());
-        meta.url = Some("https://jitendex.org".into());
-        Self {
-            id: DictionaryId(uuid::uuid!("6c0be404-fb5f-4f25-a9cc-6bf78667bb2b")),
-            meta,
-            position: 3,
-        }
+#[cfg(feature = "utoipa")]
+fn example_dictionary() -> Dictionary {
+    let mut meta = DictionaryMeta::new("Jitendex");
+    meta.version = Some("2025.02.11.0".into());
+    meta.url = Some("https://jitendex.org".into());
+    Dictionary {
+        id: DictionaryId(uuid::uuid!("6c0be404-fb5f-4f25-a9cc-6bf78667bb2b")),
+        meta,
+        position: 3,
     }
 }
 
@@ -63,7 +65,7 @@ impl poem_openapi::types::Example for Dictionary {
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
 )]
-#[cfg_attr(feature = "poem", derive(poem_openapi::Object))]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[non_exhaustive]
 pub struct DictionaryMeta {
@@ -109,7 +111,7 @@ impl DictionaryMeta {
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
 )]
-#[cfg_attr(feature = "poem", derive(poem_openapi::NewType))]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub struct DictionaryId(pub Uuid);
 
 impl DictionaryId {

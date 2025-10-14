@@ -2,10 +2,11 @@ use {
     crate::{dictionaries::RecordEntry, storage::EngineStorage},
     eyre::{Context, Result, eyre},
     rayon::prelude::*,
-    wordbase_core::deinflect::{Deinflection, Deinflector},
+    wordbase_core::{Deinflection, deinflect::Deinflector},
     wordbase_types::ProfileId,
 };
 
+#[derive(Debug)]
 pub struct Deinflectors {
     deinflectors: Vec<Box<dyn Deinflector>>,
 }

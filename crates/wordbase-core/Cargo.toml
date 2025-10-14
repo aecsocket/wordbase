@@ -19,10 +19,10 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["fs", "rt"] }
 tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
 wordbase-types = { workspace = true, features = ["serde"] }
 
 [features]
-poem = ["wordbase-types/poem"]
 rkyv = ["wordbase-types/rkyv"]
 
 [lints]
