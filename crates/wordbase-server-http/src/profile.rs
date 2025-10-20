@@ -39,12 +39,15 @@ async fn get_all(State(app): State<App>) -> Json<Vec<Profile>> {
 #[axum::debug_handler]
 #[utoipa::path(
     get,
-    path = "/profile/{id}",
-    params(("id", description = "Profile ID")),
+    path = "/profile/{profile_id}",
+    params(("profile_id", description = "Profile ID")),
     responses((status = OK, body = Vec<Profile>))
 )]
-async fn get(State(app): State<App>, Path((id,)): Path<(ProfileId,)>) -> Result<Json<Profile>> {
-    let profile = app.storage.get_profile(id)?.to_profile();
+async fn get(
+    State(app): State<App>,
+    Path((profile_id,)): Path<(ProfileId,)>,
+) -> Result<Json<Profile>> {
+    let profile = app.storage.get_profile(profile_id)?.to_profile();
     Ok(Json(profile))
 }
 
@@ -74,15 +77,15 @@ async fn create(State(app): State<App>, Json(req): Json<Create>) -> Result<Json<
     Ok(Json(profile_id))
 }
 
-/// Delete a profile.
+/// Delete a profile by its ID.
 #[axum::debug_handler]
 #[utoipa::path(
     delete,
-    path = "/profile/{id}",
-    params(("id", description = "Profile ID")),
+    path = "/profile/{profile_id}",
+    params(("profile_id", description = "Profile ID")),
     responses((status = OK))
 )]
-async fn delete(State(app): State<App>, Path((id,)): Path<(ProfileId,)>) -> Result<()> {
-    app.storage.remove_profile(id).await?;
+async fn delete(State(app): State<App>, Path((profile_id,)): Path<(ProfileId,)>) -> Result<()> {
+    app.storage.remove_profile(profile_id).await?;
     Ok(())
 }

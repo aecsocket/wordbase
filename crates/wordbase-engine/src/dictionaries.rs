@@ -93,12 +93,16 @@ impl Dictionaries {
         })
     }
 
+    fn dict_dir(&self, id: DictionaryId) -> PathBuf {
+        self.data_dir.join(id.0.hyphenated().to_string())
+    }
+
     pub fn all(&self) -> Arc<OpenDictionaries> {
         self.open.load().clone()
     }
 
-    fn dict_dir(&self, id: DictionaryId) -> PathBuf {
-        self.data_dir.join(id.0.hyphenated().to_string())
+    pub fn get(&self, id: DictionaryId) -> Option<Arc<OpenDictionary>> {
+        self.open.load().iter().find(|dict| dict.id == id).cloned()
     }
 
     pub async fn import(&self, open_archive: &dyn OpenArchive) -> Result<DictionaryId> {
@@ -190,6 +194,12 @@ pub struct RecordEntry {
 impl EngineStorage {
     pub fn dictionaries(&self) -> Arc<OpenDictionaries> {
         self.dictionaries.all()
+    }
+
+    pub fn get_dictionary(&self, id: DictionaryId) -> Result<Arc<OpenDictionary>> {
+        self.dictionaries
+            .get(id)
+            .wrap_request_err_with(|| eyre!("invalid dictionary {id}"))
     }
 
     pub async fn import_dictionary(&self, open_archive: &dyn OpenArchive) -> Result<DictionaryId> {

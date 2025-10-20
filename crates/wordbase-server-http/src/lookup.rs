@@ -1,10 +1,10 @@
 use {
-    crate::{App, Result},
+    crate::{App, Result, extractor::ExtractProfile},
     axum::{Json, extract::State},
     serde::{Deserialize, Serialize},
     utoipa::ToSchema,
     utoipa_axum::{router::OpenApiRouter, routes},
-    wordbase_types::{Deinflection, DictionaryId, ProfileId, Record, RecordId, Term},
+    wordbase_types::{Deinflection, DictionaryId, Record, RecordId, Term},
 };
 
 pub fn routes() -> OpenApiRouter<App> {
@@ -55,13 +55,11 @@ async fn lookup_deinflect(
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[schema(examples(example_lookup_lemma))]
 struct LookupLemma {
-    profile_id: ProfileId,
     lemma: String,
 }
 
 fn example_lookup_lemma() -> LookupLemma {
     LookupLemma {
-        profile_id: ProfileId(uuid::uuid!("f619b6a1-28cb-4e32-8294-85b7f51f76c5")),
         lemma: "読む".into(),
     }
 }
@@ -74,16 +72,18 @@ fn example_lookup_lemma() -> LookupLemma {
 #[utoipa::path(
     post,
     path = "/lookup/lemma",
+    params(ExtractProfile),
     request_body = inline(LookupLemma),
     responses((status = OK, body = Vec<RecordEntry>)),
 )]
 async fn lookup_lemma(
     State(app): State<App>,
+    ExtractProfile(profile): ExtractProfile,
     Json(req): Json<LookupLemma>,
 ) -> Result<Json<Vec<RecordEntry>>> {
     let entries = app
         .storage
-        .lookup_lemma(req.profile_id, &req.lemma)?
+        .lookup_lemma(profile.id, &req.lemma)?
         .into_iter()
         .map(RecordEntry::from)
         .collect();
@@ -93,28 +93,37 @@ async fn lookup_lemma(
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[schema(examples(example_lookup_sentence))]
 struct LookupSentence {
-    profile_id: ProfileId,
     sentence: String,
     cursor: usize,
 }
 
 fn example_lookup_sentence() -> LookupSentence {
     LookupSentence {
-        profile_id: ProfileId(uuid::uuid!("f619b6a1-28cb-4e32-8294-85b7f51f76c5")),
         sentence: "本を読んだ".into(),
         cursor: "本を".len(),
     }
 }
 
+/// Deinflects the word at a given position in a sentence, and searches
+/// dictionaries for records which that lemma maps to.
+///
+/// This is a combination of `/lookup/deinflect` and `/lookup/lemma`, but more
+/// efficient than calling them separately.
 #[axum::debug_handler]
-#[utoipa::path(post, path = "/lookup/sentence", responses((status = OK, body = Vec<RecordEntry>)))]
+#[utoipa::path(
+    post,
+    path = "/lookup/sentence",
+    params(ExtractProfile),
+    responses((status = OK, body = Vec<RecordEntry>))
+)]
 async fn lookup_sentence(
     State(app): State<App>,
+    ExtractProfile(profile): ExtractProfile,
     Json(req): Json<LookupSentence>,
 ) -> Result<Json<Vec<RecordEntry>>> {
     let entries = app
         .deinflectors
-        .lookup(&app.storage, req.profile_id, &req.sentence, req.cursor)?
+        .lookup(&app.storage, profile.id, &req.sentence, req.cursor)?
         .into_iter()
         .map(RecordEntry::from)
         .collect();

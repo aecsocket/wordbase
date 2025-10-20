@@ -21,7 +21,7 @@ tokio = { workspace = true, features = ["net", "time"] }
 tracing = { workspace = true }
 wordbase-engine = { workspace = true }
 wordbase-types = { workspace = true, features = ["utoipa"] }
-axum = { workspace = true, features = ["macros"] }
+axum = { workspace = true, features = ["macros", "multipart"] }
 foldhash = { workspace = true }
 utoipa = { workspace = true }
 utoipa-axum = { workspace = true }

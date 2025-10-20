@@ -12,14 +12,15 @@ use {
     serde::{Deserialize, Serialize},
     std::{fmt::Display, sync::Arc},
     tokio::net::{TcpListener, ToSocketAddrs},
-    utoipa::ToSchema,
+    utoipa::{OpenApi, ToSchema},
     utoipa_axum::{router::OpenApiRouter, routes},
     utoipa_swagger_ui::{Config, SwaggerUi},
     wordbase_engine::{deinflect::Deinflectors, storage::EngineStorage},
 };
 
 // mod anki; // TODO
-// mod dictionary;
+mod dictionary;
+mod extractor;
 mod lookup;
 mod profile;
 
@@ -38,6 +39,7 @@ pub async fn serve(
 ) -> eyre::Result<()> {
     let (openapi_router, openapi) = OpenApiRouter::new()
         .routes(routes!(health_check))
+        .merge(dictionary::routes())
         .merge(lookup::routes())
         .merge(profile::routes())
         .with_state(App {
@@ -49,7 +51,7 @@ pub async fn serve(
     let app = openapi_router.merge(
         SwaggerUi::new("/docs")
             .config(Config::default().try_it_out_enabled(true))
-            .url("/docs/openapi.json", openapi),
+            .url("/docs/openapi.json", ApiDoc::openapi().merge_from(openapi)),
     );
 
     let addr_str = bind_addr.to_string();
@@ -61,6 +63,16 @@ pub async fn serve(
         .wrap_err_with(|| eyre!("failed to run server on {addr_str}"))?;
     Ok(())
 }
+
+#[expect(clippy::needless_for_each, reason = "due to `OpenApi` generated code")]
+mod api_doc {
+    #[derive(utoipa::OpenApi)]
+    #[openapi(info(title = "wordbase"))]
+    #[doc(hidden)]
+    pub struct ApiDoc;
+}
+
+pub use api_doc::ApiDoc;
 
 #[derive(Debug, Clone)]
 struct App {
