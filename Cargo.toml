@@ -1,114 +1,82 @@
 [workspace]
-members  = ["crates/*"]
 resolver = "3"
+members = ["crates/*"]
 
 [workspace.package]
-authors      = ["aecsocket <aecsocket@tutanota.com>"]
-categories   = []
-edition      = "2024"
-keywords     = []
-license      = "MIT OR Apache-2.0"
-repository   = "https://github.com/aecsocket/wordbase"
+authors = ["aecsocket <aecsocket@tutanota.com>"]
+edition = "2024"
 rust-version = "1.85.0"
-
-[workspace.lints.rust]
-missing_docs    = "warn"
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)"] }
-
-[workspace.lints.clippy]
-all      = { level = "warn", priority = -1 }
-nursery  = { level = "warn", priority = -1 }
-pedantic = { level = "warn", priority = -1 }
-
-unwrap_used = "warn"
-
-cast_precision_loss     = "allow"
-cognitive_complexity    = "allow"
-missing_const_for_fn    = "allow"
-module_name_repetitions = "allow"
-struct_field_names      = "allow"
-too_many_arguments      = "allow"
-too_many_lines          = "allow"
-type_complexity         = "allow"
+repository = "https://github.com/aecsocket/wordbase"
+license = "MPL-2.0"
+keywords = []
+categories = []
 
 [workspace.dependencies]
+# wordbase-server = { path = "crates/wordbase-server" }
+android_logger = { version = "0.15.0" }
+anyhow = { version = "1.0" }
+arc-swap = { version = "1.7" }
+ascii_table = { version = "4.0" }
+async-compression = { version = "0.4" }
+async-stream = { version = "0.3.6" }
+async-tar = { version = "0.5" }
+async_zip = { version = "0.0.17" }
+bytes = { version = "1.10" }
+bzip2 = { version = "0.5" }
+clap = { version = "4.5" }
+data-encoding = { version = "2.9" }
+derive_more = { version = "2.0" }
+directories = { version = "6.0" }
+distance = { version = "0.4" }
+foldhash = { version = "0.1.4" }
+futures = { version = "0.3" }
+indexmap = { version = "2.8" }
+itertools = { version = "0.14" }
 jmdict-furigana = { path = "crates/jmdict-furigana" }
-wordbase        = { path = "crates/wordbase" }
+lindera = { version = "0.43.1" }
+maud = { version = "0.27" }
+paste = { version = "1.0" }
+pin-project = { version = "1.1" }
+poem = { version = "3.1.9" }
+poem-openapi = { version = "5.1" }
+regex = { version = "1.11" }
+rmp-serde = { version = "1.3" }
+serde = { version = "1.0" }
+serde_json = { version = "1.0" }
+serde_repr = { version = "0.1" }
+sqlx = { version = "0.8" }
+tempfile = { version = "3.20" }
+tera = { version = "1.20" }
+tokio = { version = "1.44.2" }
+tokio-stream = { version = "0.1" }
+tokio-tungstenite = { version = "0.26" }
+tokio-util = { version = "0.7" }
+tracing = { version = "0.1" }
+tracing-subscriber = { version = "0.3" }
+unicode-segmentation = { version = "1.12" }
+uniffi = { version = "0.29.2" }
+wordbase = { path = "crates/wordbase" }
 # wordbase-ankiconnect = { path = "crates/wordbase-ankiconnect" }
 # wordbase-client-tokio = { path = "crates/wordbase-client-tokio" }
 wordbase-api = { path = "crates/wordbase-api" }
-# wordbase-server = { path = "crates/wordbase-server" }
 
-android_logger       = { version = "0.15.0" }
-ankiconnect          = { version = "0.2" }
-anyhow               = { version = "1.0" }
-arc-swap             = { version = "1.7" }
-ascii_table          = { version = "4.0" }
-ashpd                = { version = "0.11" }
-async-compression    = { version = "0.4" }
-async-stream         = { version = "0.3.6" }
-async-tar            = { version = "0.5" }
-async_zip            = { version = "0.0.17" }
-bimap                = { version = "0.6" }
-bytes                = { version = "1.10" }
-bzip2                = { version = "0.5" }
-cfg-if               = { version = "1.0" }
-clap                 = { version = "4.5" }
-data-encoding        = { version = "2.9" }
-derive_more          = { version = "2.0" }
-directories          = { version = "6.0" }
-distance             = { version = "0.4" }
-foldhash             = { version = "0.1.4" }
-form_urlencoded      = { version = "1.2" }
-futures              = { version = "0.3" }
-genawaiter           = { version = "0.99" }
-gio                  = { version = "0.20.9" }
-glib                 = { version = "0.20" }
-gtk4                 = { version = "0.9" }
-hex                  = { version = "0.4" }
-html-escape          = { version = "0.2" }
-indexmap             = { version = "2.8" }
-itertools            = { version = "0.14" }
-libadwaita           = { version = "0.7.2" }
-libspa               = { version = "0.8" }
-lindera              = { version = "0.43.1" }
-maud                 = { version = "0.27" }
-mecab                = { version = "0.1.6" }
-notify               = { version = "8.0" }
-paste                = { version = "1.0" }
-pin-project          = { version = "1.1" }
-pipewire             = { version = "0.8" }
-poem                 = { version = "3.1.9" }
-poem-openapi         = { version = "5.1" }
-quote                = { version = "1.0" }
-rand                 = { version = "0.9" }
-regex                = { version = "1.11" }
-relm4                = { version = "0.9.1" }
-relm4-components     = { version = "0.9.1" }
-relm4-icons          = { version = "0.10.0-beta.2" }
-relm4-icons-build    = { version = "0.10.0-beta.2" }
-reqwest              = { version = "0.12.15", default-features = false }
-rmp-serde            = { version = "1.3" }
-rustyline            = { version = "15.0" }
-serde                = { version = "1.0" }
-serde_json           = { version = "1.0" }
-serde_repr           = { version = "0.1" }
-sha2                 = { version = "0.10" }
-sqlx                 = { version = "0.8" }
-tempfile             = { version = "3.20" }
-tera                 = { version = "1.20" }
-tokio                = { version = "1.44.2" }
-tokio-stream         = { version = "0.1" }
-tokio-tungstenite    = { version = "0.26" }
-tokio-util           = { version = "0.7" }
-tracing              = { version = "0.1" }
-tracing-subscriber   = { version = "0.3" }
-unicode-segmentation = { version = "1.12" }
-uniffi               = { version = "0.29.2" }
-webkit6              = { version = "0.4" }
-xz2                  = { version = "0.1" }
-zbus                 = { version = "5.5", default-features = false }
-zip                  = { version = "4.0" }
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+cast_precision_loss = "allow"
+cognitive_complexity = "allow"
+missing_const_for_fn = "allow"
+module_name_repetitions = "allow"
+nursery = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+struct_field_names = "allow"
+too_many_arguments = "allow"
+too_many_lines = "allow"
+type_complexity = "allow"
+unwrap_used = "warn"
+
+[workspace.lints.rust]
+missing_docs = "warn"
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)"] }
 
 [workspace.metadata.cargo-shear]
 ignored = ["bzip2"]
@@ -122,8 +90,8 @@ pre-build = [
 ]
 
 [profile.release]
+opt-level = "z"
+strip = true
+lto = true
+panic = "abort"
 codegen-units = 1
-lto           = true
-opt-level     = "z"
-panic         = "abort"
-strip         = true
