@@ -1,31 +1,28 @@
 [package]
-name    = "wordbase-cli"
+name = "wordbase-cli"
 version = "0.0.0"
-
-authors.workspace      = true
-categories.workspace   = true
-edition.workspace      = true
-keywords.workspace     = true
-license.workspace      = true
-repository.workspace   = true
+edition.workspace = true
 rust-version.workspace = true
-
-[lints]
-workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
 
 [dependencies]
+anyhow = { workspace = true }
+ascii_table = { workspace = true, features = ["wide_characters"] }
+clap = { workspace = true, features = ["derive"] }
+futures = { workspace = true }
+itertools = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true, features = ["preserve_order"] }
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 wordbase = { workspace = true, features = ["desktop"] }
 
-anyhow             = { workspace = true }
-ascii_table        = { workspace = true, features = ["wide_characters"] }
-clap               = { workspace = true, features = ["derive"] }
-futures            = { workspace = true }
-itertools          = { workspace = true }
-serde              = { workspace = true }
-serde_json         = { workspace = true, features = ["preserve_order"] }
-tokio              = { workspace = true, features = ["full"] }
-tracing            = { workspace = true }
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
+[lints]
+workspace = true

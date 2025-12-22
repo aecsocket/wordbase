@@ -1,44 +1,41 @@
 [package]
-description = "Dictionary and word lookup service - API types"
-name        = "wordbase-api"
-version     = "0.1.0"
-
-authors.workspace      = true
-categories.workspace   = true
-edition.workspace      = true
-keywords.workspace     = true
-license.workspace      = true
-repository.workspace   = true
+name = "wordbase-api"
+version = "0.1.0"
+edition.workspace = true
 rust-version.workspace = true
-
-[lints]
-workspace = true
+description = "Dictionary and word lookup service - API types"
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
 
-[features]
-poem        = ["dep:poem", "dep:poem-openapi"]
-render-html = ["dep:maud"]
-uniffi      = ["dep:uniffi", "dep:data-encoding"]
-
 [dependencies]
-bytes         = { workspace = true, features = ["serde"] }
+bytes = { workspace = true, features = ["serde"] }
 data-encoding = { workspace = true, optional = true }
-itertools     = { workspace = true }
-maud          = { workspace = true, optional = true }
-paste         = { workspace = true }
-poem          = { workspace = true, optional = true }
-poem-openapi  = { workspace = true, optional = true }
-serde         = { workspace = true, features = ["derive"] }
-serde_json    = { workspace = true }
-uniffi        = { workspace = true, optional = true }
-
 derive_more = { workspace = true, features = [
   "debug",
-  "display",
-  "from",
-  "error",
   "deref",
   "deref_mut",
+  "display",
+  "error",
+  "from",
 ] }
+itertools = { workspace = true }
+maud = { workspace = true, optional = true }
+paste = { workspace = true }
+poem = { workspace = true, optional = true }
+poem-openapi = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+uniffi = { workspace = true, optional = true }
+
+[features]
+poem = ["dep:poem", "dep:poem-openapi"]
+render-html = ["dep:maud"]
+uniffi = ["dep:data-encoding", "dep:uniffi"]
+
+[lints]
+workspace = true

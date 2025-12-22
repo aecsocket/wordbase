@@ -1,8 +1,7 @@
 [package]
-name    = "wordbase-uniffi-bindgen"
-publish = false
-
+name = "wordbase-uniffi-bindgen"
 edition.workspace = true
+publish = false
 
 [dependencies]
 uniffi = { workspace = true, features = ["cli"] }

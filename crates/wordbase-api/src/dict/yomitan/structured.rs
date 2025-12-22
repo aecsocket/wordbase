@@ -14,8 +14,7 @@
 use {
     derive_more::{Deref, DerefMut, Display},
     serde::{Deserialize, Serialize},
-    std::collections::HashMap,
-    std::fmt,
+    std::{collections::HashMap},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -231,8 +230,11 @@ macro_rules! display_as_serialize {
 
             impl fmt::Display for $T {
                 fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                    let serializer = FormatterSerializer { f };
-                    self.serialize(serializer)
+                    let value = serde_json::to_value(self)
+                        .expect("serializing this simple value should never fail");
+                    let s = value.as_str()
+                        .expect("serialized value should always be a string");
+                    write!(f, "{s}")
                 }
             }
         };
@@ -368,29 +370,3 @@ pub struct Data(pub HashMap<String, String>);
 
 #[cfg(feature = "uniffi")]
 uniffi::custom_newtype!(Data, HashMap<String, String>);
-
-// utils
-
-struct FormatterSerializer<'a, 'b> {
-    pub f: &'a mut fmt::Formatter<'b>,
-}
-
-impl serde::Serializer for FormatterSerializer<'_, '_> {
-    type Ok = ();
-    type Error = fmt::Error;
-
-    fn serialize_unit_variant(
-        self,
-        _name: &'static str,
-        _variant_index: u32,
-        variant: &'static str,
-    ) -> Result<Self::Ok, Self::Error> {
-        write!(self.f, "{variant}")
-    }
-
-    serde::__serialize_unimplemented! {
-        bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str bytes none some
-        unit unit_struct newtype_struct newtype_variant
-        seq tuple tuple_struct tuple_variant map struct struct_variant
-    }
-}

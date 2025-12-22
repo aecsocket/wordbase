@@ -3,7 +3,6 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-authors = ["aecsocket <aecsocket@tutanota.com>"]
 edition = "2024"
 rust-version = "1.85.0"
 repository = "https://github.com/aecsocket/wordbase"
